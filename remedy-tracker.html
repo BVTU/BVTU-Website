@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Remedy Tracker</title>
+    <style>
+        :root {
+            --primary: #0c5c9b;
+            --secondary: #2e8bc0;
+            --light: #f5faff;
+            --dark: #033863;
+            --table-bg: #ffffff;
+            --table-alt: #f0f7ff;
+            --border-color: #d0e3f0;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background: var(--light);
+            color: var(--dark);
+        }
+
+        header {
+            background: var(--primary);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        header img {
+            height: 60px;
+            display: block;
+            margin: 0 auto 10px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.8rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-group {
+            margin-bottom: 10px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: bold;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .months {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+
+        .month-chip {
+            padding: 6px 10px;
+            border-radius: 20px;
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            background: white;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .month-chip.selected {
+            background: var(--primary);
+            color: white;
+        }
+
+        button {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 8px;
+            font-size: 0.9rem;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: var(--secondary);
+            color: white;
+        }
+
+        .btn-danger {
+            background: #c0392b;
+            color: white;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        th,
+        td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background: var(--primary);
+            color: white;
+        }
+
+        tr:nth-child(even) td {
+            background: var(--table-alt);
+        }
+
+        .summary {
+            margin-top: 20px;
+        }
+
+        .note {
+            font-size: 0.9rem;
+            color: #555;
+            margin-bottom: 10px;
+        }
+
+        .spend-form {
+            margin-top: 8px;
+            padding: 8px;
+            background: var(--light);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+
+        .spend-form input,
+        .spend-form select {
+            margin-bottom: 4px;
+        }
+
+        .usage-log {
+            margin-top: 6px;
+            font-size: 0.85rem;
+        }
+
+        .usage-log li {
+            list-style-type: disc;
+            margin-left: 20px;
+            margin-bottom: 2px;
+        }
+
+        /* Styling for year header rows with toggle button */
+        .year-header td {
+            background: var(--secondary);
+            color: white;
+            font-weight: bold;
+            padding: 8px;
+        }
+        .year-header button {
+            background: none;
+            border: none;
+            color: inherit;
+            font-size: 1rem;
+            cursor: pointer;
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <!-- Replace the src with your logo file name in the same folder -->
+        <img src="bvtu-logo.png" alt="BVTU logo" />
+        <h1>Remedy Tracker</h1>
+    </header>
+    <div class="container">
+        <p class="note"><strong>Note:</strong> V is the value of compensation <em>per month</em>. The dollar value per minute is fixed (currently $2.401/minute for 2025–2026). Use the form below to add remedy entries; the tool will calculate remedy in both minutes and dollars, and you can log minutes or money spent without affecting the other category.</p>
+        <form id="entryForm">
+            <div class="form-group">
+                <label for="schoolYear">School Year</label>
+                <select id="schoolYear" required>
+                    <option value="">Select year</option>
+                    <option value="2025-2026">2025-2026</option>
+                    <option value="2026-2027">2026-2027</option>
+                    <option value="2027-2028">2027-2028</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Months (select one or more)</label>
+                <div class="months" id="monthsContainer"></div>
+                <button type="button" class="btn-secondary" id="selectOctJun">Oct–Jun</button>
+            </div>
+            <div class="form-group">
+                <label for="classType">Class Type</label>
+                <select id="classType" required>
+                    <option value="">Select class type</option>
+                    <option value="Kindergarten">Kindergarten</option>
+                    <option value="Grade 1, 2, or 3">Grade 1, 2, or 3</option>
+                    <option value="Intermediate Multi-age">Intermediate Multi-age</option>
+                    <option value="Intermediate">Intermediate</option>
+                    <option value="En./S.S./French">En./S.S./French</option>
+                    <option value="Labs and Shops">Labs and Shops</option>
+                    <option value="Secondary/Graduation">Secondary/Graduation</option>
+                </select>
+            </div>
+            <!-- Course/Class name input -->
+            <div class="form-group">
+                <label for="courseName">Course/Class Name</label>
+                <input type="text" id="courseName" placeholder="e.g., Math 10" />
+            </div>
+            <!-- Course type (only for high school classes) -->
+            <div class="form-group" id="courseTypeGroup" style="display:none;">
+                <label for="courseType">Course Type</label>
+                <select id="courseType">
+                    <option value="">Select course type</option>
+                    <option value="Linear">Linear (full year)</option>
+                    <option value="Semester">Semester (half year)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="students">Students Enrolled</label>
+                <input type="number" id="students" min="0" required />
+            </div>
+            <!-- P value: computed automatically for elementary and high school courses -->
+            <div class="form-group" id="pValueGroup">
+                <label for="pValue">P (Percentage of FTE month, decimal)</label>
+                <!-- This field displays the computed P value and is disabled to prevent manual editing -->
+                <input type="number" id="pValue" min="0" max="1" step="0.001" placeholder="Auto" disabled />
+            </div>
+            <div class="form-group">
+                <label for="s2">S2 (Students over composition limit)</label>
+                <input type="number" id="s2" min="0" value="0" />
+            </div>
+            <!-- Removed rate input: dollar value per minute is fixed for 2025/2026 (2.401) -->
+            <button type="submit" class="btn-primary">Add Entry/Entries</button>
+        </form>
+
+        <h2>Entries & Usage</h2>
+        <!-- Bulk delete button -->
+        <button type="button" class="btn-danger" id="deleteSelectedBtn" onclick="deleteSelected()" style="margin-bottom: 10px;">Delete Selected</button>
+        <!-- Button to export data to CSV -->
+        <button type="button" class="btn-primary" id="exportCsvBtn" onclick="downloadCSV()" style="margin-left: 10px; margin-bottom: 10px;">Export CSV</button>
+        <table id="entriesTable">
+            <thead>
+                <tr>
+                    <!-- master select checkbox -->
+                    <th><input type="checkbox" id="selectAll" onclick="toggleSelectAll()" /></th>
+                    <th>Year</th>
+                    <th>Month</th>
+                    <th>Course/Class Name</th>
+                    <th>Class Type</th>
+                    <th>Course Type</th>
+                    <th>Students</th>
+                    <th>P</th>
+                    <th>S1</th>
+                    <th>S2</th>
+                    <th>Total Min</th>
+                    <th>Total $</th>
+                    <th>Min Used</th>
+                    <th>$ Used</th>
+                    <th>Min Rem</th>
+                    <th>$ Rem</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="entriesBody"></tbody>
+        </table>
+
+        <div class="summary">
+            <h2>Summary by Year</h2>
+            <table id="summaryTable">
+                <thead>
+                    <tr>
+                        <th>Year</th>
+                        <th>Total Min</th>
+                        <th>Total $</th>
+                        <th>Min Used</th>
+                        <th>$ Used</th>
+                        <th>Min Rem</th>
+                        <th>$ Rem</th>
+                    </tr>
+                </thead>
+                <tbody id="summaryBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Data store key
+        const STORAGE_KEY = 'remedyTrackerEntries';
+
+        // Default $/minute rate (fixed for 2025/2026 and beyond)
+        // Updated dollar per minute rate for 2025–2026
+        // Updated dollar per minute rate (rounded) for 2025–2026
+        const DEFAULT_RATE = 2.401;
+
+        // Class size maxima
+        const classMaxSizes = {
+            'Kindergarten': 20,
+            'Grade 1, 2, or 3': 22,
+            'Intermediate Multi-age': 27,
+            'Intermediate': 29,
+            'En./S.S./French': 27,
+            'Labs and Shops': 24,
+            'Secondary/Graduation': 30
+        };
+
+        // Months list
+        // Remedy is only calculated from October through June (September, July, and August are excluded)
+        const monthNames = [
+            'October', 'November', 'December',
+            'January', 'February', 'March', 'April', 'May', 'June'
+        ];
+
+        // Selected months
+        let selectedMonths = [];
+
+        // Tracks collapsed state for each school year. When true, the year is hidden.
+        let collapsedYears = {};
+
+        // Initialize month chips
+        function initMonths() {
+            const container = document.getElementById('monthsContainer');
+            // Clear any existing month chips to avoid duplicates (e.g., when the page is saved with chips already present)
+            container.innerHTML = '';
+            monthNames.forEach((name, idx) => {
+                const chip = document.createElement('div');
+                chip.className = 'month-chip';
+                chip.textContent = name;
+                chip.dataset.index = idx;
+                chip.addEventListener('click', () => toggleMonth(idx));
+                container.appendChild(chip);
+            });
+        }
+
+        function toggleMonth(index) {
+            const chip = document.querySelector(`.month-chip[data-index="${index}"]`);
+            if (selectedMonths.includes(index)) {
+                selectedMonths = selectedMonths.filter(i => i !== index);
+                chip.classList.remove('selected');
+            } else {
+                selectedMonths.push(index);
+                chip.classList.add('selected');
+            }
+        }
+
+        // Show or hide the course type selection based on class type, and disable manual P editing
+        function updateCourseTypeVisibility() {
+            const classType = document.getElementById('classType').value;
+            const courseTypeGroup = document.getElementById('courseTypeGroup');
+            const pInput = document.getElementById('pValue');
+            // Categories that require course type selection (high school)
+            const hsCategories = ['En./S.S./French', 'Labs and Shops', 'Secondary/Graduation'];
+            if (hsCategories.includes(classType)) {
+                courseTypeGroup.style.display = 'block';
+            } else {
+                courseTypeGroup.style.display = 'none';
+                // Reset course type selection when hidden
+                document.getElementById('courseType').value = '';
+            }
+            // Always disable manual editing of P value; it is computed automatically
+            pInput.disabled = true;
+        }
+
+        // Compute and update the P value field based on current class and course types
+        function updatePValue() {
+            const classType = document.getElementById('classType').value;
+            const courseType = document.getElementById('courseType').value;
+            let pVal = '';
+            const hsCategories = ['En./S.S./French', 'Labs and Shops', 'Secondary/Graduation'];
+            const elementaryCategories = ['Kindergarten', 'Grade 1, 2, or 3', 'Intermediate Multi-age', 'Intermediate'];
+            if (hsCategories.includes(classType)) {
+                if (courseType === 'Linear') {
+                    pVal = 0.143;
+                } else if (courseType === 'Semester') {
+                    pVal = 0.286;
+                } else {
+                    pVal = '';
+                }
+            } else if (elementaryCategories.includes(classType)) {
+                // Elementary teachers now use a full FTE of 1.0 instead of 0.918
+                pVal = 1.0;
+            } else if (classType) {
+                // Default FTE for other categories
+                pVal = 1.0;
+            } else {
+                pVal = '';
+            }
+            // Set the value on the P input field
+            const pInput = document.getElementById('pValue');
+            pInput.value = pVal !== '' ? pVal : '';
+        }
+
+        // Select Oct-Jun helper (months 1-9 inclusive index). Excludes July/Aug/Sep
+        document.addEventListener('DOMContentLoaded', () => {
+            initMonths();
+            document.getElementById('selectOctJun').addEventListener('click', () => {
+                // Determine if all available months are currently selected
+                const allSelected = (selectedMonths.length === monthNames.length);
+                // Clear existing selection (for both toggle behaviours)
+                selectedMonths = [];
+                document.querySelectorAll('.month-chip').forEach(ch => ch.classList.remove('selected'));
+                if (!allSelected) {
+                    // Select all months (indices 0 through monthNames.length-1)
+                    for (let i = 0; i < monthNames.length; i++) {
+                        selectedMonths.push(i);
+                        document.querySelector(`.month-chip[data-index="${i}"]`).classList.add('selected');
+                    }
+                }
+            });
+            // Load entries
+            loadEntries();
+            renderEntries();
+            renderSummary();
+            // Initialize course type visibility and P value when page loads
+            updateCourseTypeVisibility();
+            updatePValue();
+            // Add change listeners to update P value and course type visibility dynamically
+            document.getElementById('classType').addEventListener('change', () => {
+                updateCourseTypeVisibility();
+                updatePValue();
+            });
+            document.getElementById('courseType').addEventListener('change', () => {
+                updatePValue();
+            });
+        });
+
+        // Load entries from localStorage
+        function loadEntries() {
+            const data = localStorage.getItem(STORAGE_KEY);
+            try {
+                window.entries = data ? JSON.parse(data) : [];
+            } catch (e) {
+                window.entries = [];
+            }
+        }
+
+        // Save entries to localStorage
+        function saveEntries() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(window.entries));
+        }
+
+        // Add entries based on form
+document.getElementById('entryForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const year = document.getElementById('schoolYear').value;
+            const classType = document.getElementById('classType').value;
+            const students = parseInt(document.getElementById('students').value, 10);
+            const courseName = document.getElementById('courseName').value.trim();
+            const courseType = document.getElementById('courseType').value;
+            // s2 and rate remain user inputs
+            const s2 = parseInt(document.getElementById('s2').value || '0', 10);
+            // Use fixed rate instead of user-provided input
+            const rate = DEFAULT_RATE;
+            // Determine pVal automatically based on classType and courseType
+            let pVal;
+            // High school categories
+            const hsCategories = ['En./S.S./French', 'Labs and Shops', 'Secondary/Graduation'];
+            const elementaryCategories = ['Kindergarten', 'Grade 1, 2, or 3', 'Intermediate Multi-age', 'Intermediate'];
+            if (hsCategories.includes(classType)) {
+                // Must have a course type selected for HS courses
+                if (!courseType) {
+                    alert('Please select course type (Linear or Semester) for high school classes.');
+                    return;
+                }
+                pVal = courseType === 'Linear' ? 0.143 : 0.286;
+            } else if (elementaryCategories.includes(classType)) {
+                // Elementary teachers now have a full FTE of 1.0
+                pVal = 1.0;
+            } else {
+                // Default fallback: use 1.0 (full FTE)
+                pVal = 1.0;
+            }
+            // Validation
+            if (!year || !classType || !students || selectedMonths.length === 0) {
+                alert('Please fill in all required fields and select months.');
+                return;
+            }
+            // For each selected month, create entry
+            selectedMonths.forEach(idx => {
+                const monthName = monthNames[idx];
+                // Apply flex factor: remedy starts only after two students beyond the class size limit
+                const maxSize = (classMaxSizes[classType] || 0) + 2;
+                let s1 = students - maxSize;
+                if (s1 < 0) s1 = 0;
+                const totalMin = 180 * pVal * (s1 + s2);
+                // Always compute total dollars using the fixed rate
+                const totalDollars = totalMin * rate;
+                const entry = {
+                    id: Date.now() + Math.random(),
+                    year,
+                    month: monthName,
+                    classType,
+                    courseName: courseName || '',
+                    courseType: courseType || '',
+                    students,
+                    pVal,
+                    s1,
+                    s2,
+                    // Store the rate for reference
+                    rate,
+                    totalMin,
+                    totalDollars,
+                    minutesUsed: 0,
+                    dollarsUsed: 0,
+                    remainingMinutes: totalMin,
+                    remainingDollars: totalDollars,
+                    usageLogs: []
+                };
+                window.entries.push(entry);
+            });
+            saveEntries();
+            // Reset form
+            document.getElementById('entryForm').reset();
+            // Reset P value field and course type group and course name
+            document.getElementById('pValue').value = '';
+            document.getElementById('courseTypeGroup').style.display = 'none';
+            // Clear selected months
+            selectedMonths = [];
+            document.querySelectorAll('.month-chip').forEach(ch => ch.classList.remove('selected'));
+            // Re-render
+            renderEntries();
+            renderSummary();
+        });
+
+        // Render entries table with grouping by year, collapse/expand functionality, and row selection checkboxes
+        function renderEntries() {
+            const body = document.getElementById('entriesBody');
+            body.innerHTML = '';
+            // Sort entries by year then month index so they group together
+            const sortedEntries = [...window.entries].sort((a, b) => {
+                if (a.year < b.year) return -1;
+                if (a.year > b.year) return 1;
+                const idxA = monthNames.indexOf(a.month);
+                const idxB = monthNames.indexOf(b.month);
+                return idxA - idxB;
+            });
+            let currentYear = null;
+            sortedEntries.forEach(entry => {
+                // When year changes, insert a header row for that year with collapse/expand toggle
+                if (entry.year !== currentYear) {
+                    currentYear = entry.year;
+                    if (collapsedYears[currentYear] === undefined) {
+                        collapsedYears[currentYear] = false;
+                    }
+                    const yearRow = document.createElement('tr');
+                    yearRow.className = 'year-header';
+                    const symbol = collapsedYears[currentYear] ? '+' : '–';
+                    yearRow.innerHTML = `<td colspan="17"><button onclick="toggleYear('${currentYear}')">${symbol}</button><span>${currentYear}</span></td>`;
+                    body.appendChild(yearRow);
+                }
+                // If the year is collapsed, skip rendering its entries
+                if (collapsedYears[currentYear]) {
+                    return;
+                }
+                // Create the entry row with a selection checkbox
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><input type="checkbox" class="rowSelect" value="${entry.id}" /></td>
+                    <td>${entry.year}</td>
+                    <td>${entry.month}</td>
+                    <td>${entry.courseName ? entry.courseName : ''}</td>
+                    <td>${entry.classType}</td>
+                    <td>${entry.courseType ? entry.courseType : ''}</td>
+                    <td>${entry.students}</td>
+                    <td>${entry.pVal.toFixed(3)}</td>
+                    <td>${entry.s1}</td>
+                    <td>${entry.s2}</td>
+                    <td>${entry.totalMin.toFixed(2)}</td>
+                    <td>${entry.totalDollars.toFixed(2)}</td>
+                    <td>${entry.minutesUsed.toFixed(2)}</td>
+                    <td>${entry.dollarsUsed.toFixed(2)}</td>
+                    <td>${entry.remainingMinutes.toFixed(2)}</td>
+                    <td>${entry.remainingDollars.toFixed(2)}</td>
+                    <td>
+                        <button class="btn-secondary" onclick="showSpendForm(${entry.id})">Spend</button>
+                        <button class="btn-danger" onclick="deleteEntry(${entry.id})">Delete</button>
+                    </td>
+                `;
+                body.appendChild(tr);
+                // Spend form row for each entry
+                const trForm = document.createElement('tr');
+                trForm.id = `spendFormRow-${entry.id}`;
+                trForm.style.display = 'none';
+                const td = document.createElement('td');
+                td.colSpan = 17; // match number of table columns including checkbox column
+                td.innerHTML = `
+                    <div class="spend-form" id="spendForm-${entry.id}">
+                        <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                            <div style="flex: 1 1 150px;">
+                                <label>Minutes Spent</label>
+                                <input type="number" min="0" step="0.01" id="minutesSpent-${entry.id}" />
+                            </div>
+                            <div style="flex: 1 1 150px;">
+                                <label>Money Spent ($)</label>
+                                <input type="number" min="0" step="0.01" id="moneySpent-${entry.id}" />
+                            </div>
+                            <div style="flex: 1 1 200px;">
+                                <label>Category</label>
+                                <select id="category-${entry.id}">
+                                    <option value="Additional Prep Time">Additional Prep Time</option>
+                                    <option value="Non-Enrolling Staff">Additional Non-Enrolling Staff</option>
+                                    <option value="Enrolling Staff">Additional Enrolling Staff</option>
+                                    <option value="Pro-D Use">Pro-D Use</option>
+                                </select>
+                            </div>
+                            <div style="flex: 1 1 200px;">
+                                <label>Note (optional)</label>
+                                <input type="text" id="note-${entry.id}" />
+                            </div>
+                            <div style="flex: 1 1 100px; display: flex; align-items: flex-end;">
+                                <button class="btn-primary" onclick="recordSpend(${entry.id})">Record</button>
+                            </div>
+                        </div>
+                        <div class="usage-log" id="usageLog-${entry.id}"></div>
+                    </div>
+                `;
+                trForm.appendChild(td);
+                body.appendChild(trForm);
+                // Render existing usage logs for this entry
+                renderUsageLogs(entry);
+            });
+        }
+
+        // Toggle the collapsed state of a given year and re-render entries
+        function toggleYear(year) {
+            collapsedYears[year] = !collapsedYears[year];
+            renderEntries();
+        }
+
+        // Select or deselect all row checkboxes based on the master checkbox state
+        function toggleSelectAll() {
+            const master = document.getElementById('selectAll');
+            const checkboxes = document.querySelectorAll('.rowSelect');
+            checkboxes.forEach(cb => {
+                cb.checked = master.checked;
+            });
+        }
+
+        // Delete all selected entries after user confirmation
+        function deleteSelected() {
+            const selectedIds = [];
+            document.querySelectorAll('.rowSelect:checked').forEach(cb => {
+                selectedIds.push(parseFloat(cb.value));
+            });
+            if (selectedIds.length === 0) {
+                alert('Please select at least one entry to delete.');
+                return;
+            }
+            if (!confirm(`Are you sure you want to delete ${selectedIds.length} selected entr${selectedIds.length === 1 ? 'y' : 'ies'}?`)) {
+                return;
+            }
+            window.entries = window.entries.filter(e => !selectedIds.includes(e.id));
+            saveEntries();
+            // Uncheck master checkbox after deletion
+            const master = document.getElementById('selectAll');
+            if (master) master.checked = false;
+            renderEntries();
+            renderSummary();
+        }
+
+        // Show spend form row
+        function showSpendForm(id) {
+            const row = document.getElementById(`spendFormRow-${id}`);
+            if (!row) return;
+            row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
+        }
+
+        // Record spending
+        function recordSpend(id) {
+            const entry = window.entries.find(e => e.id === id);
+            if (!entry) return;
+            const minInput = document.getElementById(`minutesSpent-${id}`);
+            const moneyInput = document.getElementById(`moneySpent-${id}`);
+            const category = document.getElementById(`category-${id}`).value;
+            const note = document.getElementById(`note-${id}`).value;
+            const minutesSpent = parseFloat(minInput.value || '0');
+            const moneySpent = parseFloat(moneyInput.value || '0');
+            if (minutesSpent <= 0 && moneySpent <= 0) {
+                alert('Enter minutes or money spent.');
+                return;
+            }
+            // Check limits
+            if (minutesSpent > entry.remainingMinutes) {
+                alert('Minutes spent exceeds remaining minutes.');
+                return;
+            }
+            if (moneySpent > entry.remainingDollars) {
+                alert('Money spent exceeds remaining dollars.');
+                return;
+            }
+            const now = new Date().toLocaleString();
+            if (minutesSpent > 0) {
+                // Deduct minutes independently
+                entry.minutesUsed += minutesSpent;
+                entry.remainingMinutes = Math.max(0, entry.remainingMinutes - minutesSpent);
+                entry.usageLogs.push({ date: now, type: 'Minutes', amount: minutesSpent, category, note });
+                minInput.value = '';
+            }
+            if (moneySpent > 0) {
+                // Deduct dollars independently
+                entry.dollarsUsed += moneySpent;
+                entry.remainingDollars = Math.max(0, entry.remainingDollars - moneySpent);
+                entry.usageLogs.push({ date: now, type: 'Money', amount: moneySpent, category, note });
+                moneyInput.value = '';
+            }
+            // Clear note
+            document.getElementById(`note-${id}`).value = '';
+            saveEntries();
+            renderEntries();
+            renderSummary();
+        }
+
+        // Render usage logs under each entry
+        function renderUsageLogs(entry) {
+            const logDiv = document.getElementById(`usageLog-${entry.id}`);
+            if (!logDiv) return;
+            if (entry.usageLogs.length === 0) {
+                logDiv.innerHTML = '<em>No usage recorded.</em>';
+                return;
+            }
+            const list = document.createElement('ul');
+            entry.usageLogs.forEach(log => {
+                const li = document.createElement('li');
+                const formatted = `${log.date}: ${log.type} - ${log.amount.toFixed(2)} (${log.category}${log.note ? ' - ' + log.note : ''})`;
+                li.textContent = formatted;
+                list.appendChild(li);
+            });
+            logDiv.innerHTML = '';
+            logDiv.appendChild(list);
+        }
+
+        // Delete entry
+        function deleteEntry(id) {
+            if (!confirm('Are you sure you want to delete this entry?')) return;
+            window.entries = window.entries.filter(e => e.id !== id);
+            saveEntries();
+            renderEntries();
+            renderSummary();
+        }
+
+        // Render summary by year
+        function renderSummary() {
+            const summaryBody = document.getElementById('summaryBody');
+            summaryBody.innerHTML = '';
+            const totalsByYear = {};
+            window.entries.forEach(entry => {
+                if (!totalsByYear[entry.year]) {
+                    totalsByYear[entry.year] = {
+                        totalMin: 0,
+                        totalDollars: 0,
+                        minUsed: 0,
+                        dollarsUsed: 0,
+                        minRem: 0,
+                        dollarsRem: 0
+                    };
+                }
+                const obj = totalsByYear[entry.year];
+                obj.totalMin += entry.totalMin;
+                obj.totalDollars += entry.totalDollars;
+                obj.minUsed += entry.minutesUsed;
+                obj.dollarsUsed += entry.dollarsUsed;
+                obj.minRem += entry.remainingMinutes;
+                obj.dollarsRem += entry.remainingDollars;
+            });
+            // Build rows
+            Object.keys(totalsByYear).sort().forEach(year => {
+                const row = totalsByYear[year];
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${year}</td>
+                    <td>${row.totalMin.toFixed(2)}</td>
+                    <td>${row.totalDollars.toFixed(2)}</td>
+                    <td>${row.minUsed.toFixed(2)}</td>
+                    <td>${row.dollarsUsed.toFixed(2)}</td>
+                    <td>${row.minRem.toFixed(2)}</td>
+                    <td>${row.dollarsRem.toFixed(2)}</td>
+                `;
+                summaryBody.appendChild(tr);
+            });
+            // All years row
+            if (Object.keys(totalsByYear).length > 1) {
+                const all = {
+                    totalMin: 0,
+                    totalDollars: 0,
+                    minUsed: 0,
+                    dollarsUsed: 0,
+                    minRem: 0,
+                    dollarsRem: 0
+                };
+                Object.values(totalsByYear).forEach(r => {
+                    all.totalMin += r.totalMin;
+                    all.totalDollars += r.totalDollars;
+                    all.minUsed += r.minUsed;
+                    all.dollarsUsed += r.dollarsUsed;
+                    all.minRem += r.minRem;
+                    all.dollarsRem += r.dollarsRem;
+                });
+                const tr = document.createElement('tr');
+                tr.style.fontWeight = 'bold';
+                tr.innerHTML = `
+                    <td>All Years</td>
+                    <td>${all.totalMin.toFixed(2)}</td>
+                    <td>${all.totalDollars.toFixed(2)}</td>
+                    <td>${all.minUsed.toFixed(2)}</td>
+                    <td>${all.dollarsUsed.toFixed(2)}</td>
+                    <td>${all.minRem.toFixed(2)}</td>
+                    <td>${all.dollarsRem.toFixed(2)}</td>
+                `;
+                summaryBody.appendChild(tr);
+            }
+
+        }
+
+        // Utility to escape values for CSV
+        function csvEscape(value) {
+            const str = (value ?? '').toString();
+            // If string contains any special CSV characters, wrap in double quotes and escape internal quotes
+            if (/[",\n]/.test(str)) {
+                return '"' + str.replace(/"/g, '""') + '"';
+            }
+            return str;
+        }
+
+        // Export all entries and their usage logs as a CSV file
+        function downloadCSV() {
+            // Define CSV header
+            const headers = ['Year','Month','Course/Class Name','Class Type','Course Type','Students','P','S1','S2','Total Minutes','Total Dollars','Minutes Used','Dollars Used','Minutes Remaining','Dollars Remaining','Usage Logs'];
+            // Build rows
+            const rows = window.entries.map(entry => {
+                // Aggregate usage logs into a single string
+                const usageString = entry.usageLogs.map(log => {
+                    const notePart = log.note ? ' - ' + log.note : '';
+                    return `${log.date}: ${log.type} ${log.amount.toFixed(2)} (${log.category}${notePart})`;
+                }).join(' | ');
+                const cols = [
+                    entry.year,
+                    entry.month,
+                    entry.courseName || '',
+                    entry.classType,
+                    entry.courseType || '',
+                    entry.students,
+                    entry.pVal.toFixed(3),
+                    entry.s1,
+                    entry.s2,
+                    entry.totalMin.toFixed(2),
+                    entry.totalDollars.toFixed(2),
+                    entry.minutesUsed.toFixed(2),
+                    entry.dollarsUsed.toFixed(2),
+                    entry.remainingMinutes.toFixed(2),
+                    entry.remainingDollars.toFixed(2),
+                    usageString
+                ];
+                return cols.map(csvEscape).join(',');
+            });
+            // Combine header and rows
+            const csvContent = [headers.map(csvEscape).join(','), ...rows].join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'remedy-data.csv';
+            // Use a hidden link for download
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
