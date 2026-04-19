@@ -20,3 +20,4 @@ jobs:
           local_path: './*'
           remote_path: /home/u285963410/domains/bvtu.ca/public_html/new
           sftp_only: true
+          port: 65002
