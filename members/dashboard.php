@@ -83,7 +83,7 @@ $documents = [
       <nav class="main-nav">
         <ul>
           <li><a href="../about.html">About</a></li>
-          <li><a href="../documents.html">Documents</a></li>
+          <li><a href="../documents.php">Documents</a></li>
           <li><a href="../members.html">Members</a></li>
           <li><a href="../prod.html">PRO-D</a></li>
           <li><a href="../health-safety.html">Health &amp; Safety</a></li>
