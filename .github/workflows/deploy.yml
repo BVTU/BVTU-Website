@@ -15,7 +15,7 @@ jobs:
       - name: Deploy to Hostinger via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: ftp.bvtu.ca
+          server: 82.180.172.230
           username: u285963410
           password: ${{ secrets.FTP_PASSWORD }}
           server-dir: /new/
