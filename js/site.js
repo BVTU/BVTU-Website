@@ -23,18 +23,14 @@ if (toggle && nav) {
   });
 }
 
-// Update "Member Login" button based on login status
+// Update nav button based on login cookie — instant, no network request
 const loginBtn = document.querySelector('a[href*="login.php"]');
 if (loginBtn) {
-  fetch('/members/status.php')
-    .then(r => r.json())
-    .then(data => {
-      if (data.loggedIn) {
-        loginBtn.textContent = 'My Dashboard';
-        loginBtn.href = '/members/dashboard.php';
-        loginBtn.style.background = '#1a6b35';
-        loginBtn.style.borderColor = '#1a6b35';
-      }
-    })
-    .catch(() => {}); // fails silently on local — works on server
+  const isLoggedIn = document.cookie.split(';').some(c => c.trim() === 'bvtu_logged_in=1');
+  if (isLoggedIn) {
+    loginBtn.textContent = 'My Dashboard';
+    loginBtn.href = '/members/dashboard.php';
+    loginBtn.style.background = '#1a6b35';
+    loginBtn.style.borderColor = '#1a6b35';
+  }
 }

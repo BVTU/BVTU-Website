@@ -23,12 +23,16 @@ function loginMember(array $member): void {
     $_SESSION['member_id']    = $member['id'];
     $_SESSION['member_name']  = $member['name'];
     $_SESSION['member_email'] = $member['email'];
+    // JS-readable cookie so static pages can update the nav instantly
+    setcookie('bvtu_logged_in', '1', time() + 60 * 60 * 24 * 7, '/', '', false, false);
 }
 
 function logoutMember(): void {
     startSession();
     $_SESSION = [];
     session_destroy();
+    // Clear the nav cookie
+    setcookie('bvtu_logged_in', '', time() - 3600, '/');
 }
 
 function getMember(): ?array {
