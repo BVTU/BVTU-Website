@@ -1,3 +1,9 @@
 # System files
 .DS_Store
 Thumbs.db
+
+# Database credentials — NEVER commit this
+members/config.php
+
+# Protected PDFs — kept on server only, not in public repo
+members/protected-docs/
