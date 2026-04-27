@@ -84,7 +84,7 @@ ul { list-style: none; }
 .logo-sub  { font-size: .70rem; color: rgba(255,255,255,.70); }
 
 /* Navigation */
-.main-nav ul { display: flex; gap: .2rem; align-items: center; }
+.main-nav > ul { display: flex; gap: .2rem; align-items: center; }
 .main-nav a {
   display: block;
   padding: .5rem .9rem;
@@ -730,7 +730,7 @@ body.so-lock { overflow: hidden; }
     border-top: 1px solid rgba(255,255,255,.1);
   }
   .main-nav.open { transform: translateY(0); }
-  .main-nav ul { flex-direction: column; gap: .15rem; }
+  .main-nav > ul { flex-direction: column; gap: .15rem; }
   .main-nav a { padding: .8rem 1rem; font-size: .98rem; }
   /* Search button and hamburger on the right in mobile header */
   .search-btn { order: 2; margin-left: auto; }
