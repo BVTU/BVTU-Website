@@ -24,9 +24,9 @@ if (toggle && nav) {
 }
 
 // Update nav button based on login cookie — instant, no network request
-const loginBtn = document.querySelector('a[href*="login.php"]');
+const loginBtn = document.querySelector('a[href*="login.php"], a[href*="dashboard.php"]');
 if (loginBtn) {
-  const isLoggedIn = document.cookie.split(';').some(c => c.trim() === 'bvtu_logged_in=1');
+  const isLoggedIn = document.cookie.split(';').some(c => c.trim().startsWith('bvtu_logged_in='));
   if (isLoggedIn) {
     loginBtn.textContent = 'My Dashboard';
     loginBtn.href = '/members/dashboard.php';
