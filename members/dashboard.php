@@ -26,6 +26,7 @@ $documents = [
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="site-root" content="../">
   <title>Member Dashboard — BVTU</title>
   <link rel="stylesheet" href="../css/style.css">
   <link rel="icon" href="../favicon.ico">
@@ -88,6 +89,11 @@ $documents = [
           <li><a href="../prod.php">PRO-D</a></li>
           <li><a href="../health-safety.php">Health &amp; Safety</a></li>
           <li><a href="../bctf.php">BCTF</a></li>
+          <li>
+            <button class="search-btn" data-search-open aria-label="Search">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            </button>
+          </li>
           <li><a href="logout.php">Sign Out</a></li>
         </ul>
       </nav>
@@ -139,5 +145,7 @@ $documents = [
     </div>
   </footer>
 
+  <script src="../js/site.js"></script>
+  <script src="../js/search.js"></script>
 </body>
 </html>

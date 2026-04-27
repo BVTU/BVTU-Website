@@ -162,6 +162,194 @@ ul { list-style: none; }
   text-decoration: none;
 }
 
+/* --- Search button (nav) --- */
+.search-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,.14);
+  border: 1px solid rgba(255,255,255,.22);
+  border-radius: var(--radius-s);
+  color: var(--white);
+  cursor: pointer;
+  padding: .42rem .6rem;
+  transition: background .18s, border-color .18s;
+  flex-shrink: 0;
+}
+.search-btn:hover { background: rgba(255,255,255,.26); border-color: rgba(255,255,255,.38); }
+.search-btn svg { display: block; }
+
+/* ── Search overlay ──────────────────────────────────────── */
+#bvtu-search-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+}
+#bvtu-search-overlay.open { display: block; }
+
+.so-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,18,40,.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.so-box {
+  position: absolute;
+  top: 10vh;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(680px, calc(100vw - 2.5rem));
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: 0 20px 60px rgba(0,18,40,.35);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.so-input-row {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .85rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.so-icon { color: var(--gray-500); flex-shrink: 0; display: flex; }
+#so-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 1.08rem;
+  font-family: var(--font);
+  color: var(--text);
+  background: transparent;
+  min-width: 0;
+}
+#so-input::placeholder { color: var(--gray-500); }
+#so-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--gray-100);
+  border: none;
+  border-radius: var(--radius-s);
+  color: var(--gray-700);
+  cursor: pointer;
+  padding: .3rem;
+  transition: background .15s;
+  flex-shrink: 0;
+}
+#so-close:hover { background: var(--gray-200); }
+
+#so-results {
+  list-style: none;
+  margin: 0;
+  padding: .4rem 0;
+  max-height: 56vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+#so-results:empty { padding: 0; }
+
+.so-state {
+  padding: 1.25rem 1.25rem;
+  font-size: .92rem;
+  color: var(--gray-500);
+}
+.so-error { color: #c0392b; }
+
+.so-result {
+  display: flex;
+  align-items: flex-start;
+  gap: .9rem;
+  padding: .7rem 1.1rem;
+  color: var(--text);
+  text-decoration: none;
+  transition: background .13s;
+}
+.so-result:hover { background: var(--accent); text-decoration: none; }
+
+.so-result-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: .15rem;
+  color: var(--blue);
+}
+.so-result-icon--document { color: var(--primary); }
+
+.so-result-body {
+  display: flex;
+  flex-direction: column;
+  gap: .18rem;
+  min-width: 0;
+  flex: 1;
+}
+.so-result-title {
+  font-size: .95rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.35;
+}
+.so-result-title mark { background: transparent; color: var(--blue); font-weight: 700; }
+.so-result-snippet {
+  font-size: .83rem;
+  color: var(--gray-500);
+  line-height: 1.45;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.so-result-snippet mark { background: transparent; color: var(--primary); font-weight: 600; }
+
+.so-members-badge {
+  flex-shrink: 0;
+  font-size: .72rem;
+  font-weight: 600;
+  color: var(--primary);
+  background: var(--accent);
+  border: 1px solid var(--border);
+  padding: .18rem .52rem;
+  border-radius: 100px;
+  margin-left: auto;
+  align-self: center;
+}
+
+.so-footer {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: .6rem 1.1rem;
+  border-top: 1px solid var(--border);
+  font-size: .76rem;
+  color: var(--gray-500);
+}
+.so-footer kbd {
+  display: inline-block;
+  background: var(--gray-100);
+  border: 1px solid var(--gray-200);
+  border-radius: 4px;
+  padding: .08rem .38rem;
+  font-size: .72rem;
+  font-family: var(--font);
+  color: var(--gray-700);
+}
+.so-algolia {
+  margin-left: auto;
+  font-size: .76rem;
+  color: var(--gray-500);
+  text-decoration: none;
+  opacity: .7;
+  transition: opacity .15s;
+}
+.so-algolia:hover { opacity: 1; text-decoration: none; }
+
+body.so-lock { overflow: hidden; }
+
 /* --- Buttons --- */
 .btn {
   display: inline-block;

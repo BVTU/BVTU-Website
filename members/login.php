@@ -34,6 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="site-root" content="../">
   <title>Member Login — BVTU</title>
   <link rel="stylesheet" href="../css/style.css">
   <link rel="icon" href="../favicon.ico">
@@ -168,5 +169,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
   </div>
 
+  <script src="../js/site.js"></script>
+  <script src="../js/search.js"></script>
 </body>
 </html>

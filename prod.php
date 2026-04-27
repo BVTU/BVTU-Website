@@ -8,6 +8,7 @@ $member   = $loggedIn ? getMember() : null;
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="site-root" content="">
   <title>PRO-D — Bulkley Valley Teachers' Union</title>
   <meta name="description" content="BVTU professional development — policies, committee information, and training opportunities.">
   <link rel="stylesheet" href="css/style.css">
@@ -41,6 +42,11 @@ $member   = $loggedIn ? getMember() : null;
           <li><a href="prod.php" class="active">PRO-D</a></li>
           <li><a href="health-safety.php">Health &amp; Safety</a></li>
           <li><a href="bctf.php">BCTF</a></li>
+          <li>
+            <button class="search-btn" data-search-open aria-label="Search">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            </button>
+          </li>
           <li><a href="<?= $loggedIn ? '/members/dashboard.php' : 'members/login.php' ?>"
               class="btn btn-primary"
               style="padding:.4rem .9rem;font-size:.88rem;margin-left:.5rem;<?= $loggedIn ? 'background:#1a6b35;border-color:#1a6b35;' : '' ?>">
@@ -143,5 +149,6 @@ $member   = $loggedIn ? getMember() : null;
   </footer>
 
   <script src="js/site.js"></script>
+  <script src="js/search.js"></script>
 </body>
 </html>
