@@ -1,3 +1,8 @@
+<?php
+require_once __DIR__ . '/members/auth.php';
+$loggedIn = isLoggedIn();
+$member   = $loggedIn ? getMember() : null;
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -12,7 +17,7 @@
 
   <header class="site-header">
     <div class="header-inner container">
-      <a href="index.html" class="logo">
+      <a href="index.php" class="logo">
         <img src="bvtu-logo.png" alt="BVTU Logo">
         <div class="logo-text">
           <span class="logo-name">Bulkley Valley Teachers' Union</span>
@@ -24,13 +29,17 @@
       </button>
       <nav class="main-nav" id="main-nav">
         <ul>
-          <li><a href="about.html">About</a></li>
+          <li><a href="about.php">About</a></li>
           <li><a href="documents.php">Documents</a></li>
-          <li><a href="members.html">Members</a></li>
-          <li><a href="prod.html" class="active">PRO-D</a></li>
-          <li><a href="health-safety.html">Health &amp; Safety</a></li>
-          <li><a href="bctf.html">BCTF</a></li>
-          <li><a href="members/login.php" class="btn btn-primary" style="padding:.4rem .9rem;font-size:.88rem;margin-left:.5rem;">Member Login</a></li>
+          <li><a href="members.php">Members</a></li>
+          <li><a href="prod.php" class="active">PRO-D</a></li>
+          <li><a href="health-safety.php">Health &amp; Safety</a></li>
+          <li><a href="bctf.php">BCTF</a></li>
+          <li><a href="<?= $loggedIn ? '/members/dashboard.php' : 'members/login.php' ?>"
+              class="btn btn-primary"
+              style="padding:.4rem .9rem;font-size:.88rem;margin-left:.5rem;<?= $loggedIn ? 'background:#1a6b35;border-color:#1a6b35;' : '' ?>">
+            <?= $loggedIn ? 'My Dashboard' : 'Member Login' ?>
+          </a></li>
         </ul>
       </nav>
     </div>
@@ -85,7 +94,7 @@
 
       <div class="content-block">
         <h2>Collaboration Grants</h2>
-        <p>Teachers working collaboratively on professional development projects may apply for a collaboration grant through BVTU. See the <a href="members.html">Members</a> page for application forms and guidelines.</p>
+        <p>Teachers working collaboratively on professional development projects may apply for a collaboration grant through BVTU. See the <a href="members.php">Members</a> page for application forms and guidelines.</p>
       </div>
 
     </div>
@@ -107,12 +116,12 @@
       <div>
         <h3>Navigate</h3>
         <ul class="footer-nav-list">
-          <li><a href="about.html">About</a></li>
+          <li><a href="about.php">About</a></li>
           <li><a href="documents.php">Documents</a></li>
-          <li><a href="members.html">Members</a></li>
-          <li><a href="prod.html">PRO-D</a></li>
-          <li><a href="health-safety.html">Health &amp; Safety</a></li>
-          <li><a href="bctf.html">BCTF</a></li>
+          <li><a href="members.php">Members</a></li>
+          <li><a href="prod.php">PRO-D</a></li>
+          <li><a href="health-safety.php">Health &amp; Safety</a></li>
+          <li><a href="bctf.php">BCTF</a></li>
         </ul>
       </div>
       <div>

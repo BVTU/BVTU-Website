@@ -1,3 +1,8 @@
+<?php
+require_once __DIR__ . '/members/auth.php';
+$loggedIn = isLoggedIn();
+$member   = $loggedIn ? getMember() : null;
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -13,7 +18,7 @@
   <!-- Header -->
   <header class="site-header">
     <div class="header-inner container">
-      <a href="index.html" class="logo">
+      <a href="index.php" class="logo">
         <img src="bvtu-logo.png" alt="BVTU Logo">
         <div class="logo-text">
           <span class="logo-name">Bulkley Valley Teachers' Union</span>
@@ -25,13 +30,17 @@
       </button>
       <nav class="main-nav" id="main-nav">
         <ul>
-          <li><a href="about.html">About</a></li>
+          <li><a href="about.php">About</a></li>
           <li><a href="documents.php">Documents</a></li>
-          <li><a href="members.html">Members</a></li>
-          <li><a href="prod.html">PRO-D</a></li>
-          <li><a href="health-safety.html">Health &amp; Safety</a></li>
-          <li><a href="bctf.html">BCTF</a></li>
-          <li><a href="members/login.php" class="btn btn-primary" style="padding:.4rem .9rem;font-size:.88rem;margin-left:.5rem;">Member Login</a></li>
+          <li><a href="members.php">Members</a></li>
+          <li><a href="prod.php">PRO-D</a></li>
+          <li><a href="health-safety.php">Health &amp; Safety</a></li>
+          <li><a href="bctf.php">BCTF</a></li>
+          <li><a href="<?= $loggedIn ? '/members/dashboard.php' : 'members/login.php' ?>"
+              class="btn btn-primary"
+              style="padding:.4rem .9rem;font-size:.88rem;margin-left:.5rem;<?= $loggedIn ? 'background:#1a6b35;border-color:#1a6b35;' : '' ?>">
+            <?= $loggedIn ? 'My Dashboard' : 'Member Login' ?>
+          </a></li>
         </ul>
       </nav>
     </div>
@@ -41,7 +50,7 @@
   <section class="hero">
     <h1>Bulkley Valley Teachers' Union</h1>
     <p>Supporting educators in Houston, Telkwa, and Smithers</p>
-    <a href="members.html" class="btn btn-primary">Member Resources</a>
+    <a href="members.php" class="btn btn-primary">Member Resources</a>
   </section>
 
   <!-- Quick Access Cards -->
@@ -50,7 +59,7 @@
       <h2 class="section-title">What are you looking for?</h2>
       <div class="cards">
 
-        <a href="about.html" class="card">
+        <a href="about.php" class="card">
           <div class="card-icon">
             <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           </div>
@@ -68,7 +77,7 @@
           <span class="card-arrow">View documents →</span>
         </a>
 
-        <a href="members.html" class="card">
+        <a href="members.php" class="card">
           <div class="card-icon">
             <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           </div>
@@ -77,7 +86,7 @@
           <span class="card-arrow">Member info →</span>
         </a>
 
-        <a href="prod.html" class="card">
+        <a href="prod.php" class="card">
           <div class="card-icon">
             <svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
           </div>
@@ -86,7 +95,7 @@
           <span class="card-arrow">PRO-D info →</span>
         </a>
 
-        <a href="health-safety.html" class="card">
+        <a href="health-safety.php" class="card">
           <div class="card-icon">
             <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
           </div>
@@ -95,7 +104,7 @@
           <span class="card-arrow">H&amp;S resources →</span>
         </a>
 
-        <a href="bctf.html" class="card">
+        <a href="bctf.php" class="card">
           <div class="card-icon">
             <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
           </div>
@@ -140,12 +149,12 @@
       <div>
         <h3>Navigate</h3>
         <ul class="footer-nav-list">
-          <li><a href="about.html">About</a></li>
+          <li><a href="about.php">About</a></li>
           <li><a href="documents.php">Documents</a></li>
-          <li><a href="members.html">Members</a></li>
-          <li><a href="prod.html">PRO-D</a></li>
-          <li><a href="health-safety.html">Health &amp; Safety</a></li>
-          <li><a href="bctf.html">BCTF</a></li>
+          <li><a href="members.php">Members</a></li>
+          <li><a href="prod.php">PRO-D</a></li>
+          <li><a href="health-safety.php">Health &amp; Safety</a></li>
+          <li><a href="bctf.php">BCTF</a></li>
         </ul>
       </div>
       <div>

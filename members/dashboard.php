@@ -73,7 +73,7 @@ $documents = [
 
   <header class="site-header">
     <div class="header-inner container">
-      <a href="../index.html" class="logo">
+      <a href="../index.php" class="logo">
         <img src="../bvtu-logo.png" alt="BVTU Logo">
         <div class="logo-text">
           <span class="logo-name">Bulkley Valley Teachers' Union</span>
@@ -82,12 +82,12 @@ $documents = [
       </a>
       <nav class="main-nav">
         <ul>
-          <li><a href="../about.html">About</a></li>
+          <li><a href="../about.php">About</a></li>
           <li><a href="../documents.php">Documents</a></li>
-          <li><a href="../members.html">Members</a></li>
-          <li><a href="../prod.html">PRO-D</a></li>
-          <li><a href="../health-safety.html">Health &amp; Safety</a></li>
-          <li><a href="../bctf.html">BCTF</a></li>
+          <li><a href="../members.php">Members</a></li>
+          <li><a href="../prod.php">PRO-D</a></li>
+          <li><a href="../health-safety.php">Health &amp; Safety</a></li>
+          <li><a href="../bctf.php">BCTF</a></li>
           <li><a href="logout.php">Sign Out</a></li>
         </ul>
       </nav>

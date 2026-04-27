@@ -1,3 +1,8 @@
+<?php
+require_once __DIR__ . '/members/auth.php';
+$loggedIn = isLoggedIn();
+$member   = $loggedIn ? getMember() : null;
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -12,7 +17,7 @@
 
   <header class="site-header">
     <div class="header-inner container">
-      <a href="index.html" class="logo">
+      <a href="index.php" class="logo">
         <img src="bvtu-logo.png" alt="BVTU Logo">
         <div class="logo-text">
           <span class="logo-name">Bulkley Valley Teachers' Union</span>
@@ -24,13 +29,17 @@
       </button>
       <nav class="main-nav" id="main-nav">
         <ul>
-          <li><a href="about.html" class="active">About</a></li>
+          <li><a href="about.php" class="active">About</a></li>
           <li><a href="documents.php">Documents</a></li>
-          <li><a href="members.html">Members</a></li>
-          <li><a href="prod.html">PRO-D</a></li>
-          <li><a href="health-safety.html">Health &amp; Safety</a></li>
-          <li><a href="bctf.html">BCTF</a></li>
-          <li><a href="members/login.php" class="btn btn-primary" style="padding:.4rem .9rem;font-size:.88rem;margin-left:.5rem;">Member Login</a></li>
+          <li><a href="members.php">Members</a></li>
+          <li><a href="prod.php">PRO-D</a></li>
+          <li><a href="health-safety.php">Health &amp; Safety</a></li>
+          <li><a href="bctf.php">BCTF</a></li>
+          <li><a href="<?= $loggedIn ? '/members/dashboard.php' : 'members/login.php' ?>"
+              class="btn btn-primary"
+              style="padding:.4rem .9rem;font-size:.88rem;margin-left:.5rem;<?= $loggedIn ? 'background:#1a6b35;border-color:#1a6b35;' : '' ?>">
+            <?= $loggedIn ? 'My Dashboard' : 'Member Login' ?>
+          </a></li>
         </ul>
       </nav>
     </div>
@@ -88,7 +97,7 @@
         <h2>Bargaining</h2>
         <p>Collective bargaining is conducted at both the provincial level (through BCTF) and locally. Updates on bargaining will be posted here.</p>
         <div class="info-box">
-          <p>For the latest provincial bargaining updates, visit the <a href="bctf.html">BCTF page</a> or go directly to <a href="https://bctf.ca" target="_blank" rel="noopener">bctf.ca</a>.</p>
+          <p>For the latest provincial bargaining updates, visit the <a href="bctf.php">BCTF page</a> or go directly to <a href="https://bctf.ca" target="_blank" rel="noopener">bctf.ca</a>.</p>
         </div>
       </div>
 
@@ -127,12 +136,12 @@
       <div>
         <h3>Navigate</h3>
         <ul class="footer-nav-list">
-          <li><a href="about.html">About</a></li>
+          <li><a href="about.php">About</a></li>
           <li><a href="documents.php">Documents</a></li>
-          <li><a href="members.html">Members</a></li>
-          <li><a href="prod.html">PRO-D</a></li>
-          <li><a href="health-safety.html">Health &amp; Safety</a></li>
-          <li><a href="bctf.html">BCTF</a></li>
+          <li><a href="members.php">Members</a></li>
+          <li><a href="prod.php">PRO-D</a></li>
+          <li><a href="health-safety.php">Health &amp; Safety</a></li>
+          <li><a href="bctf.php">BCTF</a></li>
         </ul>
       </div>
       <div>

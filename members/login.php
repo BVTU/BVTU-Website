@@ -110,7 +110,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   <header class="site-header">
     <div class="header-inner container">
-      <a href="../index.html" class="logo">
+      <a href="../index.php" class="logo">
         <img src="../bvtu-logo.png" alt="BVTU Logo">
         <div class="logo-text">
           <span class="logo-name">Bulkley Valley Teachers' Union</span>
@@ -119,12 +119,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </a>
       <nav class="main-nav">
         <ul>
-          <li><a href="../about.html">About</a></li>
+          <li><a href="../about.php">About</a></li>
           <li><a href="../documents.php">Documents</a></li>
-          <li><a href="../members.html">Members</a></li>
-          <li><a href="../prod.html">PRO-D</a></li>
-          <li><a href="../health-safety.html">Health &amp; Safety</a></li>
-          <li><a href="../bctf.html">BCTF</a></li>
+          <li><a href="../members.php">Members</a></li>
+          <li><a href="../prod.php">PRO-D</a></li>
+          <li><a href="../health-safety.php">Health &amp; Safety</a></li>
+          <li><a href="../bctf.php">BCTF</a></li>
         </ul>
       </nav>
     </div>
@@ -132,7 +132,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   <div class="auth-wrap">
     <div class="auth-card">
-      <a href="../index.html" class="auth-logo">
+      <a href="../index.php" class="auth-logo">
         <img src="../bvtu-logo.png" alt="BVTU">
         <span>Bulkley Valley<br>Teachers' Union</span>
       </a>
