@@ -135,7 +135,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <ul>
           <li><a href="../about.php">About</a></li>
           <li><a href="../documents.php">Documents</a></li>
-          <li><a href="../members.php">Members</a></li>
+<li class="has-dropdown">
+            <a href="../members.php">Members</a>
+            <ul class="dropdown">
+              <li><a href="../members.php">Member Resources</a></li>
+              <li><a href="../remedy-tracker.php">Remedy Tracker</a></li>
+            </ul>
+          </li>
           <li><a href="../prod.php">PRO-D</a></li>
           <li><a href="../health-safety.php">Health &amp; Safety</a></li>
           <li><a href="../bctf.php">BCTF</a></li>
