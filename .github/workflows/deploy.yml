@@ -9,15 +9,19 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-      - name: Deploy via SFTP
-        uses: wlixcc/SFTP-Deploy-Action@v1.2.4
+      - name: Deploy to Hostinger via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
+          server: 82.180.172.230
+          username: u285963410
           password: ${{ secrets.FTP_PASSWORD }}
-          local_path: './*'
-          remote_path: /home/u285963410/domains/bvtu.ca/public_html/new
-          sftp_only: true
-          port: 65002
+          server-dir: /public_html/
+          dangerous-clean-slate: false
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/protected-docs/**
+            **/config.php
