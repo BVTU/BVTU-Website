@@ -113,7 +113,14 @@ function algoliaAddBatch(array $records): void {
 }
 
 // ── Output ────────────────────────────────────────────────────────────────────
+// Force real-time output — disable buffering
+@ini_set('output_buffering', 'off');
+@ini_set('zlib.output_compression', false);
+while (ob_get_level()) ob_end_flush();
+ob_implicit_flush(true);
+
 header('Content-Type: text/plain; charset=utf-8');
+header('X-Accel-Buffering: no'); // disable nginx buffering
 echo "BVTU Algolia Reindex\n";
 echo str_repeat('=', 50) . "\n\n";
 
