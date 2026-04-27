@@ -60,25 +60,27 @@ const ALGOLIA_INDEX     = 'bvtu_content';
 
 $algoliaUrl = 'https://' . ALGOLIA_APP_ID . '-dsn.algolia.net/1/indexes/' . ALGOLIA_INDEX . '/query';
 
-$algoliaCtx = stream_context_create(['http' => [
-    'method'  => 'POST',
-    'header'  => implode("\r\n", [
-        'Content-Type: application/json',
-        'X-Algolia-Application-Id: ' . ALGOLIA_APP_ID,
-        'X-Algolia-API-Key: ' . ALGOLIA_SEARCH_KEY,
-    ]),
-    'content'       => json_encode([
+$algoliaCh = curl_init($algoliaUrl);
+curl_setopt_array($algoliaCh, [
+    CURLOPT_POST           => true,
+    CURLOPT_POSTFIELDS     => json_encode([
         'query'                  => $q,
         'hitsPerPage'            => 5,
         'attributesToRetrieve'   => ['title', 'content', 'url', 'type', 'members_only'],
         'attributesToSnippet'    => ['content:120'],
         'snippetEllipsisText'    => '…',
     ]),
-    'timeout'       => 5,
-    'ignore_errors' => true,
-]]);
-
-$algoliaResp = @file_get_contents($algoliaUrl, false, $algoliaCtx);
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_TIMEOUT        => 8,
+    CURLOPT_CONNECTTIMEOUT => 5,
+    CURLOPT_HTTPHEADER     => [
+        'Content-Type: application/json',
+        'X-Algolia-Application-Id: ' . ALGOLIA_APP_ID,
+        'X-Algolia-API-Key: ' . ALGOLIA_SEARCH_KEY,
+    ],
+]);
+$algoliaResp = curl_exec($algoliaCh);
+curl_close($algoliaCh);
 $hits        = [];
 $sources     = [];
 
@@ -134,19 +136,21 @@ $claudePayload = json_encode([
     'messages'   => [['role' => 'user', 'content' => $userMessage]],
 ]);
 
-$claudeCtx = stream_context_create(['http' => [
-    'method'        => 'POST',
-    'header'        => implode("\r\n", [
+$claudeCh = curl_init('https://api.anthropic.com/v1/messages');
+curl_setopt_array($claudeCh, [
+    CURLOPT_POST           => true,
+    CURLOPT_POSTFIELDS     => $claudePayload,
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_TIMEOUT        => 30,
+    CURLOPT_CONNECTTIMEOUT => 10,
+    CURLOPT_HTTPHEADER     => [
         'Content-Type: application/json',
         "x-api-key: {$claudeKey}",
         'anthropic-version: 2023-06-01',
-    ]),
-    'content'       => $claudePayload,
-    'timeout'       => 25,
-    'ignore_errors' => true,
-]]);
-
-$claudeResp = @file_get_contents('https://api.anthropic.com/v1/messages', false, $claudeCtx);
+    ],
+]);
+$claudeResp = curl_exec($claudeCh);
+curl_close($claudeCh);
 
 if (!$claudeResp) {
     http_response_code(503);

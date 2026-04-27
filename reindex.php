@@ -78,27 +78,32 @@ function extractMainContent(string $html): string {
     return extractText($html);
 }
 
-/** POST records to Algolia batch endpoint */
+/** POST records to Algolia batch endpoint (cURL) */
 function algoliaRequest(string $method, string $path, array $body): array {
     global $adminKey;
     $appId = ALGOLIA_APP_ID;
     $url   = "https://{$appId}.algolia.net{$path}";
     $json  = json_encode($body);
-    $ctx   = stream_context_create([
-        'http' => [
-            'method'  => $method,
-            'header'  => implode("\r\n", [
-                'Content-Type: application/json',
-                "X-Algolia-Application-Id: {$appId}",
-                "X-Algolia-API-Key: {$adminKey}",
-            ]),
-            'content'        => $json,
-            'timeout'        => 15,
-            'ignore_errors'  => true,
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_CUSTOMREQUEST  => $method,
+        CURLOPT_POSTFIELDS     => $json,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 20,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_HTTPHEADER     => [
+            'Content-Type: application/json',
+            "X-Algolia-Application-Id: {$appId}",
+            "X-Algolia-API-Key: {$adminKey}",
         ],
     ]);
-    $resp   = file_get_contents($url, false, $ctx);
-    $status = $http_response_header[0] ?? 'HTTP/1.1 000 Unknown';
+    $resp   = curl_exec($ch);
+    $status = 'HTTP/1.1 ' . curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $err    = curl_error($ch);
+    curl_close($ch);
+
+    if ($err) echo "  cURL error: {$err}\n";
     return ['status' => $status, 'body' => json_decode($resp ?: '{}', true)];
 }
 
