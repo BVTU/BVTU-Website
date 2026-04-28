@@ -7,7 +7,7 @@ $member   = $loggedIn ? getMember() : null;
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="site-root" content="">
   <title>Health &amp; Safety — Bulkley Valley Teachers' Union</title>
   <meta name="description" content="BVTU health and safety resources — workplace committees, WorkSafe forms, employee assistance, and mental health support.">

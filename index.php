@@ -7,7 +7,7 @@ $member   = $loggedIn ? getMember() : null;
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="site-root" content="">
   <title>Bulkley Valley Teachers' Union</title>
   <meta name="description" content="Bulkley Valley Teachers' Union — Local of the BC Teachers' Federation, representing educators in Houston, Telkwa, and Smithers.">

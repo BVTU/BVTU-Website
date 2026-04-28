@@ -38,6 +38,16 @@ if (toggle && nav) {
   });
 }
 
+// ── Floating search bubble (FAB) ────────────────────────────────────────────
+(function () {
+  const fab = document.createElement('button');
+  fab.className = 'search-fab';
+  fab.setAttribute('data-search-open', '');
+  fab.setAttribute('aria-label', 'Search & Ask AI');
+  fab.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="22" height="22"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>';
+  document.body.appendChild(fab);
+})();
+
 // ── Mobile dropdown toggle ──────────────────────────────────────────────────
 document.querySelectorAll('.has-dropdown > a').forEach(link => {
   link.addEventListener('click', e => {

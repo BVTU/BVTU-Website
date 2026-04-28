@@ -7,7 +7,7 @@ $member   = $loggedIn ? getMember() : null;
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="site-root" content="">
   <title>Remedy Tracker &mdash; Bulkley Valley Teachers' Union</title>
   <meta name="description" content="Calculate class size and composition remedies under your collective agreement &mdash; BVTU Remedy Tracker.">

@@ -7,7 +7,7 @@ $member   = $loggedIn ? getMember() : null;
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="site-root" content="">
   <title>BCTF — Bulkley Valley Teachers' Union</title>
   <meta name="description" content="BC Teachers' Federation resources — provincial agreements, member discounts, and bargaining updates.">
