@@ -206,7 +206,8 @@ ul { list-style: none; }
   border-radius: 0;
   background: none;
 }
-.dropdown li a:hover {
+.dropdown li a:hover,
+.dropdown li a.active {
   background: var(--accent);
   color: var(--primary);
   text-decoration: none;
