@@ -85,6 +85,14 @@ ul { list-style: none; }
   background: var(--gray-100);
   color: var(--primary);
 }
+/* Keep Member Login button white text regardless of scroll state */
+.site-header.scrolled .main-nav a.btn-primary {
+  color: var(--white);
+}
+.site-header.scrolled .main-nav a.btn-primary:hover {
+  background: var(--blue-lt);
+  color: var(--white);
+}
 .site-header.scrolled .search-btn {
   background: var(--gray-100);
   border-color: var(--gray-200);

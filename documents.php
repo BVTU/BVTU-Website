@@ -240,7 +240,7 @@ $protected_docs = [
       <?php endif; ?>
 
       <div class="info-box" style="margin-top: 2.5rem;">
-        <p>Can't find what you're looking for? Contact the union office at <a href="tel:6134853127">613 485 3127</a>.</p>
+        <p>Can't find what you're looking for? <a href="contact.php">Contact the union office</a>.</p>
       </div>
 
     </div>
@@ -257,7 +257,7 @@ $protected_docs = [
         <h3>Contact</h3>
         <p><strong style="color:rgba(255,255,255,.9)">President:</strong> Cody Lind</p>
         <p>3772-C 1st Ave<br>Smithers, BC V0J 2N0</p>
-        <p><a href="tel:6134853127">613 485 3127</a></p>
+        <p><a href="contact.php">Contact Us</a></p>
       </div>
       <div>
         <h3>Navigate</h3>

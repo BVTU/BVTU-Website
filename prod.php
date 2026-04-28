@@ -69,7 +69,7 @@ $member   = $loggedIn ? getMember() : null;
         <h2>PRO-D Committee</h2>
         <p>The BVTU PRO-D Committee plans and coordinates professional development activities for members throughout the school year. Members are welcome to join the committee.</p>
         <div class="info-box">
-          <p>Interested in joining the PRO-D Committee? Contact the union president at <a href="tel:6134853127">613 485 3127</a>.</p>
+          <p>Interested in joining the PRO-D Committee? <a href="contact.php">contact the union president</a>.</p>
         </div>
       </div>
 
@@ -121,7 +121,7 @@ $member   = $loggedIn ? getMember() : null;
         <h3>Contact</h3>
         <p><strong style="color:rgba(255,255,255,.9)">President:</strong> Cody Lind</p>
         <p>3772-C 1st Ave<br>Smithers, BC V0J 2N0</p>
-        <p><a href="tel:6134853127">613 485 3127</a></p>
+        <p><a href="contact.php">Contact Us</a></p>
       </div>
       <div>
         <h3>Navigate</h3>
