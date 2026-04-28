@@ -2,25 +2,26 @@
    Bulkley Valley Teachers' Union — Site Styles
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Fraunces:ital,opsz,wght@0,9..144,700;1,9..144,400;1,9..144,600&display=swap');
 
 /* --- Custom Properties --- */
 :root {
-  --primary:     #003865;
-  --primary-dk:  #001f40;
-  --blue:        #1565c0;
+  --primary:     #0d3b2e;   /* deep forest green */
+  --primary-dk:  #071f18;   /* darkest forest    */
+  --blue:        #1565c0;   /* links / UI actions */
   --blue-lt:     #1976d2;
-  --accent:      #e3f0ff;
+  --accent:      #e6f4ee;   /* light green tint   */
   --white:       #ffffff;
-  --off-white:   #f7f9fc;
-  --gray-100:    #f1f5f9;
-  --gray-200:    #e2e8f0;
-  --gray-500:    #64748b;
-  --gray-700:    #334155;
-  --text:        #0f1d2e;
-  --border:      #cddcf0;
+  --off-white:   #f7faf8;
+  --gray-100:    #f1f5f2;
+  --gray-200:    #e2e8e4;
+  --gray-500:    #5c7268;
+  --gray-700:    #2e4039;
+  --text:        #0e1f18;
+  --border:      #c0d8cc;
 
-  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font:         'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Fraunces', Georgia, serif;
 
   --radius-s: 6px;
   --radius:   10px;
@@ -542,35 +543,36 @@ body.so-lock { overflow: hidden; }
 
 /* --- Hero (home) --- */
 .hero {
-  background: linear-gradient(145deg, #001020 0%, var(--primary-dk) 30%, #013b6e 62%, #1055a8 100%);
+  /* Dark green overlay over photo — swap the URL for your own image any time */
+  background:
+    linear-gradient(
+      160deg,
+      rgba(4, 16, 10, .82) 0%,
+      rgba(10, 42, 28, .68) 50%,
+      rgba(4, 16, 10, .80) 100%
+    ),
+    url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=1920&q=80')
+    center / cover no-repeat;
   color: var(--white);
   padding: calc(var(--hdr-h) + 5.5rem) 1.5rem 6.5rem;
   text-align: center;
-  position: relative;
-  overflow: hidden;
-}
-/* Subtle radial highlight */
-.hero::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse 80% 60% at 50% 100%, rgba(21,101,192,.18) 0%, transparent 70%);
-  pointer-events: none;
 }
 .hero h1 {
-  font-size: clamp(2rem, 5vw, 3.2rem);
-  font-weight: 900;
-  margin-bottom: .9rem;
-  line-height: 1.1;
-  letter-spacing: -.02em;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 600;
+  font-size: clamp(2.4rem, 6vw, 4rem);
+  margin-bottom: 1rem;
+  line-height: 1.08;
+  letter-spacing: -.01em;
 }
 .hero p {
-  font-size: 1.18rem;
-  opacity: .78;
-  max-width: 520px;
+  font-size: 1.15rem;
+  opacity: .82;
+  max-width: 540px;
   margin: 0 auto 2.25rem;
   font-weight: 400;
-  line-height: 1.65;
+  line-height: 1.7;
 }
 
 /* --- Page hero (inner pages) --- */
@@ -580,8 +582,10 @@ body.so-lock { overflow: hidden; }
   padding: calc(var(--hdr-h) + 2.75rem) 1.5rem 3rem;
 }
 .page-hero h1 {
-  font-size: clamp(1.5rem, 3.5vw, 2.2rem);
-  font-weight: 800;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 600;
+  font-size: clamp(1.6rem, 3.5vw, 2.4rem);
   margin-bottom: .4rem;
   letter-spacing: -.01em;
 }
@@ -593,11 +597,13 @@ body.so-lock { overflow: hidden; }
   background: var(--off-white);
 }
 .cards-section .section-title {
-  font-size: 1.7rem;
-  font-weight: 800;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 600;
+  font-size: 1.9rem;
   color: var(--primary);
   margin-bottom: .5rem;
-  letter-spacing: -.02em;
+  letter-spacing: -.01em;
 }
 .cards-section .section-sub {
   font-size: .98rem;
@@ -671,8 +677,10 @@ body.so-lock { overflow: hidden; }
 .page-content { padding: 3.5rem 0; }
 .content-block { margin-bottom: 3rem; }
 .content-block h2 {
-  font-size: 1.35rem;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 600;
+  font-size: 1.45rem;
   color: var(--primary);
   margin-bottom: 1rem;
   padding-bottom: .6rem;
