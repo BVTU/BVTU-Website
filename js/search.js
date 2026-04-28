@@ -31,6 +31,7 @@
       body: JSON.stringify({
         query,
         hitsPerPage:           8,
+        filters:               'NOT type:collective-agreement',
         attributesToHighlight: ['title'],
         attributesToSnippet:   ['content:25'],
         snippetEllipsisText:   '…',

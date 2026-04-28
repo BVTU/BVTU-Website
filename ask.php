@@ -65,7 +65,7 @@ curl_setopt_array($algoliaCh, [
     CURLOPT_POST           => true,
     CURLOPT_POSTFIELDS     => json_encode([
         'query'                  => $q,
-        'hitsPerPage'            => 5,
+        'hitsPerPage'            => 8,   // No type filter — Claude searches CA articles too
         'attributesToRetrieve'   => ['title', 'content', 'url', 'type', 'members_only'],
         'attributesToSnippet'    => ['content:120'],
         'snippetEllipsisText'    => '…',
@@ -87,11 +87,26 @@ $sources     = [];
 if ($algoliaResp) {
     $algoliaData = json_decode($algoliaResp, true);
     $hits        = $algoliaData['hits'] ?? [];
-    $sources     = array_map(fn($h) => [
-        'title' => $h['title'] ?? '',
-        'url'   => $h['url']   ?? '',
-        'type'  => $h['type']  ?? 'page',
-    ], $hits);
+
+    // Build sources list, deduplicating by URL so CA articles
+    // (which all link to collective-agreement.php) appear only once.
+    $seenUrls = [];
+    foreach ($hits as $h) {
+        $url = $h['url'] ?? '';
+        if (!$url || isset($seenUrls[$url])) continue;
+        $seenUrls[$url] = true;
+
+        // Give CA articles a friendly display title
+        $title = ($h['type'] === 'collective-agreement')
+            ? 'Collective Agreement (SD54–BVTU)'
+            : ($h['title'] ?? '');
+
+        $sources[] = [
+            'title' => $title,
+            'url'   => $url,
+            'type'  => $h['type'] ?? 'page',
+        ];
+    }
 }
 
 // ── Build context string from hits ────────────────────────────────────────────
