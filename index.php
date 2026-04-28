@@ -17,7 +17,7 @@ $member   = $loggedIn ? getMember() : null;
 <body>
 
   <!-- Header -->
-  <header class="site-header">
+  <header class="site-header hero-mode">
     <div class="header-inner container">
       <a href="index.php" class="logo">
         <img src="bvtu-logo.png" alt="BVTU Logo">
@@ -58,15 +58,19 @@ $member   = $loggedIn ? getMember() : null;
 
   <!-- Hero -->
   <section class="hero">
-    <h1>Bulkley Valley Teachers' Union</h1>
-    <p>Supporting educators in Houston, Telkwa, and Smithers</p>
-    <a href="members.php" class="btn btn-primary">Member Resources</a>
+    <h1>Supporting Educators<br>in the Bulkley Valley</h1>
+    <p>Your local union representing teachers in Houston, Telkwa, and Smithers — SD54, Local of the BCTF.</p>
+    <div style="display:flex;gap:.85rem;justify-content:center;flex-wrap:wrap;">
+      <a href="members.php" class="btn btn-primary">Member Resources</a>
+      <a href="about.php" class="btn btn-outline-white">About BVTU</a>
+    </div>
   </section>
 
   <!-- Quick Access Cards -->
   <section class="cards-section">
     <div class="container">
       <h2 class="section-title">What are you looking for?</h2>
+      <p class="section-sub">Resources, documents, and information for BVTU members.</p>
       <div class="cards">
 
         <a href="about.php" class="card">

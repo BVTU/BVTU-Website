@@ -1,3 +1,15 @@
+// ── Scroll-triggered sticky header ──────────────────────────────────────────
+(function () {
+  const hdr = document.querySelector('.site-header');
+  if (!hdr) return;
+  const THRESHOLD = 60;
+  function onScroll() {
+    hdr.classList.toggle('scrolled', window.scrollY > THRESHOLD);
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll(); // set correct state on page load
+})();
+
 // ── Mobile nav toggle ───────────────────────────────────────────────────────
 const toggle = document.querySelector('.nav-toggle');
 const nav    = document.getElementById('main-nav');

@@ -2,10 +2,12 @@
    Bulkley Valley Teachers' Union — Site Styles
    ============================================================ */
 
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
 /* --- Custom Properties --- */
 :root {
   --primary:     #003865;
-  --primary-dk:  #002244;
+  --primary-dk:  #001f40;
   --blue:        #1565c0;
   --blue-lt:     #1976d2;
   --accent:      #e3f0ff;
@@ -15,10 +17,10 @@
   --gray-200:    #e2e8f0;
   --gray-500:    #64748b;
   --gray-700:    #334155;
-  --text:        #1a2332;
+  --text:        #0f1d2e;
   --border:      #cddcf0;
 
-  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 
   --radius-s: 6px;
   --radius:   10px;
@@ -50,13 +52,48 @@ ul { list-style: none; }
 
 /* --- Header --- */
 .site-header {
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 100;
   background: var(--primary);
   height: var(--hdr-h);
-  box-shadow: 0 2px 8px rgba(0,0,0,.30);
+  box-shadow: 0 2px 8px rgba(0,0,0,.25);
+  transition: background .32s ease, box-shadow .32s ease;
 }
+
+/* Homepage only: transparent over the hero */
+.site-header.hero-mode {
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Scrolled state — white header that "pops down" */
+.site-header.scrolled {
+  background: var(--white) !important;
+  box-shadow: 0 2px 24px rgba(0,0,0,.09) !important;
+}
+.site-header.scrolled .logo-name { color: var(--primary); }
+.site-header.scrolled .logo-sub  { color: var(--gray-500); }
+.site-header.scrolled .main-nav a {
+  color: var(--gray-700);
+}
+.site-header.scrolled .main-nav a:hover,
+.site-header.scrolled .main-nav a.active {
+  background: var(--gray-100);
+  color: var(--primary);
+}
+.site-header.scrolled .search-btn {
+  background: var(--gray-100);
+  border-color: var(--gray-200);
+  color: var(--gray-700);
+}
+.site-header.scrolled .search-btn:hover {
+  background: var(--gray-200);
+  border-color: var(--border);
+}
+.site-header.scrolled .nav-toggle span { background: var(--text); }
 
 .header-inner {
   display: flex;
@@ -505,60 +542,80 @@ body.so-lock { overflow: hidden; }
 
 /* --- Hero (home) --- */
 .hero {
-  background: linear-gradient(140deg, var(--primary-dk) 0%, var(--blue) 100%);
+  background: linear-gradient(145deg, #001020 0%, var(--primary-dk) 30%, #013b6e 62%, #1055a8 100%);
   color: var(--white);
-  padding: 5.5rem 1.5rem;
+  padding: calc(var(--hdr-h) + 5.5rem) 1.5rem 6.5rem;
   text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+/* Subtle radial highlight */
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 80% 60% at 50% 100%, rgba(21,101,192,.18) 0%, transparent 70%);
+  pointer-events: none;
 }
 .hero h1 {
-  font-size: clamp(1.8rem, 4.5vw, 2.8rem);
-  font-weight: 800;
-  margin-bottom: .75rem;
-  line-height: 1.15;
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  font-weight: 900;
+  margin-bottom: .9rem;
+  line-height: 1.1;
+  letter-spacing: -.02em;
 }
 .hero p {
-  font-size: 1.15rem;
-  opacity: .82;
+  font-size: 1.18rem;
+  opacity: .78;
   max-width: 520px;
-  margin: 0 auto 2rem;
+  margin: 0 auto 2.25rem;
+  font-weight: 400;
+  line-height: 1.65;
 }
 
 /* --- Page hero (inner pages) --- */
 .page-hero {
   background: linear-gradient(140deg, var(--primary-dk) 0%, var(--primary) 100%);
   color: var(--white);
-  padding: 3rem 1.5rem;
+  padding: calc(var(--hdr-h) + 2.75rem) 1.5rem 3rem;
 }
 .page-hero h1 {
   font-size: clamp(1.5rem, 3.5vw, 2.2rem);
   font-weight: 800;
   margin-bottom: .4rem;
+  letter-spacing: -.01em;
 }
 .page-hero p { opacity: .78; font-size: .98rem; max-width: 600px; }
 
 /* --- Cards section --- */
 .cards-section {
-  padding: 4rem 0;
+  padding: 5rem 0;
   background: var(--off-white);
 }
 .cards-section .section-title {
-  font-size: 1.5rem;
-  font-weight: 700;
+  font-size: 1.7rem;
+  font-weight: 800;
   color: var(--primary);
-  margin-bottom: 2rem;
+  margin-bottom: .5rem;
+  letter-spacing: -.02em;
+}
+.cards-section .section-sub {
+  font-size: .98rem;
+  color: var(--gray-500);
+  margin-bottom: 2.25rem;
 }
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(285px, 1fr));
-  gap: 1.2rem;
+  gap: 1.25rem;
 }
 .card {
   background: var(--white);
-  border-radius: var(--radius);
-  padding: 1.75rem;
+  border-radius: var(--radius-l);
+  padding: 1.9rem;
   border: 1px solid var(--border);
   box-shadow: var(--shadow-s);
-  transition: transform .2s, box-shadow .2s, border-color .2s;
+  transition: transform .22s, box-shadow .22s, border-color .22s;
   display: flex;
   flex-direction: column;
   gap: .4rem;
@@ -566,26 +623,26 @@ body.so-lock { overflow: hidden; }
   color: var(--text);
 }
 .card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-l);
+  transform: translateY(-5px);
+  box-shadow: 0 12px 36px rgba(0,56,101,.13);
   border-color: var(--blue);
   text-decoration: none;
   color: var(--text);
 }
 .card-icon {
-  width: 48px;
-  height: 48px;
+  width: 50px;
+  height: 50px;
   background: var(--accent);
-  border-radius: var(--radius-s);
+  border-radius: var(--radius);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: .6rem;
+  margin-bottom: .7rem;
   color: var(--blue);
 }
 .card-icon svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.card h3 { font-size: 1.05rem; font-weight: 700; color: var(--primary); }
-.card p  { font-size: .88rem; color: var(--gray-500); line-height: 1.5; flex: 1; }
+.card h3 { font-size: 1.06rem; font-weight: 700; color: var(--primary); }
+.card p  { font-size: .88rem; color: var(--gray-500); line-height: 1.55; flex: 1; }
 .card-arrow { font-size: .85rem; font-weight: 600; color: var(--blue); padding-top: .5rem; }
 
 /* --- Quick links bar --- */
@@ -761,8 +818,8 @@ body.so-lock { overflow: hidden; }
     color: var(--white);
   }
 
-  .hero { padding: 3.5rem 1.25rem; }
-  .page-hero { padding: 2rem 1.25rem; }
+  .hero { padding: calc(var(--hdr-h) + 3rem) 1.25rem 4rem; }
+  .page-hero { padding: calc(var(--hdr-h) + 1.75rem) 1.25rem 2rem; }
 
   .footer-grid { grid-template-columns: 1fr; gap: 1.75rem; padding: 2.5rem 0 2rem; }
   .cards { grid-template-columns: 1fr; }
