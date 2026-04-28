@@ -9,10 +9,31 @@ require_once __DIR__ . '/members/auth.php';
 $loggedIn = isLoggedIn();
 $member   = $loggedIn ? getMember() : null;
 
-// PDF filename in /documents/ — update if you rename the file
-$pdfFile   = 'SD54-Bulkley-Valley-Collective-Agreement-2022-2025.pdf';
-$pdfUrl    = 'documents/' . $pdfFile;
-$pdfExists = file_exists(__DIR__ . '/' . $pdfUrl);
+// Auto-detect any PDF in /documents/ with "collective" or "CA" in the name
+$pdfFile   = '';
+$pdfUrl    = '';
+$pdfExists = false;
+$docsDir   = __DIR__ . '/documents/';
+if (is_dir($docsDir)) {
+    foreach (scandir($docsDir) as $f) {
+        if (strtolower(substr($f, -4)) === '.pdf' &&
+            preg_match('/collective|agreement|\bCA\b/i', $f)) {
+            $pdfFile   = $f;
+            $pdfUrl    = 'documents/' . $f;
+            $pdfExists = true;
+            break;
+        }
+    }
+    // Fallback: just grab the first PDF in the folder
+    if (!$pdfExists) {
+        foreach (scandir($docsDir) as $f) {
+            if (strtolower(substr($f, -4)) === '.pdf') {
+                $pdfFile = $f; $pdfUrl = 'documents/' . $f; $pdfExists = true;
+                break;
+            }
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">

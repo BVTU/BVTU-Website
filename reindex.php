@@ -154,14 +154,16 @@ echo str_contains($res['status'], '200') ? "  ✓ Settings saved.\n\n" : "  ✗ 
 echo "Indexing public pages...\n";
 
 $root = __DIR__;
-$baseUrl = 'https://bvtu.ca'; // update if site is at a different domain
+$baseUrl = 'https://new.bvtu.ca'; // switch to https://bvtu.ca when live domain is ready
 
 $publicPages = [
-    ['file' => 'index.php',         'url' => '/',                    'priority' => 10],
-    ['file' => 'about.php',         'url' => '/about.php',           'priority' => 8],
-    ['file' => 'documents.php',     'url' => '/documents.php',       'priority' => 8],
-    ['file' => 'members.php',       'url' => '/members.php',         'priority' => 7],
-    ['file' => 'prod.php',          'url' => '/prod.php',            'priority' => 7],
+    ['file' => 'index.php',                'url' => '/',                           'priority' => 10],
+    ['file' => 'about.php',               'url' => '/about.php',                  'priority' => 8],
+    ['file' => 'documents.php',           'url' => '/documents.php',              'priority' => 8],
+    ['file' => 'collective-agreement.php','url' => '/collective-agreement.php',   'priority' => 9],
+    ['file' => 'contact.php',             'url' => '/contact.php',                'priority' => 5],
+    ['file' => 'members.php',             'url' => '/members.php',                'priority' => 7],
+    ['file' => 'prod.php',                'url' => '/prod.php',                   'priority' => 7],
     ['file' => 'health-safety.php', 'url' => '/health-safety.php',   'priority' => 7],
     ['file' => 'bctf.php',          'url' => '/bctf.php',            'priority' => 6],
     ['file' => 'remedy-tracker.php','url' => '/remedy-tracker.php',  'priority' => 6],
