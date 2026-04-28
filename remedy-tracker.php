@@ -1083,6 +1083,7 @@ $member   = $loggedIn ? getMember() : null;
           <li class="has-dropdown"><a href="documents.php">Documents</a><ul class="dropdown"><li><a href="documents.php">All Documents</a></li><li><a href="collective-agreement.php">Collective Agreement</a></li></ul></li>
           <li><a href="members.php">Members</a></li>
           <li><a href="remedy-tracker.php">Remedy Tracker</a></li>
+              <li><a href="collab-grant.php">Collaboration Grant</a></li>
           <li><a href="prod.php">PRO-D</a></li>
           <li><a href="health-safety.php">Health &amp; Safety</a></li>
           <li><a href="bctf.php">BCTF</a></li>

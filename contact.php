@@ -178,6 +178,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <ul class="dropdown">
               <li><a href="members.php">Member Resources</a></li>
               <li><a href="remedy-tracker.php">Remedy Tracker</a></li>
+              <li><a href="collab-grant.php">Collaboration Grant</a></li>
             </ul>
           </li>
           <li><a href="prod.php">PRO-D</a></li>
@@ -323,6 +324,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <li><a href="documents.php">Documents</a></li>
           <li><a href="members.php">Member Resources</a></li>
           <li><a href="remedy-tracker.php">Remedy Tracker</a></li>
+              <li><a href="collab-grant.php">Collaboration Grant</a></li>
           <li><a href="prod.php">PRO-D</a></li>
         </ul>
       </div>

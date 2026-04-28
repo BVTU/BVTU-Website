@@ -40,6 +40,7 @@ $member   = $loggedIn ? getMember() : null;
             <ul class="dropdown">
               <li><a href="members.php">Member Resources</a></li>
               <li><a href="remedy-tracker.php">Remedy Tracker</a></li>
+              <li><a href="collab-grant.php">Collaboration Grant</a></li>
             </ul>
           </li>
           <li><a href="prod.php">PRO-D</a></li>

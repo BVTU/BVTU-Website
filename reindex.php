@@ -167,6 +167,7 @@ $publicPages = [
     ['file' => 'health-safety.php', 'url' => '/health-safety.php',   'priority' => 7],
     ['file' => 'bctf.php',          'url' => '/bctf.php',            'priority' => 6],
     ['file' => 'remedy-tracker.php','url' => '/remedy-tracker.php',  'priority' => 6],
+    ['file' => 'collab-grant.php', 'url' => '/collab-grant.php',   'priority' => 7],
 ];
 
 $records = [];
