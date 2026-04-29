@@ -161,6 +161,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <input type="password" id="password" name="password" required autocomplete="current-password">
         </div>
         <button type="submit" class="auth-submit">Sign In</button>
+        <div style="text-align:center;margin-top:.9rem;">
+          <a href="forgot-password.php" style="font-size:.85rem;color:var(--gray-500);">Forgot your password?</a>
+        </div>
       </form>
 
       <div class="auth-footer">

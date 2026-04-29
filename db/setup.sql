@@ -19,9 +19,17 @@ CREATE TABLE IF NOT EXISTS members (
   email           VARCHAR(255) NOT NULL UNIQUE,
   password_hash   VARCHAR(255) NOT NULL,
   employee_number VARCHAR(20)  NOT NULL UNIQUE,
+  reset_token     VARCHAR(64)  NULL,
+  reset_expires   DATETIME     NULL,
   created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (employee_number) REFERENCES valid_employee_numbers(employee_number)
 );
+
+-- ============================================================
+--  EXISTING INSTALLS: run this to add password reset columns
+-- ============================================================
+-- ALTER TABLE members ADD COLUMN reset_token   VARCHAR(64) NULL;
+-- ALTER TABLE members ADD COLUMN reset_expires  DATETIME    NULL;
 
 -- ============================================================
 --  PILOT: Add executive employee numbers below.
