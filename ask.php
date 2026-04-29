@@ -58,7 +58,7 @@ const ALGOLIA_APP_ID    = 'IUEMJN3YMB';
 const ALGOLIA_SEARCH_KEY = 'f743d9e8113b01fbb593d0d5ea592854';
 const ALGOLIA_INDEX     = 'bvtu_content';
 
-// Strip common question words so keyword matching works better.
+// Strip common question words to extract searchable keywords.
 // "how much prep time am I entitled to?" → "prep time entitled"
 $searchQuery = preg_replace(
     '/\b(how much|how many|how do i|how can i|what is|what are|what does|can i|do i|am i|when can|when do|where is|who is|is there|is it|tell me about|explain)\b/i',
@@ -66,51 +66,73 @@ $searchQuery = preg_replace(
 );
 $searchQuery = trim(preg_replace('/\s+/', ' ', $searchQuery)) ?: $q;
 
-// Expand teacher shorthand to full terms so Algolia keyword matching works.
-// "prep" won't match "preparation time" without this.
-$expansions = [
-    '/\bprep\b/i'         => 'preparation',
-    '/\bpro-?d\b/i'       => 'professional development',
-    '/\bpd\b/i'           => 'professional development',
-    '/\bttoc\b/i'         => 'TTOC',
-    '/\b(mat|paternity)\s+leave\b/i' => 'maternity leave',
-    '/\bsick\s+days?\b/i' => 'sick leave',
-    '/\bcat\s+(?:days?|time)\b/i'    => 'classroom assistant time',
-];
-$searchQuery = preg_replace(array_keys($expansions), array_values($expansions), $searchQuery);
-$searchQuery = trim(preg_replace('/\s+/', ' ', $searchQuery));
+$hits    = [];
+$sources = [];
 
-// Two parallel Algolia queries via the multi-index batch endpoint:
-//   1. General search (pages, documents) — catches non-CA questions
-//   2. CA-specific search — always surfaces collective agreement articles
-$retrieve = 'title,content,url,type,members_only';
-$batchUrl = 'https://' . ALGOLIA_APP_ID . '-dsn.algolia.net/1/indexes/*/queries';
-$batchPayload = json_encode([
-    'requests' => [
-        [
-            'indexName' => ALGOLIA_INDEX,
-            'params'    => http_build_query([
-                'query'                => $searchQuery,
-                'hitsPerPage'          => 4,
-                'attributesToRetrieve' => $retrieve,
-            ]),
-        ],
-        [
-            'indexName' => ALGOLIA_INDEX,
-            'params'    => http_build_query([
-                'query'                => $searchQuery,
-                'hitsPerPage'          => 6,
-                'filters'              => 'type:collective-agreement',
-                'attributesToRetrieve' => $retrieve,
-            ]),
-        ],
-    ],
-]);
+// ── 1. Search CA directly from parsed JSON (no Algolia needed) ────────────────
+// Score every CA article by keyword frequency and return the top matches.
+$caPath = __DIR__ . '/../ca-content.json';
+if (file_exists($caPath)) {
+    $caArticles = json_decode(file_get_contents($caPath), true) ?: [];
 
-$algoliaCh = curl_init($batchUrl);
+    // Build word list — keep words 3+ chars, skip generic stop words
+    $stopWords = ['the','and','for','are','was','that','this','with','have',
+                  'from','they','will','been','has','its','not','but','can',
+                  'you','your','our','their','what','how','much','many','who'];
+    $words = preg_split('/\s+/', strtolower($searchQuery), -1, PREG_SPLIT_NO_EMPTY);
+    $words = array_filter($words, fn($w) => strlen($w) >= 3 && !in_array($w, $stopWords));
+    $words = array_values($words);
+
+    if ($words) {
+        $scored = [];
+        foreach ($caArticles as $idx => $article) {
+            $titleLower   = strtolower($article['title']   ?? '');
+            $contentLower = strtolower($article['content'] ?? '');
+            $score = 0;
+            foreach ($words as $word) {
+                // Title matches are worth 5×, content matches 1×
+                $score += substr_count($titleLower,   $word) * 5;
+                $score += substr_count($contentLower, $word);
+            }
+            if ($score > 0) {
+                $scored[] = ['score' => $score, 'idx' => $idx];
+            }
+        }
+        usort($scored, fn($a, $b) => $b['score'] - $a['score']);
+
+        foreach (array_slice($scored, 0, 5) as $s) {
+            $art = $caArticles[$s['idx']];
+            $hits[] = [
+                'title'       => $art['title'],
+                'content'     => $art['content'],
+                'url'         => 'https://new.bvtu.ca/collective-agreement.php',
+                'type'        => 'collective-agreement',
+                'members_only'=> false,
+            ];
+        }
+    }
+
+    // CA source link (shown once regardless of how many articles matched)
+    if ($hits) {
+        $sources[] = [
+            'title' => 'Collective Agreement (SD54–BVTU)',
+            'url'   => 'https://new.bvtu.ca/collective-agreement.php',
+            'type'  => 'collective-agreement',
+        ];
+    }
+}
+
+// ── 2. Algolia: general site pages only (not CA) ─────────────────────────────
+$algoliaUrl = 'https://' . ALGOLIA_APP_ID . '-dsn.algolia.net/1/indexes/' . ALGOLIA_INDEX . '/query';
+$algoliaCh  = curl_init($algoliaUrl);
 curl_setopt_array($algoliaCh, [
     CURLOPT_POST           => true,
-    CURLOPT_POSTFIELDS     => $batchPayload,
+    CURLOPT_POSTFIELDS     => json_encode([
+        'query'                => $searchQuery,
+        'hitsPerPage'          => 3,
+        'filters'              => 'NOT type:collective-agreement',
+        'attributesToRetrieve' => ['title', 'content', 'url', 'type', 'members_only'],
+    ]),
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_TIMEOUT        => 8,
     CURLOPT_CONNECTTIMEOUT => 5,
@@ -122,39 +144,15 @@ curl_setopt_array($algoliaCh, [
 ]);
 $algoliaResp = curl_exec($algoliaCh);
 curl_close($algoliaCh);
-$hits    = [];
-$sources = [];
 
 if ($algoliaResp) {
-    $batchData = json_decode($algoliaResp, true);
-    // Merge results from both queries, deduplicating by objectID
-    $seenIds = [];
-    foreach (($batchData['results'] ?? []) as $result) {
-        foreach (($result['hits'] ?? []) as $hit) {
-            $id = $hit['objectID'] ?? '';
-            if ($id && isset($seenIds[$id])) continue;
-            if ($id) $seenIds[$id] = true;
-            $hits[] = $hit;
-        }
-    }
-
-    // Build sources list, deduplicating by URL
-    $seenUrls = [];
-    foreach ($hits as $h) {
+    $algoliaData = json_decode($algoliaResp, true);
+    foreach (($algoliaData['hits'] ?? []) as $h) {
+        $hits[] = $h;
         $url = $h['url'] ?? '';
-        if (!$url || isset($seenUrls[$url])) continue;
-        $seenUrls[$url] = true;
-
-        // Collapse all CA articles to one friendly source link
-        $title = ($h['type'] === 'collective-agreement')
-            ? 'Collective Agreement (SD54–BVTU)'
-            : ($h['title'] ?? '');
-
-        $sources[] = [
-            'title' => $title,
-            'url'   => $url,
-            'type'  => $h['type'] ?? 'page',
-        ];
+        if ($url) {
+            $sources[] = ['title' => $h['title'] ?? '', 'url' => $url, 'type' => $h['type'] ?? 'page'];
+        }
     }
 }
 
