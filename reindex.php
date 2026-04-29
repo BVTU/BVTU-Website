@@ -150,6 +150,24 @@ $settings = [
 $res = algoliaRequest('PUT', '/1/indexes/' . ALGOLIA_INDEX . '/settings', $settings);
 echo str_contains($res['status'], '200') ? "  ✓ Settings saved.\n\n" : "  ✗ Settings failed: {$res['status']}\n\n";
 
+// ── 2b. Push synonyms ─────────────────────────────────────────────────────────
+echo "Pushing synonyms...\n";
+$synonyms = [
+    ['objectID' => 'syn-prep',      'type' => 'synonym', 'synonyms' => ['prep time', 'preparation time', 'preparation period']],
+    ['objectID' => 'syn-prod',      'type' => 'synonym', 'synonyms' => ['pro-d', 'prod', 'professional development', 'pro d']],
+    ['objectID' => 'syn-sick',      'type' => 'synonym', 'synonyms' => ['sick days', 'sick leave', 'illness leave']],
+    ['objectID' => 'syn-mat',       'type' => 'synonym', 'synonyms' => ['maternity leave', 'mat leave', 'parental leave', 'paternity leave']],
+    ['objectID' => 'syn-ttoc',      'type' => 'synonym', 'synonyms' => ['ttoc', 'teacher on call', 'teacher teaching on call', 'toc', 'substitute teacher']],
+    ['objectID' => 'syn-salary',    'type' => 'synonym', 'synonyms' => ['salary', 'pay', 'wages', 'compensation', 'salary grid', 'pay grid']],
+    ['objectID' => 'syn-grievance', 'type' => 'synonym', 'synonyms' => ['grievance', 'complaint', 'dispute', 'remedy']],
+    ['objectID' => 'syn-release',   'type' => 'synonym', 'synonyms' => ['release time', 'released time', 'release day', 'time release']],
+    ['objectID' => 'syn-benefits',  'type' => 'synonym', 'synonyms' => ['benefits', 'extended health', 'dental', 'msp', 'health benefits']],
+];
+$res = algoliaRequest('POST', '/1/indexes/' . ALGOLIA_INDEX . '/synonyms/batch?replaceExistingSynonyms=true', $synonyms);
+echo str_contains($res['status'], '200') || str_contains($res['status'], '201')
+    ? "  ✓ " . count($synonyms) . " synonym groups pushed.\n\n"
+    : "  ✗ Synonyms failed: {$res['status']}\n\n";
+
 // ── 3. Index public pages ─────────────────────────────────────────────────────
 echo "Indexing public pages...\n";
 

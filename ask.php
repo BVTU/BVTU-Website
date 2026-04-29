@@ -66,6 +66,20 @@ $searchQuery = preg_replace(
 );
 $searchQuery = trim(preg_replace('/\s+/', ' ', $searchQuery)) ?: $q;
 
+// Expand teacher shorthand to full terms so Algolia keyword matching works.
+// "prep" won't match "preparation time" without this.
+$expansions = [
+    '/\bprep\b/i'         => 'preparation',
+    '/\bpro-?d\b/i'       => 'professional development',
+    '/\bpd\b/i'           => 'professional development',
+    '/\bttoc\b/i'         => 'TTOC',
+    '/\b(mat|paternity)\s+leave\b/i' => 'maternity leave',
+    '/\bsick\s+days?\b/i' => 'sick leave',
+    '/\bcat\s+(?:days?|time)\b/i'    => 'classroom assistant time',
+];
+$searchQuery = preg_replace(array_keys($expansions), array_values($expansions), $searchQuery);
+$searchQuery = trim(preg_replace('/\s+/', ' ', $searchQuery));
+
 // Two parallel Algolia queries via the multi-index batch endpoint:
 //   1. General search (pages, documents) — catches non-CA questions
 //   2. CA-specific search — always surfaces collective agreement articles
