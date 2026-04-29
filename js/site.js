@@ -1,13 +1,16 @@
 // ── Scroll-triggered sticky header ──────────────────────────────────────────
+// Only runs on hero-mode pages (index.php). Inner pages keep their
+// green header — they're often short and can't scroll back past the
+// threshold to dismiss the white state.
 (function () {
-  const hdr = document.querySelector('.site-header');
+  const hdr = document.querySelector('.site-header.hero-mode');
   if (!hdr) return;
   const THRESHOLD = 60;
   function onScroll() {
     hdr.classList.toggle('scrolled', window.scrollY > THRESHOLD);
   }
   window.addEventListener('scroll', onScroll, { passive: true });
-  onScroll(); // set correct state on page load
+  onScroll();
 })();
 
 // ── Mobile nav toggle ───────────────────────────────────────────────────────
