@@ -71,7 +71,7 @@ $sources = [];
 
 // ── 1. Search CA directly from parsed JSON (no Algolia needed) ────────────────
 // Score every CA article by keyword frequency and return the top matches.
-$caPath = __DIR__ . '/../ca-content.json';
+$caPath = __DIR__ . '/ca-content.json';
 if (file_exists($caPath)) {
     $caArticles = json_decode(file_get_contents($caPath), true) ?: [];
 
