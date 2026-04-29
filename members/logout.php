@@ -1,5 +1,5 @@
 <?php
 require_once 'auth.php';
 logoutMember();
-header('Location: ../index.html');
+header('Location: ../index.php');
 exit;
