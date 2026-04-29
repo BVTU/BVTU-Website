@@ -58,18 +58,45 @@ const ALGOLIA_APP_ID    = 'IUEMJN3YMB';
 const ALGOLIA_SEARCH_KEY = 'f743d9e8113b01fbb593d0d5ea592854';
 const ALGOLIA_INDEX     = 'bvtu_content';
 
-$algoliaUrl = 'https://' . ALGOLIA_APP_ID . '-dsn.algolia.net/1/indexes/' . ALGOLIA_INDEX . '/query';
+// Strip common question words so keyword matching works better.
+// "how much prep time am I entitled to?" → "prep time entitled"
+$searchQuery = preg_replace(
+    '/\b(how much|how many|how do i|how can i|what is|what are|what does|can i|do i|am i|when can|when do|where is|who is|is there|is it|tell me about|explain)\b/i',
+    ' ', $q
+);
+$searchQuery = trim(preg_replace('/\s+/', ' ', $searchQuery)) ?: $q;
 
-$algoliaCh = curl_init($algoliaUrl);
+// Two parallel Algolia queries via the multi-index batch endpoint:
+//   1. General search (pages, documents) — catches non-CA questions
+//   2. CA-specific search — always surfaces collective agreement articles
+$retrieve = 'title,content,url,type,members_only';
+$batchUrl = 'https://' . ALGOLIA_APP_ID . '-dsn.algolia.net/1/indexes/*/queries';
+$batchPayload = json_encode([
+    'requests' => [
+        [
+            'indexName' => ALGOLIA_INDEX,
+            'params'    => http_build_query([
+                'query'                => $searchQuery,
+                'hitsPerPage'          => 4,
+                'attributesToRetrieve' => $retrieve,
+            ]),
+        ],
+        [
+            'indexName' => ALGOLIA_INDEX,
+            'params'    => http_build_query([
+                'query'                => $searchQuery,
+                'hitsPerPage'          => 6,
+                'filters'              => 'type:collective-agreement',
+                'attributesToRetrieve' => $retrieve,
+            ]),
+        ],
+    ],
+]);
+
+$algoliaCh = curl_init($batchUrl);
 curl_setopt_array($algoliaCh, [
     CURLOPT_POST           => true,
-    CURLOPT_POSTFIELDS     => json_encode([
-        'query'                  => $q,
-        'hitsPerPage'            => 8,   // No type filter — Claude searches CA articles too
-        'attributesToRetrieve'   => ['title', 'content', 'url', 'type', 'members_only'],
-        'attributesToSnippet'    => ['content:120'],
-        'snippetEllipsisText'    => '…',
-    ]),
+    CURLOPT_POSTFIELDS     => $batchPayload,
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_TIMEOUT        => 8,
     CURLOPT_CONNECTTIMEOUT => 5,
@@ -81,22 +108,30 @@ curl_setopt_array($algoliaCh, [
 ]);
 $algoliaResp = curl_exec($algoliaCh);
 curl_close($algoliaCh);
-$hits        = [];
-$sources     = [];
+$hits    = [];
+$sources = [];
 
 if ($algoliaResp) {
-    $algoliaData = json_decode($algoliaResp, true);
-    $hits        = $algoliaData['hits'] ?? [];
+    $batchData = json_decode($algoliaResp, true);
+    // Merge results from both queries, deduplicating by objectID
+    $seenIds = [];
+    foreach (($batchData['results'] ?? []) as $result) {
+        foreach (($result['hits'] ?? []) as $hit) {
+            $id = $hit['objectID'] ?? '';
+            if ($id && isset($seenIds[$id])) continue;
+            if ($id) $seenIds[$id] = true;
+            $hits[] = $hit;
+        }
+    }
 
-    // Build sources list, deduplicating by URL so CA articles
-    // (which all link to collective-agreement.php) appear only once.
+    // Build sources list, deduplicating by URL
     $seenUrls = [];
     foreach ($hits as $h) {
         $url = $h['url'] ?? '';
         if (!$url || isset($seenUrls[$url])) continue;
         $seenUrls[$url] = true;
 
-        // Give CA articles a friendly display title
+        // Collapse all CA articles to one friendly source link
         $title = ($h['type'] === 'collective-agreement')
             ? 'Collective Agreement (SD54–BVTU)'
             : ($h['title'] ?? '');
