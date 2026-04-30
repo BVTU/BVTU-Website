@@ -129,7 +129,7 @@ if (is_dir($docsDir)) {
             <a href="members.php">Members</a>
             <ul class="dropdown">
               <li><a href="members.php">Member Resources</a></li>
-              <li><a href="life-insurance.php">Life Insurance</a></li><li><a href="remedy-tracker.php">Remedy Tracker</a></li>
+              <li><a href="benefits.php">Health &amp; Dental</a></li><li><a href="life-insurance.php">Life Insurance</a></li><li><a href="remedy-tracker.php">Remedy Tracker</a></li>
               <li><a href="collab-grant.php">Collaboration Grant</a></li>
             </ul>
           </li>
@@ -215,7 +215,7 @@ if (is_dir($docsDir)) {
           <li><a href="about.php">About BVTU</a></li>
           <li><a href="documents.php">Documents</a></li>
           <li><a href="members.php">Member Resources</a></li>
-          <li><a href="life-insurance.php">Life Insurance</a></li><li><a href="remedy-tracker.php">Remedy Tracker</a></li>
+          <li><a href="benefits.php">Health &amp; Dental</a></li><li><a href="life-insurance.php">Life Insurance</a></li><li><a href="remedy-tracker.php">Remedy Tracker</a></li>
               <li><a href="collab-grant.php">Collaboration Grant</a></li>
           <li><a href="prod.php">PRO-D</a></li>
         </ul>
