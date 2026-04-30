@@ -242,7 +242,7 @@ $member   = $loggedIn ? getMember() : null;
             <ul class="dropdown">
               <li><a href="members.php">Member Resources</a></li>
               <li><a href="life-insurance.php" class="active">Life Insurance</a></li>
-              <li><a href="remedy-tracker.php">Remedy Tracker</a></li>
+              <li><a href="ttoc.php">TTOC Resources</a></li><li><a href="atrieve.php">Release Time / Atrieve</a></li><li><a href="remedy-tracker.php">Remedy Tracker</a></li>
               <li><a href="collab-grant.php">Collaboration Grant</a></li>
             </ul>
           </li>

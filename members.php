@@ -39,7 +39,7 @@ $member   = $loggedIn ? getMember() : null;
             <a href="members.php" class="active">Members</a>
             <ul class="dropdown">
               <li><a href="members.php">Member Resources</a></li>
-              <li><a href="benefits.php">Health &amp; Dental</a></li><li><a href="life-insurance.php">Life Insurance</a></li><li><a href="remedy-tracker.php">Remedy Tracker</a></li>
+              <li><a href="benefits.php">Health &amp; Dental</a></li><li><a href="life-insurance.php">Life Insurance</a></li><li><a href="ttoc.php">TTOC Resources</a></li><li><a href="atrieve.php">Release Time / Atrieve</a></li><li><a href="remedy-tracker.php">Remedy Tracker</a></li>
               <li><a href="collab-grant.php">Collaboration Grant</a></li>
             </ul>
           </li>
@@ -136,6 +136,24 @@ $member   = $loggedIn ? getMember() : null;
           <h3>Life Insurance</h3>
           <p>Plan EB coverage — 3× salary up to $300,000, beneficiary designation, disability waiver, and conversion rights.</p>
           <div class="member-page-card-arrow">View coverage details →</div>
+        </a>
+
+        <a href="ttoc.php" class="member-page-card">
+          <div class="member-page-card-icon">
+            <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <h3>TTOC Resources</h3>
+          <p>Call-out rates, EI hours calculator, experience credit, sick leave entitlements, pro-D access, and benefits for TTOCs.</p>
+          <div class="member-page-card-arrow">View TTOC guide →</div>
+        </a>
+
+        <a href="atrieve.php" class="member-page-card">
+          <div class="member-page-card-icon">
+            <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          </div>
+          <h3>Release Time &amp; Atrieve</h3>
+          <p>How to enter union-paid release time in Atrieve — approval process, BCTF and BVTU event codes, and leave entry instructions.</p>
+          <div class="member-page-card-arrow">View Atrieve guide →</div>
         </a>
 
         <a href="remedy-tracker.php" class="member-page-card">
