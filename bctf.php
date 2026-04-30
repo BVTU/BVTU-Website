@@ -79,7 +79,7 @@ $member   = $loggedIn ? getMember() : null;
         <h2>Provincial Collective Agreement</h2>
         <p>The provincial collective agreement sets out the terms and conditions of employment for all BC public school teachers. It is negotiated between the BCTF and the BC Public School Employers' Association (BCPSEA).</p>
         <div class="doc-list">
-          <a href="documents/provincial-collective-agreement.pdf" class="doc-item">
+          <a href="https://bctf.ca/bargaining/provincial-collective-agreement" class="doc-item" target="_blank" rel="noopener">
             <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
             Provincial Collective Agreement (Current)
           </a>

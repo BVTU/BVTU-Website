@@ -117,13 +117,13 @@ $member   = $loggedIn ? getMember() : null;
         <h2>Governance Documents</h2>
         <p>BVTU bylaws and constitutional documents govern how the local operates.</p>
         <div class="doc-list">
-          <a href="documents/bvtu-bylaws.pdf" class="doc-item">
+          <a href="mailto:lp54@bctf.ca?subject=BVTU Bylaws" class="doc-item">
             <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            BVTU Bylaws
+            BVTU Bylaws <span style="font-size:.8rem;color:var(--gray-500);">(request from president)</span>
           </a>
-          <a href="documents/bvtu-constitution.pdf" class="doc-item">
+          <a href="mailto:lp54@bctf.ca?subject=BVTU Constitution" class="doc-item">
             <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            BVTU Constitution
+            BVTU Constitution <span style="font-size:.8rem;color:var(--gray-500);">(request from president)</span>
           </a>
         </div>
       </div>

@@ -180,16 +180,7 @@ $member   = $loggedIn ? getMember() : null;
       <div class="content-block">
         <h2>Union-Paid Release Time</h2>
         <p>BVTU members may be entitled to union-paid release time for union business, including committee work, bargaining, and BCTF events. Contact the president to request release time or learn about your entitlements.</p>
-        <div class="doc-list">
-          <a href="documents/release-time-policy.pdf" class="doc-item">
-            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            Release Time Policy
-          </a>
-          <a href="documents/release-time-request-form.pdf" class="doc-item">
-            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            Release Time Request Form
-          </a>
-        </div>
+        <p style="margin-top:.5rem;"><a href="atrieve.php">See the Atrieve Release Time guide →</a> for step-by-step instructions on entering union-paid release time and a full list of qualifying events. Contact <a href="mailto:lp54@bctf.ca">lp54@bctf.ca</a> to request approval.</p>
       </div>
 
       <!-- Salary Information -->
@@ -351,12 +342,7 @@ $member   = $loggedIn ? getMember() : null;
         <div class="info-box">
           <p>Keep your TRB receipt and submit it to the union president. Reimbursement is available once per renewal cycle.</p>
         </div>
-        <div class="doc-list">
-          <a href="documents/certification-reimbursement-form.pdf" class="doc-item">
-            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            Certification Fee Reimbursement Form
-          </a>
-        </div>
+        <p style="margin-top:.5rem;">Email your receipt to <a href="mailto:lp54@bctf.ca">lp54@bctf.ca</a> to request reimbursement. A reimbursement form is available from the president.</p>
       </div>
 
       <!-- Collaboration Grants -->
@@ -364,13 +350,9 @@ $member   = $loggedIn ? getMember() : null;
         <h2>Collaboration Grants</h2>
         <p>Grants are available to support collaborative teacher projects and initiatives. Applications are reviewed by the PRO-D committee.</p>
         <div class="doc-list">
-          <a href="documents/collaboration-grant-application.pdf" class="doc-item">
+          <a href="collab-grant.php" class="doc-item">
             <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            Collaboration Grant Application
-          </a>
-          <a href="documents/collaboration-grant-guidelines.pdf" class="doc-item">
-            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            Grant Guidelines
+            Collaboration Grant — Application &amp; Guidelines
           </a>
         </div>
       </div>
@@ -380,13 +362,13 @@ $member   = $loggedIn ? getMember() : null;
         <h2>TTOC Resources</h2>
         <p>Teacher-on-Call (TTOC / Substitute) members have specific rights and entitlements under the collective agreement. Key resources are listed below.</p>
         <div class="doc-list">
-          <a href="documents/ttoc-information.pdf" class="doc-item">
+          <a href="ttoc.php" class="doc-item">
             <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            TTOC Information Guide
+            TTOC Resources Guide
           </a>
-          <a href="documents/ttoc-collective-agreement-provisions.pdf" class="doc-item">
+          <a href="documents/ttoc-experience-credit.pdf" class="doc-item" download>
             <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            TTOC Collective Agreement Provisions
+            Understanding TTOC Experience Credit (PDF)
           </a>
         </div>
         <ul class="resource-list" style="margin-top: 1rem;">

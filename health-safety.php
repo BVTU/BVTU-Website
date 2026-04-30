@@ -78,13 +78,13 @@ $member   = $loggedIn ? getMember() : null;
         <h2>Violence in the Workplace</h2>
         <p>Teachers are entitled to a safe working environment. If you experience or witness violence in the workplace, you have the right to report it and receive support.</p>
         <div class="doc-list">
-          <a href="documents/violence-incident-report.pdf" class="doc-item">
+          <a href="https://www.worksafebc.com/en/claims" class="doc-item" target="_blank" rel="noopener">
             <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            Violence Incident Report Form
+            Violence Incident Report Form (WorkSafeBC)
           </a>
-          <a href="documents/violence-prevention-policy.pdf" class="doc-item">
+          <a href="https://www.sd54.bc.ca" class="doc-item" target="_blank" rel="noopener">
             <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            Violence Prevention Policy (SD54)
+            Violence Prevention Policy (SD54 website)
           </a>
         </div>
       </div>
@@ -93,13 +93,9 @@ $member   = $loggedIn ? getMember() : null;
         <h2>WorkSafe BC</h2>
         <p>Work-related injuries must be reported to WorkSafe BC. Forms and guidance are available below. Contact the union if you need support navigating a WorkSafe claim.</p>
         <div class="doc-list">
-          <a href="documents/worksafe-claim-form.pdf" class="doc-item">
+          <a href="https://www.worksafebc.com/en/claims" class="doc-item" target="_blank" rel="noopener">
             <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            WorkSafe Claim Form (Worker)
-          </a>
-          <a href="documents/worksafe-injury-guide.pdf" class="doc-item">
-            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            Guide to WorkSafe Claims for Teachers
+            WorkSafe Claim Forms &amp; Guides (WorkSafeBC website)
           </a>
         </div>
         <ul class="resource-list" style="margin-top:1rem;">
@@ -114,9 +110,9 @@ $member   = $loggedIn ? getMember() : null;
           <p>EFAP services are available 24/7. Access is confidential — your employer is not informed. Contact details are in your benefits package or ask the union president.</p>
         </div>
         <div class="doc-list">
-          <a href="documents/efap-guide.pdf" class="doc-item">
+          <a href="https://bctf.ca/member-services/efap" class="doc-item" target="_blank" rel="noopener">
             <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            EFAP Guide for Employees
+            EFAP Information (BCTF website)
           </a>
         </div>
       </div>

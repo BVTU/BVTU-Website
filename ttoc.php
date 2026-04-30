@@ -339,6 +339,9 @@ $member   = $loggedIn ? getMember() : null;
         <div class="info-box" style="font-size:.9rem;">
           <strong>See LOU No. 11 (page 129)</strong> of the Local Collective Agreement for specific timelines on transferring TTOC days to the experience bank.
         </div>
+        <a href="documents/ttoc-experience-credit.pdf" download class="btn btn-outline" style="margin-top:.75rem;display:inline-block;font-size:.9rem;">
+          ↓ Download: Understanding TTOC Experience Credit (PDF)
+        </a>
       </div>
 
       <!-- ── Sick Leave ─────────────────────────────────────────── -->

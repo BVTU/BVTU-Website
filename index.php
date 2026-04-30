@@ -139,7 +139,7 @@ $member   = $loggedIn ? getMember() : null;
       <div class="quick-links-row">
         <a href="https://bctf.ca" target="_blank" rel="noopener">BCTF</a>
         <a href="https://www.sd54.bc.ca" target="_blank" rel="noopener">School District 54</a>
-        <a href="https://www.teacherspension.ca" target="_blank" rel="noopener">Teachers' Pension Plan</a>
+        <a href="https://www.bctp.ca" target="_blank" rel="noopener">Teachers' Pension Plan</a>
         <a href="https://www2.gov.bc.ca/gov/content/education-training/k-12" target="_blank" rel="noopener">Ministry of Education</a>
         <a href="https://www.bcteacherregulation.ca" target="_blank" rel="noopener">Teacher Certification</a>
         <a href="https://www.tqs.ca" target="_blank" rel="noopener">Teacher Qualification Services</a>

@@ -139,11 +139,11 @@ $protected_docs = [
         <div class="doc-category">
           <h3>Collective Agreements</h3>
           <div class="doc-list">
-            <a href="documents/provincial-collective-agreement.pdf" class="doc-item" download>
+            <a href="https://bctf.ca/bargaining/provincial-collective-agreement" class="doc-item" target="_blank" rel="noopener">
               <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
               Provincial Collective Agreement
             </a>
-            <a href="documents/local-collective-agreement.pdf" class="doc-item" download>
+            <a href="collective-agreement.php" class="doc-item">
               <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
               Local Collective Agreement (SD54–BVTU)
             </a>
@@ -153,13 +153,13 @@ $protected_docs = [
         <div class="doc-category">
           <h3>Provincial Regulations</h3>
           <div class="doc-list">
-            <a href="documents/school-act.pdf" class="doc-item">
+            <a href="https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/96412_00" class="doc-item" target="_blank" rel="noopener">
               <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
               School Act
             </a>
-            <a href="documents/teachers-act.pdf" class="doc-item">
+            <a href="https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/11019_00" class="doc-item" target="_blank" rel="noopener">
               <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-              Teachers Act
+              Teacher Regulation Branch Act
             </a>
           </div>
         </div>
@@ -167,11 +167,11 @@ $protected_docs = [
         <div class="doc-category">
           <h3>Ethics &amp; Professional Standards</h3>
           <div class="doc-list">
-            <a href="documents/bctf-code-of-ethics.pdf" class="doc-item">
+            <a href="https://www.bctf.ca/topics/member-services/code-of-ethics" class="doc-item" target="_blank" rel="noopener">
               <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
               BCTF Code of Ethics
             </a>
-            <a href="documents/standards-for-educators.pdf" class="doc-item">
+            <a href="https://www.bcteacherregulation.ca" class="doc-item" target="_blank" rel="noopener">
               <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
               Standards for Educators (TRB)
             </a>
@@ -181,13 +181,13 @@ $protected_docs = [
         <div class="doc-category">
           <h3>BVTU Governance</h3>
           <div class="doc-list">
-            <a href="documents/bvtu-bylaws.pdf" class="doc-item">
+            <a href="mailto:lp54@bctf.ca?subject=BVTU Bylaws" class="doc-item">
               <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-              BVTU Bylaws
+              BVTU Bylaws <span style="font-size:.8rem;color:var(--gray-500);">(request from president)</span>
             </a>
-            <a href="documents/bvtu-constitution.pdf" class="doc-item">
+            <a href="mailto:lp54@bctf.ca?subject=BVTU Constitution" class="doc-item">
               <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-              BVTU Constitution
+              BVTU Constitution <span style="font-size:.8rem;color:var(--gray-500);">(request from president)</span>
             </a>
           </div>
         </div>
