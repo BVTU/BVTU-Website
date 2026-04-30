@@ -40,21 +40,21 @@ $member   = $loggedIn ? getMember() : null;
       background: var(--accent);
       border: 1.5px solid var(--border);
       border-radius: var(--radius-l);
-      padding: 1.75rem;
+      padding: 1.5rem 1.75rem;
     }
     .grant-eligibility h3 {
-      font-size: .95rem;
+      font-size: .85rem;
       font-weight: 700;
       color: var(--primary);
       text-transform: uppercase;
       letter-spacing: .06em;
-      margin-bottom: 1rem;
+      margin-bottom: .9rem;
     }
     .grant-eligibility ul {
       list-style: none;
-      display: flex;
-      flex-direction: column;
-      gap: .6rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: .5rem .75rem;
     }
     .grant-eligibility li {
       display: flex;
@@ -62,7 +62,7 @@ $member   = $loggedIn ? getMember() : null;
       align-items: flex-start;
       font-size: .9rem;
       color: var(--gray-700);
-      line-height: 1.55;
+      line-height: 1.5;
     }
     .grant-eligibility li::before {
       content: '';
@@ -71,7 +71,7 @@ $member   = $loggedIn ? getMember() : null;
       height: 7px;
       background: var(--primary);
       border-radius: 50%;
-      margin-top: .45rem;
+      margin-top: .42rem;
     }
 
     /* ── Section heading style ─────────────────────────────── */
@@ -302,42 +302,39 @@ $member   = $loggedIn ? getMember() : null;
 
       <!-- ── Background & Purpose ──────────────────────────── -->
       <div class="grant-section">
-        <div class="grant-overview">
-          <div>
-            <p class="grant-lead" style="margin-bottom:1.25rem;">
-              As part of the 2019–2022 provincial collective bargaining process, a fund was established to provide collaboration support through local unions. This opportunity is completely voluntary and is distinct from anything SD54 may offer independently.
-            </p>
-            <h2 class="grant-h2">Who This Is For</h2>
-            <p style="font-size:.93rem;color:var(--gray-700);line-height:1.7;max-width:640px;">
-              The grant is designed to support teachers at key transition points in their careers — but any member who self-identifies as a candidate is welcome to apply:
-            </p>
-            <ul style="list-style:none;margin-top:1rem;display:flex;flex-direction:column;gap:.6rem;max-width:640px;">
-              <li style="display:flex;gap:.75rem;align-items:flex-start;font-size:.93rem;color:var(--gray-700);line-height:1.55;">
-                <span style="flex-shrink:0;width:8px;height:8px;background:var(--primary);border-radius:50%;margin-top:.45rem;"></span>
-                Teachers in the <strong>first five years</strong> of their career
-              </li>
-              <li style="display:flex;gap:.75rem;align-items:flex-start;font-size:.93rem;color:var(--gray-700);line-height:1.55;">
-                <span style="flex-shrink:0;width:8px;height:8px;background:var(--primary);border-radius:50%;margin-top:.45rem;"></span>
-                Experienced teachers in their <strong>first or second year in a significantly different position</strong>
-              </li>
-              <li style="display:flex;gap:.75rem;align-items:flex-start;font-size:.93rem;color:var(--gray-700);line-height:1.55;">
-                <span style="flex-shrink:0;width:8px;height:8px;background:var(--primary);border-radius:50%;margin-top:.45rem;"></span>
-                Teachers who <strong>self-identify</strong> as candidates for collaboration or mentorship support
-              </li>
-            </ul>
-          </div>
+        <p class="grant-lead">
+          As part of the 2019–2022 provincial collective bargaining process, a fund was established to provide collaboration support through local unions. This opportunity is completely voluntary and is distinct from anything SD54 may offer independently.
+        </p>
 
-          <div class="grant-eligibility">
-            <h3>At a Glance</h3>
-            <ul>
-              <li>$40,000 fund held by BVTU</li>
-              <li>Available to K–12, district &amp; itinerant staff, and TTOCs</li>
-              <li>Up to <strong>3 release days</strong> per member per year</li>
-              <li>Funds cover TTOC release time only — not materials or technology</li>
-              <li>Applications reviewed monthly by the BVTU Mentorship Sub-Committee</li>
-              <li>Approved by the first week of each month; notifications by the 15th</li>
-            </ul>
-          </div>
+        <h2 class="grant-h2" style="margin-top:1.75rem;">Who This Is For</h2>
+        <p style="font-size:.95rem;color:var(--gray-700);line-height:1.7;">
+          The grant is designed to support teachers at key transition points in their careers — but any member who self-identifies as a candidate is welcome to apply:
+        </p>
+        <ul style="list-style:none;margin-top:.75rem;display:flex;flex-direction:column;gap:.55rem;">
+          <li style="display:flex;gap:.75rem;align-items:flex-start;font-size:.95rem;color:var(--gray-700);line-height:1.6;">
+            <span style="flex-shrink:0;width:8px;height:8px;background:var(--primary);border-radius:50%;margin-top:.5rem;"></span>
+            Teachers in the <strong>first five years</strong> of their career
+          </li>
+          <li style="display:flex;gap:.75rem;align-items:flex-start;font-size:.95rem;color:var(--gray-700);line-height:1.6;">
+            <span style="flex-shrink:0;width:8px;height:8px;background:var(--primary);border-radius:50%;margin-top:.5rem;"></span>
+            Experienced teachers in their <strong>first or second year in a significantly different position</strong>
+          </li>
+          <li style="display:flex;gap:.75rem;align-items:flex-start;font-size:.95rem;color:var(--gray-700);line-height:1.6;">
+            <span style="flex-shrink:0;width:8px;height:8px;background:var(--primary);border-radius:50%;margin-top:.5rem;"></span>
+            Teachers who <strong>self-identify</strong> as candidates for collaboration or mentorship support
+          </li>
+        </ul>
+
+        <div class="grant-eligibility" style="margin-top:1.75rem;">
+          <h3>At a Glance</h3>
+          <ul>
+            <li>$40,000 fund held by BVTU</li>
+            <li>Available to K–12, district &amp; itinerant staff, and TTOCs</li>
+            <li>Up to <strong>3 release days</strong> per member per year</li>
+            <li>Funds cover TTOC release time only — not materials or technology</li>
+            <li>Applications reviewed monthly by the BVTU Mentorship Sub-Committee</li>
+            <li>Approved by the first week of each month; notifications by the 15th</li>
+          </ul>
         </div>
       </div>
 
@@ -419,6 +416,24 @@ $member   = $loggedIn ? getMember() : null;
             </div>
           </div>
 
+        </div>
+      </div>
+
+      <!-- ── Application Form ──────────────────────────────── -->
+      <div class="grant-section" id="apply">
+        <div class="grant-apply-header">
+          <h2 class="grant-h2" style="margin-bottom:0;border-bottom:none;padding-bottom:0;">Apply Now</h2>
+          <p class="grant-apply-note">Applications reviewed monthly · notifications by the 15th</p>
+        </div>
+        <div class="grant-form-wrap">
+          <iframe
+            src="https://forms.office.com/Pages/ResponsePage.aspx?id=DQSIkWdsW0yxEjajBLZtrQAAAAAAAAAAAANAAV60Yf9UNjBVWU5KTTBGTjYwMVBQVkg2TVQxSzkzNS4u&embed=true"
+            title="BVTU Collaboration Grant Application"
+            allowfullscreen
+            webkitallowfullscreen
+            mozallowfullscreen
+            msallowfullscreen>
+          </iframe>
         </div>
       </div>
 
@@ -559,24 +574,6 @@ $member   = $loggedIn ? getMember() : null;
             </div>
           </div>
 
-        </div>
-      </div>
-
-      <!-- ── Application Form ──────────────────────────────── -->
-      <div class="grant-section" id="apply">
-        <div class="grant-apply-header">
-          <h2 class="grant-h2" style="margin-bottom:0;border-bottom:none;padding-bottom:0;">Apply Now</h2>
-          <p class="grant-apply-note">Applications reviewed monthly · notifications by the 15th</p>
-        </div>
-        <div class="grant-form-wrap">
-          <iframe
-            src="https://forms.office.com/Pages/ResponsePage.aspx?id=DQSIkWdsW0yxEjajBLZtrQAAAAAAAAAAAANAAV60Yf9UNjBVWU5KTTBGTjYwMVBQVkg2TVQxSzkzNS4u&embed=true"
-            title="BVTU Collaboration Grant Application"
-            allowfullscreen
-            webkitallowfullscreen
-            mozallowfullscreen
-            msallowfullscreen>
-          </iframe>
         </div>
       </div>
 
