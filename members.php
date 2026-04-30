@@ -39,7 +39,7 @@ $member   = $loggedIn ? getMember() : null;
             <a href="members.php" class="active">Members</a>
             <ul class="dropdown">
               <li><a href="members.php">Member Resources</a></li>
-              <li><a href="benefits.php">Health &amp; Dental</a></li><li><a href="life-insurance.php">Life Insurance</a></li><li><a href="ttoc.php">TTOC Resources</a></li><li><a href="atrieve.php">Release Time / Atrieve</a></li><li><a href="remedy-tracker.php">Remedy Tracker</a></li>
+              <li><a href="benefits.php">Health &amp; Dental</a></li><li><a href="life-insurance.php">Life Insurance</a></li><li><a href="loan-forgiveness.php">Student Loan Forgiveness</a></li><li><a href="ttoc.php">TTOC Resources</a></li><li><a href="atrieve.php">Release Time / Atrieve</a></li><li><a href="remedy-tracker.php">Remedy Tracker</a></li>
               <li><a href="collab-grant.php">Collaboration Grant</a></li>
             </ul>
           </li>
@@ -136,6 +136,15 @@ $member   = $loggedIn ? getMember() : null;
           <h3>Life Insurance</h3>
           <p>Plan EB coverage — 3× salary up to $300,000, beneficiary designation, disability waiver, and conversion rights.</p>
           <div class="member-page-card-arrow">View coverage details →</div>
+        </a>
+
+        <a href="loan-forgiveness.php" class="member-page-card">
+          <div class="member-page-card-icon">
+            <svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </div>
+          <h3>Student Loan Forgiveness</h3>
+          <p>Up to $30,000 forgiven over 5 years — Houston, Telkwa, and Smithers postal codes all qualify. Learn how to apply.</p>
+          <div class="member-page-card-arrow">See if you qualify →</div>
         </a>
 
         <a href="ttoc.php" class="member-page-card">
