@@ -66,6 +66,98 @@ $member   = $loggedIn ? getMember() : null;
   <main class="page-content">
     <div class="container">
 
+      <!-- Quick-access page cards -->
+      <style>
+        .member-page-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+          gap: 1rem;
+          margin-bottom: 2.5rem;
+        }
+        .member-page-card {
+          display: flex;
+          flex-direction: column;
+          background: var(--white);
+          border: 1.5px solid var(--border);
+          border-radius: var(--radius);
+          padding: 1.4rem 1.25rem 1.2rem;
+          text-decoration: none;
+          color: var(--text);
+          transition: border-color .15s, box-shadow .15s, transform .12s;
+        }
+        .member-page-card:hover {
+          border-color: var(--primary);
+          box-shadow: 0 4px 18px rgba(27,107,66,.1);
+          transform: translateY(-2px);
+          color: var(--text);
+        }
+        .member-page-card-icon {
+          width: 40px; height: 40px;
+          background: var(--accent);
+          border-radius: 10px;
+          display: flex; align-items: center; justify-content: center;
+          margin-bottom: .9rem;
+          flex-shrink: 0;
+        }
+        .member-page-card-icon svg {
+          width: 20px; height: 20px;
+          stroke: var(--primary); fill: none;
+          stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+        }
+        .member-page-card h3 {
+          font-size: 1rem; font-weight: 800; color: var(--primary);
+          margin: 0 0 .35rem;
+        }
+        .member-page-card p {
+          font-size: .85rem; color: var(--gray-500); margin: 0;
+          line-height: 1.55; flex: 1;
+        }
+        .member-page-card-arrow {
+          font-size: .82rem; font-weight: 700; color: var(--primary);
+          margin-top: .9rem;
+        }
+      </style>
+
+      <div class="member-page-grid">
+
+        <a href="benefits.php" class="member-page-card">
+          <div class="member-page-card-icon">
+            <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          </div>
+          <h3>Health &amp; Dental Benefits</h3>
+          <p>Pacific Blue Cross coverage — dental, extended health, paramedical, vision, prescription drugs, and how to claim.</p>
+          <div class="member-page-card-arrow">View benefits guide →</div>
+        </a>
+
+        <a href="life-insurance.php" class="member-page-card">
+          <div class="member-page-card-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <h3>Life Insurance</h3>
+          <p>Plan EB coverage — 3× salary up to $300,000, beneficiary designation, disability waiver, and conversion rights.</p>
+          <div class="member-page-card-arrow">View coverage details →</div>
+        </a>
+
+        <a href="remedy-tracker.php" class="member-page-card">
+          <div class="member-page-card-icon">
+            <svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          </div>
+          <h3>Remedy Tracker</h3>
+          <p>Track outstanding remedies and settlements owed to BVTU members under the collective agreement.</p>
+          <div class="member-page-card-arrow">Open tracker →</div>
+        </a>
+
+        <a href="collab-grant.php" class="member-page-card">
+          <div class="member-page-card-icon">
+            <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <h3>Collaboration Grant</h3>
+          <p>Apply for BVTU collaboration grants supporting teacher-led professional development projects.</p>
+          <div class="member-page-card-arrow">Apply now →</div>
+        </a>
+
+      </div>
+
       <!-- Release Time -->
       <div class="content-block">
         <h2>Union-Paid Release Time</h2>
