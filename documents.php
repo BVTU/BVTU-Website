@@ -194,6 +194,108 @@ $protected_docs = [
 
       </div>
 
+      <!-- SETTLEMENTS & LETTERS OF UNDERSTANDING -->
+      <hr class="section-divider">
+
+      <h2 style="font-size:1.35rem;font-weight:800;color:var(--primary);margin-bottom:.4rem;">Settlements &amp; Letters of Understanding</h2>
+      <p style="color:var(--gray-500);font-size:.92rem;margin-bottom:1.5rem;">Local settlements, remedies, and letters of understanding reached between BVTU and SD54, listed chronologically.</p>
+
+      <div class="doc-categories">
+
+        <div class="doc-category" style="grid-column: 1 / -1;">
+          <h3>2000s</h3>
+          <div class="doc-list">
+            <a href="documents/settlements/2001-dorsey-award.pdf" class="doc-item" download>
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              2001 — Dorsey Award
+            </a>
+            <a href="documents/settlements/2004-early-retirement-incentive.pdf" class="doc-item" download>
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              2004 — Early Retirement Incentive
+            </a>
+          </div>
+        </div>
+
+        <div class="doc-category" style="grid-column: 1 / -1;">
+          <h3>2010s</h3>
+          <div class="doc-list">
+            <a href="documents/settlements/2010-sec-preptime.pdf" class="doc-item" download>
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              2010 — Secondary Prep Time (Bev Young)
+            </a>
+            <a href="documents/settlements/2013-elem-preptime.pdf" class="doc-item" download>
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              2013 — Elementary Prep Time Agreement
+            </a>
+            <a href="documents/settlements/2014-ttoc-pay-settlement.pdf" class="doc-item" download>
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              2014 — TTOC Pay Settlement
+            </a>
+            <a href="documents/settlements/2014-ttoc-continuation-settlement.pdf" class="doc-item" download>
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              2014 — TTOC Continuation Settlement
+            </a>
+            <a href="documents/settlements/2015-part-time-pro-d.pdf" class="doc-item" download>
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              2015 — Part-Time Teachers Pro-D Settlement
+            </a>
+            <a href="documents/settlements/2017-2018-cupe-emergency-replacements.pdf" class="doc-item" download>
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              2017–18 — CUPE SD54 Emergency Response Replacements
+            </a>
+            <a href="documents/settlements/2017-ttoc-temp-contract-sick-days.pdf" class="doc-item" download>
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              2017 — TTOC Temp Contract Sick Days
+            </a>
+            <a href="documents/settlements/2018-jackson-remedy-rollover.pdf" class="doc-item" download>
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              2018 — Jackson Remedy Rollover
+            </a>
+          </div>
+        </div>
+
+        <div class="doc-category" style="grid-column: 1 / -1;">
+          <h3>2023–Present</h3>
+          <div class="doc-list">
+            <a href="documents/settlements/2023-calendar-settlement.pdf" class="doc-item" download>
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              2023 — Calendar Settlement
+            </a>
+            <a href="documents/settlements/2023-continuing-to-continuing.pdf" class="doc-item" download>
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              2023 — Continuing to Continuing
+            </a>
+            <a href="documents/settlements/2024-d4-5-elem-prep.pdf" class="doc-item" download>
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              2024 — Article D.4.5 Elementary Prep (Updated)
+            </a>
+            <a href="documents/settlements/2024-lab-shop-class-size.pdf" class="doc-item" download>
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              2024 — Lab/Shop Class Size Settlement
+            </a>
+            <a href="documents/settlements/2025-2026-lous-signed.pdf" class="doc-item" download>
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              2025–26 — Letters of Understanding (Signed)
+            </a>
+          </div>
+        </div>
+
+        <div class="doc-category" style="grid-column: 1 / -1;">
+          <h3>Clean Articles</h3>
+          <div class="doc-list">
+            <a href="documents/settlements/article-c25-part-time-rights.pdf" class="doc-item" download>
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              Article C.25 — Part-Time Teacher Rights
+            </a>
+            <a href="documents/settlements/article-d22-staff-meetings.pdf" class="doc-item" download>
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              Article D.22 — Staff Meetings
+            </a>
+          </div>
+        </div>
+
+      </div>
+
       <!-- MEMBERS-ONLY SECTION -->
       <hr class="section-divider">
 
