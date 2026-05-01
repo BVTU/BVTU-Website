@@ -194,11 +194,29 @@ $protected_docs = [
 
       </div>
 
-      <!-- SETTLEMENTS & LETTERS OF UNDERSTANDING -->
+      <!-- CONTRACT ASSISTANT CALLOUT -->
       <hr class="section-divider">
 
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:2rem;">
+        <a href="ca-assistant.php" style="display:flex;align-items:flex-start;gap:1rem;background:linear-gradient(135deg,#1a6b35,#155a2a);border-radius:10px;padding:1.25rem 1.4rem;text-decoration:none;color:#fff;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:36px;height:36px;flex-shrink:0;opacity:.9"><path d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 3v-3z"/></svg>
+          <div>
+            <div style="font-weight:700;font-size:.95rem;margin-bottom:.25rem;">Contract Assistant</div>
+            <div style="font-size:.82rem;opacity:.85;line-height:1.5;">Ask questions about the CA and LOUs in plain language — get answers instantly.</div>
+          </div>
+        </a>
+        <a href="lous.php" style="display:flex;align-items:flex-start;gap:1rem;background:#f0f7f2;border:1px solid #b8ddc5;border-radius:10px;padding:1.25rem 1.4rem;text-decoration:none;color:var(--gray-800);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:36px;height:36px;flex-shrink:0;color:var(--primary);"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          <div>
+            <div style="font-weight:700;font-size:.95rem;margin-bottom:.25rem;color:var(--primary);">Letters of Understanding</div>
+            <div style="font-size:.82rem;color:var(--gray-500);line-height:1.5;">Browse all signed LOUs, settlements, and arbitration awards with full detail.</div>
+          </div>
+        </a>
+      </div>
+
+      <!-- SETTLEMENTS & LETTERS OF UNDERSTANDING -->
       <h2 style="font-size:1.35rem;font-weight:800;color:var(--primary);margin-bottom:.4rem;">Settlements &amp; Letters of Understanding</h2>
-      <p style="color:var(--gray-500);font-size:.92rem;margin-bottom:1.5rem;">Local settlements, remedies, and letters of understanding reached between BVTU and SD54, listed chronologically.</p>
+      <p style="color:var(--gray-500);font-size:.92rem;margin-bottom:1.5rem;">Local settlements, remedies, and letters of understanding reached between BVTU and SD54, listed chronologically. <a href="lous.php">View detailed descriptions →</a></p>
 
       <div class="doc-categories">
 
@@ -366,7 +384,7 @@ $protected_docs = [
         <h3>Navigate</h3>
         <ul class="footer-nav-list">
           <li><a href="about.php">About</a></li>
-          <li class="has-dropdown"><a href="documents.php">Documents</a><ul class="dropdown"><li><a href="documents.php">All Documents</a></li><li><a href="collective-agreement.php">Collective Agreement</a></li></ul></li>
+          <li class="has-dropdown"><a href="documents.php">Documents</a><ul class="dropdown"><li><a href="documents.php">All Documents</a></li><li><a href="collective-agreement.php">Collective Agreement</a></li><li><a href="lous.php">Letters of Understanding</a></li><li><a href="ca-assistant.php">Contract Assistant</a></li></ul></li>
           <li><a href="members.php">Members</a></li>
           <li><a href="prod.php">PRO-D</a></li>
           <li><a href="health-safety.php">Health &amp; Safety</a></li>

@@ -16,3 +16,13 @@ define('DB_PASS', 'your_database_password');
 
 // Security key — change this to any long random string
 define('SESSION_SECRET', 'change-this-to-a-long-random-string-xyz');
+
+// ── Claude API (for ask.php and ca-ask.php) ───────────────────────────────────
+// define('CLAUDE_API_KEY', 'sk-ant-...');
+
+// ── CA Assistant token monitoring (ca-ask.php) ───────────────────────────────
+// Monthly token budget before an alert email is sent to the union president.
+// Default: 500,000 tokens/month (~$0.50 at Haiku pricing).
+// Set lower for stricter monitoring, e.g. 200000 for ~$0.20/month.
+// define('TOKEN_ALERT_THRESHOLD', 500000);
+// define('TOKEN_ALERT_EMAIL',     'lp54@bctf.ca');
