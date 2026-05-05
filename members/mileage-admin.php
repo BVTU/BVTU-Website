@@ -119,6 +119,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delet
     }
 }
 
+// ── Edit claim ────────────────────────────────────────────────────────────────
+$edited = false;
+$editError = null;
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'edit') {
+    $editId  = (int)($_POST['id'] ?? 0);
+    $eName   = trim($_POST['name']  ?? '');
+    $eDate   = trim($_POST['date_traveled'] ?? '');
+    $eEvent  = trim($_POST['event'] ?? '');
+    $eKm     = (float)($_POST['kilometers'] ?? 0);
+    $eRate   = 0.70;
+    $eAmount = round($eKm * $eRate, 2);
+
+    if ($editId > 0 && $eName !== '' && $eDate !== '' && $eEvent !== '' && $eKm > 0) {
+        getDB()->prepare("
+            UPDATE mileage_claims
+            SET name=?, date_traveled=?, event=?, kilometers=?, rate=?, amount=?
+            WHERE id=?
+        ")->execute([$eName, $eDate, $eEvent, $eKm, $eRate, $eAmount, $editId]);
+        $edited = true;
+    } else {
+        $editError = 'All fields are required and kilometres must be greater than zero.';
+    }
+}
+
 // ── Filters ───────────────────────────────────────────────────────────────────
 $filterYear  = isset($_GET['year'])  ? (int)$_GET['year']  : (int)date('Y');
 $filterMonth = isset($_GET['month']) ? (int)$_GET['month'] : 0;
@@ -217,12 +241,31 @@ $grandKm    = array_sum(array_column($claims, 'kilometers'));
     .amount-cell { font-weight: 700; color: var(--primary); }
     .delete-btn { background: none; border: none; cursor: pointer; color: var(--gray-300); font-size: .8rem; padding: .15rem .4rem; border-radius: 4px; transition: all .15s; }
     .delete-btn:hover { color: #dc2626; background: #fef2f2; }
+    .edit-btn { background: none; border: none; cursor: pointer; color: var(--gray-300); font-size: .8rem; padding: .15rem .4rem; border-radius: 4px; transition: all .15s; margin-right: .15rem; }
+    .edit-btn:hover { color: var(--primary); background: var(--accent); }
+    .action-cell { display: flex; align-items: center; gap: .1rem; }
     .empty-row td { text-align: center; color: var(--gray-400); padding: 3rem; }
 
     .export-btn { display: inline-flex; align-items: center; gap: .4rem; }
     .export-btn svg { width: 15px; height: 15px; }
 
     .deleted-notice { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: .75rem 1rem; font-size: .85rem; color: #166534; margin-bottom: 1rem; }
+    .edited-notice  { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: .75rem 1rem; font-size: .85rem; color: #1e40af; margin-bottom: 1rem; }
+    .error-notice   { background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: .75rem 1rem; font-size: .85rem; color: #991b1b; margin-bottom: 1rem; }
+
+    /* Edit modal */
+    .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1000; align-items: center; justify-content: center; }
+    .modal-backdrop.open { display: flex; }
+    .modal { background: #fff; border-radius: 12px; padding: 2rem; width: 100%; max-width: 480px; box-shadow: 0 20px 60px rgba(0,0,0,.2); }
+    .modal h2 { font-size: 1.1rem; font-weight: 800; color: var(--gray-800); margin: 0 0 1.25rem; }
+    .modal-field { margin-bottom: 1rem; }
+    .modal-field label { display: block; font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--gray-500); margin-bottom: .3rem; }
+    .modal-field input { width: 100%; border: 1px solid var(--gray-300); border-radius: 7px; padding: .55rem .75rem; font-size: .92rem; box-sizing: border-box; }
+    .modal-field input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(27,107,66,.12); }
+    .modal-field input[readonly] { background: #f8f9fa; color: var(--gray-500); cursor: not-allowed; }
+    .modal-calc { background: var(--accent); border-radius: 7px; padding: .6rem .85rem; font-size: .88rem; color: var(--primary); font-weight: 600; margin-bottom: 1.25rem; }
+    .modal-actions { display: flex; gap: .75rem; justify-content: flex-end; }
+    .modal-actions .btn { padding: .55rem 1.1rem; font-size: .9rem; }
   </style>
 </head>
 <body>
@@ -234,7 +277,11 @@ $grandKm    = array_sum(array_column($claims, 'kilometers'));
   </div>
 
   <?php if ($deleted): ?>
-  <div class="deleted-notice">Claim deleted.</div>
+  <div class="deleted-notice">✓ Claim deleted.</div>
+  <?php elseif ($edited): ?>
+  <div class="edited-notice">✓ Claim updated successfully.</div>
+  <?php elseif ($editError): ?>
+  <div class="error-notice">⚠ <?= htmlspecialchars($editError) ?></div>
   <?php endif; ?>
 
   <!-- Stats -->
@@ -346,11 +393,17 @@ $grandKm    = array_sum(array_column($claims, 'kilometers'));
           <td class="num amount-cell">$<?= number_format($c['amount'], 2) ?></td>
           <td style="white-space:nowrap;font-size:.78rem;color:var(--gray-400);"><?= date('M j g:ia', strtotime($c['submitted_at'])) ?></td>
           <td>
-            <form method="POST" onsubmit="return confirm('Delete this claim from <?= htmlspecialchars($c['name']) ?> on <?= date('M j', strtotime($c['date_traveled'])) ?>?');">
-              <input type="hidden" name="action" value="delete">
-              <input type="hidden" name="id" value="<?= $c['id'] ?>">
-              <button type="submit" class="delete-btn" title="Delete claim">✕</button>
-            </form>
+            <div class="action-cell">
+              <button type="button" class="edit-btn" title="Edit claim"
+                onclick="openEdit(<?= $c['id'] ?>, <?= htmlspecialchars(json_encode($c['name'])) ?>, '<?= $c['date_traveled'] ?>', <?= htmlspecialchars(json_encode($c['event'])) ?>, <?= (float)$c['kilometers'] ?>)">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+              <form method="POST" onsubmit="return confirm('Delete this claim from <?= htmlspecialchars($c['name']) ?> on <?= date('M j', strtotime($c['date_traveled'])) ?>?');">
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="id" value="<?= $c['id'] ?>">
+                <button type="submit" class="delete-btn" title="Delete claim">✕</button>
+              </form>
+            </div>
           </td>
         </tr>
         <?php endforeach; ?>
@@ -370,5 +423,69 @@ $grandKm    = array_sum(array_column($claims, 'kilometers'));
   </div>
 
 </div>
+
+<!-- Edit Modal -->
+<div class="modal-backdrop" id="editModal" onclick="if(event.target===this)closeEdit()">
+  <div class="modal">
+    <h2>Edit Claim</h2>
+    <form method="POST" id="editForm">
+      <input type="hidden" name="action" value="edit">
+      <input type="hidden" name="id" id="edit-id">
+
+      <div class="modal-field">
+        <label>Name</label>
+        <input type="text" name="name" id="edit-name" required maxlength="120">
+      </div>
+      <div class="modal-field">
+        <label>Date Traveled</label>
+        <input type="date" name="date_traveled" id="edit-date" required max="<?= date('Y-m-d') ?>">
+      </div>
+      <div class="modal-field">
+        <label>Event / Purpose</label>
+        <input type="text" name="event" id="edit-event" required maxlength="300">
+      </div>
+      <div class="modal-field">
+        <label>Kilometres</label>
+        <input type="number" name="kilometers" id="edit-km" required min="0.1" step="0.1" oninput="updateCalc()">
+      </div>
+      <div class="modal-field">
+        <label>Rate ($/km)</label>
+        <input type="text" value="$0.70 — fixed rate" readonly>
+      </div>
+
+      <div class="modal-calc" id="edit-calc">Total: $0.00</div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="closeEdit()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openEdit(id, name, date, event, km) {
+  document.getElementById('edit-id').value   = id;
+  document.getElementById('edit-name').value  = name;
+  document.getElementById('edit-date').value  = date;
+  document.getElementById('edit-event').value = event;
+  document.getElementById('edit-km').value    = km;
+  updateCalc();
+  document.getElementById('editModal').classList.add('open');
+  document.getElementById('edit-name').focus();
+}
+function closeEdit() {
+  document.getElementById('editModal').classList.remove('open');
+}
+function updateCalc() {
+  const km  = parseFloat(document.getElementById('edit-km').value) || 0;
+  const amt = (km * 0.70).toFixed(2);
+  document.getElementById('edit-calc').textContent = 'Total: $' + parseFloat(amt).toLocaleString('en-CA', {minimumFractionDigits:2});
+}
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeEdit();
+});
+</script>
+
 </body>
 </html>
