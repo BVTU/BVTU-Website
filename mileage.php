@@ -11,6 +11,8 @@
 require_once __DIR__ . '/members/config.php';
 require_once __DIR__ . '/members/db.php';
 
+date_default_timezone_set('America/Vancouver');
+
 define('MILEAGE_RATE',  0.70);   // $/km — change here if rate changes
 define('NOTIFY_EMAIL',  'lp54@bctf.ca');
 define('NOTIFY_NAME',   'Cody Lind');
@@ -147,6 +149,39 @@ if ($action === 'submit') {
 if ($action === 'lookup') {
     $lookupName = trim($_POST['lookup_name'] ?? '');
     if ($lookupName) {
+        $lookupClaims = personClaims($lookupName);
+        $lookupDone   = true;
+    }
+}
+
+// ── DELETE (member self-service) ──────────────────────────────────────────────
+$deleteSuccess = false;
+$deleteError   = null;
+if ($action === 'delete') {
+    $delId   = (int)($_POST['del_id']   ?? 0);
+    $delName = trim($_POST['del_name']  ?? '');
+
+    $ownerCheck = getDB()->prepare("SELECT name FROM mileage_claims WHERE id = ?");
+    $ownerCheck->execute([$delId]);
+    $ownerRow = $ownerCheck->fetch();
+
+    if ($delId <= 0 || !$ownerRow) {
+        $deleteError = 'Claim not found.';
+    } elseif (strtolower(trim($ownerRow['name'])) !== strtolower($delName)) {
+        $deleteError = 'You can only delete your own claims.';
+    } else {
+        getDB()->prepare("DELETE FROM mileage_claims WHERE id = ?")->execute([$delId]);
+        $deleteSuccess = true;
+
+        // Notify president
+        $body = "A mileage claim has been deleted by the member.\n\n"
+              . "Claim ID: #{$delId}\n"
+              . "Name:     {$delName}\n\n"
+              . "View all claims:\nhttps://new.bvtu.ca/members/mileage-admin.php\n";
+        mail(NOTIFY_EMAIL, "Mileage Claim Deleted — {$delName} (#{$delId})", $body,
+             "From: noreply@bvtu.ca\r\nReply-To: noreply@bvtu.ca\r\nContent-Type: text/plain; charset=UTF-8\r\n");
+
+        $lookupName   = $delName;
         $lookupClaims = personClaims($lookupName);
         $lookupDone   = true;
     }
@@ -341,8 +376,11 @@ if ($action === 'edit') {
     /* Edit button in history table */
     .edit-claim-btn { background: none; border: none; cursor: pointer; color: var(--gray-300); padding: .15rem .3rem; border-radius: 4px; transition: all .15s; vertical-align: middle; }
     .edit-claim-btn:hover { color: var(--primary); background: var(--accent); }
-    .edited-banner { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: .85rem 1.1rem; margin-bottom: 1rem; font-size: .88rem; color: #1e40af; font-weight: 500; }
-    .error-banner  { background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: .85rem 1.1rem; margin-bottom: 1rem; font-size: .88rem; color: #991b1b; }
+    .edited-banner  { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: .85rem 1.1rem; margin-bottom: 1rem; font-size: .88rem; color: #1e40af; font-weight: 500; }
+    .deleted-banner { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: .85rem 1.1rem; margin-bottom: 1rem; font-size: .88rem; color: #166534; font-weight: 500; }
+    .error-banner   { background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: .85rem 1.1rem; margin-bottom: 1rem; font-size: .88rem; color: #991b1b; }
+    .del-btn { background: none; border: none; cursor: pointer; color: var(--gray-300); padding: .15rem .3rem; border-radius: 4px; transition: all .15s; vertical-align: middle; }
+    .del-btn:hover { color: #dc2626; background: #fef2f2; }
 
     /* Edit modal */
     .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1000; align-items: center; justify-content: center; padding: 1rem; }
@@ -524,8 +562,12 @@ if ($action === 'edit') {
 
               <?php if ($editSuccess): ?>
                 <div class="edited-banner">✓ Claim updated successfully.</div>
+              <?php elseif ($deleteSuccess): ?>
+                <div class="deleted-banner">✓ Claim deleted.</div>
               <?php elseif ($editError): ?>
                 <div class="error-banner">⚠ <?= htmlspecialchars($editError) ?></div>
+              <?php elseif ($deleteError): ?>
+                <div class="error-banner">⚠ <?= htmlspecialchars($deleteError) ?></div>
               <?php endif; ?>
 
               <?php if ($lookupDone && $lookupName): ?>
@@ -571,11 +613,20 @@ if ($action === 'edit') {
                         <td><?= htmlspecialchars($c['event']) ?></td>
                         <td class="num"><?= number_format($c['kilometers'], 1) ?></td>
                         <td class="num amount-cell">$<?= number_format($c['amount'], 2) ?></td>
-                        <td>
+                        <td style="white-space:nowrap;">
                           <button type="button" class="edit-claim-btn" title="Edit this claim"
                             onclick="openClaimEdit(<?= $c['id'] ?>, <?= htmlspecialchars(json_encode($c['name'])) ?>, '<?= $c['date_traveled'] ?>', <?= htmlspecialchars(json_encode($c['event'])) ?>, <?= (float)$c['kilometers'] ?>)">
                             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                           </button>
+                          <form method="POST" action="mileage.php" style="display:inline;"
+                            onsubmit="return confirm('Delete this claim (<?= date('M j', strtotime($c['date_traveled'])) ?> — <?= htmlspecialchars(addslashes($c['event'])) ?>)?\nThis cannot be undone.');">
+                            <input type="hidden" name="action"   value="delete">
+                            <input type="hidden" name="del_id"   value="<?= $c['id'] ?>">
+                            <input type="hidden" name="del_name" value="<?= htmlspecialchars($c['name']) ?>">
+                            <button type="submit" class="del-btn" title="Delete this claim">
+                              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                            </button>
+                          </form>
                         </td>
                       </tr>
                       <?php endforeach; ?>

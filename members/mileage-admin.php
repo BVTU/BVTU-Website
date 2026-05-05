@@ -10,6 +10,8 @@ require_once __DIR__ . '/auth.php';
 requireLogin();
 require_once __DIR__ . '/db.php';
 
+date_default_timezone_set('America/Vancouver');
+
 // ── Ensure table exists (mirrors mileage.php) ─────────────────────────────────
 getDB()->exec("CREATE TABLE IF NOT EXISTS mileage_claims (
     id           INT AUTO_INCREMENT PRIMARY KEY,
