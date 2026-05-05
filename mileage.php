@@ -151,6 +151,60 @@ if ($action === 'lookup') {
         $lookupDone   = true;
     }
 }
+
+// ── EDIT ──────────────────────────────────────────────────────────────────────
+$editSuccess = false;
+$editError   = null;
+if ($action === 'edit') {
+    $editId      = (int)($_POST['edit_id']       ?? 0);
+    $editName    = trim($_POST['edit_name']       ?? '');
+    $editDate    = trim($_POST['edit_date']       ?? '');
+    $editEvent   = trim($_POST['edit_event']      ?? '');
+    $editKm      = (float)($_POST['edit_km']      ?? 0);
+    $editAmount  = round($editKm * MILEAGE_RATE,  2);
+
+    // Verify this claim actually belongs to the stated name (security check)
+    $ownerCheck = getDB()->prepare("SELECT name FROM mileage_claims WHERE id = ?");
+    $ownerCheck->execute([$editId]);
+    $ownerRow = $ownerCheck->fetch();
+
+    if ($editId <= 0 || !$ownerRow) {
+        $editError = 'Claim not found.';
+    } elseif (strtolower(trim($ownerRow['name'])) !== strtolower($editName)) {
+        $editError = 'You can only edit your own claims.';
+    } elseif (!$editDate || $editDate > date('Y-m-d')) {
+        $editError = 'Please enter a valid date (not in the future).';
+    } elseif (!$editEvent) {
+        $editError = 'Event / purpose is required.';
+    } elseif ($editKm <= 0) {
+        $editError = 'Kilometres must be greater than zero.';
+    } else {
+        getDB()->prepare("
+            UPDATE mileage_claims
+            SET date_traveled=?, event=?, kilometers=?, rate=?, amount=?
+            WHERE id=?
+        ")->execute([$editDate, $editEvent, $editKm, MILEAGE_RATE, $editAmount, $editId]);
+        $editSuccess = true;
+
+        // Notify president of the correction
+        $d    = date('M j, Y', strtotime($editDate));
+        $body = "A mileage claim has been edited by the member.\n\n"
+              . "Claim ID:   #{$editId}\n"
+              . "Name:       {$editName}\n"
+              . "Date:       {$d}\n"
+              . "Event:      {$editEvent}\n"
+              . "Kilometres: " . number_format($editKm, 1) . " km\n"
+              . "Amount:     \$" . number_format($editAmount, 2) . "\n\n"
+              . "View all claims:\nhttps://new.bvtu.ca/members/mileage-admin.php\n";
+        mail(NOTIFY_EMAIL, "Mileage Claim Edited — {$editName} (#{$editId})", $body,
+             "From: noreply@bvtu.ca\r\nReply-To: noreply@bvtu.ca\r\nContent-Type: text/plain; charset=UTF-8\r\n");
+
+        // Reload their claims so the table refreshes
+        $lookupName   = $editName;
+        $lookupClaims = personClaims($lookupName);
+        $lookupDone   = true;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -283,6 +337,26 @@ if ($action === 'lookup') {
     .lookup-form input { flex: 1; }
     .lookup-form button { white-space: nowrap; padding: .65rem 1.1rem; }
     .empty-msg { text-align: center; padding: 2rem; color: var(--gray-400); font-size: .9rem; }
+
+    /* Edit button in history table */
+    .edit-claim-btn { background: none; border: none; cursor: pointer; color: var(--gray-300); padding: .15rem .3rem; border-radius: 4px; transition: all .15s; vertical-align: middle; }
+    .edit-claim-btn:hover { color: var(--primary); background: var(--accent); }
+    .edited-banner { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: .85rem 1.1rem; margin-bottom: 1rem; font-size: .88rem; color: #1e40af; font-weight: 500; }
+    .error-banner  { background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: .85rem 1.1rem; margin-bottom: 1rem; font-size: .88rem; color: #991b1b; }
+
+    /* Edit modal */
+    .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1000; align-items: center; justify-content: center; padding: 1rem; }
+    .modal-backdrop.open { display: flex; }
+    .modal-box { background: #fff; border-radius: 12px; padding: 1.75rem; width: 100%; max-width: 440px; box-shadow: 0 20px 60px rgba(0,0,0,.2); }
+    .modal-box h2 { font-size: 1.05rem; font-weight: 800; color: var(--gray-800); margin: 0 0 1.1rem; }
+    .modal-field { margin-bottom: .9rem; }
+    .modal-field label { display: block; font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--gray-500); margin-bottom: .28rem; }
+    .modal-field input { width: 100%; border: 1px solid var(--gray-300); border-radius: 7px; padding: .55rem .75rem; font-size: .92rem; box-sizing: border-box; }
+    .modal-field input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,107,53,.1); }
+    .modal-field input[readonly] { background: #f8f9fa; color: var(--gray-500); cursor: not-allowed; }
+    .modal-calc { background: #f0f7f2; border: 1px solid #b8ddc5; border-radius: 7px; padding: .6rem .85rem; font-size: .9rem; color: var(--primary); font-weight: 600; margin-bottom: 1.1rem; }
+    .modal-actions { display: flex; gap: .6rem; justify-content: flex-end; }
+    .modal-actions .btn { padding: .5rem 1rem; font-size: .88rem; }
 
     /* School year label */
     .syr-label {
@@ -448,6 +522,12 @@ if ($action === 'lookup') {
             </div>
             <div class="mileage-card-body">
 
+              <?php if ($editSuccess): ?>
+                <div class="edited-banner">✓ Claim updated successfully.</div>
+              <?php elseif ($editError): ?>
+                <div class="error-banner">⚠ <?= htmlspecialchars($editError) ?></div>
+              <?php endif; ?>
+
               <?php if ($lookupDone && $lookupName): ?>
 
                 <!-- YTD total -->
@@ -481,6 +561,7 @@ if ($action === 'lookup') {
                         <th>Event</th>
                         <th class="num">km</th>
                         <th class="num">Amount</th>
+                        <th></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -490,6 +571,12 @@ if ($action === 'lookup') {
                         <td><?= htmlspecialchars($c['event']) ?></td>
                         <td class="num"><?= number_format($c['kilometers'], 1) ?></td>
                         <td class="num amount-cell">$<?= number_format($c['amount'], 2) ?></td>
+                        <td>
+                          <button type="button" class="edit-claim-btn" title="Edit this claim"
+                            onclick="openClaimEdit(<?= $c['id'] ?>, <?= htmlspecialchars(json_encode($c['name'])) ?>, '<?= $c['date_traveled'] ?>', <?= htmlspecialchars(json_encode($c['event'])) ?>, <?= (float)$c['kilometers'] ?>)">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                          </button>
+                        </td>
                       </tr>
                       <?php endforeach; ?>
                     </tbody>
@@ -563,26 +650,79 @@ if ($action === 'lookup') {
     </div>
   </footer>
 
+  <!-- Edit Claim Modal -->
+  <div class="modal-backdrop" id="claimEditModal" onclick="if(event.target===this)closeClaimEdit()">
+    <div class="modal-box">
+      <h2>Edit Claim</h2>
+      <form method="POST" action="mileage.php">
+        <input type="hidden" name="action" value="edit">
+        <input type="hidden" name="edit_id"   id="cedit-id">
+        <input type="hidden" name="edit_name" id="cedit-name">
+
+        <div class="modal-field">
+          <label>Name</label>
+          <input type="text" id="cedit-name-display" readonly>
+        </div>
+        <div class="modal-field">
+          <label>Date of Travel</label>
+          <input type="date" name="edit_date" id="cedit-date" required max="<?= date('Y-m-d') ?>">
+        </div>
+        <div class="modal-field">
+          <label>Event / Purpose</label>
+          <input type="text" name="edit_event" id="cedit-event" required maxlength="300">
+        </div>
+        <div class="modal-field">
+          <label>Kilometres</label>
+          <input type="number" name="edit_km" id="cedit-km" required min="0.1" step="0.1" oninput="updateClaimCalc()">
+        </div>
+        <div class="modal-field">
+          <label>Rate ($/km)</label>
+          <input type="text" value="$<?= number_format(MILEAGE_RATE, 2) ?>/km — fixed" readonly>
+        </div>
+        <div class="modal-calc" id="cedit-calc">Total: $0.00</div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline" onclick="closeClaimEdit()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script src="js/site.js"></script>
   <script>
-  // Live km → dollar calculation
+  // Live km → dollar calculation (submit form)
   const kmInput   = document.getElementById('km');
   const calcTotal = document.getElementById('calc-total');
   const RATE      = <?= MILEAGE_RATE ?>;
 
   function updateCalc() {
     const km = parseFloat(kmInput.value);
-    if (isNaN(km) || km <= 0) {
-      calcTotal.textContent = '—';
-    } else {
-      calcTotal.textContent = '$' + (km * RATE).toFixed(2);
-    }
+    calcTotal.textContent = (!isNaN(km) && km > 0) ? '$' + (km * RATE).toFixed(2) : '—';
   }
+  if (kmInput) { kmInput.addEventListener('input', updateCalc); updateCalc(); }
 
-  if (kmInput) {
-    kmInput.addEventListener('input', updateCalc);
-    updateCalc();
+  // Edit modal
+  function openClaimEdit(id, name, date, event, km) {
+    document.getElementById('cedit-id').value           = id;
+    document.getElementById('cedit-name').value         = name;
+    document.getElementById('cedit-name-display').value = name;
+    document.getElementById('cedit-date').value         = date;
+    document.getElementById('cedit-event').value        = event;
+    document.getElementById('cedit-km').value           = km;
+    updateClaimCalc();
+    document.getElementById('claimEditModal').classList.add('open');
+    document.getElementById('cedit-date').focus();
   }
+  function closeClaimEdit() {
+    document.getElementById('claimEditModal').classList.remove('open');
+  }
+  function updateClaimCalc() {
+    const km  = parseFloat(document.getElementById('cedit-km').value) || 0;
+    document.getElementById('cedit-calc').textContent = 'Total: $' + (km * RATE).toFixed(2);
+  }
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeClaimEdit();
+  });
   </script>
 </body>
 </html>
