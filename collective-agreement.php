@@ -130,7 +130,7 @@ if (is_dir($docsDir)) {
             <ul class="dropdown">
               <li><a href="members.php">Member Resources</a></li>
               <li><a href="benefits.php">Health &amp; Dental</a></li><li><a href="life-insurance.php">Life Insurance</a></li><li><a href="loan-forgiveness.php">Student Loan Forgiveness</a></li><li><a href="ttoc.php">TTOC Resources</a></li><li><a href="atrieve.php">Release Time / Atrieve</a></li><li><a href="remedy-tracker.php">Remedy Tracker</a></li>
-              <li><a href="collab-grant.php">Collaboration Grant</a></li>
+              <li><a href="collab-grant.php">Collaboration Grant</a></li><li><a href="mileage.php">EC Mileage</a></li>
             </ul>
           </li>
           <li><a href="prod.php">PRO-D</a></li>
@@ -216,7 +216,7 @@ if (is_dir($docsDir)) {
           <li><a href="documents.php">Documents</a></li>
           <li><a href="members.php">Member Resources</a></li>
           <li><a href="benefits.php">Health &amp; Dental</a></li><li><a href="life-insurance.php">Life Insurance</a></li><li><a href="loan-forgiveness.php">Student Loan Forgiveness</a></li><li><a href="ttoc.php">TTOC Resources</a></li><li><a href="atrieve.php">Release Time / Atrieve</a></li><li><a href="remedy-tracker.php">Remedy Tracker</a></li>
-              <li><a href="collab-grant.php">Collaboration Grant</a></li>
+              <li><a href="collab-grant.php">Collaboration Grant</a></li><li><a href="mileage.php">EC Mileage</a></li>
           <li><a href="prod.php">PRO-D</a></li>
         </ul>
       </div>

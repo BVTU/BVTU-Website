@@ -40,7 +40,7 @@ $member   = $loggedIn ? getMember() : null;
             <ul class="dropdown">
               <li><a href="members.php">Member Resources</a></li>
               <li><a href="benefits.php">Health &amp; Dental</a></li><li><a href="life-insurance.php">Life Insurance</a></li><li><a href="loan-forgiveness.php">Student Loan Forgiveness</a></li><li><a href="ttoc.php">TTOC Resources</a></li><li><a href="atrieve.php">Release Time / Atrieve</a></li><li><a href="remedy-tracker.php">Remedy Tracker</a></li>
-              <li><a href="collab-grant.php">Collaboration Grant</a></li>
+              <li><a href="collab-grant.php">Collaboration Grant</a></li><li><a href="mileage.php">EC Mileage</a></li>
             </ul>
           </li>
           <li><a href="prod.php">PRO-D</a></li>
@@ -181,6 +181,15 @@ $member   = $loggedIn ? getMember() : null;
           <h3>Collaboration Grant</h3>
           <p>Apply for BVTU collaboration grants supporting teacher-led professional development projects.</p>
           <div class="member-page-card-arrow">Apply now →</div>
+        </a>
+
+        <a href="mileage.php" class="member-page-card">
+          <div class="member-page-card-icon">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+          </div>
+          <h3>EC Mileage</h3>
+          <p>Submit mileage claims for union driving. View your school-year total and track reimbursements at $0.70/km.</p>
+          <div class="member-page-card-arrow">Submit a claim →</div>
         </a>
 
       </div>
