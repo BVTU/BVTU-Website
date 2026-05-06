@@ -115,6 +115,16 @@ $documents = [
       <?php endif; ?>
 
       <div class="doc-section" style="margin-bottom:1.5rem;">
+        <h2>Pro-D Portal</h2>
+        <div class="doc-list">
+          <a href="prod-dashboard.php" class="doc-item">
+            <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            Professional Development Portal
+          </a>
+        </div>
+      </div>
+
+      <div class="doc-section" style="margin-bottom:1.5rem;">
         <h2>Administration</h2>
         <div class="doc-list">
           <a href="token-usage.php" class="doc-item">

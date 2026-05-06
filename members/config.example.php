@@ -17,8 +17,13 @@ define('DB_PASS', 'your_database_password');
 // Security key — change this to any long random string
 define('SESSION_SECRET', 'change-this-to-a-long-random-string-xyz');
 
-// ── Claude API (for ask.php and ca-ask.php) ───────────────────────────────────
+// ── Claude API (for ask.php, ca-ask.php, Pro-D receipt scanning) ─────────────
 // define('CLAUDE_API_KEY', 'sk-ant-...');
+
+// ── Pro-D Portal ──────────────────────────────────────────────────────────────
+// Email that gets admin access to the Pro-D review queue (approve/reject claims).
+// Set to the president's or treasurer's email.
+// define('PROD_ADMIN_EMAIL', 'your-email@bctf.ca');
 
 // ── CA Assistant token monitoring (ca-ask.php) ───────────────────────────────
 // Monthly token budget before an alert email is sent to the union president.
