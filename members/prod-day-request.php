@@ -6,28 +6,35 @@ requireLogin();
 $member = getMember();
 prodEnsureTables();
 
-$errors = [];
-$saved  = false;
+$errors  = [];
+$saved   = false;
+$schools = prodGetSchools();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $dates  = array_filter(array_map('trim', explode(',', $_POST['request_dates'] ?? '')));
-    $numDay = (float)($_POST['num_days'] ?? 0);
-    $activity = trim($_POST['activity_description'] ?? '');
-    $school   = trim($_POST['school'] ?? '');
-    $toc      = isset($_POST['toc_needed']) ? 1 : 0;
+    $dates     = array_filter(array_map('trim', explode(',', $_POST['request_dates'] ?? '')));
+    $numDay    = (float)($_POST['num_days'] ?? 0);
+    $activity  = trim($_POST['activity_description'] ?? '');
+    $schoolId  = (int)($_POST['school_id'] ?? 0);
+    $toc       = isset($_POST['toc_needed']) ? 1 : 0;
 
-    if (!$dates)     $errors['dates']    = 'Please select at least one date.';
+    // Look up school name from id
+    $schoolName = '';
+    foreach ($schools as $s) {
+        if ((int)$s['id'] === $schoolId) { $schoolName = $s['name']; break; }
+    }
+
+    if (!$dates)      $errors['dates']    = 'Please select at least one date.';
     if ($numDay <= 0) $errors['num_days'] = 'Please enter the number of days.';
-    if (!$activity)  $errors['activity'] = 'Please describe the activity.';
-    if (!$school)    $errors['school']   = 'Please enter your school.';
+    if (!$activity)   $errors['activity'] = 'Please describe the activity.';
+    if (!$schoolId)   $errors['school']   = 'Please select your school.';
 
     if (!$errors) {
         getDB()->prepare("INSERT INTO prod_day_requests
-            (user_email, user_name, school, request_dates, num_days, activity_description, toc_needed)
-            VALUES (?,?,?,?,?,?,?)")
+            (user_email, user_name, school, school_id, request_dates, num_days, activity_description, toc_needed)
+            VALUES (?,?,?,?,?,?,?,?)")
            ->execute([
                $member['email'], $member['name'],
-               $school,
+               $schoolName, $schoolId,
                json_encode(array_values($dates)),
                $numDay, $activity, $toc,
            ]);
@@ -131,10 +138,16 @@ $statusBg    = ['pending' => '#fffbeb', 'approved' => '#f0fdf4', 'rejected' => '
         </div>
 
         <div class="field">
-          <label for="school">Your School</label>
-          <input type="text" name="school" id="school" placeholder="e.g. Smithers Secondary"
-            value="<?= htmlspecialchars($_POST['school'] ?? '') ?>"
+          <label for="school_id">Your School</label>
+          <select name="school_id" id="school_id" required
             class="<?= isset($errors['school']) ? 'err' : '' ?>">
+            <option value="">Select school…</option>
+            <?php foreach ($schools as $s): ?>
+            <option value="<?= $s['id'] ?>" <?= (int)($_POST['school_id'] ?? 0) === (int)$s['id'] ? 'selected' : '' ?>>
+              <?= htmlspecialchars($s['name']) ?>
+            </option>
+            <?php endforeach; ?>
+          </select>
           <?php if (isset($errors['school'])): ?><div class="field-err"><?= $errors['school'] ?></div><?php endif; ?>
         </div>
       </div>
