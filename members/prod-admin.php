@@ -6,10 +6,22 @@ requireLogin();
 $member = getMember();
 prodEnsureTables();
 
-if (!prodIsAdmin($member['email'])) {
+// Determine what this user is allowed to see
+$isExec      = prodIsExec($member['email']);
+$isTreasurer = prodIsTreasurer($member['email']); // exec also passes this
+$isSiteRep   = prodIsSiteRep($member['email']);
+$siteRepSchoolId   = $isSiteRep ? prodSiteRepSchoolId($member['email']) : null;
+$siteRepSchoolName = $isSiteRep ? prodSiteRepSchoolName($member['email']) : null;
+
+// Must have at least one elevated role to access this page
+if (!$isExec && !$isTreasurer && !$isSiteRep) {
     header('Location: prod-dashboard.php');
     exit;
+
 }
+
+$showClaims  = $isExec || $isTreasurer;
+$showDays    = $isExec || $isSiteRep;
 
 $notice = null;
 
@@ -37,13 +49,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // ── Load data ─────────────────────────────────────────────────────────────────
-$pendingClaims = getDB()->query(
-    "SELECT * FROM prod_claims ORDER BY FIELD(status,'pending','approved','rejected'), created_at DESC"
-)->fetchAll();
+$pendingClaims = [];
+if ($showClaims) {
+    $pendingClaims = getDB()->query(
+        "SELECT * FROM prod_claims ORDER BY FIELD(status,'pending','approved','rejected'), created_at DESC"
+    )->fetchAll();
+}
 
-$pendingDays = getDB()->query(
-    "SELECT * FROM prod_day_requests ORDER BY FIELD(status,'pending','approved','rejected'), created_at DESC"
-)->fetchAll();
+$pendingDays = [];
+if ($showDays) {
+    if ($isSiteRep && !$isExec && $siteRepSchoolId) {
+        // Site rep: only their school's requests
+        $s = getDB()->prepare(
+            "SELECT * FROM prod_day_requests WHERE school_id=?
+             ORDER BY FIELD(status,'pending','approved','rejected'), created_at DESC"
+        );
+        $s->execute([$siteRepSchoolId]);
+        $pendingDays = $s->fetchAll();
+    } else {
+        $pendingDays = getDB()->query(
+            "SELECT * FROM prod_day_requests ORDER BY FIELD(status,'pending','approved','rejected'), created_at DESC"
+        )->fetchAll();
+    }
+}
 
 $catLabel = ['conference'=>'Conference','course'=>'Course','materials'=>'Materials','travel'=>'Travel','other'=>'Other'];
 $statusColor = ['pending'=>'#d97706','approved'=>'#166534','rejected'=>'#991b1b','flagged'=>'#7c3aed'];
@@ -94,12 +122,33 @@ $statusBg    = ['pending'=>'#fffbeb','approved'=>'#f0fdf4','rejected'=>'#fef2f2'
 <div class="admin-wrap">
 
   <div class="portal-header">
-    <h1>Pro-D Administration</h1>
-    <a class="back-link" href="prod-dashboard.php">← Pro-D Portal</a>
+    <div>
+      <h1><?php
+        if ($isExec)           echo 'Pro-D Administration';
+        elseif ($isTreasurer)  echo 'Financial Claims — Review Queue';
+        elseif ($isSiteRep)    echo 'Day Requests — ' . htmlspecialchars($siteRepSchoolName ?? 'My School');
+      ?></h1>
+      <div style="font-size:.82rem;color:var(--gray-500);margin-top:.2rem;">
+        <?php
+          $tags = [];
+          if ($isExec)      $tags[] = '<span style="color:#1e40af;font-weight:600;">Exec</span>';
+          if ($isTreasurer && !$isExec) $tags[] = '<span style="color:#166534;font-weight:600;">Treasurer</span>';
+          if ($isSiteRep)   $tags[] = '<span style="color:#7c3aed;font-weight:600;">Site Rep</span>';
+          echo implode(' · ', $tags);
+        ?>
+      </div>
+    </div>
+    <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;">
+      <?php if ($isExec): ?>
+      <a href="prod-manage.php" class="btn btn-outline" style="padding:.45rem .9rem;font-size:.85rem;">⚙ Manage Schools &amp; Roles</a>
+      <?php endif; ?>
+      <a class="back-link" href="prod-dashboard.php">← Pro-D Portal</a>
+    </div>
   </div>
 
   <?php if ($notice): ?><div class="notice"><?= htmlspecialchars($notice) ?></div><?php endif; ?>
 
+  <?php if ($showClaims): ?>
   <!-- ── Financial Claims ──────────────────────────────────────────────────── -->
   <p class="section-title" id="claims">Financial Claims</p>
 
@@ -168,10 +217,16 @@ $statusBg    = ['pending'=>'#fffbeb','approved'=>'#f0fdf4','rejected'=>'#fef2f2'
   <?php endforeach; ?>
   <?php endif; ?>
 
-  <hr class="divider" id="day-requests">
+  <?php endif; // showClaims ?>
 
+  <?php if ($showClaims && $showDays): ?><hr class="divider" id="day-requests"><?php endif; ?>
+
+  <?php if ($showDays): ?>
   <!-- ── Day Requests ──────────────────────────────────────────────────────── -->
-  <p class="section-title">Release Day Requests</p>
+  <p class="section-title">
+    Release Day Requests
+    <?php if ($isSiteRep && !$isExec): ?>— <?= htmlspecialchars($siteRepSchoolName ?? '') ?><?php endif; ?>
+  </p>
 
   <?php if (!$pendingDays): ?>
   <div class="empty-state">No day requests submitted yet.</div>
@@ -217,7 +272,7 @@ $statusBg    = ['pending'=>'#fffbeb','approved'=>'#f0fdf4','rejected'=>'#fef2f2'
     <?php endif; ?>
   </div>
   <?php endforeach; ?>
-  <?php endif; ?>
+  <?php endif; // showDays ?>
 
 </div>
 </body>
