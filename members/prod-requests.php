@@ -111,15 +111,15 @@ $statusBg    = ['pending' => '#fffbeb', 'approved' => '#f0fdf4', 'rejected' => '
 
       // Phase 1 display
       $p1label = $statusLabel[$st] ?? ucfirst($st);
-      $p1class = match($st) { 'approved' => 'done', 'rejected' => 'rejected', default => 'pending' };
+      $p1class = $st === 'approved' ? 'done' : ($st === 'rejected' ? 'rejected' : 'pending');
 
       // Phase 2 display
       if (!$r['final_submitted']) {
           $p2label = $st === 'approved' ? 'Ready to submit' : 'Awaiting approval';
           $p2class = $st === 'approved' ? 'pending' : 'waiting';
       } else {
-          $p2label = match($fst) { 'approved' => 'Approved', 'rejected' => 'Rejected', default => 'Under review' };
-          $p2class = match($fst) { 'approved' => 'done', 'rejected' => 'rejected', default => 'pending' };
+          $p2label = $fst === 'approved' ? 'Approved' : ($fst === 'rejected' ? 'Rejected' : 'Under review');
+          $p2class = $fst === 'approved' ? 'done'     : ($fst === 'rejected' ? 'rejected'  : 'pending');
       }
     ?>
     <div class="req-card">
