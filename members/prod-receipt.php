@@ -12,14 +12,17 @@ $id     = (int)($_GET['id'] ?? 0);
 
 if ($id <= 0) { http_response_code(400); exit('Invalid request.'); }
 
-$stmt = getDB()->prepare("SELECT user_email, receipt_path, receipt_filename FROM prod_claims WHERE id=?");
+// Support both prod_claims (legacy) and prod_requests (new two-phase)
+$table = ($_GET['table'] ?? '') === 'request' ? 'prod_requests' : 'prod_claims';
+$stmt = getDB()->prepare("SELECT user_email, receipt_path, receipt_filename FROM {$table} WHERE id=?");
 $stmt->execute([$id]);
 $claim = $stmt->fetch();
 
 if (!$claim || !$claim['receipt_path']) { http_response_code(404); exit('Receipt not found.'); }
 
-// Access control: own claims or admin
-if ($claim['user_email'] !== $member['email'] && !prodIsAdmin($member['email'])) {
+// Access control: own records or admin/treasurer/site_rep
+$isPrivileged = prodIsAdmin($member['email']) || prodIsTreasurer($member['email']) || prodIsSiteRep($member['email']);
+if ($claim['user_email'] !== $member['email'] && !$isPrivileged) {
     http_response_code(403);
     exit('Access denied.');
 }

@@ -105,6 +105,49 @@ function prodEnsureTables(): void {
         INDEX idx_school (school_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+    // ── Unified two-phase request table ──────────────────────────────────────
+    $db->exec("CREATE TABLE IF NOT EXISTS prod_requests (
+        id                   INT AUTO_INCREMENT PRIMARY KEY,
+        user_email           VARCHAR(255)   NOT NULL,
+        user_name            VARCHAR(255)   NOT NULL,
+        school               VARCHAR(255),
+        school_id            INT            DEFAULT NULL,
+        request_dates        TEXT           NOT NULL,
+        num_days             DECIMAL(4,1)   NOT NULL,
+        toc_needed           TINYINT(1)     DEFAULT 0,
+        activity_description TEXT           NOT NULL,
+        category             VARCHAR(50),
+        tentative_amount     DECIMAL(10,2),
+
+        -- Phase 1: initial approval (site rep / exec)
+        status               VARCHAR(20)    DEFAULT 'pending',
+        reviewed_by          VARCHAR(255),
+        reviewed_at          DATETIME,
+        reviewer_note        TEXT,
+
+        -- Phase 2: final claim (submitted after the event)
+        final_submitted      TINYINT(1)     DEFAULT 0,
+        final_amount         DECIMAL(10,2),
+        final_description    TEXT,
+        receipt_path         VARCHAR(500),
+        receipt_filename     VARCHAR(255),
+        extracted_vendor     VARCHAR(255),
+        extracted_date       DATE,
+        extracted_amount     DECIMAL(10,2),
+        extraction_flag      VARCHAR(50),
+        extraction_concerns  TEXT,
+        final_status         VARCHAR(20),
+        final_reviewed_by    VARCHAR(255),
+        final_reviewed_at    DATETIME,
+        final_reviewer_note  TEXT,
+
+        created_at           DATETIME       DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_email       (user_email),
+        INDEX idx_status      (status),
+        INDEX idx_final       (final_status),
+        INDEX idx_school      (school_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
     // Seed schools if none exist
     $count = (int)$db->query("SELECT COUNT(*) FROM prod_schools")->fetchColumn();
     if ($count === 0) {
@@ -172,17 +215,21 @@ function prodGetBalance(string $email): array {
     $s = $db->prepare("SELECT COALESCE(SUM(amount),0) FROM prod_allocations WHERE user_email=?");
     $s->execute([$email]); $allocated = (float)$s->fetchColumn();
 
-    $s = $db->prepare("SELECT COALESCE(SUM(amount_claimed),0) FROM prod_claims WHERE user_email=? AND status='approved'");
+    // Spent = final claims that have been financially approved
+    $s = $db->prepare("SELECT COALESCE(SUM(final_amount),0) FROM prod_requests WHERE user_email=? AND final_status='approved'");
     $s->execute([$email]); $spent = (float)$s->fetchColumn();
 
-    $s = $db->prepare("SELECT COALESCE(SUM(amount_claimed),0) FROM prod_claims WHERE user_email=? AND status='pending'");
-    $s->execute([$email]); $pending = (float)$s->fetchColumn();
+    // Reserved = tentative amounts on approved-but-not-yet-finalized requests
+    $s = $db->prepare("SELECT COALESCE(SUM(tentative_amount),0) FROM prod_requests
+                       WHERE user_email=? AND status='approved' AND (final_status IS NULL OR final_status='pending')");
+    $s->execute([$email]); $reserved = (float)$s->fetchColumn();
 
     return [
         'allocated' => $allocated,
         'spent'     => $spent,
-        'pending'   => $pending,
-        'balance'   => $allocated - $spent,
+        'reserved'  => $reserved,
+        'pending'   => $reserved,          // alias kept for template compatibility
+        'balance'   => $allocated - $spent - $reserved,
     ];
 }
 
@@ -198,18 +245,26 @@ function prodSeedTrialAllocation(string $email, string $name): void {
 }
 
 // ── Pending counts ────────────────────────────────────────────────────────────
-function prodPendingClaims(): int {
-    return (int)getDB()->query("SELECT COUNT(*) FROM prod_claims WHERE status='pending'")->fetchColumn();
-}
-
-function prodPendingDayRequests(?int $schoolId = null): int {
+/** Phase 1: requests awaiting initial approval */
+function prodPendingRequests(?int $schoolId = null): int {
     if ($schoolId) {
-        $s = getDB()->prepare("SELECT COUNT(*) FROM prod_day_requests WHERE status='pending' AND school_id=?");
+        $s = getDB()->prepare("SELECT COUNT(*) FROM prod_requests WHERE status='pending' AND school_id=?");
         $s->execute([$schoolId]);
         return (int)$s->fetchColumn();
     }
-    return (int)getDB()->query("SELECT COUNT(*) FROM prod_day_requests WHERE status='pending'")->fetchColumn();
+    return (int)getDB()->query("SELECT COUNT(*) FROM prod_requests WHERE status='pending'")->fetchColumn();
 }
+
+/** Phase 2: approved requests with final claim awaiting financial review */
+function prodPendingFinalClaims(): int {
+    return (int)getDB()->query(
+        "SELECT COUNT(*) FROM prod_requests WHERE status='approved' AND final_submitted=1 AND final_status='pending'"
+    )->fetchColumn();
+}
+
+// Legacy aliases so existing pages don't break
+function prodPendingClaims(): int         { return prodPendingFinalClaims(); }
+function prodPendingDayRequests(?int $s = null): int { return prodPendingRequests($s); }
 
 // ── School helpers ────────────────────────────────────────────────────────────
 function prodGetSchools(bool $activeOnly = true): array {

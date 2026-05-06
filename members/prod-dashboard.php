@@ -10,13 +10,20 @@ prodSeedTrialAllocation($member['email'], $member['name']);
 $bal     = prodGetBalance($member['email']);
 $isAdmin = prodIsAdmin($member['email']);
 
-// Pending counts for the member
+// Pending counts for the member (using unified prod_requests table)
 $db = getDB();
-$s  = $db->prepare("SELECT COUNT(*) FROM prod_claims WHERE user_email=? AND status='pending'");
-$s->execute([$member['email']]); $myPendingClaims = (int)$s->fetchColumn();
 
-$s = $db->prepare("SELECT COUNT(*) FROM prod_day_requests WHERE user_email=? AND status='pending'");
-$s->execute([$member['email']]); $myPendingDays = (int)$s->fetchColumn();
+// Requests awaiting initial approval
+$s = $db->prepare("SELECT COUNT(*) FROM prod_requests WHERE user_email=? AND status='pending'");
+$s->execute([$member['email']]); $myPendingRequests = (int)$s->fetchColumn();
+
+// Approved requests ready for final claim submission
+$s = $db->prepare("SELECT COUNT(*) FROM prod_requests WHERE user_email=? AND status='approved' AND final_submitted=0");
+$s->execute([$member['email']]); $myReadyForFinal = (int)$s->fetchColumn();
+
+// Final claims under financial review
+$s = $db->prepare("SELECT COUNT(*) FROM prod_requests WHERE user_email=? AND final_submitted=1 AND final_status='pending'");
+$s->execute([$member['email']]); $myPendingFinal = (int)$s->fetchColumn();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -129,14 +136,14 @@ $s->execute([$member['email']]); $myPendingDays = (int)$s->fetchColumn();
       <div class="stat-sub">Per FTE per year (Sep 1)</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">My Pending Claims</div>
-      <div class="stat-value"><?= $myPendingClaims ?></div>
-      <div class="stat-sub">awaiting review</div>
+      <div class="stat-label">Awaiting Approval</div>
+      <div class="stat-value"><?= $myPendingRequests ?></div>
+      <div class="stat-sub">requests pending review</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">My Day Requests</div>
-      <div class="stat-value"><?= $myPendingDays ?></div>
-      <div class="stat-sub">awaiting approval</div>
+      <div class="stat-label">Ready to Claim</div>
+      <div class="stat-value"><?= $myReadyForFinal ?></div>
+      <div class="stat-sub">approved, submit receipt</div>
     </div>
   </div>
 
@@ -144,31 +151,32 @@ $s->execute([$member['email']]); $myPendingDays = (int)$s->fetchColumn();
   <p class="section-title">Quick Actions</p>
   <div class="action-grid">
 
-    <a href="prod-claim-new.php" class="action-card">
+    <a href="prod-request-new.php" class="action-card">
       <div class="action-card-icon">
         <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
       </div>
-      <h3>Submit a Claim</h3>
-      <p>Upload a receipt and submit a financial reimbursement. AI extracts the details for you.</p>
-      <div class="arrow">Submit claim →</div>
+      <h3>New Pro-D Request</h3>
+      <p>Request release days and tentative funding for an upcoming professional development activity.</p>
+      <div class="arrow">Start request →</div>
     </a>
 
-    <a href="prod-claims.php" class="action-card">
+    <a href="prod-requests.php" class="action-card">
       <div class="action-card-icon">
         <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
       </div>
-      <h3>My Claims</h3>
-      <p>View all your submitted financial claims, statuses, and reviewer notes.</p>
-      <div class="arrow">View history →</div>
-    </a>
-
-    <a href="prod-day-request.php" class="action-card">
-      <div class="action-card-icon">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <h3>My Requests</h3>
+      <p>View your requests, track approvals, and submit final claims with receipts after your event.</p>
+      <?php if ($myReadyForFinal > 0): ?>
+      <div class="arrow" style="color:#166534;">
+        <?= $myReadyForFinal ?> ready for final claim →
       </div>
-      <h3>Request Release Day</h3>
-      <p>Request pro-d release days from your school's pool for an upcoming activity.</p>
-      <div class="arrow">Request days →</div>
+      <?php elseif ($myPendingFinal > 0): ?>
+      <div class="arrow" style="color:#d97706;">
+        <?= $myPendingFinal ?> under financial review →
+      </div>
+      <?php else: ?>
+      <div class="arrow">View history →</div>
+      <?php endif; ?>
     </a>
 
   </div>
@@ -181,30 +189,30 @@ $s->execute([$member['email']]); $myPendingDays = (int)$s->fetchColumn();
   <!-- Role-based admin section -->
   <p class="section-title" style="margin-top:1rem;">Review Queue</p>
 
-  <?php if ($isAdmin || prodIsTreasurer($member['email'])): ?>
-  <a href="prod-admin.php" class="admin-card">
+  <?php if ($isAdmin || prodIsSiteRep($member['email'])): ?>
+  <a href="prod-admin.php#phase1" class="admin-card">
     <div class="admin-card-left">
       <div class="admin-card-icon">
-        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
       </div>
       <div>
-        <h4>Financial Claims <?php $pc = prodPendingClaims(); if ($pc > 0): ?><span class="badge"><?= $pc ?></span><?php endif; ?></h4>
-        <p>Approve or reject pending reimbursement claims</p>
+        <h4>Phase 1 — Request Approvals <?php $pd = prodPendingRequests($memberSchoolId); if ($pd > 0): ?><span class="badge"><?= $pd ?></span><?php endif; ?></h4>
+        <p>Approve days &amp; tentative funding<?= $memberSchoolId ? ' for your school' : '' ?></p>
       </div>
     </div>
     <span style="color:var(--gray-400);font-size:1.1rem;">→</span>
   </a>
   <?php endif; ?>
 
-  <?php if ($isAdmin || prodIsSiteRep($member['email'])): ?>
-  <a href="prod-admin.php#day-requests" class="admin-card">
+  <?php if ($isAdmin || prodIsTreasurer($member['email'])): ?>
+  <a href="prod-admin.php#phase2" class="admin-card">
     <div class="admin-card-left">
       <div class="admin-card-icon">
-        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
       </div>
       <div>
-        <h4>Day Requests <?php $pd = prodPendingDayRequests($memberSchoolId); if ($pd > 0): ?><span class="badge"><?= $pd ?></span><?php endif; ?></h4>
-        <p>Approve or reject pending release day requests<?= $memberSchoolId ? ' from your school' : '' ?></p>
+        <h4>Phase 2 — Final Claims <?php $pc = prodPendingFinalClaims(); if ($pc > 0): ?><span class="badge"><?= $pc ?></span><?php endif; ?></h4>
+        <p>Review receipts &amp; approve reimbursements</p>
       </div>
     </div>
     <span style="color:var(--gray-400);font-size:1.1rem;">→</span>
