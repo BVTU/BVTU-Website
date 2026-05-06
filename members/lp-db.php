@@ -236,6 +236,15 @@ function lpGrantSummary(int $year = 0): array {
     return $grants;
 }
 
+/** Returns emails of all treasurers; falls back to exec email */
+function lpGetTreasurerEmails(): array {
+    $emails = [];
+    $s = getDB()->query("SELECT user_email FROM prod_roles WHERE role='treasurer'");
+    foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $e) $emails[] = $e;
+    if (empty($emails) && defined('PROD_ADMIN_EMAIL')) $emails[] = PROD_ADMIN_EMAIL;
+    return array_unique($emails);
+}
+
 function lpBudgetSummary(int $year = 0): array {
     if (!$year) $year = lpCurrentYear();
     $lines = lpGetBudgetLines($year);

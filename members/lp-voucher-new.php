@@ -458,6 +458,10 @@ function handleRowScan(input, rowId) {
 }
 
 function showLocalPreview(rowId, file) {
+    if (file.type === 'application/pdf') {
+        showThumb(rowId, null, '__pdf__');
+        return;
+    }
     const reader = new FileReader();
     reader.onload = e => showThumb(rowId, null, e.target.result);
     reader.readAsDataURL(file);
@@ -528,6 +532,10 @@ function setSelect(row, selector, value) {
     if (el) el.value = value;
 }
 
+function isPdfSrc(src) {
+    return src === '__pdf__' || /\.pdf/i.test(src || '') || (src && src.startsWith('data:application/pdf'));
+}
+
 function showThumb(rowId, savedPath, dataUrl) {
     const wrap = document.getElementById('receipt-wrap-' + rowId);
     if (!wrap) return;
@@ -539,14 +547,17 @@ function showThumb(rowId, savedPath, dataUrl) {
     const existing = wrap.querySelector('.receipt-has-file');
     if (existing) existing.remove();
 
-    const src = dataUrl || ('lp-receipt.php?f=' + encodeURIComponent(savedPath));
+    const pdf = isPdfSrc(dataUrl) || isPdfSrc(savedPath);
+    const src = (dataUrl && dataUrl !== '__pdf__') ? dataUrl : ('lp-receipt.php?f=' + encodeURIComponent(savedPath || ''));
+    const hoverSrc = pdf ? '__pdf__' : src;
+
     const indicator = document.createElement('div');
     indicator.className = 'receipt-has-file';
-    indicator.title = 'Receipt attached — hover to preview, click to change';
+    indicator.title = pdf ? 'PDF receipt — hover for info, click to change' : 'Receipt attached — hover to preview, click to change';
     indicator.innerHTML = '📄';
     indicator.dataset.src = src;
     indicator.onclick = () => triggerRowScan(rowId);
-    indicator.addEventListener('mouseenter', e => showHoverPreview(e, src));
+    indicator.addEventListener('mouseenter', e => showHoverPreview(e, hoverSrc));
     indicator.addEventListener('mouseleave',  hideHoverPreview);
     indicator.addEventListener('mousemove',   moveHoverPreview);
     wrap.insertBefore(indicator, wrap.querySelector('.scan-spinner'));
@@ -556,13 +567,27 @@ function showThumb(rowId, savedPath, dataUrl) {
 const hoverPreview = (() => {
     const el = document.createElement('div');
     el.id = 'receiptPreview';
-    el.innerHTML = '<img src="" alt="Receipt preview">';
+    el.innerHTML = '<img src="" alt="Receipt preview">'
+        + '<div id="hoverPdfMsg" style="display:none;width:200px;padding:1rem 1.25rem;text-align:center;">'
+        + '<div style="font-size:2.5rem;line-height:1;">📄</div>'
+        + '<div style="font-size:.82rem;font-weight:700;color:#374151;margin-top:.5rem;">PDF Receipt</div>'
+        + '<div style="font-size:.74rem;color:#9ca3af;margin-top:.25rem;">Click to change file</div>'
+        + '</div>';
     document.body.appendChild(el);
     return el;
 })();
 
 function showHoverPreview(e, src) {
-    hoverPreview.querySelector('img').src = src;
+    const pdf = isPdfSrc(src);
+    const img    = hoverPreview.querySelector('img');
+    const pdfMsg = document.getElementById('hoverPdfMsg');
+    if (pdf) {
+        img.style.display = 'none'; img.src = '';
+        if (pdfMsg) pdfMsg.style.display = 'block';
+    } else {
+        if (pdfMsg) pdfMsg.style.display = 'none';
+        img.style.display = 'block'; img.src = src;
+    }
     hoverPreview.style.display = 'block';
     positionPreview(e);
 }

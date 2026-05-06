@@ -17,6 +17,41 @@ $isOwner = $voucher['submitted_by_email'] === $member['email'];
 if (!$isOwner && !lpCanView($member['email'])) { header('Location: lp-dashboard.php'); exit; }
 
 $expenses = lpGetExpenses($id);
+$notice   = null;
+
+// ── Submit to treasurer ───────────────────────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'submit') {
+    if ($voucher['status'] === 'draft' && ($isOwner || prodIsExec($member['email']))) {
+        getDB()->prepare("UPDATE lp_vouchers SET status='submitted', submitted_at=NOW() WHERE id=?")
+               ->execute([$id]);
+        $voucher = lpGetVoucher($id); // reload
+
+        // Send email to treasurer(s)
+        $treasurerEmails = lpGetTreasurerEmails();
+        $vNum    = $voucher['voucher_number'] ? '#'.$voucher['voucher_number'].' — ' : '';
+        $subject = "LP Expense Voucher submitted for review: {$vNum}{$voucher['name']}";
+        $viewUrl = 'https://' . $_SERVER['HTTP_HOST'] . '/members/lp-voucher-view.php?id=' . $id;
+
+        // Expense summary for email
+        $expCount = count($expenses);
+        $total    = array_sum(array_map('lpRowTotal', $expenses));
+        $body  = "A new expense voucher has been submitted for your review.\n\n";
+        $body .= "Submitted by: {$voucher['submitted_by']}\n";
+        $body .= "Voucher: {$vNum}{$voucher['name']}\n";
+        $body .= "Expenses: {$expCount} line items\n";
+        $body .= "Total: $" . number_format($total, 2) . "\n";
+        if ($voucher['notes']) $body .= "Notes: {$voucher['notes']}\n";
+        $body .= "\nView and approve online:\n{$viewUrl}\n\n";
+        $body .= "— BVTU Members Portal";
+
+        $headers = "From: noreply@bvtu.ca\r\nReply-To: {$voucher['submitted_by_email']}\r\nContent-Type: text/plain; charset=UTF-8";
+        foreach ($treasurerEmails as $to) {
+            @mail($to, $subject, $body, $headers);
+        }
+
+        $notice = 'Voucher submitted — the treasurer has been notified by email.';
+    }
+}
 
 // Export as CSV
 if (($_GET['export'] ?? '') === 'csv') {
@@ -165,7 +200,10 @@ arsort($blSummary);
     .lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.85); z-index: 9999; align-items: center; justify-content: center; }
     .lightbox.open { display: flex; }
     .lightbox img { max-width: 90vw; max-height: 90vh; border-radius: 8px; }
-    .lightbox-close { position: absolute; top: 1rem; right: 1.5rem; color: #fff; font-size: 2rem; cursor: pointer; }
+    .lightbox iframe { width: 88vw; height: 90vh; border: none; border-radius: 8px; background: #fff; }
+    .lightbox-close { position: absolute; top: 1rem; right: 1.5rem; color: #fff; font-size: 2rem; cursor: pointer; line-height: 1; }
+    .lightbox-opennew { position: absolute; top: 1rem; right: 4rem; color: rgba(255,255,255,.7); font-size: .85rem; text-decoration: none; }
+    .lightbox-opennew:hover { color: #fff; }
   </style>
 </head>
 <body>
@@ -186,14 +224,29 @@ arsort($blSummary);
     <div style="display:flex;flex-direction:column;gap:.5rem;align-items:flex-end;">
       <div class="action-bar no-print">
         <?php if ($isOwner || prodIsExec($member['email'])): ?>
-        <a href="lp-voucher-edit.php?id=<?= $id ?>" class="btn btn-outline" style="padding:.45rem .85rem;font-size:.83rem;">✏ Edit</a>
+          <?php if ($voucher['status'] === 'draft'): ?>
+          <a href="lp-voucher-edit.php?id=<?= $id ?>" class="btn btn-outline" style="padding:.45rem .85rem;font-size:.83rem;">✏ Edit</a>
+          <form method="POST" style="display:inline;" onsubmit="return confirm('Submit this voucher to the treasurer for review? You can still edit it after.')">
+            <input type="hidden" name="action" value="submit">
+            <button type="submit" class="btn btn-primary" style="padding:.45rem .85rem;font-size:.83rem;background:#166534;">📤 Submit to Treasurer</button>
+          </form>
+          <?php else: ?>
+          <span style="font-size:.82rem;font-weight:700;color:#166534;padding:.45rem .5rem;">✓ Submitted <?= $voucher['submitted_at'] ? date('M j', strtotime($voucher['submitted_at'])) : '' ?></span>
+          <a href="lp-voucher-edit.php?id=<?= $id ?>" class="btn btn-outline" style="padding:.45rem .85rem;font-size:.83rem;">✏ Edit</a>
+          <?php endif; ?>
         <?php endif; ?>
         <a href="?id=<?= $id ?>&export=csv" class="btn btn-outline" style="padding:.45rem .85rem;font-size:.83rem;">⬇ CSV</a>
-        <button onclick="window.print()" class="btn btn-primary" style="padding:.45rem .85rem;font-size:.83rem;">🖨 Print</button>
+        <button onclick="window.print()" class="btn btn-outline" style="padding:.45rem .85rem;font-size:.83rem;">🖨 Print</button>
       </div>
       <a class="back-link no-print" href="lp-dashboard.php">← LP Expenses</a>
     </div>
   </div>
+
+  <?php if ($notice): ?>
+  <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:.75rem 1rem;margin-bottom:1.25rem;font-size:.88rem;color:#166534;font-weight:600;">
+    ✓ <?= htmlspecialchars($notice) ?>
+  </div>
+  <?php endif; ?>
 
   <!-- Summary cards -->
   <div class="summary-row">
@@ -345,17 +398,31 @@ arsort($blSummary);
 <!-- Lightbox -->
 <div class="lightbox" id="lightbox" onclick="closeLightbox()">
   <span class="lightbox-close">×</span>
+  <a id="lightbox-opennew" class="lightbox-opennew no-print" href="#" target="_blank" onclick="event.stopPropagation()">⬡ Open in new tab</a>
   <img src="" id="lightboxImg" alt="Receipt">
+  <iframe id="lightboxFrame" src="" style="display:none;"></iframe>
 </div>
 
 <script>
 function openLightbox(src) {
-    document.getElementById('lightboxImg').src = src;
+    const isPdf = /\.pdf/i.test(src);
+    const img   = document.getElementById('lightboxImg');
+    const frame = document.getElementById('lightboxFrame');
+    const openNew = document.getElementById('lightbox-opennew');
+    if (isPdf) {
+        img.style.display = 'none'; img.src = '';
+        frame.src = src; frame.style.display = 'block';
+    } else {
+        frame.style.display = 'none'; frame.src = '';
+        img.src = src; img.style.display = 'block';
+    }
+    if (openNew) openNew.href = src;
     document.getElementById('lightbox').classList.add('open');
 }
 function closeLightbox() {
     document.getElementById('lightbox').classList.remove('open');
     document.getElementById('lightboxImg').src = '';
+    document.getElementById('lightboxFrame').src = '';
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
 </script>

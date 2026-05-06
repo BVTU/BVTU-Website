@@ -281,7 +281,14 @@ $expensesJson = json_encode(array_values($expenses));
   </form>
 </div>
 
-<div id="receiptPreview"><img src="" alt="Receipt preview"></div>
+<div id="receiptPreview">
+  <img src="" alt="Receipt preview">
+  <div id="hoverPdfMsg" style="display:none;width:200px;padding:1rem 1.25rem;text-align:center;">
+    <div style="font-size:2.5rem;line-height:1;">📄</div>
+    <div style="font-size:.82rem;font-weight:700;color:#374151;margin-top:.5rem;">PDF Receipt</div>
+    <div style="font-size:.74rem;color:#9ca3af;margin-top:.25rem;">Click to change file</div>
+  </div>
+</div>
 
 <script>
 const GRANTS       = <?= $grantsJson ?>;
@@ -390,13 +397,21 @@ function updateTotals() {
     document.getElementById('grandTotal').textContent = '$' + grand.toFixed(2);
 }
 
+function isPdfSrc(src) {
+    return src === '__pdf__' || /\.pdf/i.test(src || '') || (src && src.startsWith('data:application/pdf'));
+}
+
 function triggerRowScan(rowId) { document.getElementById('file-' + rowId).click(); }
 function handleRowScan(input, rowId) {
     if (!input.files[0]) return;
     // Instant local preview
-    const reader = new FileReader();
-    reader.onload = e => showThumb(rowId, null, e.target.result);
-    reader.readAsDataURL(input.files[0]);
+    if (input.files[0].type === 'application/pdf') {
+        showThumb(rowId, null, '__pdf__');
+    } else {
+        const reader = new FileReader();
+        reader.onload = e => showThumb(rowId, null, e.target.result);
+        reader.readAsDataURL(input.files[0]);
+    }
     // Upload + AI scan
     const spinner = document.getElementById('spinner-' + rowId);
     if (spinner) spinner.style.display = 'block';
@@ -432,21 +447,36 @@ function showThumb(rowId, savedPath, dataUrl) {
     const btn = document.getElementById('attach-btn-' + rowId);
     if (btn) btn.remove();
     wrap.querySelector('.receipt-has-file')?.remove();
-    const src = dataUrl || ('lp-receipt.php?f=' + encodeURIComponent(savedPath));
+    const pdf = isPdfSrc(dataUrl) || isPdfSrc(savedPath);
+    const src = (dataUrl && dataUrl !== '__pdf__') ? dataUrl : ('lp-receipt.php?f=' + encodeURIComponent(savedPath || ''));
+    const hoverSrc = pdf ? '__pdf__' : src;
     const indicator = document.createElement('div');
     indicator.className = 'receipt-has-file';
-    indicator.title = 'Receipt attached — hover to preview, click to change';
+    indicator.title = pdf ? 'PDF receipt — hover for info, click to change' : 'Receipt attached — hover to preview, click to change';
     indicator.innerHTML = '📄';
     indicator.dataset.src = src;
     indicator.onclick = () => triggerRowScan(rowId);
-    indicator.addEventListener('mouseenter', e => showHoverPreview(e, src));
+    indicator.addEventListener('mouseenter', e => showHoverPreview(e, hoverSrc));
     indicator.addEventListener('mouseleave', hideHoverPreview);
     indicator.addEventListener('mousemove',  moveHoverPreview);
     wrap.insertBefore(indicator, wrap.querySelector('.scan-spinner'));
 }
 
 const hoverPreview = document.getElementById('receiptPreview');
-function showHoverPreview(e, src) { hoverPreview.querySelector('img').src = src; hoverPreview.style.display = 'block'; positionPreview(e); }
+function showHoverPreview(e, src) {
+    const pdf = isPdfSrc(src);
+    const img    = hoverPreview.querySelector('img');
+    const pdfMsg = document.getElementById('hoverPdfMsg');
+    if (pdf) {
+        img.style.display = 'none'; img.src = '';
+        if (pdfMsg) pdfMsg.style.display = 'block';
+    } else {
+        if (pdfMsg) pdfMsg.style.display = 'none';
+        img.style.display = 'block'; img.src = src;
+    }
+    hoverPreview.style.display = 'block';
+    positionPreview(e);
+}
 function hideHoverPreview() { hoverPreview.style.display = 'none'; hoverPreview.querySelector('img').src = ''; }
 function moveHoverPreview(e) { positionPreview(e); }
 function positionPreview(e) {
