@@ -156,12 +156,17 @@ $budgetLinesJson = json_encode(array_values($budgetLines));
     .cell-select:hover, .cell-select:focus { border-color: var(--primary); background: #fff; outline: none; }
 
     /* Receipt cell */
-    .receipt-cell { width: 60px; text-align: center; }
-    .receipt-thumb { width: 44px; height: 44px; object-fit: cover; border-radius: 5px; cursor: pointer; border: 1px solid var(--gray-200); }
-    .receipt-placeholder { width: 44px; height: 44px; border: 1.5px dashed var(--gray-300); border-radius: 5px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1.1rem; transition: border-color .15s, background .15s; background: transparent; }
-    .receipt-placeholder:hover { border-color: var(--primary); background: var(--accent); }
-    .scan-spinner { display: none; width: 20px; height: 20px; border: 2px solid var(--gray-200); border-top-color: var(--primary); border-radius: 50%; animation: spin .7s linear infinite; margin: auto; }
+    .receipt-cell { width: 52px; text-align: center; }
+    .receipt-attach-btn { background: none; border: 1px dashed var(--gray-300); border-radius: 5px; width: 34px; height: 28px; cursor: pointer; font-size: .85rem; color: var(--gray-400); display: flex; align-items: center; justify-content: center; margin: auto; transition: border-color .12s, color .12s, background .12s; }
+    .receipt-attach-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--accent); }
+    .receipt-has-file { width: 34px; height: 28px; border-radius: 5px; background: #dcfce7; border: 1px solid #86efac; display: flex; align-items: center; justify-content: center; margin: auto; cursor: pointer; font-size: .85rem; position: relative; }
+    .receipt-has-file:hover { background: #bbf7d0; }
+    .scan-spinner { display: none; width: 18px; height: 18px; border: 2px solid var(--gray-200); border-top-color: var(--primary); border-radius: 50%; animation: spin .7s linear infinite; margin: auto; }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Hover receipt preview */
+    #receiptPreview { position: fixed; z-index: 9998; display: none; background: #fff; border: 1px solid var(--gray-200); border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,.2); padding: 6px; pointer-events: none; }
+    #receiptPreview img { max-width: 260px; max-height: 340px; display: block; border-radius: 6px; object-fit: contain; }
 
     .row-flag { background: #fffbeb; }
     .flag-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #f59e0b; margin-right: .3rem; vertical-align: middle; }
@@ -240,12 +245,8 @@ $budgetLinesJson = json_encode(array_values($budgetLines));
 
   <!-- Toolbar -->
   <div class="toolbar">
-    <button type="button" class="btn-scan" onclick="triggerScan()">
-      📷 Scan Receipt
-    </button>
-    <button type="button" class="btn-add" onclick="addRow()">+ Add Row Manually</button>
-    <span class="mileage-note">Mileage rate: $<?= number_format($mileageRate, 2) ?>/km · auto-calculated</span>
-    <input type="file" id="globalScanInput" accept="image/*,.pdf" capture="environment" style="display:none" onchange="handleGlobalScan(this)">
+    <button type="button" class="btn-add" onclick="addRow()">+ Add Row</button>
+    <span class="mileage-note">Mileage rate: $<?= number_format($mileageRate, 2) ?>/km · auto-calculated · attach receipts with 📎 on each row</span>
   </div>
 
   <!-- Expense table -->
@@ -302,12 +303,6 @@ $budgetLinesJson = json_encode(array_values($budgetLines));
   <?php endif; ?>
 </div>
 
-<!-- Lightbox -->
-<div class="lightbox" id="lightbox" onclick="closeLightbox()">
-  <span class="lightbox-close">×</span>
-  <img src="" id="lightboxImg" alt="Receipt">
-</div>
-
 <script>
 const GRANTS       = <?= $grantsJson ?>;
 const BUDGET_LINES = <?= $budgetLinesJson ?>;
@@ -344,7 +339,8 @@ function addRow(data = {}) {
     tr.innerHTML = `
       <td class="receipt-cell">
         <div id="receipt-wrap-${id}">
-          <div class="receipt-placeholder" title="Upload or scan receipt" onclick="triggerRowScan(${id})">📄</div>
+          <button type="button" class="receipt-attach-btn" id="attach-btn-${id}"
+            title="Attach receipt" onclick="triggerRowScan(${id})">📎</button>
           <div class="scan-spinner" id="spinner-${id}"></div>
           <input type="file" id="file-${id}" accept="image/*,.pdf" capture="environment" style="display:none"
             onchange="handleRowScan(this, ${id})">
@@ -450,22 +446,10 @@ function updateTotals() {
 }
 
 // ── Receipt scanning ──────────────────────────────────────────────────────────
-let pendingScanRowId = null;
-
-function triggerScan() {
-    pendingScanRowId = null;
-    document.getElementById('globalScanInput').click();
-}
 function triggerRowScan(rowId) {
     document.getElementById('file-' + rowId).click();
 }
 
-function handleGlobalScan(input) {
-    if (!input.files[0]) return;
-    const id = addRow({}); // add empty row first
-    uploadAndScan(input.files[0], id);
-    input.value = '';
-}
 function handleRowScan(input, rowId) {
     if (!input.files[0]) return;
     // Preview immediately
@@ -547,28 +531,56 @@ function setSelect(row, selector, value) {
 function showThumb(rowId, savedPath, dataUrl) {
     const wrap = document.getElementById('receipt-wrap-' + rowId);
     if (!wrap) return;
-    const placeholder = wrap.querySelector('.receipt-placeholder');
-    if (placeholder) placeholder.remove();
-    const existingThumb = wrap.querySelector('.receipt-thumb');
-    if (existingThumb) existingThumb.remove();
 
-    const img = document.createElement('img');
-    img.className = 'receipt-thumb';
-    img.alt = 'Receipt';
-    img.onclick = () => openLightbox(dataUrl || ('lp-receipt.php?f=' + encodeURIComponent(savedPath)));
-    img.src = dataUrl || ('lp-receipt.php?f=' + encodeURIComponent(savedPath));
-    wrap.insertBefore(img, wrap.querySelector('.scan-spinner'));
+    // Replace attach button with a green "✓ Receipt" indicator
+    const btn = document.getElementById('attach-btn-' + rowId);
+    if (btn) btn.remove();
+
+    const existing = wrap.querySelector('.receipt-has-file');
+    if (existing) existing.remove();
+
+    const src = dataUrl || ('lp-receipt.php?f=' + encodeURIComponent(savedPath));
+    const indicator = document.createElement('div');
+    indicator.className = 'receipt-has-file';
+    indicator.title = 'Receipt attached — hover to preview, click to change';
+    indicator.innerHTML = '📄';
+    indicator.dataset.src = src;
+    indicator.onclick = () => triggerRowScan(rowId);
+    indicator.addEventListener('mouseenter', e => showHoverPreview(e, src));
+    indicator.addEventListener('mouseleave',  hideHoverPreview);
+    indicator.addEventListener('mousemove',   moveHoverPreview);
+    wrap.insertBefore(indicator, wrap.querySelector('.scan-spinner'));
 }
 
-// ── Lightbox ──────────────────────────────────────────────────────────────────
-function openLightbox(src) {
-    document.getElementById('lightboxImg').src = src;
-    document.getElementById('lightbox').classList.add('open');
+// ── Hover preview ─────────────────────────────────────────────────────────────
+const hoverPreview = (() => {
+    const el = document.createElement('div');
+    el.id = 'receiptPreview';
+    el.innerHTML = '<img src="" alt="Receipt preview">';
+    document.body.appendChild(el);
+    return el;
+})();
+
+function showHoverPreview(e, src) {
+    hoverPreview.querySelector('img').src = src;
+    hoverPreview.style.display = 'block';
+    positionPreview(e);
 }
-function closeLightbox() {
-    document.getElementById('lightbox').classList.remove('open');
+function hideHoverPreview() {
+    hoverPreview.style.display = 'none';
+    hoverPreview.querySelector('img').src = '';
 }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+function moveHoverPreview(e) { positionPreview(e); }
+function positionPreview(e) {
+    const pad = 16, vw = window.innerWidth, vh = window.innerHeight;
+    const w = 272, h = 352; // approx preview size
+    let x = e.clientX + pad;
+    let y = e.clientY + pad;
+    if (x + w > vw) x = e.clientX - w - pad;
+    if (y + h > vh) y = e.clientY - h - pad;
+    hoverPreview.style.left = x + 'px';
+    hoverPreview.style.top  = y + 'px';
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmt(v) { return v && parseFloat(v) > 0 ? parseFloat(v).toFixed(2) : ''; }
@@ -576,8 +588,8 @@ function escHtml(s) {
     return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// Start with 3 empty rows
-addRow(); addRow(); addRow();
+// Start with 10 empty rows
+for (let i = 0; i < 10; i++) addRow();
 </script>
 </body>
 </html>

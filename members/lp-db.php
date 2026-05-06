@@ -6,7 +6,7 @@ require_once __DIR__ . '/db.php';
 date_default_timezone_set('America/Vancouver');
 
 define('LP_RECEIPTS_DIR', __DIR__ . '/lp-receipts/');
-define('LP_MILEAGE_RATE', 0.61); // $/km — update annually
+define('LP_MILEAGE_RATE', 0.70); // $/km — update annually
 
 // School year helper: Sep 1 = new year
 function lpCurrentYear(): int {
