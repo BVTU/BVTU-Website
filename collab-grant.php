@@ -81,69 +81,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
       gap: 2.5rem;
       align-items: start;
     }
+    /* ── At a Glance card ──────────────────────────────────── */
     .grant-eligibility {
       background: var(--accent);
       border: 1.5px solid var(--border);
       border-radius: var(--radius-l);
-      padding: 1.5rem 1.75rem;
+      padding: 1.4rem 1.6rem;
     }
     .grant-eligibility h3 {
-      font-size: .85rem;
+      font-size: .8rem;
       font-weight: 700;
       color: var(--primary);
       text-transform: uppercase;
-      letter-spacing: .06em;
-      margin-bottom: .9rem;
+      letter-spacing: .07em;
+      margin: 0 0 1rem;
     }
     .grant-eligibility ul {
       list-style: none;
-      display: flex;
-      flex-direction: column;
-      gap: .55rem;
+      padding: 0;
+      margin: 0;
     }
     .grant-eligibility li {
-      display: flex;
-      gap: .6rem;
-      align-items: flex-start;
+      position: relative;
+      padding-left: 1rem;
+      margin-bottom: .6rem;
       font-size: .88rem;
       color: var(--gray-700);
       line-height: 1.5;
     }
+    .grant-eligibility li:last-child { margin-bottom: 0; }
     .grant-eligibility li::before {
       content: '';
-      flex-shrink: 0;
-      width: 6px;
-      height: 6px;
+      position: absolute;
+      left: 0;
+      top: .52em;
+      width: 5px;
+      height: 5px;
       background: var(--primary);
       border-radius: 50%;
-      margin-top: .42rem;
     }
 
-    /* ── Clean bullet list used in overview ────────────────── */
+    /* ── Bullet list (Who can apply / What's covered) ──────── */
     .grant-bullet-list {
       list-style: none;
-      display: flex;
-      flex-direction: column;
-      gap: .45rem;
-      margin-bottom: 1.25rem;
+      padding: 0;
+      margin: 0 0 1.5rem;
     }
     .grant-bullet-list li {
-      display: flex;
-      gap: .65rem;
-      align-items: baseline;
+      position: relative;
+      padding-left: 1.1rem;
+      margin-bottom: .55rem;
       font-size: .93rem;
       color: var(--gray-700);
-      line-height: 1.55;
+      line-height: 1.6;
     }
+    .grant-bullet-list li:last-child { margin-bottom: 0; }
     .grant-bullet-list li::before {
       content: '';
-      flex-shrink: 0;
-      width: 6px;
-      height: 6px;
+      position: absolute;
+      left: 0;
+      top: .55em;
+      width: 5px;
+      height: 5px;
       background: var(--primary);
       border-radius: 50%;
-      position: relative;
-      top: -1px;
     }
     .grant-bullet-list li.muted {
       color: var(--gray-500);
@@ -501,7 +502,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
 
           <div>
             <h2 class="grant-h2">Who can apply</h2>
-            <p style="font-size:.93rem;color:var(--gray-600);margin-bottom:.85rem;">Any BVTU member is welcome to apply. Priority is given to:</p>
+            <p style="font-size:.92rem;color:var(--gray-600);margin:0 0 .75rem;">Any BVTU member is welcome to apply. Priority is given to:</p>
             <ul class="grant-bullet-list">
               <li>Teachers in their <strong>first five years</strong> of teaching</li>
               <li>Experienced teachers in a <strong>significantly different position</strong> for the first or second year</li>
