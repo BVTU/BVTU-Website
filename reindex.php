@@ -176,7 +176,6 @@ $baseUrl = 'https://new.bvtu.ca'; // switch to https://bvtu.ca when live domain 
 
 $publicPages = [
     ['file' => 'index.php',                'url' => '/',                           'priority' => 10],
-    ['file' => 'about.php',               'url' => '/about.php',                  'priority' => 8],
     ['file' => 'documents.php',           'url' => '/documents.php',              'priority' => 8],
     ['file' => 'collective-agreement.php','url' => '/collective-agreement.php',   'priority' => 9],
     ['file' => 'contact.php',             'url' => '/contact.php',                'priority' => 5],

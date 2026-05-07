@@ -165,7 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </button>
       <nav class="main-nav" id="main-nav">
         <ul>
-          <li><a href="about.php">About</a></li>
+          
           <li class="has-dropdown">
             <a href="documents.php">Documents</a>
             <ul class="dropdown">
@@ -177,7 +177,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <a href="members.php">Members</a>
             <ul class="dropdown">
               <li><a href="members.php">Member Resources</a></li>
-              <li><a href="benefits.php">Health &amp; Dental</a></li><li><a href="life-insurance.php">Life Insurance</a></li><li><a href="loan-forgiveness.php">Student Loan Forgiveness</a></li><li><a href="ttoc.php">TTOC Resources</a></li><li><a href="atrieve.php">Release Time / Atrieve</a></li><li><a href="remedy-tracker.php">Remedy Tracker</a></li>
+              <li><a href="benefits.php">Health &amp; Dental</a></li><li><a href="life-insurance.php">Life Insurance</a></li><li><a href="loan-forgiveness.php">Student Loan Forgiveness</a></li><li><a href="salary.php">Salary Grids</a></li><li><a href="ttoc.php">TTOC Resources</a></li><li><a href="atrieve.php">Release Time / Atrieve</a></li><li><a href="remedy-tracker.php">Remedy Tracker</a></li>
               <li><a href="collab-grant.php">Collaboration Grant</a></li><li><a href="mileage.php">EC Mileage</a></li>
             </ul>
           </li>
@@ -320,10 +320,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <div>
         <h4>Quick Links</h4>
         <ul class="footer-nav-list">
-          <li><a href="about.php">About BVTU</a></li>
+          
           <li><a href="documents.php">Documents</a></li>
           <li><a href="members.php">Member Resources</a></li>
-          <li><a href="benefits.php">Health &amp; Dental</a></li><li><a href="life-insurance.php">Life Insurance</a></li><li><a href="loan-forgiveness.php">Student Loan Forgiveness</a></li><li><a href="ttoc.php">TTOC Resources</a></li><li><a href="atrieve.php">Release Time / Atrieve</a></li><li><a href="remedy-tracker.php">Remedy Tracker</a></li>
+          <li><a href="benefits.php">Health &amp; Dental</a></li><li><a href="life-insurance.php">Life Insurance</a></li><li><a href="loan-forgiveness.php">Student Loan Forgiveness</a></li><li><a href="salary.php">Salary Grids</a></li><li><a href="ttoc.php">TTOC Resources</a></li><li><a href="atrieve.php">Release Time / Atrieve</a></li><li><a href="remedy-tracker.php">Remedy Tracker</a></li>
               <li><a href="collab-grant.php">Collaboration Grant</a></li><li><a href="mileage.php">EC Mileage</a></li>
           <li><a href="prod.php">PRO-D</a></li>
         </ul>

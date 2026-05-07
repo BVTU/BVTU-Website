@@ -34,13 +34,13 @@ $member   = $loggedIn ? getMember() : null;
       </button>
       <nav class="main-nav" id="main-nav">
         <ul>
-          <li><a href="about.php">About</a></li>
+          
           <li class="has-dropdown"><a href="documents.php">Documents</a><ul class="dropdown"><li><a href="documents.php">All Documents</a></li><li><a href="collective-agreement.php">Collective Agreement</a></li><li><a href="lous.php">Letters of Understanding</a></li><li><a href="ca-assistant.php">Contract Assistant</a></li></ul></li>
 <li class="has-dropdown">
             <a href="members.php">Members</a>
             <ul class="dropdown">
               <li><a href="members.php">Member Resources</a></li>
-              <li><a href="benefits.php">Health &amp; Dental</a></li><li><a href="life-insurance.php">Life Insurance</a></li><li><a href="loan-forgiveness.php">Student Loan Forgiveness</a></li><li><a href="ttoc.php">TTOC Resources</a></li><li><a href="atrieve.php">Release Time / Atrieve</a></li><li><a href="remedy-tracker.php">Remedy Tracker</a></li>
+              <li><a href="benefits.php">Health &amp; Dental</a></li><li><a href="life-insurance.php">Life Insurance</a></li><li><a href="loan-forgiveness.php">Student Loan Forgiveness</a></li><li><a href="salary.php">Salary Grids</a></li><li><a href="ttoc.php">TTOC Resources</a></li><li><a href="atrieve.php">Release Time / Atrieve</a></li><li><a href="remedy-tracker.php">Remedy Tracker</a></li>
               <li><a href="collab-grant.php">Collaboration Grant</a></li>
             </ul>
           </li>
@@ -63,7 +63,7 @@ $member   = $loggedIn ? getMember() : null;
     <p>Your local union representing teachers in Houston, Telkwa, and Smithers — SD54, Local of the BCTF.</p>
     <div style="display:flex;gap:.85rem;justify-content:center;flex-wrap:wrap;">
       <a href="members.php" class="btn btn-primary">Member Resources</a>
-      <a href="about.php" class="btn btn-outline-white">About BVTU</a>
+
     </div>
   </section>
 
@@ -74,16 +74,7 @@ $member   = $loggedIn ? getMember() : null;
       <p class="section-sub">Resources, documents, and information for BVTU members.</p>
       <div class="cards">
 
-        <a href="about.php" class="card">
-          <div class="card-icon">
-            <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          </div>
-          <h3>About BVTU</h3>
-          <p>Leadership, meeting schedules, committees, and governance documents.</p>
-          <span class="card-arrow">Learn more →</span>
-        </a>
-
-        <a href="documents.php" class="card">
+<a href="documents.php" class="card">
           <div class="card-icon">
             <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
           </div>
@@ -164,7 +155,7 @@ $member   = $loggedIn ? getMember() : null;
       <div>
         <h3>Navigate</h3>
         <ul class="footer-nav-list">
-          <li><a href="about.php">About</a></li>
+          
           <li class="has-dropdown"><a href="documents.php">Documents</a><ul class="dropdown"><li><a href="documents.php">All Documents</a></li><li><a href="collective-agreement.php">Collective Agreement</a></li><li><a href="lous.php">Letters of Understanding</a></li><li><a href="ca-assistant.php">Contract Assistant</a></li></ul></li>
           <li><a href="members.php">Members</a></li>
           <li><a href="prod.php">PRO-D</a></li>

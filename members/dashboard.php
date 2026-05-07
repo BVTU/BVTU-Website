@@ -66,7 +66,7 @@ $welcome = isset($_GET['welcome']);
       </a>
       <nav class="main-nav">
         <ul>
-          <li><a href="../about.php">About</a></li>
+          
           <li><a href="../documents.php">Documents</a></li>
           <li><a href="../members.php">Members</a></li>
           <li><a href="../prod.php">PRO-D</a></li>

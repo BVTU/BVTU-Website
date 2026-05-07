@@ -134,7 +134,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </a>
       <nav class="main-nav">
         <ul>
-          <li><a href="../about.php">About</a></li>
+          
           <li><a href="../documents.php">Documents</a></li>
 <li class="has-dropdown">
             <a href="../members.php">Members</a>

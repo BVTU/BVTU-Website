@@ -235,7 +235,7 @@ $member   = $loggedIn ? getMember() : null;
       </button>
       <nav class="main-nav" id="main-nav">
         <ul>
-          <li><a href="about.php">About</a></li>
+          
           <li class="has-dropdown"><a href="documents.php">Documents</a><ul class="dropdown"><li><a href="documents.php">All Documents</a></li><li><a href="collective-agreement.php">Collective Agreement</a></li><li><a href="lous.php">Letters of Understanding</a></li><li><a href="ca-assistant.php">Contract Assistant</a></li></ul></li>
           <li class="has-dropdown">
             <a href="members.php" class="active">Members</a>
@@ -543,7 +543,7 @@ $member   = $loggedIn ? getMember() : null;
       <div>
         <h3>Navigate</h3>
         <ul class="footer-nav-list">
-          <li><a href="about.php">About</a></li>
+          
           <li class="has-dropdown"><a href="documents.php">Documents</a><ul class="dropdown"><li><a href="documents.php">All Documents</a></li><li><a href="collective-agreement.php">Collective Agreement</a></li><li><a href="lous.php">Letters of Understanding</a></li><li><a href="ca-assistant.php">Contract Assistant</a></li></ul></li>
           <li><a href="members.php">Members</a></li>
           <li><a href="prod.php">PRO-D</a></li>

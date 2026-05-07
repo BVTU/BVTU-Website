@@ -1,24 +1,4 @@
 <?php
-require_once __DIR__ . '/members/auth.php';
-$loggedIn = isLoggedIn();
-$member   = $loggedIn ? getMember() : null;
-
-// Members-only documents — update filenames here as you upload PDFs
-$protected_docs = [
-    'Internal &amp; Executive' => [
-        ['file' => 'executive-meeting-minutes.pdf',    'label' => 'Executive Meeting Minutes'],
-        ['file' => 'budget-report.pdf',                'label' => 'BVTU Budget Report'],
-        ['file' => 'bargaining-strategy-notes.pdf',    'label' => 'Bargaining Strategy Notes'],
-    ],
-    'Local Agreement Resources' => [
-        ['file' => 'local-agreement-working-copy.pdf', 'label' => 'Local Agreement — Working Copy'],
-        ['file' => 'grievance-log.pdf',                'label' => 'Grievance Log'],
-    ],
-    'Member Information' => [
-        ['file' => 'salary-grid-internal.pdf',         'label' => 'Salary Grid (Internal)'],
-        ['file' => 'release-time-tracker.pdf',         'label' => 'Release Time Tracker'],
-    ],
-];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -100,13 +80,13 @@ $protected_docs = [
       </button>
       <nav class="main-nav" id="main-nav">
         <ul>
-          <li><a href="about.php">About</a></li>
+          
           <li><a href="documents.php" class="active">Documents</a></li>
 <li class="has-dropdown">
             <a href="members.php">Members</a>
             <ul class="dropdown">
               <li><a href="members.php">Member Resources</a></li>
-              <li><a href="benefits.php">Health &amp; Dental</a></li><li><a href="life-insurance.php">Life Insurance</a></li><li><a href="loan-forgiveness.php">Student Loan Forgiveness</a></li><li><a href="ttoc.php">TTOC Resources</a></li><li><a href="atrieve.php">Release Time / Atrieve</a></li><li><a href="remedy-tracker.php">Remedy Tracker</a></li>
+              <li><a href="benefits.php">Health &amp; Dental</a></li><li><a href="life-insurance.php">Life Insurance</a></li><li><a href="loan-forgiveness.php">Student Loan Forgiveness</a></li><li><a href="salary.php">Salary Grids</a></li><li><a href="ttoc.php">TTOC Resources</a></li><li><a href="atrieve.php">Release Time / Atrieve</a></li><li><a href="remedy-tracker.php">Remedy Tracker</a></li>
               <li><a href="collab-grant.php">Collaboration Grant</a></li><li><a href="mileage.php">EC Mileage</a></li>
             </ul>
           </li>
@@ -314,52 +294,6 @@ $protected_docs = [
 
       </div>
 
-      <!-- MEMBERS-ONLY SECTION -->
-      <hr class="section-divider">
-
-      <div class="members-section-title">
-        Members-Only Documents
-        <span class="members-badge">Login Required</span>
-      </div>
-
-      <?php if ($loggedIn): ?>
-
-        <!-- Logged in — show protected documents -->
-        <p style="color:var(--gray-500);font-size:.92rem;margin-bottom:1.5rem;">
-          Welcome, <?= htmlspecialchars($member['name']) ?>. Your members-only documents are below.
-        </p>
-        <div class="doc-categories">
-          <?php foreach ($protected_docs as $category => $docs): ?>
-            <div class="doc-category">
-              <h3><?= $category ?></h3>
-              <div class="doc-list">
-                <?php foreach ($docs as $doc): ?>
-                  <a href="members/serve-doc.php?file=<?= urlencode($doc['file']) ?>" class="doc-item">
-                    <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-                    <?= htmlspecialchars($doc['label']) ?>
-                  </a>
-                <?php endforeach; ?>
-              </div>
-            </div>
-          <?php endforeach; ?>
-        </div>
-
-      <?php else: ?>
-
-        <!-- Not logged in — show login prompt -->
-        <div class="members-locked">
-          <div class="lock-icon">
-            <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-          </div>
-          <h3>Members-Only Content</h3>
-          <p>Log in with your BVTU member account to access internal documents, meeting minutes, and more.</p>
-          <a href="members/login.php" class="btn btn-primary">Sign In</a>
-          &nbsp;
-          <a href="members/register.php" class="btn btn-outline">Create Account</a>
-        </div>
-
-      <?php endif; ?>
-
       <div class="info-box" style="margin-top: 2.5rem;">
         <p>Can't find what you're looking for? <a href="contact.php">Contact the union office</a>.</p>
       </div>
@@ -383,7 +317,7 @@ $protected_docs = [
       <div>
         <h3>Navigate</h3>
         <ul class="footer-nav-list">
-          <li><a href="about.php">About</a></li>
+          
           <li class="has-dropdown"><a href="documents.php">Documents</a><ul class="dropdown"><li><a href="documents.php">All Documents</a></li><li><a href="collective-agreement.php">Collective Agreement</a></li><li><a href="lous.php">Letters of Understanding</a></li><li><a href="ca-assistant.php">Contract Assistant</a></li></ul></li>
           <li><a href="members.php">Members</a></li>
           <li><a href="prod.php">PRO-D</a></li>
