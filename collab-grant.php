@@ -300,83 +300,60 @@ $member   = $loggedIn ? getMember() : null;
   <main class="page-content">
     <div class="container">
 
-      <!-- ── Background & Purpose ──────────────────────────── -->
+      <!-- ── Overview ─────────────────────────────────────── -->
       <div class="grant-section">
-        <p class="grant-lead">
-          As part of the 2019–2022 provincial collective bargaining process, a fund was established to provide collaboration support through local unions. This opportunity is completely voluntary and is distinct from anything SD54 may offer independently.
-        </p>
+        <div class="grant-overview">
 
-        <h2 class="grant-h2" style="margin-top:1.75rem;">Who This Is For</h2>
-        <p style="font-size:.95rem;color:var(--gray-700);line-height:1.7;">
-          The grant is designed to support teachers at key transition points in their careers — but any member who self-identifies as a candidate is welcome to apply:
-        </p>
-        <ul style="list-style:none;margin-top:.75rem;display:flex;flex-direction:column;gap:.55rem;">
-          <li style="display:flex;gap:.75rem;align-items:flex-start;font-size:.95rem;color:var(--gray-700);line-height:1.6;">
-            <span style="flex-shrink:0;width:8px;height:8px;background:var(--primary);border-radius:50%;margin-top:.5rem;"></span>
-            Teachers in the <strong>first five years</strong> of their career
-          </li>
-          <li style="display:flex;gap:.75rem;align-items:flex-start;font-size:.95rem;color:var(--gray-700);line-height:1.6;">
-            <span style="flex-shrink:0;width:8px;height:8px;background:var(--primary);border-radius:50%;margin-top:.5rem;"></span>
-            Experienced teachers in their <strong>first or second year in a significantly different position</strong>
-          </li>
-          <li style="display:flex;gap:.75rem;align-items:flex-start;font-size:.95rem;color:var(--gray-700);line-height:1.6;">
-            <span style="flex-shrink:0;width:8px;height:8px;background:var(--primary);border-radius:50%;margin-top:.5rem;"></span>
-            Teachers who <strong>self-identify</strong> as candidates for collaboration or mentorship support
-          </li>
-        </ul>
+          <div>
+            <h2 class="grant-h2">Who can apply</h2>
+            <p style="font-size:.95rem;color:var(--gray-700);line-height:1.7;margin-bottom:1rem;">
+              Any BVTU member is welcome to apply. Priority is given to:
+            </p>
+            <ul style="list-style:none;display:flex;flex-direction:column;gap:.55rem;margin-bottom:1.5rem;">
+              <li style="display:flex;gap:.75rem;align-items:flex-start;font-size:.95rem;color:var(--gray-700);line-height:1.6;">
+                <span style="flex-shrink:0;width:8px;height:8px;background:var(--primary);border-radius:50%;margin-top:.5rem;display:block;"></span>
+                Teachers in their <strong>first five years</strong> of teaching
+              </li>
+              <li style="display:flex;gap:.75rem;align-items:flex-start;font-size:.95rem;color:var(--gray-700);line-height:1.6;">
+                <span style="flex-shrink:0;width:8px;height:8px;background:var(--primary);border-radius:50%;margin-top:.5rem;display:block;"></span>
+                Experienced teachers in a <strong>significantly different position</strong> for the first or second year
+              </li>
+              <li style="display:flex;gap:.75rem;align-items:flex-start;font-size:.95rem;color:var(--gray-700);line-height:1.6;">
+                <span style="flex-shrink:0;width:8px;height:8px;background:var(--primary);border-radius:50%;margin-top:.5rem;display:block;"></span>
+                Any member who <strong>self-identifies</strong> as benefiting from mentorship or collaboration
+              </li>
+            </ul>
 
-        <div class="grant-eligibility" style="margin-top:1.75rem;">
-          <h3>At a Glance</h3>
-          <ul>
-            <li>$40,000 fund held by BVTU</li>
-            <li>Available to K–12, district &amp; itinerant staff, and TTOCs</li>
-            <li>Up to <strong>3 release days</strong> per member per year</li>
-            <li>Funds cover TTOC release time only — not materials or technology</li>
-            <li>Applications reviewed monthly by the BVTU Mentorship Sub-Committee</li>
-            <li>Approved by the first week of each month; notifications by the 15th</li>
-          </ul>
-        </div>
-      </div>
-
-      <!-- ── Guidelines ────────────────────────────────────── -->
-      <div class="grant-section">
-        <h2 class="grant-h2">Fund Guidelines</h2>
-        <div class="grant-guidelines">
-
-          <div class="grant-guideline-card">
-            <h4>Eligible Activities</h4>
-            <ul>
-              <li>Release time to observe another teacher's practice</li>
-              <li>Collaboration with a colleague on teaching and learning</li>
-              <li>Voluntary peer mentorship arrangements</li>
+            <h2 class="grant-h2">What's covered</h2>
+            <ul style="list-style:none;display:flex;flex-direction:column;gap:.5rem;">
+              <li style="display:flex;gap:.75rem;align-items:flex-start;font-size:.93rem;color:var(--gray-700);line-height:1.6;">
+                <span style="flex-shrink:0;width:8px;height:8px;background:var(--primary);border-radius:50%;margin-top:.5rem;display:block;"></span>
+                Release time to observe a colleague's classroom practice
+              </li>
+              <li style="display:flex;gap:.75rem;align-items:flex-start;font-size:.93rem;color:var(--gray-700);line-height:1.6;">
+                <span style="flex-shrink:0;width:8px;height:8px;background:var(--primary);border-radius:50%;margin-top:.5rem;display:block;"></span>
+                Collaboration with a colleague on teaching and learning
+              </li>
+              <li style="display:flex;gap:.75rem;align-items:flex-start;font-size:.93rem;color:var(--gray-700);line-height:1.6;">
+                <span style="flex-shrink:0;width:8px;height:8px;background:var(--primary);border-radius:50%;margin-top:.5rem;display:block;"></span>
+                Voluntary peer mentorship — in person or virtual
+              </li>
+              <li style="display:flex;gap:.75rem;align-items:flex-start;font-size:.93rem;color:var(--gray-500);line-height:1.6;font-style:italic;">
+                <span style="flex-shrink:0;width:8px;height:8px;background:var(--gray-300);border-radius:50%;margin-top:.5rem;display:block;"></span>
+                Not covered: materials, consumables, or technology
+              </li>
             </ul>
           </div>
 
-          <div class="grant-guideline-card">
-            <h4>How Funds Are Used</h4>
+          <div class="grant-eligibility">
+            <h3>At a Glance</h3>
             <ul>
-              <li>Funds cover TTOC release costs for contract teachers</li>
-              <li>TTOC applicants are reimbursed at their daily TTOC rate</li>
-              <li>No funding for consumables, resources, or technology</li>
-            </ul>
-          </div>
-
-          <div class="grant-guideline-card">
-            <h4>Priorities &amp; Limits</h4>
-            <ul>
-              <li>Priority given to early-career and newly-repositioned teachers</li>
-              <li>Committee aims for broad availability — more members, fewer days each</li>
-              <li>Annual limit of 3 release days per member</li>
-              <li>Self-identified candidates are accepted; early-career teachers given priority</li>
-            </ul>
-          </div>
-
-          <div class="grant-guideline-card">
-            <h4>Booking Absences</h4>
-            <ul>
-              <li>Once approved, book absences in Atrieve using <em>"Other BVTU business"</em></li>
-              <li>Release days are charged to the District Pro-D account set up for this purpose</li>
-              <li>Do not book before receiving written approval</li>
+              <li>$40,000 fund held by BVTU</li>
+              <li>Open to K–12, district &amp; itinerant staff, and TTOCs</li>
+              <li>Up to <strong>3 release days</strong> per member per year</li>
+              <li>TTOC costs covered for contract teachers; TTOCs reimbursed at their daily rate</li>
+              <li>Reviewed monthly — notifications by the 15th</li>
+              <li>Once approved, book in Atrieve as <em>"Other BVTU business"</em></li>
             </ul>
           </div>
 
