@@ -4,12 +4,19 @@
  * Access: executive members only
  */
 require_once __DIR__ . '/auth.php';
-require_once __DIR__ . '/prod-db.php';
 require_once __DIR__ . '/collab-grant-db.php';
 requireLogin();
 
 $member = getMember();
-if (!prodIsExec($member['email'])) {
+
+// Access check: PROD_ADMIN_EMAIL (always exec) or lp54@bctf.ca fallback
+function cgIsAdmin(string $email): bool {
+    $email = strtolower(trim($email));
+    if (defined('PROD_ADMIN_EMAIL') && $email === strtolower(trim(PROD_ADMIN_EMAIL))) return true;
+    return $email === 'lp54@bctf.ca';
+}
+
+if (!cgIsAdmin($member['email'])) {
     header('Location: dashboard.php');
     exit;
 }
