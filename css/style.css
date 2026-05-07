@@ -171,7 +171,13 @@ ul { list-style: none; }
 .nav-toggle[aria-expanded="true"] span:nth-child(2) { opacity: 0; }
 .nav-toggle[aria-expanded="true"] span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
 
-/* --- Dropdown nav --- */
+/* --- Dropdown nav ---
+   RULE: Never use margin-top or top: calc(100% + Npx) on absolute dropdowns.
+   Any gap between the trigger and the dropdown will cause hover to break mid-travel.
+   Instead, set top: 100% and use border-top: Npx solid transparent on the dropdown
+   so the element extends upward invisibly, keeping :hover alive across the gap.
+   The mobile override (position: static) is exempt — no gap issue there.
+--- */
 .has-dropdown { position: relative; }
 .has-dropdown > a::after {
   content: ' ▾';
