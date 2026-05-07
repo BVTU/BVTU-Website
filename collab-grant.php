@@ -1,11 +1,56 @@
 <?php
 /**
  * collab-grant.php — BVTU Collaboration Grant
- * Primer, FAQ, and embedded Microsoft Forms application.
  */
 require_once __DIR__ . '/members/auth.php';
+require_once __DIR__ . '/members/collab-grant-db.php';
 $loggedIn = isLoggedIn();
 $member   = $loggedIn ? getMember() : null;
+
+$formSuccess = false;
+$formError   = '';
+$formData    = [];
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
+    // Sanitise inputs
+    $f = function(string $k): string { return trim($_POST[$k] ?? ''); };
+    $formData = [
+        'name'              => $f('name'),
+        'email'             => $f('email'),
+        'school'            => $f('school'),
+        'position'          => $f('position'),
+        'years_in_role'     => $f('years_in_role'),
+        'has_collaborator'  => ($f('has_collaborator') === 'yes'),
+        'collaborator_name' => $f('collaborator_name'),
+        'collaborator_school'=> $f('collaborator_school'),
+        'needs_partner'     => isset($_POST['needs_partner']),
+        'collaboration_desc'=> $f('collaboration_desc'),
+        'goals'             => $f('goals'),
+        'days_requested'    => max(1, min(3, (int)$f('days_requested'))),
+    ];
+
+    // Validation
+    if (!$formData['name'])              $formError = 'Please enter your name.';
+    elseif (!filter_var($formData['email'], FILTER_VALIDATE_EMAIL))
+                                         $formError = 'Please enter a valid email address.';
+    elseif (!$formData['school'])        $formError = 'Please enter your school.';
+    elseif (!$formData['position'])      $formError = 'Please enter your current position.';
+    elseif (!$formData['collaboration_desc']) $formError = 'Please describe your collaboration.';
+    elseif (!$formData['goals'])         $formError = 'Please describe your goals.';
+
+    if (!$formError) {
+        try {
+            $appId = cgSubmitApplication($formData);
+            $formData['id'] = $appId;
+            cgSendNewApplicationNotification($formData);
+            cgSendSubmissionConfirmation($formData);
+            $formSuccess = true;
+            $formData = []; // clear form
+        } catch (Exception $e) {
+            $formError = 'Something went wrong saving your application. Please email lp54@bctf.ca directly.';
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -234,11 +279,129 @@ $member   = $loggedIn ? getMember() : null;
       border: none;
     }
 
+    /* ── Native application form ───────────────────────────── */
+    .grant-form {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      max-width: 720px;
+    }
+    .grant-form-group {
+      display: flex;
+      flex-direction: column;
+      gap: .4rem;
+    }
+    .grant-form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    .grant-form label {
+      font-size: .88rem;
+      font-weight: 600;
+      color: var(--gray-700);
+    }
+    .grant-form label .req {
+      color: var(--primary);
+      margin-left: .15rem;
+    }
+    .grant-form label .hint {
+      font-weight: 400;
+      color: var(--gray-400);
+      font-size: .8rem;
+      margin-left: .3rem;
+    }
+    .grant-form input[type="text"],
+    .grant-form input[type="email"],
+    .grant-form select,
+    .grant-form textarea {
+      border: 1.5px solid var(--gray-200);
+      border-radius: 8px;
+      padding: .65rem .9rem;
+      font-size: .93rem;
+      font-family: inherit;
+      color: var(--gray-800);
+      background: #fff;
+      width: 100%;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .grant-form input:focus,
+    .grant-form select:focus,
+    .grant-form textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(26,107,53,.1);
+    }
+    .grant-form textarea { resize: vertical; }
+    .grant-form-section-label {
+      font-size: .75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--gray-400);
+      padding-bottom: .6rem;
+      border-bottom: 1px solid var(--gray-100);
+      margin-bottom: .25rem;
+    }
+    .grant-collab-toggle {
+      display: flex;
+      gap: .75rem;
+    }
+    .grant-collab-toggle label {
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .grant-collab-fields { display: none; }
+    .grant-collab-fields.visible { display: contents; }
+    .grant-partner-note { display: none; }
+    .grant-partner-note.visible { display: block; }
+    .grant-days-options {
+      display: flex;
+      gap: .75rem;
+    }
+    .grant-days-options label {
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .grant-form-submit {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .grant-error {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: .85rem 1rem;
+      font-size: .9rem;
+      color: #991b1b;
+    }
+    .grant-success {
+      background: #f0f9f3;
+      border: 1.5px solid #b3d9bf;
+      border-radius: 10px;
+      padding: 1.5rem 1.75rem;
+      max-width: 720px;
+    }
+    .grant-success h3 {
+      color: var(--primary);
+      margin: 0 0 .5rem;
+      font-size: 1.1rem;
+    }
+    .grant-success p { margin: 0; color: var(--gray-700); line-height: 1.65; font-size: .93rem; }
+
     /* ── Responsive ────────────────────────────────────────── */
     @media (max-width: 860px) {
       .grant-overview   { grid-template-columns: 1fr; }
       .grant-guidelines { grid-template-columns: 1fr; }
-      .grant-form-wrap iframe { height: 700px; }
+      .grant-form-row   { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -402,16 +565,142 @@ $member   = $loggedIn ? getMember() : null;
           <h2 class="grant-h2" style="margin-bottom:0;border-bottom:none;padding-bottom:0;">Apply Now</h2>
           <p class="grant-apply-note">Applications reviewed monthly · notifications by the 15th</p>
         </div>
-        <div class="grant-form-wrap">
-          <iframe
-            src="https://forms.office.com/Pages/ResponsePage.aspx?id=DQSIkWdsW0yxEjajBLZtrQAAAAAAAAAAAANAAV60Yf9UNjBVWU5KTTBGTjYwMVBQVkg2TVQxSzkzNS4u&embed=true"
-            title="BVTU Collaboration Grant Application"
-            allowfullscreen
-            webkitallowfullscreen
-            mozallowfullscreen
-            msallowfullscreen>
-          </iframe>
-        </div>
+
+        <?php if ($formSuccess): ?>
+          <div class="grant-success">
+            <h3>✓ Application received — thank you!</h3>
+            <p>We've sent a confirmation to your email address. Your application will be reviewed at the next monthly Executive Meeting and you'll hear back from us by the 15th. If you have any questions in the meantime, reach out at <a href="mailto:lp54@bctf.ca">lp54@bctf.ca</a>.</p>
+          </div>
+
+        <?php else: ?>
+
+          <?php if ($formError): ?>
+            <div class="grant-error" style="margin-bottom:1rem;"><?= htmlspecialchars($formError) ?></div>
+          <?php endif; ?>
+
+          <form class="grant-form" method="post" action="#apply" novalidate>
+
+            <div class="grant-form-section-label">Your Information</div>
+
+            <div class="grant-form-row">
+              <div class="grant-form-group">
+                <label for="cg-name">Full name <span class="req">*</span></label>
+                <input type="text" id="cg-name" name="name" required
+                  value="<?= htmlspecialchars($formData['name'] ?? '') ?>"
+                  placeholder="Jane Smith">
+              </div>
+              <div class="grant-form-group">
+                <label for="cg-email">Email address <span class="req">*</span></label>
+                <input type="email" id="cg-email" name="email" required
+                  value="<?= htmlspecialchars($formData['email'] ?? '') ?>"
+                  placeholder="you@sd54.bc.ca">
+              </div>
+            </div>
+
+            <div class="grant-form-row">
+              <div class="grant-form-group">
+                <label for="cg-school">School <span class="req">*</span></label>
+                <input type="text" id="cg-school" name="school" required
+                  value="<?= htmlspecialchars($formData['school'] ?? '') ?>"
+                  placeholder="e.g. Smithers Secondary">
+              </div>
+              <div class="grant-form-group">
+                <label for="cg-position">Current position / role <span class="req">*</span></label>
+                <input type="text" id="cg-position" name="position" required
+                  value="<?= htmlspecialchars($formData['position'] ?? '') ?>"
+                  placeholder="e.g. Grade 4 teacher">
+              </div>
+            </div>
+
+            <div class="grant-form-group" style="max-width:320px;">
+              <label for="cg-years">How long have you been in this role?</label>
+              <select id="cg-years" name="years_in_role">
+                <option value="" <?= empty($formData['years_in_role']) ? 'selected' : '' ?>>Select…</option>
+                <option value="First year"  <?= ($formData['years_in_role'] ?? '') === 'First year'  ? 'selected' : '' ?>>This is my first year</option>
+                <option value="Second year" <?= ($formData['years_in_role'] ?? '') === 'Second year' ? 'selected' : '' ?>>This is my second year</option>
+                <option value="3+ years"    <?= ($formData['years_in_role'] ?? '') === '3+ years'    ? 'selected' : '' ?>>Three or more years</option>
+              </select>
+            </div>
+
+            <div class="grant-form-section-label" style="margin-top:.5rem;">Your Collaboration</div>
+
+            <div class="grant-form-group">
+              <label>Do you have a collaborator in mind?</label>
+              <div class="grant-collab-toggle">
+                <label>
+                  <input type="radio" name="has_collaborator" value="yes" id="collab-yes"
+                    <?= (($formData['has_collaborator'] ?? false) === true) ? 'checked' : '' ?>>
+                  Yes, I have someone in mind
+                </label>
+                <label>
+                  <input type="radio" name="has_collaborator" value="no" id="collab-no"
+                    <?= (($formData['has_collaborator'] ?? null) === false) ? 'checked' : '' ?>>
+                  Not yet
+                </label>
+              </div>
+            </div>
+
+            <div class="grant-form-row grant-collab-fields" id="collab-fields">
+              <div class="grant-form-group">
+                <label for="cg-collab-name">Collaborator's name</label>
+                <input type="text" id="cg-collab-name" name="collaborator_name"
+                  value="<?= htmlspecialchars($formData['collaborator_name'] ?? '') ?>"
+                  placeholder="Their full name">
+              </div>
+              <div class="grant-form-group">
+                <label for="cg-collab-school">Collaborator's school</label>
+                <input type="text" id="cg-collab-school" name="collaborator_school"
+                  value="<?= htmlspecialchars($formData['collaborator_school'] ?? '') ?>"
+                  placeholder="e.g. Houston Secondary">
+              </div>
+            </div>
+
+            <div class="grant-partner-note info-box" id="partner-note" style="margin:0;">
+              <p style="margin:0;font-size:.9rem;">No problem — describe what you're looking for below and the BVTU will help connect you with a suitable partner.</p>
+              <label style="display:flex;gap:.5rem;align-items:center;margin-top:.6rem;font-size:.9rem;cursor:pointer;">
+                <input type="checkbox" name="needs_partner" value="1"
+                  <?= !empty($formData['needs_partner']) ? 'checked' : '' ?>>
+                Please help me find a collaborator
+              </label>
+            </div>
+
+            <div class="grant-form-group">
+              <label for="cg-desc">Describe your collaboration <span class="req">*</span>
+                <span class="hint">What will you and your partner do together?</span>
+              </label>
+              <textarea id="cg-desc" name="collaboration_desc" rows="4" required
+                placeholder="e.g. I'd like to observe a colleague's classroom practice around inquiry-based learning and then debrief together on strategies I can bring back to my class…"><?= htmlspecialchars($formData['collaboration_desc'] ?? '') ?></textarea>
+            </div>
+
+            <div class="grant-form-group">
+              <label for="cg-goals">Your goals <span class="req">*</span>
+                <span class="hint">What do you hope to achieve or learn as a result of this collaboration?</span>
+              </label>
+              <textarea id="cg-goals" name="goals" rows="4" required
+                placeholder="e.g. I hope to strengthen my approach to formative assessment and gain confidence in differentiated instruction by seeing how an experienced colleague structures their lessons…"><?= htmlspecialchars($formData['goals'] ?? '') ?></textarea>
+            </div>
+
+            <div class="grant-form-group">
+              <label>How many release days are you requesting?</label>
+              <div class="grant-days-options">
+                <?php foreach ([1,2,3] as $d): ?>
+                <label>
+                  <input type="radio" name="days_requested" value="<?= $d ?>"
+                    <?= (int)($formData['days_requested'] ?? 1) === $d ? 'checked' : ($d === 1 && empty($formData['days_requested']) ? 'checked' : '') ?>>
+                  <?= $d ?> <?= $d === 1 ? 'day' : 'days' ?>
+                </label>
+                <?php endforeach; ?>
+              </div>
+            </div>
+
+            <div class="grant-form-submit">
+              <button type="submit" name="cg_submit" class="btn btn-primary" style="padding:.65rem 1.5rem;">Submit application</button>
+              <span style="font-size:.82rem;color:var(--gray-400);">You'll receive a confirmation email right away.</span>
+            </div>
+
+          </form>
+
+        <?php endif; ?>
       </div>
 
       <!-- ── FAQ ──────────────────────────────────────────── -->
@@ -593,6 +882,24 @@ $member   = $loggedIn ? getMember() : null;
   <script src="js/site.js"></script>
   <script src="js/search.js"></script>
   <script>
+    // Collaborator toggle
+    (function () {
+      const yesRadio    = document.getElementById('collab-yes');
+      const noRadio     = document.getElementById('collab-no');
+      const collabFields = document.getElementById('collab-fields');
+      const partnerNote  = document.getElementById('partner-note');
+      if (!yesRadio) return;
+
+      function update() {
+        const hasCollab = yesRadio.checked;
+        collabFields && collabFields.classList.toggle('visible', hasCollab);
+        partnerNote  && partnerNote.classList.toggle('visible', !hasCollab && noRadio.checked);
+      }
+      yesRadio.addEventListener('change', update);
+      noRadio.addEventListener('change', update);
+      update(); // run on load for back-filled forms
+    })();
+
     // FAQ accordion
     document.querySelectorAll('.faq-question').forEach(btn => {
       btn.addEventListener('click', () => {
