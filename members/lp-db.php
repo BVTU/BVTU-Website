@@ -245,6 +245,20 @@ function lpGetTreasurerEmails(): array {
     return array_unique($emails);
 }
 
+function lpGetExpensesByGrant(int $grantId): array {
+    $s = getDB()->prepare(
+        "SELECT e.expense_date, e.description, e.travel_km, e.travel_amt,
+                e.meals, e.gifts, e.misc, e.office, e.phone,
+                v.name AS voucher_name, v.voucher_number, v.id AS voucher_id
+         FROM lp_expenses e
+         JOIN lp_vouchers v ON v.id = e.voucher_id
+         WHERE e.grant_id=? AND v.status != 'draft'
+         ORDER BY e.expense_date, e.id"
+    );
+    $s->execute([$grantId]);
+    return $s->fetchAll(PDO::FETCH_ASSOC);
+}
+
 function lpBudgetSummary(int $year = 0): array {
     if (!$year) $year = lpCurrentYear();
     $lines = lpGetBudgetLines($year);
