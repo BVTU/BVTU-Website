@@ -97,27 +97,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
     }
     .grant-eligibility ul {
       list-style: none;
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: .5rem .75rem;
+      display: flex;
+      flex-direction: column;
+      gap: .55rem;
     }
     .grant-eligibility li {
       display: flex;
       gap: .6rem;
       align-items: flex-start;
-      font-size: .9rem;
+      font-size: .88rem;
       color: var(--gray-700);
       line-height: 1.5;
     }
     .grant-eligibility li::before {
       content: '';
       flex-shrink: 0;
-      width: 7px;
-      height: 7px;
+      width: 6px;
+      height: 6px;
       background: var(--primary);
       border-radius: 50%;
       margin-top: .42rem;
     }
+
+    /* ── Clean bullet list used in overview ────────────────── */
+    .grant-bullet-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: .45rem;
+      margin-bottom: 1.25rem;
+    }
+    .grant-bullet-list li {
+      display: flex;
+      gap: .65rem;
+      align-items: baseline;
+      font-size: .93rem;
+      color: var(--gray-700);
+      line-height: 1.55;
+    }
+    .grant-bullet-list li::before {
+      content: '';
+      flex-shrink: 0;
+      width: 6px;
+      height: 6px;
+      background: var(--primary);
+      border-radius: 50%;
+      position: relative;
+      top: -1px;
+    }
+    .grant-bullet-list li.muted {
+      color: var(--gray-500);
+      font-style: italic;
+    }
+    .grant-bullet-list li.muted::before { background: var(--gray-300); }
 
     /* ── Section heading style ─────────────────────────────── */
     .grant-h2 {
@@ -469,42 +501,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
 
           <div>
             <h2 class="grant-h2">Who can apply</h2>
-            <p style="font-size:.95rem;color:var(--gray-700);line-height:1.7;margin-bottom:1rem;">
-              Any BVTU member is welcome to apply. Priority is given to:
-            </p>
-            <ul style="list-style:none;display:flex;flex-direction:column;gap:.55rem;margin-bottom:1.5rem;">
-              <li style="display:flex;gap:.75rem;align-items:flex-start;font-size:.95rem;color:var(--gray-700);line-height:1.6;">
-                <span style="flex-shrink:0;width:8px;height:8px;background:var(--primary);border-radius:50%;margin-top:.5rem;display:block;"></span>
-                Teachers in their <strong>first five years</strong> of teaching
-              </li>
-              <li style="display:flex;gap:.75rem;align-items:flex-start;font-size:.95rem;color:var(--gray-700);line-height:1.6;">
-                <span style="flex-shrink:0;width:8px;height:8px;background:var(--primary);border-radius:50%;margin-top:.5rem;display:block;"></span>
-                Experienced teachers in a <strong>significantly different position</strong> for the first or second year
-              </li>
-              <li style="display:flex;gap:.75rem;align-items:flex-start;font-size:.95rem;color:var(--gray-700);line-height:1.6;">
-                <span style="flex-shrink:0;width:8px;height:8px;background:var(--primary);border-radius:50%;margin-top:.5rem;display:block;"></span>
-                Any member who <strong>self-identifies</strong> as benefiting from mentorship or collaboration
-              </li>
+            <p style="font-size:.93rem;color:var(--gray-600);margin-bottom:.85rem;">Any BVTU member is welcome to apply. Priority is given to:</p>
+            <ul class="grant-bullet-list">
+              <li>Teachers in their <strong>first five years</strong> of teaching</li>
+              <li>Experienced teachers in a <strong>significantly different position</strong> for the first or second year</li>
+              <li>Any member who <strong>self-identifies</strong> as benefiting from mentorship or collaboration</li>
             </ul>
 
             <h2 class="grant-h2">What's covered</h2>
-            <ul style="list-style:none;display:flex;flex-direction:column;gap:.5rem;">
-              <li style="display:flex;gap:.75rem;align-items:flex-start;font-size:.93rem;color:var(--gray-700);line-height:1.6;">
-                <span style="flex-shrink:0;width:8px;height:8px;background:var(--primary);border-radius:50%;margin-top:.5rem;display:block;"></span>
-                Release time to observe a colleague's classroom practice
-              </li>
-              <li style="display:flex;gap:.75rem;align-items:flex-start;font-size:.93rem;color:var(--gray-700);line-height:1.6;">
-                <span style="flex-shrink:0;width:8px;height:8px;background:var(--primary);border-radius:50%;margin-top:.5rem;display:block;"></span>
-                Collaboration with a colleague on teaching and learning
-              </li>
-              <li style="display:flex;gap:.75rem;align-items:flex-start;font-size:.93rem;color:var(--gray-700);line-height:1.6;">
-                <span style="flex-shrink:0;width:8px;height:8px;background:var(--primary);border-radius:50%;margin-top:.5rem;display:block;"></span>
-                Voluntary peer mentorship — in person or virtual
-              </li>
-              <li style="display:flex;gap:.75rem;align-items:flex-start;font-size:.93rem;color:var(--gray-500);line-height:1.6;font-style:italic;">
-                <span style="flex-shrink:0;width:8px;height:8px;background:var(--gray-300);border-radius:50%;margin-top:.5rem;display:block;"></span>
-                Not covered: materials, consumables, or technology
-              </li>
+            <ul class="grant-bullet-list">
+              <li>Release time to observe a colleague's classroom practice</li>
+              <li>Collaboration with a colleague on teaching and learning</li>
+              <li>Voluntary peer mentorship — in person or virtual</li>
+              <li class="muted">Not covered: materials, consumables, or technology</li>
             </ul>
           </div>
 
@@ -515,45 +524,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
               <li>Open to K–12, district &amp; itinerant staff, and TTOCs</li>
               <li>Up to <strong>3 release days</strong> per member per year</li>
               <li>TTOC costs covered for contract teachers; TTOCs reimbursed at their daily rate</li>
-              <li>Reviewed monthly — notifications by the 15th</li>
-              <li>Once approved, book in Atrieve as <em>"Other BVTU business"</em></li>
+              <li>Once approved, book your absence in Atrieve as <em>"Other BVTU business"</em></li>
             </ul>
-          </div>
-
-        </div>
-      </div>
-
-      <!-- ── Application Process ───────────────────────────── -->
-      <div class="grant-section">
-        <h2 class="grant-h2">Application Process</h2>
-        <div class="grant-steps">
-
-          <div class="grant-step">
-            <div class="grant-step-num">1</div>
-            <div class="grant-step-body">
-              <strong>Complete the application form</strong> below on this page. Describe your collaboration goals, your partner (if identified), and any other relevant details.
-            </div>
-          </div>
-
-          <div class="grant-step">
-            <div class="grant-step-num">2</div>
-            <div class="grant-step-body">
-              <strong>Applications are reviewed at the monthly BVTU Executive Meeting</strong> — usually the first week of every month. You'll be notified of the outcome by the 15th.
-            </div>
-          </div>
-
-          <div class="grant-step">
-            <div class="grant-step-num">3</div>
-            <div class="grant-step-body">
-              <strong>Once approved, book your release time</strong> in Atrieve using the <em>"Other BVTU business"</em> code.
-            </div>
-          </div>
-
-          <div class="grant-step">
-            <div class="grant-step-num">4</div>
-            <div class="grant-step-body">
-              <strong>If you've already identified a mentor/collaborator</strong> and they've agreed, proceed as planned. <strong>If you need help finding a partner</strong>, the BVTU will assist — reach out to the local president or your colleagues.
-            </div>
           </div>
 
         </div>
@@ -561,15 +533,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
 
       <!-- ── Application Form ──────────────────────────────── -->
       <div class="grant-section" id="apply">
-        <div class="grant-apply-header">
-          <h2 class="grant-h2" style="margin-bottom:0;border-bottom:none;padding-bottom:0;">Apply Now</h2>
-          <p class="grant-apply-note">Applications reviewed monthly · notifications by the 15th</p>
-        </div>
+        <h2 class="grant-h2">Apply Now</h2>
 
         <?php if ($formSuccess): ?>
           <div class="grant-success">
             <h3>✓ Application received — thank you!</h3>
-            <p>We've sent a confirmation to your email address. Your application will be reviewed at the next monthly Executive Meeting and you'll hear back from us by the 15th. If you have any questions in the meantime, reach out at <a href="mailto:lp54@bctf.ca">lp54@bctf.ca</a>.</p>
+            <p>We've sent a confirmation to your email address. We'll be in touch once your application has been reviewed. If you have any questions in the meantime, reach out at <a href="mailto:lp54@bctf.ca">lp54@bctf.ca</a>.</p>
           </div>
 
         <?php else: ?>
@@ -754,7 +723,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
               <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
             </button>
             <div class="faq-answer">
-              The BVTU reviews all submissions at the monthly Executive Meeting and notifies applicants by the 15th of each month.
+              The BVTU reviews all submissions at the Executive Meeting. You'll be notified by email once a decision has been made.
             </div>
           </div>
 
