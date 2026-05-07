@@ -295,7 +295,7 @@ $grantSumJson      = json_encode(array_values($grantSum));
           </thead>
           <tbody id="gmodal-rows"></tbody>
         </table>
-        <div id="gmodal-empty" class="gmodal-empty" style="display:none;">No submitted expenses for this grant yet.</div>
+        <div id="gmodal-empty" class="gmodal-empty" style="display:none;">No expenses for this grant yet.</div>
       </div>
     </div>
     <div class="gmodal-foot">
@@ -346,11 +346,15 @@ function openGrantModal(grantId) {
             const vNum = e.voucher_number ? '#' + e.voucher_number + ' — ' : '';
             const vLabel = vNum + e.voucher_name;
 
+            const statusBadge = e.voucher_status === 'draft'
+                ? '<span style="font-size:.65rem;font-weight:700;background:#f1f5f9;color:#64748b;border-radius:4px;padding:.1rem .35rem;margin-left:.4rem;">draft</span>'
+                : '';
+
             const tr = document.createElement('tr');
             tr.innerHTML =
                 '<td style="white-space:nowrap;">' + fmtDate(e.expense_date) + '</td>' +
                 '<td><a class="voucher-link" href="lp-voucher-view.php?id=' + e.voucher_id + '" target="_blank">' +
-                    escH(vLabel) + ' ↗</a></td>' +
+                    escH(vLabel) + ' ↗</a>' + statusBadge + '</td>' +
                 '<td>' + escH(e.description || '—') + '</td>' +
                 '<td class="r">' + (parseFloat(e.travel_km) > 0 ? parseFloat(e.travel_km).toFixed(1) : '') + '</td>' +
                 '<td class="r">' + (parseFloat(e.travel_amt) > 0 ? fmt2(e.travel_amt) : '') + '</td>' +

@@ -226,7 +226,7 @@ function lpGrantSummary(int $year = 0): array {
             "SELECT COALESCE(SUM(e.travel_amt+e.meals+e.gifts+e.misc+e.office+e.phone),0)
              FROM lp_expenses e
              JOIN lp_vouchers v ON v.id = e.voucher_id
-             WHERE e.grant_id=? AND v.status != 'draft'"
+             WHERE e.grant_id=?"
         );
         $s->execute([$g['id']]);
         $g['spent']     = (float)$s->fetchColumn();
@@ -249,10 +249,10 @@ function lpGetExpensesByGrant(int $grantId): array {
     $s = getDB()->prepare(
         "SELECT e.expense_date, e.description, e.travel_km, e.travel_amt,
                 e.meals, e.gifts, e.misc, e.office, e.phone,
-                v.name AS voucher_name, v.voucher_number, v.id AS voucher_id
+                v.name AS voucher_name, v.voucher_number, v.id AS voucher_id, v.status AS voucher_status
          FROM lp_expenses e
          JOIN lp_vouchers v ON v.id = e.voucher_id
-         WHERE e.grant_id=? AND v.status != 'draft'
+         WHERE e.grant_id=?
          ORDER BY e.expense_date, e.id"
     );
     $s->execute([$grantId]);
@@ -268,7 +268,7 @@ function lpBudgetSummary(int $year = 0): array {
             "SELECT COALESCE(SUM(e.travel_amt+e.meals+e.gifts+e.misc+e.office+e.phone),0)
              FROM lp_expenses e
              JOIN lp_vouchers v ON v.id = e.voucher_id
-             WHERE e.budget_line_id=? AND v.status != 'draft'"
+             WHERE e.budget_line_id=?"
         );
         $s->execute([$l['id']]);
         $l['spent']     = (float)$s->fetchColumn();
