@@ -3,23 +3,6 @@ require_once 'auth.php';
 requireLogin();
 $member  = getMember();
 $welcome = isset($_GET['welcome']);
-
-// Protected documents — add filenames and labels here as you upload PDFs
-$documents = [
-    'Internal & Executive' => [
-        ['file' => 'executive-meeting-minutes.pdf',   'label' => 'Executive Meeting Minutes'],
-        ['file' => 'bargaining-strategy-notes.pdf',   'label' => 'Bargaining Strategy Notes'],
-        ['file' => 'budget-report.pdf',               'label' => 'BVTU Budget Report'],
-    ],
-    'Collective Agreement Resources' => [
-        ['file' => 'local-agreement-working-copy.pdf','label' => 'Local Agreement — Working Copy'],
-        ['file' => 'grievance-log.pdf',               'label' => 'Grievance Log'],
-    ],
-    'Member Information' => [
-        ['file' => 'salary-grid-internal.pdf',        'label' => 'Salary Grid (Internal)'],
-        ['file' => 'release-time-tracker.pdf',        'label' => 'Release Time Tracker'],
-    ],
-];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -147,33 +130,28 @@ $documents = [
       </div>
 
       <div class="doc-section" style="margin-bottom:1.5rem;">
+        <h2>EC Mileage</h2>
+        <div class="doc-list">
+          <a href="../mileage.php" class="doc-item">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+            Submit EC Mileage Claim
+          </a>
+          <a href="mileage-admin.php" class="doc-item">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            EC Mileage Claims — Admin View
+          </a>
+        </div>
+      </div>
+
+      <div class="doc-section" style="margin-bottom:1.5rem;">
         <h2>Administration</h2>
         <div class="doc-list">
           <a href="token-usage.php" class="doc-item">
             <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
             Claude API Token Usage
           </a>
-          <a href="mileage-admin.php" class="doc-item">
-            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
-            EC Mileage Claims — Admin
-          </a>
         </div>
       </div>
-
-      <?php foreach ($documents as $category => $docs): ?>
-        <div class="doc-section">
-          <h2><?= htmlspecialchars($category) ?></h2>
-          <div class="doc-list">
-            <?php foreach ($docs as $doc): ?>
-              <a href="serve-doc.php?file=<?= urlencode($doc['file']) ?>" class="doc-item">
-                <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-                <?= htmlspecialchars($doc['label']) ?>
-                <span class="lock-badge">Members only</span>
-              </a>
-            <?php endforeach; ?>
-          </div>
-        </div>
-      <?php endforeach; ?>
 
     </div>
   </main>

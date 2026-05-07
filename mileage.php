@@ -1,12 +1,15 @@
 <?php
 /**
- * mileage.php — BVTU EC Mileage Tracker (public, no login required)
+ * mileage.php — BVTU EC Mileage Tracker (members only)
  *
  * Handles:
  *   GET  /mileage.php               — blank submission form
  *   POST /mileage.php action=submit — process new claim
  *   POST /mileage.php action=lookup — view personal history by name
  */
+
+require_once __DIR__ . '/members/auth.php';
+requireLogin();
 
 require_once __DIR__ . '/members/config.php';
 require_once __DIR__ . '/members/db.php';
