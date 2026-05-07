@@ -194,16 +194,6 @@ $member   = $loggedIn ? getMember() : null;
 
       </div>
 
-      <!-- Certification Fees -->
-      <div class="content-block">
-        <h2>Certification Fees</h2>
-        <p>BVTU reimburses members for Teacher Regulation Branch (TRB) certification fees. Submit your receipt to the president for reimbursement.</p>
-        <div class="info-box">
-          <p>Keep your TRB receipt and submit it to the union president. Reimbursement is available once per renewal cycle.</p>
-        </div>
-        <p style="margin-top:.5rem;">Email your receipt to <a href="mailto:lp54@bctf.ca">lp54@bctf.ca</a> to request reimbursement. A reimbursement form is available from the president.</p>
-      </div>
-
     </div>
   </main>
 
