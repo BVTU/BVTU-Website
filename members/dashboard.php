@@ -34,7 +34,7 @@ $documents = [
     .dashboard-hero {
       background: linear-gradient(140deg, var(--primary-dk) 0%, var(--primary) 100%);
       color: var(--white);
-      padding: 2.5rem 1.5rem;
+      padding: calc(var(--hdr-h) + 2.5rem) 1.5rem 2.5rem;
     }
     .dashboard-hero-inner { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
     .dashboard-hero h1 { font-size: 1.5rem; font-weight: 800; margin-bottom: .25rem; }
