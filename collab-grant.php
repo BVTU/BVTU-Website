@@ -26,8 +26,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
         'needs_partner'     => isset($_POST['needs_partner']),
         'collaboration_desc'=> $f('collaboration_desc'),
         'goals'             => $f('goals'),
+        'proposed_dates'    => $f('proposed_dates'),
         'days_requested'    => max(1, min(3, (int)$f('days_requested'))),
     ];
+
+    // Validate and sanitise proposed_dates JSON
+    $decodedDates = json_decode($formData['proposed_dates'], true);
+    if (!is_array($decodedDates) || count($decodedDates) < 1) {
+        $formData['proposed_dates'] = null;
+        $formData['days_requested'] = 0;
+    } else {
+        // Keep only valid future weekday dates, max 3
+        $today = date('Y-m-d');
+        $clean = [];
+        foreach (array_slice($decodedDates, 0, 3) as $d) {
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $d) && $d >= $today) {
+                $dow = (int)date('N', strtotime($d));
+                if ($dow <= 5) $clean[] = $d; // weekdays only
+            }
+        }
+        sort($clean);
+        $formData['proposed_dates'] = json_encode($clean);
+        $formData['days_requested'] = count($clean);
+    }
 
     // Validation
     if (!$formData['name'])              $formError = 'Please enter your name.';
@@ -37,6 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
     elseif (!$formData['position'])      $formError = 'Please enter your current position.';
     elseif (!$formData['collaboration_desc']) $formError = 'Please describe your collaboration.';
     elseif (!$formData['goals'])         $formError = 'Please describe your goals.';
+    elseif ($formData['days_requested'] < 1) $formError = 'Please select at least one preferred date.';
 
     if (!$formError) {
         try {
@@ -430,6 +452,135 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
     }
     .grant-success p { margin: 0; color: var(--gray-700); line-height: 1.65; font-size: .93rem; }
 
+    /* ── Date picker calendar ──────────────────────────────── */
+    .cg-cal {
+      border: 1.5px solid var(--gray-200);
+      border-radius: 10px;
+      overflow: hidden;
+      background: #fff;
+      max-width: 420px;
+      user-select: none;
+    }
+    .cg-cal-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: .75rem 1rem;
+      background: var(--off-white);
+      border-bottom: 1px solid var(--gray-200);
+    }
+    .cg-cal-nav button {
+      background: none;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      width: 30px; height: 30px;
+      font-size: 1.1rem;
+      line-height: 1;
+      cursor: pointer;
+      color: var(--gray-600);
+      display: flex; align-items: center; justify-content: center;
+      transition: background .15s, border-color .15s;
+    }
+    .cg-cal-nav button:hover:not(:disabled) { background: #fff; border-color: var(--primary); color: var(--primary); }
+    .cg-cal-nav button:disabled { opacity: .35; cursor: not-allowed; }
+    .cg-cal-nav-title { font-size: .92rem; font-weight: 700; color: var(--gray-800); }
+    .cg-cal-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+    }
+    .cg-cal-dow {
+      padding: .5rem 0;
+      text-align: center;
+      font-size: .72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: var(--gray-400);
+    }
+    .cg-cal-dow.weekend { color: var(--gray-300); }
+    .cg-cal-day {
+      aspect-ratio: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: .88rem;
+      color: var(--gray-700);
+      cursor: pointer;
+      border-radius: 6px;
+      margin: 2px;
+      position: relative;
+      transition: background .12s, color .12s;
+      font-weight: 500;
+    }
+    .cg-cal-day:hover:not(.disabled):not(.empty) { background: #e8f5ed; color: var(--primary); }
+    .cg-cal-day.today { font-weight: 800; color: var(--primary); }
+    .cg-cal-day.today::after {
+      content: '';
+      position: absolute;
+      bottom: 3px; left: 50%;
+      transform: translateX(-50%);
+      width: 4px; height: 4px;
+      border-radius: 50%;
+      background: var(--primary);
+    }
+    .cg-cal-day.disabled, .cg-cal-day.weekend-day {
+      color: var(--gray-300);
+      cursor: not-allowed;
+    }
+    .cg-cal-day.empty { cursor: default; }
+    .cg-cal-day.selected {
+      background: var(--primary);
+      color: #fff;
+      font-weight: 700;
+    }
+    .cg-cal-day.selected:hover { background: #155a2a; }
+    .cg-cal-day.selected .sel-num {
+      position: absolute;
+      top: 2px; right: 3px;
+      font-size: .55rem;
+      font-weight: 800;
+      line-height: 1;
+      opacity: .85;
+    }
+    /* Selected dates summary chips */
+    .cg-selected-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .45rem;
+      min-height: 2rem;
+      margin-top: .75rem;
+    }
+    .cg-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+      background: #e8f5ed;
+      border: 1px solid #b3d9bf;
+      border-radius: 20px;
+      padding: .3rem .75rem;
+      font-size: .82rem;
+      font-weight: 600;
+      color: var(--primary);
+    }
+    .cg-chip button {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      line-height: 1;
+      color: var(--primary);
+      font-size: .9rem;
+      display: flex; align-items: center;
+      opacity: .6;
+      transition: opacity .15s;
+    }
+    .cg-chip button:hover { opacity: 1; }
+    .cg-cal-hint {
+      font-size: .78rem;
+      color: var(--gray-400);
+      margin-top: .4rem;
+    }
+
     /* ── Responsive ────────────────────────────────────────── */
     @media (max-width: 860px) {
       .grant-overview   { grid-template-columns: 1fr; }
@@ -651,20 +802,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
             </div>
 
             <div class="grant-form-group">
-              <label>How many release days are you requesting?</label>
-              <div class="grant-days-options">
-                <?php foreach ([1,2,3] as $d): ?>
-                <label>
-                  <input type="radio" name="days_requested" value="<?= $d ?>"
-                    <?= (int)($formData['days_requested'] ?? 1) === $d ? 'checked' : ($d === 1 && empty($formData['days_requested']) ? 'checked' : '') ?>>
-                  <?= $d ?> <?= $d === 1 ? 'day' : 'days' ?>
-                </label>
-                <?php endforeach; ?>
-              </div>
+              <label>Preferred release day(s) <span class="req">*</span>
+                <span class="hint">Select up to 3 weekdays — click a day to select or deselect it</span>
+              </label>
+              <div class="cg-cal" id="cg-cal"></div>
+              <div class="cg-selected-summary" id="cg-chips"></div>
+              <p class="cg-cal-hint" id="cg-hint">No dates selected yet. Select up to 3 preferred days.</p>
+              <input type="hidden" name="proposed_dates" id="cg-proposed-dates" value="[]">
+              <input type="hidden" name="days_requested"  id="cg-days-count"     value="0">
             </div>
 
             <div class="grant-form-submit">
-              <button type="submit" name="cg_submit" class="btn btn-primary" style="padding:.65rem 1.5rem;">Submit application</button>
+              <button type="submit" name="cg_submit" id="cg-submit" class="btn btn-primary" style="padding:.65rem 1.5rem;" disabled>Submit application</button>
               <span style="font-size:.82rem;color:var(--gray-400);">You'll receive a confirmation email right away.</span>
             </div>
 
@@ -852,6 +1001,175 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
   <script src="js/site.js"></script>
   <script src="js/search.js"></script>
   <script>
+  // ── Collaboration Grant date picker ──────────────────────────────────────
+  (function () {
+    const calEl    = document.getElementById('cg-cal');
+    if (!calEl) return; // form not on page (e.g. success state)
+
+    const chipsEl  = document.getElementById('cg-chips');
+    const hintEl   = document.getElementById('cg-hint');
+    const datesIn  = document.getElementById('cg-proposed-dates');
+    const countIn  = document.getElementById('cg-days-count');
+    const submitBtn= document.getElementById('cg-submit');
+
+    const MAX = 3;
+    const MONTHS = ['January','February','March','April','May','June',
+                    'July','August','September','October','November','December'];
+    const DAYS  = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+    let selected = []; // sorted array of 'YYYY-MM-DD'
+    let viewYear, viewMonth;
+
+    // Start on current month; don't allow navigating to past months
+    const now = new Date();
+    viewYear  = now.getFullYear();
+    viewMonth = now.getMonth(); // 0-indexed
+
+    function toDateStr(y, m, d) {
+      return y + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+    }
+
+    function todayStr() {
+      return toDateStr(now.getFullYear(), now.getMonth(), now.getDate());
+    }
+
+    function isWeekend(y, m, d) {
+      const dow = new Date(y, m, d).getDay(); // 0=Sun, 6=Sat
+      return dow === 0 || dow === 6;
+    }
+
+    function isPast(dateStr) {
+      return dateStr < todayStr();
+    }
+
+    function formatDisplay(dateStr) {
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const date = new Date(y, m - 1, d);
+      return date.toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' });
+    }
+
+    function toggleDate(dateStr) {
+      const idx = selected.indexOf(dateStr);
+      if (idx >= 0) {
+        selected.splice(idx, 1);
+      } else {
+        if (selected.length >= MAX) return;
+        selected.push(dateStr);
+        selected.sort();
+      }
+      syncInputs();
+      renderChips();
+      renderCalendar(); // refresh day states
+    }
+
+    function syncInputs() {
+      datesIn.value  = JSON.stringify(selected);
+      countIn.value  = selected.length;
+      submitBtn.disabled = selected.length === 0;
+      if (hintEl) {
+        if (selected.length === 0) {
+          hintEl.textContent = 'No dates selected yet. Select up to 3 preferred days.';
+        } else if (selected.length < MAX) {
+          hintEl.textContent = selected.length + ' day' + (selected.length > 1 ? 's' : '') + ' selected. You can add ' + (MAX - selected.length) + ' more.';
+        } else {
+          hintEl.textContent = '3 days selected (maximum reached).';
+        }
+      }
+    }
+
+    function renderChips() {
+      chipsEl.innerHTML = '';
+      selected.forEach(function (d) {
+        const chip = document.createElement('div');
+        chip.className = 'cg-chip';
+        chip.innerHTML = formatDisplay(d) +
+          '<button type="button" title="Remove" aria-label="Remove ' + formatDisplay(d) + '">×</button>';
+        chip.querySelector('button').addEventListener('click', function () { toggleDate(d); });
+        chipsEl.appendChild(chip);
+      });
+    }
+
+    function renderCalendar() {
+      // First day of month, number of days
+      const firstDow  = new Date(viewYear, viewMonth, 1).getDay(); // 0=Sun
+      const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+      const isPrevDisabled = viewYear === now.getFullYear() && viewMonth === now.getMonth();
+
+      calEl.innerHTML =
+        '<div class="cg-cal-nav">' +
+          '<button type="button" class="cg-prev" ' + (isPrevDisabled ? 'disabled' : '') + '>‹</button>' +
+          '<span class="cg-cal-nav-title">' + MONTHS[viewMonth] + ' ' + viewYear + '</span>' +
+          '<button type="button" class="cg-next">›</button>' +
+        '</div>' +
+        '<div class="cg-cal-grid" id="cg-grid"></div>';
+
+      calEl.querySelector('.cg-prev').addEventListener('click', function () {
+        viewMonth--;
+        if (viewMonth < 0) { viewMonth = 11; viewYear--; }
+        renderCalendar();
+      });
+      calEl.querySelector('.cg-next').addEventListener('click', function () {
+        viewMonth++;
+        if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+        renderCalendar();
+      });
+
+      const grid = calEl.querySelector('#cg-grid');
+
+      // Day-of-week headers
+      DAYS.forEach(function (d, i) {
+        const hdr = document.createElement('div');
+        hdr.className = 'cg-cal-dow' + (i === 0 || i === 6 ? ' weekend' : '');
+        hdr.textContent = d;
+        grid.appendChild(hdr);
+      });
+
+      // Empty cells before first day
+      for (let i = 0; i < firstDow; i++) {
+        const empty = document.createElement('div');
+        empty.className = 'cg-cal-day empty';
+        grid.appendChild(empty);
+      }
+
+      // Day cells
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateStr  = toDateStr(viewYear, viewMonth, d);
+        const weekend  = isWeekend(viewYear, viewMonth, d);
+        const past     = isPast(dateStr);
+        const isToday  = dateStr === todayStr();
+        const isSel    = selected.indexOf(dateStr) >= 0;
+        const selIdx   = selected.indexOf(dateStr);
+        const maxed    = selected.length >= MAX && !isSel;
+
+        const cell = document.createElement('div');
+        let cls = 'cg-cal-day';
+        if (weekend)      cls += ' weekend-day disabled';
+        else if (past)    cls += ' disabled';
+        else if (isSel)   cls += ' selected';
+        if (isToday)      cls += ' today';
+        cell.className = cls;
+
+        if (isSel) {
+          cell.innerHTML = d + '<span class="sel-num">' + (selIdx + 1) + '</span>';
+        } else {
+          cell.textContent = d;
+        }
+
+        if (!weekend && !past) {
+          cell.style.cursor = maxed ? 'not-allowed' : 'pointer';
+          if (!maxed) {
+            cell.addEventListener('click', function () { toggleDate(dateStr); });
+          }
+        }
+
+        grid.appendChild(cell);
+      }
+    }
+
+    renderCalendar();
+    syncInputs();
+  })();
+
     // Collaborator toggle
     (function () {
       const yesRadio    = document.getElementById('collab-yes');

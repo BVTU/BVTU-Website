@@ -33,11 +33,15 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
         'ID', 'Status', 'Submitted',
         'Applicant Name', 'Email', 'School', 'Position', 'Time in Role',
         'Has Collaborator', 'Collaborator Name', 'Collaborator School', 'Needs Partner Help',
-        'Days Requested',
+        'Days Requested', 'Proposed Dates',
         'Collaboration Description', 'Goals',
         'Admin Notes', 'Reviewed By', 'Reviewed At',
     ]);
     foreach ($apps as $a) {
+        $pdArr = json_decode($a['proposed_dates'] ?? '[]', true);
+        $pdStr = is_array($pdArr)
+            ? implode(', ', array_map(fn($d) => date('D M j Y', strtotime($d)), $pdArr))
+            : '';
         fputcsv($out, [
             $a['id'],
             ucfirst($a['status']),
@@ -52,6 +56,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
             $a['collaborator_school'],
             $a['needs_partner'] ? 'Yes' : 'No',
             $a['days_requested'],
+            $pdStr,
             $a['collaboration_desc'],
             $a['goals'],
             $a['admin_notes'],
@@ -487,6 +492,19 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
               <div class="read-fact"><strong>Email:</strong> <a href="mailto:<?= htmlspecialchars($app['applicant_email']) ?>"><?= htmlspecialchars($app['applicant_email']) ?></a></div>
               <div class="read-fact"><strong>Time in role:</strong> <?= htmlspecialchars($app['years_in_role'] ?: '—') ?></div>
               <div class="read-fact"><strong>Days requested:</strong> <?= $days ?></div>
+              <?php
+                $pdDatesR = [];
+                if (!empty($app['proposed_dates'])) {
+                    $pdR = json_decode($app['proposed_dates'], true);
+                    if (is_array($pdR)) $pdDatesR = $pdR;
+                }
+              ?>
+              <?php if ($pdDatesR): ?>
+              <div class="read-fact" style="width:100%;">
+                <strong>Proposed dates:</strong>
+                <?= implode(', ', array_map(fn($d) => date('D, M j Y', strtotime($d)), $pdDatesR)) ?>
+              </div>
+              <?php endif; ?>
               <div class="read-fact">
                 <strong>Collaborator:</strong>
                 <?php if ($app['has_collaborator'] && $app['collaborator_name']): ?>
@@ -567,6 +585,25 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
                 <div class="dl">Days requested</div>
                 <div class="dd"><?= $days ?></div>
               </div>
+              <?php
+                $pdDates = [];
+                if (!empty($app['proposed_dates'])) {
+                    $pd = json_decode($app['proposed_dates'], true);
+                    if (is_array($pd)) $pdDates = $pd;
+                }
+              ?>
+              <?php if ($pdDates): ?>
+              <div class="app-detail-item" style="grid-column:1/-1;">
+                <div class="dl">Proposed dates</div>
+                <div class="dd">
+                  <?php foreach ($pdDates as $pd): ?>
+                    <span style="display:inline-block;background:#e8f5ed;border:1px solid #b3d9bf;border-radius:20px;padding:.15rem .65rem;font-size:.82rem;font-weight:600;color:#1a5c2e;margin:.1rem .2rem .1rem 0;">
+                      <?= date('D, M j Y', strtotime($pd)) ?>
+                    </span>
+                  <?php endforeach; ?>
+                </div>
+              </div>
+              <?php endif; ?>
             </div>
 
             <div class="app-text-label">Collaboration description</div>

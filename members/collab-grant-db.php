@@ -12,7 +12,8 @@ function cgCurrentYear(): int {
 }
 
 function cgEnsureTable(): void {
-    getDB()->exec("CREATE TABLE IF NOT EXISTS collab_grant_applications (
+    $db = getDB();
+    $db->exec("CREATE TABLE IF NOT EXISTS collab_grant_applications (
         id                  INT AUTO_INCREMENT PRIMARY KEY,
         applicant_name      VARCHAR(255) NOT NULL,
         applicant_email     VARCHAR(255) NOT NULL,
@@ -25,6 +26,7 @@ function cgEnsureTable(): void {
         needs_partner       TINYINT(1) DEFAULT 0,
         collaboration_desc  TEXT,
         goals               TEXT,
+        proposed_dates      TEXT,
         days_requested      TINYINT NOT NULL DEFAULT 1,
         status              VARCHAR(20) DEFAULT 'pending',
         admin_notes         TEXT,
@@ -36,6 +38,11 @@ function cgEnsureTable(): void {
         INDEX idx_status (status),
         INDEX idx_year   (school_year)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // Migration: add proposed_dates if upgrading an existing table
+    try {
+        $db->exec("ALTER TABLE collab_grant_applications ADD COLUMN proposed_dates TEXT DEFAULT NULL");
+    } catch (Exception $e) { /* column already exists — safe to ignore */ }
 }
 
 function cgSubmitApplication(array $d): int {
@@ -44,8 +51,8 @@ function cgSubmitApplication(array $d): int {
     $s  = $db->prepare("INSERT INTO collab_grant_applications
         (applicant_name, applicant_email, school, position, years_in_role,
          has_collaborator, collaborator_name, collaborator_school, needs_partner,
-         collaboration_desc, goals, days_requested, school_year)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)");
+         collaboration_desc, goals, proposed_dates, days_requested, school_year)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
     $s->execute([
         $d['name'], $d['email'], $d['school'], $d['position'], $d['years_in_role'],
         $d['has_collaborator'] ? 1 : 0,
@@ -53,6 +60,7 @@ function cgSubmitApplication(array $d): int {
         $d['collaborator_school'] ?? null,
         $d['needs_partner'] ? 1 : 0,
         $d['collaboration_desc'], $d['goals'],
+        $d['proposed_dates'] ?? null,
         (int)$d['days_requested'],
         cgCurrentYear(),
     ]);
@@ -132,6 +140,15 @@ function cgSendNewApplicationNotification(array $app): void {
         ? $app['collaborator_name'] . ' (' . ($app['collaborator_school'] ?? '') . ')'
         : ($app['needs_partner'] ? 'None — needs help finding partner' : 'None identified');
 
+    $datesLine = '';
+    if (!empty($app['proposed_dates'])) {
+        $dates = json_decode($app['proposed_dates'], true);
+        if (is_array($dates) && count($dates)) {
+            $formatted = array_map(fn($d) => date('D, M j Y', strtotime($d)), $dates);
+            $datesLine = "\nProposed dates:   " . implode(', ', $formatted);
+        }
+    }
+
     $subject = "New Collaboration Grant Application — {$name}";
     $body    = <<<TEXT
 A new collaboration grant application has been submitted.
@@ -142,7 +159,7 @@ School:           {$app['school']}
 Position:         {$app['position']}
 Time in role:     {$app['years_in_role']}
 Collaborator:     {$collab}
-Days requested:   {$days}
+Days requested:   {$days}{$datesLine}
 
 DESCRIPTION:
 {$app['collaboration_desc']}
