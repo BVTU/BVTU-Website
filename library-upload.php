@@ -17,23 +17,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['lib_upload'])) {
     $title       = $f('title');
     $description = $f('description');
     $grades      = array_filter($_POST['grades'] ?? [], fn($g) => in_array($g, LIB_GRADES));
-    $subject     = in_array($f('subject'), LIB_SUBJECTS) ? $f('subject') : '';
+    // Subject: if "Other" selected, use the custom text (title-cased via libNormaliseSubject)
+    $rawSubject = $f('subject');
+    if ($rawSubject === 'Other' && trim($f('subject_custom')) !== '') {
+        $subject = libNormaliseSubject($f('subject_custom'));
+    } elseif (in_array($rawSubject, LIB_SUBJECTS)) {
+        $subject = $rawSubject;
+    } else {
+        $subject = '';
+    }
     $type        = in_array($f('resource_type'), LIB_TYPES) ? $f('resource_type') : '';
     $bcCurric    = $f('bc_curriculum');
     $timeReq     = $f('time_required');
     $materials   = $f('materials');
     $anonymous   = isset($_POST['anonymous']);
-    // Tags: sanitise comma-separated list
-    $tags = implode(',', array_map('trim', array_filter(
-        array_map('trim', explode(',', $f('tags'))),
-        fn($t) => strlen($t) >= 2 && strlen($t) <= 40
-    )));
+    // Tags: normalise via DB helper (lowercase, deduplicate, length-check)
+    $tags = libNormaliseTags($f('tags'));
 
     // Validation
     if (!$title)           $error = 'Please enter a title.';
     elseif (!$description) $error = 'Please enter a short description.';
     elseif (empty($grades))$error = 'Please select at least one grade level.';
-    elseif (!$subject)     $error = 'Please select a subject.';
+    elseif (!$subject || $subject === 'Other') $error = 'Please select a subject (or enter a custom one if you chose Other).';
     elseif (!$type)        $error = 'Please select a resource type.';
     elseif (empty($_FILES['resource_file']['name'])) $error = 'Please choose a file to upload.';
     else {
@@ -260,9 +265,19 @@ $loggedIn = isLoggedIn();
                 <select id="ul-subject" name="subject" required>
                   <option value="">Select a subject…</option>
                   <?php foreach (LIB_SUBJECTS as $s): ?>
-                    <option value="<?= $s ?>" <?= ($_POST['subject'] ?? '') === $s ? 'selected' : '' ?>><?= $s ?></option>
+                    <option value="<?= htmlspecialchars($s) ?>"
+                      <?= ($_POST['subject'] ?? '') === $s ? 'selected' : '' ?>><?= htmlspecialchars($s) ?></option>
                   <?php endforeach; ?>
                 </select>
+                <!-- Shown when "Other" is selected -->
+                <div id="subject-custom-wrap" style="display:<?= ($_POST['subject'] ?? '') === 'Other' ? 'block' : 'none' ?>;margin-top:.5rem;">
+                  <input type="text" id="ul-subject-custom" name="subject_custom"
+                    placeholder="e.g. French Immersion, Foods &amp; Nutrition, Film Studies"
+                    maxlength="100"
+                    value="<?= htmlspecialchars($_POST['subject_custom'] ?? '') ?>"
+                    style="width:100%;padding:.6rem .8rem;border:1.5px solid var(--border);border-radius:var(--radius-s);font-size:.9rem;font-family:inherit;box-sizing:border-box;">
+                  <p style="font-size:.75rem;color:var(--gray-400);margin:.25rem 0 0;">Capitalisation doesn't matter — "physics" and "Physics" are treated the same.</p>
+                </div>
               </div>
               <div class="upload-group">
                 <label class="upload-label" for="ul-type">Resource type <span class="req">*</span></label>
@@ -443,6 +458,37 @@ $loggedIn = isLoggedIn();
         suggestWrap.style.display = 'none';
       }
     }
+
+    // Show/hide custom subject input
+    const subjectSel = document.getElementById('ul-subject');
+    const customWrap = document.getElementById('subject-custom-wrap');
+    subjectSel.addEventListener('change', () => {
+      customWrap.style.display = subjectSel.value === 'Other' ? 'block' : 'none';
+    });
+
+    // Also pull bc_curriculum suggestions into the pool
+    const bcTags = TAG_SUGGESTIONS.bc_curriculum || [];
+
+    const _origUpdateSuggestions = updateSuggestions;
+    updateSuggestions = function() {
+      _origUpdateSuggestions();
+      // Append BC curriculum tags not already in the list
+      const existing = [...suggestChips.querySelectorAll('.tag-sugg')].map(b => b.textContent);
+      const extra = bcTags.filter(t => !existing.includes(t));
+      if (extra.length) {
+        const div = document.createElement('div');
+        div.style.cssText = 'margin-top:.4rem;padding-top:.4rem;border-top:1px solid var(--border);display:flex;flex-wrap:wrap;gap:.3rem;';
+        div.innerHTML = '<span style="font-size:.68rem;color:var(--gray-400);width:100%;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">BC Curriculum</span>' +
+          extra.slice(0, 8).map(t =>
+            `<button type="button" class="tag-sugg" onclick="addTag('${t.replace(/'/g,"\\'")}');renderChips();"
+               style="background:var(--gray-100);border:1px solid var(--border);border-radius:100px;padding:.18rem .55rem;font-size:.72rem;font-weight:600;color:var(--gray-600);cursor:pointer;"
+               onmouseover="this.style.background='#f0fdf4';this.style.color='#166534';"
+               onmouseout="this.style.background='';this.style.color='';">${t}</button>`
+          ).join('');
+        suggestChips.appendChild(div);
+        suggestWrap.style.display = 'block';
+      }
+    };
 
     document.querySelectorAll('[name=subject],[name=resource_type],[name="grades[]"]').forEach(el => {
       el.addEventListener('change', updateSuggestions);

@@ -14,8 +14,35 @@ define('LIB_ALLOWED_MIME', [
     'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 ]);
 
-const LIB_GRADES   = ['K','1','2','3','4','5','6','7'];
-const LIB_SUBJECTS = ['Math','ELA','Science','Social Studies','Arts','PE','Other'];
+const LIB_GRADES   = ['K','1','2','3','4','5','6','7','8','9','10','11','12'];
+
+// Standard BC subjects — K-12.
+// 'Other' must stay last; upload form shows a free-text input when it is selected.
+const LIB_SUBJECTS = [
+    // ── Elementary & cross-grade ─────────────────────────────
+    'Math',
+    'English / ELA',
+    'Science',
+    'Social Studies',
+    'French',
+    'Arts',
+    'PE / Health',
+    'ADST',
+    // ── Secondary-specific ───────────────────────────────────
+    'Physics',
+    'Chemistry',
+    'Biology',
+    'Earth Science',
+    'Computer Science',
+    'Business Education',
+    'Psychology',
+    'Drama',
+    'Visual Art',
+    'Music',
+    // ── Catch-all ────────────────────────────────────────────
+    'Other',
+];
+
 const LIB_TYPES    = ['Lesson Plan','Unit Plan','Rubric','Activity','Assessment','Other'];
 
 // ── Table creation ────────────────────────────────────────────────────────────
@@ -105,13 +132,17 @@ function libSaveResource(array $d): int {
          grade_levels, subject, resource_type, bc_curriculum, time_required,
          materials, tags, file_name, file_path, file_size, file_ext)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+    // Normalise subject: title-case custom values; lowercase all tags
+    $subject = libNormaliseSubject($d['subject'] ?? '');
+    $tags    = libNormaliseTags($d['tags'] ?? '');
+
     $s->execute([
         $d['uploader_email'], $d['uploader_name'], $d['anonymous'] ? 1 : 0,
         $d['title'], $d['description'],
-        $d['grade_levels'], $d['subject'], $d['resource_type'],
+        $d['grade_levels'], $subject, $d['resource_type'],
         $d['bc_curriculum'] ?? null, $d['time_required'] ?? null,
         $d['materials'] ?? null,
-        $d['tags'] ?? '',
+        $tags,
         $d['file_name'], $d['file_path'], $d['file_size'], $d['file_ext'],
     ]);
     return (int)getDB()->lastInsertId();
@@ -155,7 +186,7 @@ function libGetResources(array $filters = [], bool $adminView = false): array {
     }
 
     if (!empty($filters['subject'])) {
-        $where[]  = "subject = ?";
+        $where[]  = "LOWER(subject) = LOWER(?)";
         $params[] = $filters['subject'];
     }
 
@@ -164,10 +195,10 @@ function libGetResources(array $filters = [], bool $adminView = false): array {
         $params[] = $filters['type'];
     }
 
-    // Tag filter
+    // Tag filter — tags stored lowercase so compare lowercase
     if (!empty($filters['tag'])) {
         $where[]  = "FIND_IN_SET(?, tags)";
-        $params[] = trim($filters['tag']);
+        $params[] = strtolower(trim($filters['tag']));
     }
 
     // Uploader filter (non-anonymous only)
@@ -315,6 +346,51 @@ function libStats(): array {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Title-case a custom subject value.
+ * Standard subjects are returned unchanged; "Other" is returned as-is.
+ */
+function libNormaliseSubject(string $subject): string {
+    $subject = trim($subject);
+    if (!$subject) return '';
+    // Already a known subject — keep the canonical capitalisation
+    foreach (LIB_SUBJECTS as $s) {
+        if (strtolower($s) === strtolower($subject)) return $s;
+    }
+    // Custom subject — title-case it
+    return ucwords(strtolower($subject));
+}
+
+/**
+ * Normalise a comma-separated tags string: lowercase, trim, deduplicate.
+ */
+function libNormaliseTags(string $raw): string {
+    $tags = array_values(array_unique(array_filter(
+        array_map(fn($t) => strtolower(trim($t)), explode(',', $raw)),
+        fn($t) => strlen($t) >= 2 && strlen($t) <= 40
+    )));
+    return implode(',', $tags);
+}
+
+/**
+ * Returns subjects in the DB that are not in the standard LIB_SUBJECTS list.
+ * Used by the filter sidebar to surface teacher-entered custom subjects.
+ */
+function libGetCustomSubjects(): array {
+    libEnsureTables();
+    $known = array_map('strtolower', LIB_SUBJECTS);
+    $s = getDB()->query(
+        "SELECT DISTINCT subject FROM library_resources
+         WHERE status='published' AND subject != '' AND subject != 'Other'
+         ORDER BY subject"
+    );
+    return array_values(array_filter(
+        $s->fetchAll(\PDO::FETCH_COLUMN),
+        fn($sub) => !in_array(strtolower($sub), $known, true)
+    ));
+}
+
 function libFormatSize(int $bytes): string {
     if ($bytes >= 1048576) return round($bytes / 1048576, 1) . ' MB';
     return round($bytes / 1024) . ' KB';
@@ -400,38 +476,79 @@ function libGetBookmarks(string $email): array {
 function libGetTagSuggestions(): array {
     return [
         'subject' => [
-            'Math'           => ['counting','number sense','place value','addition','subtraction',
-                                 'multiplication','division','fractions','decimals','algebra',
-                                 'geometry','measurement','statistics','patterns','integers','ratios'],
-            'ELA'            => ['reading','writing','phonics','grammar','comprehension',
-                                 'vocabulary','oral language','spelling','poetry','media literacy'],
-            'Science'        => ['inquiry','life science','physical science','earth science',
-                                 'experiments','organisms','ecosystems','matter','energy','forces'],
-            'Social Studies' => ['community','history','geography','culture','first nations',
-                                 'reconciliation','local history','government','economics','citizenship'],
-            'Arts'           => ['visual art','drama','music','dance','drawing','painting',
-                                 'sculpture','performance','creative expression'],
-            'PE'             => ['fitness','games','movement','cooperation','health','teamwork',
-                                 'outdoor education','wellness','sport','dance'],
-            'Other'          => ['cross-curricular','project-based','ADST','career education','life skills'],
+            'Math'              => ['number sense','place value','addition','subtraction','multiplication',
+                                    'division','fractions','decimals','algebra','geometry','measurement',
+                                    'statistics','patterns','integers','ratios','spatial reasoning',
+                                    'pre-calculus','calculus','probability'],
+            'English / ELA'     => ['reading','writing','grammar','comprehension','vocabulary',
+                                    'oral language','phonics','spelling','poetry','media literacy',
+                                    'text features','literary analysis','creative writing','research skills'],
+            'Science'           => ['inquiry','scientific method','life science','ecosystems','matter',
+                                    'energy','forces','sustainability','systems thinking',
+                                    'climate','biodiversity','cells'],
+            'Social Studies'    => ['community','history','geography','culture','first nations',
+                                    'reconciliation','indigenous perspectives','local history',
+                                    'government','economics','citizenship','continuity and change',
+                                    'identity and culture','human rights'],
+            'Physics'           => ['forces','motion','energy','waves','electricity','magnetism',
+                                    'kinematics','dynamics','optics','modern physics'],
+            'Chemistry'         => ['atoms','molecules','periodic table','reactions','stoichiometry',
+                                    'acids and bases','organic chemistry','solutions','bonding'],
+            'Biology'           => ['cells','genetics','evolution','ecology','body systems',
+                                    'biodiversity','reproduction','photosynthesis','DNA'],
+            'Earth Science'     => ['geology','plate tectonics','weather','climate','space',
+                                    'oceans','rocks and minerals','natural resources'],
+            'Computer Science'  => ['coding','programming','algorithms','data structures',
+                                    'computational thinking','python','scratch','web design','cybersecurity'],
+            'ADST'              => ['design thinking','making','prototyping','woodworking',
+                                    'textiles','electronics','3D printing','entrepreneurship'],
+            'Business Education'=> ['entrepreneurship','marketing','finance','accounting',
+                                    'economics','career planning','digital literacy'],
+            'French'            => ['vocabulary','grammar','conversation','reading','culture',
+                                    'francophone','immersion'],
+            'Arts'              => ['visual art','drama','music','dance','drawing','painting',
+                                    'sculpture','performance','creative expression','Elements of Art'],
+            'PE / Health'       => ['fitness','games','movement','cooperation','teamwork',
+                                    'outdoor education','wellness','mental health','sport','nutrition'],
+            'Psychology'        => ['mental health','behaviour','cognition','development',
+                                    'research methods','social psychology'],
+            'Drama'             => ['performance','script writing','improv','stagecraft',
+                                    'character development','theatre history'],
+            'Visual Art'        => ['drawing','painting','sculpture','design','art history',
+                                    'elements of art','principles of design','printmaking'],
+            'Music'             => ['theory','notation','rhythm','harmony','performance',
+                                    'composition','ear training','history of music'],
+            'Other'             => ['cross-curricular','project-based','career education',
+                                    'life skills','core competencies','big ideas'],
         ],
         'type' => [
-            'Lesson Plan'  => ['direct instruction','inquiry-based','differentiated','centres'],
-            'Unit Plan'    => ['big ideas','cross-curricular','long-range planning','inquiry'],
-            'Rubric'       => ['self-assessment','peer assessment','criteria','performance standards'],
-            'Activity'     => ['hands-on','group work','independent practice','game','outdoor'],
-            'Assessment'   => ['formative','summative','portfolio','checklist','observation'],
-            'Other'        => ['template','parent communication','classroom management'],
+            'Lesson Plan'  => ['direct instruction','inquiry-based','differentiated','centres','project-based'],
+            'Unit Plan'    => ['big ideas','cross-curricular','long-range planning','inquiry','backwards design'],
+            'Rubric'       => ['self-assessment','peer assessment','criteria','performance standards','single-point'],
+            'Activity'     => ['hands-on','group work','independent practice','game','outdoor','lab'],
+            'Assessment'   => ['formative','summative','portfolio','checklist','observation','exit ticket'],
+            'Other'        => ['template','parent communication','classroom management','anchor chart'],
         ],
         'grade' => [
-            'K'  => ['kindergarten','early learning','play-based','emergent'],
-            '1'  => ['grade 1','primary'],
-            '2'  => ['grade 2','primary'],
-            '3'  => ['grade 3','primary','intermediate'],
-            '4'  => ['grade 4','intermediate'],
-            '5'  => ['grade 5','intermediate'],
-            '6'  => ['grade 6','intermediate'],
-            '7'  => ['grade 7','intermediate','middle school'],
+            'K'  => ['kindergarten','early learning','play-based','emergent literacy'],
+            '1'  => ['primary','grade 1'],
+            '2'  => ['primary','grade 2'],
+            '3'  => ['primary','grade 3'],
+            '4'  => ['intermediate','grade 4'],
+            '5'  => ['intermediate','grade 5'],
+            '6'  => ['intermediate','grade 6'],
+            '7'  => ['intermediate','grade 7'],
+            '8'  => ['secondary','grade 8','middle school'],
+            '9'  => ['secondary','grade 9','middle school'],
+            '10' => ['secondary','grade 10'],
+            '11' => ['secondary','grade 11'],
+            '12' => ['secondary','grade 12','graduation'],
+        ],
+        // BC Curriculum language — shown when any subject is selected
+        'bc_curriculum' => [
+            'core competencies','big ideas','curricular competency','first peoples principles',
+            'indigenous knowledge','reconciliation','inquiry','place-based learning',
+            'project-based learning','differentiated instruction','universal design for learning',
         ],
     ];
 }

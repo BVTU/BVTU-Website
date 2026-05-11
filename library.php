@@ -11,7 +11,9 @@ $loggedIn = true;
 
 // Gather filters from GET
 $selGrades   = array_filter($_GET['grades'] ?? [], fn($g) => in_array($g, LIB_GRADES));
-$selSubject  = in_array($_GET['subject'] ?? '', LIB_SUBJECTS) ? $_GET['subject'] : '';
+// Accept both known subjects and any custom subject that exists in the DB
+$_rawSubject = trim($_GET['subject'] ?? '');
+$selSubject  = (in_array($_rawSubject, LIB_SUBJECTS) || $_rawSubject !== '') ? $_rawSubject : '';
 $selType     = in_array($_GET['type'] ?? '', LIB_TYPES) ? $_GET['type'] : '';
 $selTag      = trim($_GET['tag'] ?? '');
 $selUploader = trim($_GET['uploader'] ?? '');
@@ -357,13 +359,26 @@ function buildUrl(array $overrides = []): string {
                   <input type="radio" name="subject" value=""
                     <?= !$selSubject ? 'checked' : '' ?> onchange="this.form.submit()"> All subjects
                 </label></li>
-                <?php foreach (LIB_SUBJECTS as $s): ?>
-                  <li><label class="<?= $selSubject === $s ? 'lib-filter-active' : '' ?>">
-                    <input type="radio" name="subject" value="<?= $s ?>"
-                      <?= $selSubject === $s ? 'checked' : '' ?> onchange="this.form.submit()">
-                    <?= $s ?>
+                <?php foreach (array_filter(LIB_SUBJECTS, fn($s) => $s !== 'Other') as $s): ?>
+                  <li><label class="<?= strcasecmp($selSubject, $s) === 0 ? 'lib-filter-active' : '' ?>">
+                    <input type="radio" name="subject" value="<?= htmlspecialchars($s) ?>"
+                      <?= strcasecmp($selSubject, $s) === 0 ? 'checked' : '' ?> onchange="this.form.submit()">
+                    <?= htmlspecialchars($s) ?>
                   </label></li>
                 <?php endforeach; ?>
+                <?php
+                  // Dynamically add any teacher-entered custom subjects from the DB
+                  $customSubjects = libGetCustomSubjects();
+                  if ($customSubjects): ?>
+                  <li style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-300);margin:.5rem 0 .25rem;padding-left:.1rem;">Other</li>
+                  <?php foreach ($customSubjects as $cs): ?>
+                    <li><label class="<?= strcasecmp($selSubject, $cs) === 0 ? 'lib-filter-active' : '' ?>">
+                      <input type="radio" name="subject" value="<?= htmlspecialchars($cs) ?>"
+                        <?= strcasecmp($selSubject, $cs) === 0 ? 'checked' : '' ?> onchange="this.form.submit()">
+                      <?= htmlspecialchars($cs) ?>
+                    </label></li>
+                  <?php endforeach; ?>
+                <?php endif; ?>
               </ul>
             </div>
 
