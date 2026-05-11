@@ -1,28 +1,24 @@
 <?php
 require_once __DIR__ . '/members/auth.php';
-if (!isLoggedIn()) {
-    $redir = urlencode('library-resource.php?id=' . (int)($_GET['id'] ?? 0));
-    header('Location: members/login.php?redirect=../' . $redir);
-    exit;
-}
 require_once __DIR__ . '/members/library-db.php';
 
-$member  = getMember();
-$isAdmin = libIsAdmin($member['email']);
+// Browsing is public — login required only to download / rate / bookmark
+$loggedIn = isLoggedIn();
+$member   = $loggedIn ? getMember() : null;
+$isAdmin  = $loggedIn && libIsAdmin($member['email']);
 
 $id       = (int)($_GET['id'] ?? 0);
 $resource = $id ? libGetResource($id) : null;
 
 if (!$resource || ($resource['status'] !== 'published' && !$isAdmin)) {
     http_response_code(404);
-    // Show a nice 404 page
     $notFound = true;
 }
 
-// Handle rating POST
+// Handle rating POST — members only
 $ratingError   = '';
 $ratingSuccess = false;
-if (!isset($notFound) && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['lib_rate'])) {
+if ($loggedIn && !isset($notFound) && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['lib_rate'])) {
     $rating  = (int)($_POST['rating'] ?? 0);
     $comment = trim($_POST['comment'] ?? '');
     if ($rating < 1 || $rating > 5) {
@@ -31,14 +27,13 @@ if (!isset($notFound) && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['
         libAddRating($id, $member['email'], $member['name'], $rating, $comment);
         libNotifyRating($resource, $member['name'], $rating, $comment);
         $ratingSuccess = true;
-        // Refresh resource data to show updated avg
         $resource = libGetResource($id);
     }
 }
 
-// Handle flag POST
+// Handle flag POST — members only
 $flagDone = false;
-if (!isset($notFound) && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['lib_flag'])) {
+if ($loggedIn && !isset($notFound) && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['lib_flag'])) {
     $reason = trim($_POST['flag_reason'] ?? '');
     libAddFlag($id, $member['email'], $reason);
     $flagDone = true;
@@ -59,13 +54,14 @@ if (!isset($notFound) && $isAdmin && isset($_GET['action'])) {
 }
 
 $ratings     = isset($notFound) ? [] : libGetRatings($id);
-$myRating    = isset($notFound) ? null : libGetMemberRating($id, $member['email']);
+$myRating    = ($loggedIn && !isset($notFound)) ? libGetMemberRating($id, $member['email']) : null;
 $grades      = isset($notFound) ? [] : ($resource['grade_levels'] ? explode(',', $resource['grade_levels']) : []);
 $tags        = isset($notFound) ? [] : ($resource['tags'] ? array_map('trim', explode(',', $resource['tags'])) : []);
-$bookmarked    = isset($notFound) ? false : libIsBookmarked($id, $member['email']);
-$extraFiles    = isset($notFound) ? [] : libGetResourceFiles($id);
-$downloadUrl   = 'members/library-serve.php?id=' . $id;
-$previewUrl    = 'members/library-serve.php?id=' . $id . '&preview=1';
+$bookmarked  = ($loggedIn && !isset($notFound)) ? libIsBookmarked($id, $member['email']) : false;
+$extraFiles  = isset($notFound) ? [] : libGetResourceFiles($id);
+$downloadUrl = 'members/library-serve.php?id=' . $id;
+$previewUrl  = 'members/library-serve.php?id=' . $id . '&preview=1';
+$loginUrl    = 'members/login.php?redirect=' . urlencode('../library-resource.php?id=' . $id);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -637,7 +633,13 @@ $previewUrl    = 'members/library-serve.php?id=' . $id . '&preview=1';
             <!-- Rate this resource -->
             <div class="res-main-card" style="margin-bottom: 1rem;">
               <div class="res-body">
-                <?php if ($myRating && !$ratingSuccess): ?>
+                <?php if (!$loggedIn): ?>
+                  <div class="res-section-title">Rate This Resource</div>
+                  <p style="font-size:.88rem;color:var(--gray-500);margin:0 0 .75rem;">
+                    <a href="<?= $loginUrl ?>" style="color:var(--primary);font-weight:600;">Log in</a>
+                    to rate and review this resource.
+                  </p>
+                <?php elseif ($myRating && !$ratingSuccess): ?>
                   <div class="res-section-title">Your Rating</div>
                   <p style="font-size:.88rem;color:var(--gray-600);margin:0 0 .75rem;">
                     You rated this
@@ -706,8 +708,14 @@ $previewUrl    = 'members/library-serve.php?id=' . $id . '&preview=1';
               }
             ?>
 
+            <?php if (!$loggedIn): ?>
+            <!-- Guest: prompt to log in -->
+            <a href="<?= $loginUrl ?>" class="download-btn" style="background:var(--accent);color:var(--primary);border:1.5px solid var(--border);">
+              <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              Log in to download
+            </a>
+            <?php else: ?>
             <!-- Primary file -->
-            <a href="<?= $downloadUrl ?>" class="download-btn">
               <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               <?php if (count($extraFiles)): ?>
                 <span style="flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
@@ -733,7 +741,10 @@ $previewUrl    = 'members/library-serve.php?id=' . $id . '&preview=1';
               </a>
             <?php endforeach; ?>
 
-            <!-- Bookmark toggle -->
+            <?php endif; // end logged-in download block ?>
+
+            <!-- Bookmark toggle — members only -->
+            <?php if ($loggedIn): ?>
             <button id="bm-btn" data-id="<?= $id ?>" data-state="<?= $bookmarked ? '1' : '0' ?>"
                     style="display:flex;align-items:center;justify-content:center;gap:.4rem;width:100%;margin-top:.6rem;padding:.55rem;background:none;border:1.5px solid var(--border);border-radius:var(--radius-s);font-size:.83rem;font-weight:600;color:var(--gray-600);cursor:pointer;transition:border-color .15s,color .15s;">
               <svg id="bm-icon" width="15" height="15" viewBox="0 0 24 24"
@@ -744,6 +755,7 @@ $previewUrl    = 'members/library-serve.php?id=' . $id . '&preview=1';
               </svg>
               <span id="bm-label"><?= $bookmarked ? 'Saved' : 'Save for later' ?></span>
             </button>
+            <?php endif; ?>
             <div class="res-stat-row">
               <div>Size</div>
               <span><?php

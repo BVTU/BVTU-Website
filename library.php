@@ -1,13 +1,10 @@
 <?php
 require_once __DIR__ . '/members/auth.php';
-if (!isLoggedIn()) {
-    header('Location: members/login.php?redirect=../library.php');
-    exit;
-}
 require_once __DIR__ . '/members/library-db.php';
 
-$member   = getMember();
-$loggedIn = true;
+// Browsing is public — login only required to download/upload/bookmark
+$loggedIn = isLoggedIn();
+$member   = $loggedIn ? getMember() : null;
 
 // Gather filters from GET
 $selGrades   = array_filter($_GET['grades'] ?? [], fn($g) => in_array($g, LIB_GRADES));
@@ -30,8 +27,8 @@ $resources = libGetResources([
     'sort'     => $sort,
 ]);
 
-$isAdmin     = libIsAdmin($member['email']);
-$hasFilters  = $selGrades || $selSubject || $selType || $q || $selTag || $selUploader;
+$isAdmin    = $loggedIn && libIsAdmin($member['email']);
+$hasFilters = $selGrades || $selSubject || $selType || $q || $selTag || $selUploader;
 
 // For uploader filter: get a display name from first result
 $uploaderName = '';
@@ -39,9 +36,9 @@ if ($selUploader && $resources) {
     $uploaderName = $resources[0]['uploader_name'] ?? '';
 }
 
-// Pre-load bookmark state for current user
+// Pre-load bookmark state — only for logged-in members
 $myBookmarks = [];
-if ($resources) {
+if ($loggedIn && $resources) {
     $bmRows = getDB()->prepare(
         "SELECT resource_id FROM library_bookmarks WHERE member_email=?"
     );
@@ -440,10 +437,12 @@ function buildUrl(array $overrides = []): string {
               <?= count($resources) ?> resource<?= count($resources) !== 1 ? 's' : '' ?>
               <?= $hasFilters || $q ? '— <a href="library.php" style="color:var(--gray-400);font-size:.9em;">clear filters</a>' : '' ?>
             </p>
+            <?php if ($loggedIn): ?>
             <a href="library-saved.php" style="font-size:.8rem;color:var(--primary);font-weight:600;text-decoration:none;display:flex;align-items:center;gap:.3rem;">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
               Saved
             </a>
+            <?php endif; ?>
           </div>
 
           <?php if (empty($resources)): ?>
@@ -464,7 +463,8 @@ function buildUrl(array $overrides = []): string {
                 $bookmarked  = !empty($myBookmarks[$r['id']]);
               ?>
               <div class="lib-card" style="position:relative;">
-                <!-- Bookmark button -->
+                <!-- Bookmark button — members only -->
+                <?php if ($loggedIn): ?>
                 <button class="lib-bm-btn" data-id="<?= $r['id'] ?>"
                         title="<?= $bookmarked ? 'Remove bookmark' : 'Save for later' ?>"
                         aria-label="<?= $bookmarked ? 'Remove bookmark' : 'Save for later' ?>"
@@ -477,6 +477,7 @@ function buildUrl(array $overrides = []): string {
                     <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                   </svg>
                 </button>
+                <?php endif; ?>
 
                 <a href="library-resource.php?id=<?= $r['id'] ?>" class="lib-card-link" style="display:flex;flex-direction:column;flex:1;color:inherit;text-decoration:none;">
                   <div class="lib-card-top">
