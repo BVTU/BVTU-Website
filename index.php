@@ -120,6 +120,15 @@ $member   = $loggedIn ? getMember() : null;
           <span class="card-arrow">BCTF info →</span>
         </a>
 
+        <a href="library.php" class="card">
+          <div class="card-icon">
+            <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          </div>
+          <h3>Resource Library</h3>
+          <p>Lesson plans, unit plans, rubrics, and activities shared by BVTU teachers.</p>
+          <span class="card-arrow">Browse resources →</span>
+        </a>
+
       </div>
     </div>
   </section>
