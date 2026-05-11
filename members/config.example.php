@@ -25,6 +25,10 @@ define('SESSION_SECRET', 'change-this-to-a-long-random-string-xyz');
 // Set to the president's or treasurer's email.
 // define('PROD_ADMIN_EMAIL', 'your-email@bctf.ca');
 
+// ── Mailchimp (Newsletter Archive) ───────────────────────────────────────────
+// API key from Mailchimp → Account → Extras → API Keys
+// define('MC_API_KEY', 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-us9');
+
 // ── CA Assistant token monitoring (ca-ask.php) ───────────────────────────────
 // Monthly token budget before an alert email is sent to the union president.
 // Default: 500,000 tokens/month (~$0.50 at Haiku pricing).
