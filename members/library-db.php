@@ -152,11 +152,13 @@ function libGetResources(array $filters = [], bool $adminView = false): array {
     if ($where) $sql .= " WHERE " . implode(" AND ", $where);
 
     $sort = $filters['sort'] ?? 'newest';
-    $sql .= match($sort) {
-        'downloads' => " ORDER BY download_count DESC, created_at DESC",
-        'rating'    => " ORDER BY avg_rating DESC, rating_count DESC, created_at DESC",
-        default     => " ORDER BY created_at DESC",
-    };
+    if ($sort === 'downloads') {
+        $sql .= " ORDER BY download_count DESC, created_at DESC";
+    } elseif ($sort === 'rating') {
+        $sql .= " ORDER BY avg_rating DESC, rating_count DESC, created_at DESC";
+    } else {
+        $sql .= " ORDER BY created_at DESC";
+    }
 
     $s = getDB()->prepare($sql);
     $s->execute($params);

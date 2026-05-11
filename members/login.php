@@ -5,6 +5,13 @@ require_once 'db.php';
 startSession();
 if (isLoggedIn()) { header('Location: dashboard.php'); exit; }
 
+// Safe redirect: only allow relative paths starting with ../ (root-level pages)
+$redirect = '';
+$raw = trim($_GET['redirect'] ?? $_POST['redirect'] ?? '');
+if ($raw && preg_match('#^\.\./[a-zA-Z0-9_\-\./?=&]+$#', $raw)) {
+    $redirect = $raw;
+}
+
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -19,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($member && password_verify($password, $member['password_hash'])) {
             loginMember($member);
-            header('Location: dashboard.php');
+            header('Location: ' . ($redirect ?: 'dashboard.php'));
             exit;
         } else {
             $error = 'Incorrect email or password. Please try again.';
@@ -151,6 +158,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <?php endif; ?>
 
       <form method="POST">
+        <?php if ($redirect): ?>
+          <input type="hidden" name="redirect" value="<?= htmlspecialchars($redirect) ?>">
+        <?php endif; ?>
         <div class="field">
           <label for="email">Email address</label>
           <input type="email" id="email" name="email" required autocomplete="email"

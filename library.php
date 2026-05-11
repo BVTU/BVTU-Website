@@ -1,7 +1,10 @@
 <?php
 require_once __DIR__ . '/members/auth.php';
+if (!isLoggedIn()) {
+    header('Location: members/login.php?redirect=../library.php');
+    exit;
+}
 require_once __DIR__ . '/members/library-db.php';
-requireLogin();
 
 $member   = getMember();
 $loggedIn = true;

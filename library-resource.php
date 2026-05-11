@@ -1,7 +1,11 @@
 <?php
 require_once __DIR__ . '/members/auth.php';
+if (!isLoggedIn()) {
+    $redir = urlencode('library-resource.php?id=' . (int)($_GET['id'] ?? 0));
+    header('Location: members/login.php?redirect=../' . $redir);
+    exit;
+}
 require_once __DIR__ . '/members/library-db.php';
-requireLogin();
 
 $member  = getMember();
 $isAdmin = libIsAdmin($member['email']);
