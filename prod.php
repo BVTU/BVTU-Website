@@ -46,6 +46,7 @@ $member   = $loggedIn ? getMember() : null;
           <li><a href="prod.php" class="active">PRO-D</a></li>
           <li><a href="health-safety.php">Health &amp; Safety</a></li>
           <li><a href="bctf.php">BCTF</a></li>
+          <li><a href="library.php">Library</a></li>
           <li><a href="<?= $loggedIn ? '/members/dashboard.php' : 'members/login.php' ?>"
               class="btn btn-primary"
               style="padding:.4rem .9rem;font-size:.88rem;margin-left:.5rem;<?= $loggedIn ? 'background:#1a6b35;border-color:#1a6b35;' : '' ?>">
@@ -133,6 +134,7 @@ $member   = $loggedIn ? getMember() : null;
           <li><a href="prod.php">PRO-D</a></li>
           <li><a href="health-safety.php">Health &amp; Safety</a></li>
           <li><a href="bctf.php">BCTF</a></li>
+          <li><a href="library.php">Library</a></li>
         </ul>
       </div>
       <div>

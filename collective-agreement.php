@@ -136,6 +136,7 @@ if (is_dir($docsDir)) {
           <li><a href="prod.php">PRO-D</a></li>
           <li><a href="health-safety.php">Health &amp; Safety</a></li>
           <li><a href="bctf.php">BCTF</a></li>
+          <li><a href="library.php">Library</a></li>
           <li><a href="<?= $loggedIn ? '/members/dashboard.php' : 'members/login.php' ?>"
               class="btn btn-primary"
               style="padding:.4rem .9rem;font-size:.88rem;margin-left:.5rem;<?= $loggedIn ? 'background:#1a6b35;border-color:#1a6b35;' : '' ?>">
@@ -225,6 +226,7 @@ if (is_dir($docsDir)) {
         <ul class="footer-nav-list">
           <li><a href="health-safety.php">Health &amp; Safety</a></li>
           <li><a href="bctf.php">BCTF</a></li>
+          <li><a href="library.php">Library</a></li>
           <li><a href="contact.php">Contact Us</a></li>
           <li><a href="members/login.php">Member Login</a></li>
         </ul>
