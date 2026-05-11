@@ -10,22 +10,42 @@ $member   = getMember();
 $loggedIn = true;
 
 // Gather filters from GET
-$selGrades  = array_filter($_GET['grades'] ?? [], fn($g) => in_array($g, LIB_GRADES));
-$selSubject = in_array($_GET['subject'] ?? '', LIB_SUBJECTS) ? $_GET['subject'] : '';
-$selType    = in_array($_GET['type'] ?? '', LIB_TYPES) ? $_GET['type'] : '';
-$q          = trim($_GET['q'] ?? '');
-$sort       = in_array($_GET['sort'] ?? '', ['newest','downloads','rating']) ? $_GET['sort'] : 'newest';
+$selGrades   = array_filter($_GET['grades'] ?? [], fn($g) => in_array($g, LIB_GRADES));
+$selSubject  = in_array($_GET['subject'] ?? '', LIB_SUBJECTS) ? $_GET['subject'] : '';
+$selType     = in_array($_GET['type'] ?? '', LIB_TYPES) ? $_GET['type'] : '';
+$selTag      = trim($_GET['tag'] ?? '');
+$selUploader = trim($_GET['uploader'] ?? '');
+$q           = trim($_GET['q'] ?? '');
+$sort        = in_array($_GET['sort'] ?? '', ['newest','downloads','rating']) ? $_GET['sort'] : 'newest';
 
 $resources = libGetResources([
-    'grades'  => $selGrades,
-    'subject' => $selSubject,
-    'type'    => $selType,
-    'q'       => $q,
-    'sort'    => $sort,
+    'grades'   => $selGrades,
+    'subject'  => $selSubject,
+    'type'     => $selType,
+    'tag'      => $selTag,
+    'uploader' => $selUploader,
+    'q'        => $q,
+    'sort'     => $sort,
 ]);
 
-$isAdmin  = libIsAdmin($member['email']);
-$hasFilters = $selGrades || $selSubject || $selType || $q;
+$isAdmin     = libIsAdmin($member['email']);
+$hasFilters  = $selGrades || $selSubject || $selType || $q || $selTag || $selUploader;
+
+// For uploader filter: get a display name from first result
+$uploaderName = '';
+if ($selUploader && $resources) {
+    $uploaderName = $resources[0]['uploader_name'] ?? '';
+}
+
+// Pre-load bookmark state for current user
+$myBookmarks = [];
+if ($resources) {
+    $bmRows = getDB()->prepare(
+        "SELECT resource_id FROM library_bookmarks WHERE member_email=?"
+    );
+    $bmRows->execute([$member['email']]);
+    foreach ($bmRows->fetchAll() as $bm) $myBookmarks[$bm['resource_id']] = true;
+}
 
 function gradeLabel(string $g): string {
     return $g === 'K' ? 'K' : $g;
@@ -387,10 +407,29 @@ function buildUrl(array $overrides = []): string {
             <button type="submit" class="btn btn-primary" style="padding:.58rem 1rem;font-size:.88rem;">Search</button>
           </form>
 
-          <p class="lib-count">
-            <?= count($resources) ?> resource<?= count($resources) !== 1 ? 's' : '' ?>
-            <?= $hasFilters || $q ? '— <a href="library.php" style="color:var(--gray-400);font-size:.9em;">clear filters</a>' : '' ?>
-          </p>
+          <!-- Context banners for tag/uploader filters -->
+          <?php if ($selUploader && $uploaderName): ?>
+            <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:var(--radius-s);padding:.6rem 1rem;margin-bottom:.75rem;font-size:.88rem;color:#166534;display:flex;align-items:center;justify-content:space-between;">
+              <span>Resources by <strong><?= htmlspecialchars($uploaderName) ?></strong></span>
+              <a href="library.php" style="color:#166534;font-weight:600;font-size:.8rem;">× Clear</a>
+            </div>
+          <?php elseif ($selTag): ?>
+            <div style="background:#e0f2fe;border:1px solid #7dd3fc;border-radius:var(--radius-s);padding:.6rem 1rem;margin-bottom:.75rem;font-size:.88rem;color:#0369a1;display:flex;align-items:center;justify-content:space-between;">
+              <span>Tagged: <strong><?= htmlspecialchars($selTag) ?></strong></span>
+              <a href="library.php" style="color:#0369a1;font-weight:600;font-size:.8rem;">× Clear</a>
+            </div>
+          <?php endif; ?>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;">
+            <p class="lib-count" style="margin:0;">
+              <?= count($resources) ?> resource<?= count($resources) !== 1 ? 's' : '' ?>
+              <?= $hasFilters || $q ? '— <a href="library.php" style="color:var(--gray-400);font-size:.9em;">clear filters</a>' : '' ?>
+            </p>
+            <a href="library-saved.php" style="font-size:.8rem;color:var(--primary);font-weight:600;text-decoration:none;display:flex;align-items:center;gap:.3rem;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+              Saved
+            </a>
+          </div>
 
           <?php if (empty($resources)): ?>
             <div class="lib-empty">
@@ -403,37 +442,69 @@ function buildUrl(array $overrides = []): string {
           <?php else: ?>
             <div class="lib-grid">
               <?php foreach ($resources as $r):
-                $grades  = array_filter(explode(',', $r['grade_levels']));
-                $by      = $r['anonymous'] ? 'Anonymous' : htmlspecialchars($r['uploader_name']);
-                $date    = date('M j, Y', strtotime($r['created_at']));
-                $rating  = (float)$r['avg_rating'];
-                $stars   = $rating > 0 ? str_repeat('★', round($rating)) . str_repeat('☆', 5 - round($rating)) : '';
+                $grades      = array_filter(explode(',', $r['grade_levels']));
+                $tags        = $r['tags'] ? array_slice(array_map('trim', explode(',', $r['tags'])), 0, 3) : [];
+                $rating      = (float)$r['avg_rating'];
+                $stars       = $rating > 0 ? str_repeat('★', (int)round($rating)) . str_repeat('☆', 5 - (int)round($rating)) : '';
+                $bookmarked  = !empty($myBookmarks[$r['id']]);
               ?>
-              <a href="library-resource.php?id=<?= $r['id'] ?>" class="lib-card">
-                <div class="lib-card-top">
-                  <div></div>
-                  <span class="lib-card-type"><?= htmlspecialchars($r['resource_type']) ?></span>
-                </div>
-                <div class="lib-card-title"><?= htmlspecialchars($r['title']) ?></div>
-                <div class="lib-card-desc"><?= htmlspecialchars($r['description']) ?></div>
-                <div class="lib-card-grades">
-                  <?php foreach ($grades as $g): ?>
-                    <span class="lib-grade-badge"><?= gradeLabel($g) ?></span>
-                  <?php endforeach; ?>
-                  <?php if ($r['subject']): ?>
-                    <span class="lib-subject-badge"><?= htmlspecialchars($r['subject']) ?></span>
+              <div class="lib-card" style="position:relative;">
+                <!-- Bookmark button -->
+                <button class="lib-bm-btn" data-id="<?= $r['id'] ?>"
+                        title="<?= $bookmarked ? 'Remove bookmark' : 'Save for later' ?>"
+                        aria-label="<?= $bookmarked ? 'Remove bookmark' : 'Save for later' ?>"
+                        style="position:absolute;top:.55rem;right:.55rem;background:none;border:none;cursor:pointer;padding:.3rem;border-radius:50%;transition:background .15s;z-index:2;"
+                        onmouseover="this.style.background='rgba(0,0,0,.07)'"
+                        onmouseout="this.style.background='none'">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="<?= $bookmarked ? '#f59e0b' : 'none' ?>"
+                       stroke="<?= $bookmarked ? '#f59e0b' : 'var(--gray-300)' ?>" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+                  </svg>
+                </button>
+
+                <a href="library-resource.php?id=<?= $r['id'] ?>" class="lib-card-link" style="display:flex;flex-direction:column;flex:1;color:inherit;text-decoration:none;">
+                  <div class="lib-card-top">
+                    <div></div>
+                    <span class="lib-card-type"><?= htmlspecialchars($r['resource_type']) ?></span>
+                  </div>
+                  <div class="lib-card-title"><?= htmlspecialchars($r['title']) ?></div>
+                  <?php if (!$r['anonymous']): ?>
+                    <div style="font-size:.73rem;color:var(--gray-400);padding:0 1rem .25rem;">
+                      by <a href="library.php?uploader=<?= urlencode($r['uploader_email']) ?>"
+                            style="color:var(--primary);font-weight:600;text-decoration:none;"
+                            onclick="event.stopPropagation();"><?= htmlspecialchars($r['uploader_name']) ?></a>
+                    </div>
                   <?php endif; ?>
-                </div>
-                <div class="lib-card-meta">
-                  <span><?= $by ?></span>
-                  <span>
-                    <?php if ($stars): ?>
-                      <span class="lib-card-rating"><?= $stars ?> <span>(<?= $r['rating_count'] ?>)</span></span>
+                  <div class="lib-card-desc"><?= htmlspecialchars($r['description']) ?></div>
+                  <?php if ($tags): ?>
+                    <div style="display:flex;flex-wrap:wrap;gap:.3rem;padding:0 1rem .5rem;">
+                      <?php foreach ($tags as $tag): ?>
+                        <a href="library.php?tag=<?= urlencode($tag) ?>"
+                           style="font-size:.68rem;background:#e0f2fe;color:#0369a1;padding:.15rem .5rem;border-radius:100px;font-weight:600;text-decoration:none;"
+                           onclick="event.stopPropagation();"><?= htmlspecialchars($tag) ?></a>
+                      <?php endforeach; ?>
+                    </div>
+                  <?php endif; ?>
+                  <div class="lib-card-grades">
+                    <?php foreach ($grades as $g): ?>
+                      <span class="lib-grade-badge"><?= gradeLabel($g) ?></span>
+                    <?php endforeach; ?>
+                    <?php if ($r['subject']): ?>
+                      <span class="lib-subject-badge"><?= htmlspecialchars($r['subject']) ?></span>
                     <?php endif; ?>
-                    &nbsp;↓ <?= $r['download_count'] ?>
-                  </span>
-                </div>
-              </a>
+                  </div>
+                  <div class="lib-card-meta">
+                    <span style="font-size:.73rem;color:var(--gray-400);"><?= date('M Y', strtotime($r['created_at'])) ?></span>
+                    <span>
+                      <?php if ($stars): ?>
+                        <span class="lib-card-rating"><?= $stars ?> <span>(<?= $r['rating_count'] ?>)</span></span>
+                      <?php endif; ?>
+                      &nbsp;↓ <?= $r['download_count'] ?>
+                    </span>
+                  </div>
+                </a>
+              </div>
               <?php endforeach; ?>
             </div>
           <?php endif; ?>
@@ -455,5 +526,29 @@ function buildUrl(array $overrides = []): string {
 
   <script src="js/site.js"></script>
   <script src="js/search.js"></script>
+  <script>
+    // Bookmark toggle on library cards
+    document.querySelectorAll('.lib-bm-btn').forEach(btn => {
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const id  = this.dataset.id;
+        const svg = this.querySelector('svg');
+        fetch('library-bookmark.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'id=' + id,
+        })
+        .then(r => r.json())
+        .then(data => {
+          const c = data.bookmarked ? '#f59e0b' : 'var(--gray-300)';
+          svg.setAttribute('fill',   data.bookmarked ? '#f59e0b' : 'none');
+          svg.setAttribute('stroke', c);
+          this.title     = data.bookmarked ? 'Remove bookmark' : 'Save for later';
+          this.ariaLabel = this.title;
+        });
+      });
+    });
+  </script>
 </body>
 </html>

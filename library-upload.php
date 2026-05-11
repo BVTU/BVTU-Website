@@ -23,6 +23,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['lib_upload'])) {
     $timeReq     = $f('time_required');
     $materials   = $f('materials');
     $anonymous   = isset($_POST['anonymous']);
+    // Tags: sanitise comma-separated list
+    $tags = implode(',', array_map('trim', array_filter(
+        array_map('trim', explode(',', $f('tags'))),
+        fn($t) => strlen($t) >= 2 && strlen($t) <= 40
+    )));
 
     // Validation
     if (!$title)           $error = 'Please enter a title.';
@@ -62,6 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['lib_upload'])) {
                     'bc_curriculum'  => $bcCurric ?: null,
                     'time_required'  => $timeReq ?: null,
                     'materials'      => $materials ?: null,
+                    'tags'           => $tags,
                     'file_name'      => $origName,
                     'file_path'      => $stored,
                     'file_size'      => $file['size'],
@@ -297,6 +303,24 @@ $loggedIn = isLoggedIn();
               </div>
             </div>
 
+            <!-- ── Tags ──────────────────────────────────────── -->
+            <div class="upload-section-label">Tags <span style="font-weight:400;text-transform:none;font-size:.78rem;color:var(--gray-400)">(optional but helpful for search)</span></div>
+            <div class="upload-group">
+              <label class="upload-label" for="ul-tags">
+                Tags
+                <span class="hint">Comma-separated — e.g. fractions, hands-on, inquiry</span>
+              </label>
+              <input type="text" id="ul-tags" name="tags" maxlength="500"
+                placeholder="Add tags…"
+                value="<?= htmlspecialchars($_POST['tags'] ?? '') ?>"
+                autocomplete="off">
+              <div id="tag-chips" style="display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.5rem;min-height:1.5rem;"></div>
+              <div id="tag-suggestions" style="margin-top:.65rem;display:none;">
+                <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin-bottom:.4rem;">Suggested tags — click to add</div>
+                <div id="tag-suggestion-chips" style="display:flex;flex-wrap:wrap;gap:.3rem;"></div>
+              </div>
+            </div>
+
             <div class="upload-section-label">File</div>
 
             <div class="upload-group">
@@ -341,7 +365,7 @@ $loggedIn = isLoggedIn();
   <script src="js/site.js"></script>
   <script src="js/search.js"></script>
   <script>
-    // Show file size/name after selection
+    // File size display
     document.getElementById('ul-file').addEventListener('change', function () {
       const info = document.getElementById('ul-file-info');
       if (this.files[0]) {
@@ -350,6 +374,82 @@ $loggedIn = isLoggedIn();
         info.style.color = this.files[0].size > 20971520 ? '#dc2626' : 'var(--gray-500)';
       }
     });
+
+    // ── Tag chip input + auto-suggestions ─────────────────────
+    const TAG_SUGGESTIONS = <?= json_encode(libGetTagSuggestions()) ?>;
+
+    const tagInput  = document.getElementById('ul-tags');
+    const chipWrap  = document.getElementById('tag-chips');
+    const suggestWrap    = document.getElementById('tag-suggestions');
+    const suggestChips   = document.getElementById('tag-suggestion-chips');
+
+    function getTags() {
+      return tagInput.value.split(',').map(t => t.trim()).filter(Boolean);
+    }
+    function setTags(arr) {
+      tagInput.value = arr.join(', ');
+      renderChips();
+    }
+    function addTag(tag) {
+      tag = tag.trim().toLowerCase();
+      if (!tag) return;
+      const cur = getTags().map(t => t.toLowerCase());
+      if (!cur.includes(tag)) setTags([...getTags(), tag]);
+    }
+    function renderChips() {
+      const tags = getTags();
+      chipWrap.innerHTML = tags.map(t =>
+        `<span style="display:inline-flex;align-items:center;gap:.25rem;background:#0369a1;color:#fff;padding:.18rem .55rem;border-radius:100px;font-size:.72rem;font-weight:600;">
+           ${t}
+           <button type="button" onclick="removeTag('${t.replace(/'/g,"\\'")}'))"
+             style="background:none;border:none;color:#fff;cursor:pointer;font-size:.8rem;padding:0;line-height:1;">×</button>
+         </span>`
+      ).join('');
+    }
+    window.removeTag = function(tag) {
+      setTags(getTags().filter(t => t.toLowerCase() !== tag.toLowerCase()));
+    };
+    tagInput.addEventListener('input', renderChips);
+    tagInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ',') {
+        e.preventDefault();
+        const val = tagInput.value.split(',').pop().trim();
+        if (val) { addTag(val); tagInput.value = getTags().join(', ') + ', '; renderChips(); }
+      }
+    });
+
+    function updateSuggestions() {
+      const subject = document.querySelector('[name=subject]')?.value;
+      const type    = document.querySelector('[name=resource_type]')?.value;
+      const grades  = [...document.querySelectorAll('[name="grades[]"]:checked')].map(c => c.value);
+
+      const seen  = new Set();
+      const suggs = [];
+      if (subject && TAG_SUGGESTIONS.subject[subject]) TAG_SUGGESTIONS.subject[subject].forEach(t => { if (!seen.has(t)) { seen.add(t); suggs.push(t); } });
+      if (type    && TAG_SUGGESTIONS.type[type])       TAG_SUGGESTIONS.type[type]      .forEach(t => { if (!seen.has(t)) { seen.add(t); suggs.push(t); } });
+      grades.slice(0,2).forEach(g => {
+        if (TAG_SUGGESTIONS.grade[g]) TAG_SUGGESTIONS.grade[g].forEach(t => { if (!seen.has(t)) { seen.add(t); suggs.push(t); } });
+      });
+
+      if (suggs.length) {
+        suggestChips.innerHTML = suggs.slice(0, 18).map(t =>
+          `<button type="button" class="tag-sugg" onclick="addTag('${t.replace(/'/g,"\\'")}');renderChips();"
+             style="background:var(--gray-100);border:1px solid var(--border);border-radius:100px;padding:.18rem .55rem;font-size:.72rem;font-weight:600;color:var(--gray-600);cursor:pointer;transition:background .12s,color .12s;"
+             onmouseover="this.style.background='#e0f2fe';this.style.color='#0369a1';"
+             onmouseout="this.style.background='';this.style.color='';">${t}</button>`
+        ).join('');
+        suggestWrap.style.display = 'block';
+      } else {
+        suggestWrap.style.display = 'none';
+      }
+    }
+
+    document.querySelectorAll('[name=subject],[name=resource_type],[name="grades[]"]').forEach(el => {
+      el.addEventListener('change', updateSuggestions);
+    });
+    // Render on load if form was re-submitted with errors
+    renderChips();
+    updateSuggestions();
   </script>
 </body>
 </html>

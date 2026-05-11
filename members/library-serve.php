@@ -23,7 +23,12 @@ if (!file_exists($filePath)) {
     exit('File not found on server.');
 }
 
-libIncrementDownload($id);
+$isPreview = isset($_GET['preview']);
+
+// Only count as a download when actually downloading (not previewing)
+if (!$isPreview) {
+    libIncrementDownload($id);
+}
 
 $ext      = strtolower($resource['file_ext']);
 $mimeMap  = [
@@ -36,9 +41,13 @@ $mime = $mimeMap[$ext] ?? 'application/octet-stream';
 // Sanitise the download filename
 $safeFileName = preg_replace('/[^A-Za-z0-9._\- ]/', '_', $resource['file_name']);
 
+// Preview mode: inline display for PDF.js; download mode: force save
+$disposition = $isPreview ? 'inline' : 'attachment';
+
 header('Content-Type: ' . $mime);
-header('Content-Disposition: attachment; filename="' . $safeFileName . '"');
+header('Content-Disposition: ' . $disposition . '; filename="' . $safeFileName . '"');
 header('Content-Length: ' . filesize($filePath));
 header('Cache-Control: private, no-cache');
+header('Access-Control-Allow-Origin: ' . (isset($_SERVER['HTTP_HOST']) ? 'https://' . $_SERVER['HTTP_HOST'] : '*'));
 readfile($filePath);
 exit;

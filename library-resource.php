@@ -61,7 +61,10 @@ if (!isset($notFound) && $isAdmin && isset($_GET['action'])) {
 $ratings     = isset($notFound) ? [] : libGetRatings($id);
 $myRating    = isset($notFound) ? null : libGetMemberRating($id, $member['email']);
 $grades      = isset($notFound) ? [] : ($resource['grade_levels'] ? explode(',', $resource['grade_levels']) : []);
+$tags        = isset($notFound) ? [] : ($resource['tags'] ? array_map('trim', explode(',', $resource['tags'])) : []);
+$bookmarked  = isset($notFound) ? false : libIsBookmarked($id, $member['email']);
 $downloadUrl = 'members/library-serve.php?id=' . $id;
+$previewUrl  = 'members/library-serve.php?id=' . $id . '&preview=1';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -505,7 +508,12 @@ $downloadUrl = 'members/library-serve.php?id=' . $id;
                   <?php if ($resource['anonymous']): ?>
                     Anonymous Member
                   <?php else: ?>
-                    <?= htmlspecialchars($resource['uploader_name']) ?>
+                    <a href="library.php?uploader=<?= urlencode($resource['uploader_email']) ?>"
+                       style="color:rgba(255,255,255,.9);font-weight:600;text-decoration:none;"
+                       onmouseover="this.style.textDecoration='underline'"
+                       onmouseout="this.style.textDecoration='none'">
+                      <?= htmlspecialchars($resource['uploader_name']) ?>
+                    </a>
                   <?php endif; ?>
                 </span>
                 <span class="sep">·</span>
@@ -518,6 +526,29 @@ $downloadUrl = 'members/library-serve.php?id=' . $id;
                 <span><?= $resource['download_count'] ?> download<?= $resource['download_count'] !== 1 ? 's' : '' ?></span>
               </div>
             </div>
+
+            <!-- PDF Preview -->
+            <?php if (!isset($notFound) && $resource['file_ext'] === 'pdf'): ?>
+            <div id="pdf-preview-wrap" style="background:#f3f4f6;border-bottom:1.5px solid var(--border);padding:1.25rem;text-align:center;">
+              <div id="pdf-loading" style="font-size:.85rem;color:var(--gray-400);padding:2rem 0;">Loading preview…</div>
+              <canvas id="pdf-canvas" style="max-width:100%;border-radius:4px;box-shadow:0 2px 12px rgba(0,0,0,.15);display:none;"></canvas>
+              <div id="pdf-error" style="display:none;font-size:.83rem;color:var(--gray-400);padding:1.5rem 0;">
+                Preview unavailable — <a href="<?= $downloadUrl ?>" style="color:var(--primary);font-weight:600;">download the file</a> to view it.
+              </div>
+              <p style="font-size:.72rem;color:var(--gray-400);margin-top:.65rem;margin-bottom:0;">Page 1 preview · <a href="<?= $downloadUrl ?>" style="color:var(--primary);font-weight:600;">Download full file</a></p>
+            </div>
+            <?php elseif (!isset($notFound) && in_array($resource['file_ext'], ['docx','pptx'])): ?>
+            <div style="background:#f3f4f6;border-bottom:1.5px solid var(--border);padding:2rem;text-align:center;">
+              <?php $icon = $resource['file_ext'] === 'pptx' ? '🟧' : '🟦'; ?>
+              <div style="font-size:2.5rem;margin-bottom:.5rem;"><?= $icon ?></div>
+              <div style="font-size:.88rem;font-weight:700;color:var(--text);margin-bottom:.25rem;"><?= strtoupper($resource['file_ext']) ?> Document</div>
+              <div style="font-size:.78rem;color:var(--gray-400);margin-bottom:.85rem;">Preview not available for this file type</div>
+              <a href="<?= $downloadUrl ?>" class="download-btn" style="display:inline-flex;width:auto;padding:.55rem 1.25rem;font-size:.85rem;">
+                <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Download to view
+              </a>
+            </div>
+            <?php endif; ?>
 
             <!-- Body -->
             <div class="res-body">
@@ -540,6 +571,21 @@ $downloadUrl = 'members/library-serve.php?id=' . $id;
                   <?php endif; ?>
                 </div>
               </div>
+
+              <!-- Keywords/tags -->
+              <?php if ($tags): ?>
+              <div class="res-section">
+                <div class="res-section-title">Tags</div>
+                <div class="res-tag-row">
+                  <?php foreach ($tags as $tag): ?>
+                    <a href="library.php?tag=<?= urlencode($tag) ?>"
+                       style="font-size:.78rem;font-weight:600;padding:.25rem .65rem;border-radius:100px;background:#e0f2fe;color:#0369a1;text-decoration:none;transition:background .12s;"
+                       onmouseover="this.style.background='#bae6fd'"
+                       onmouseout="this.style.background='#e0f2fe'"><?= htmlspecialchars($tag) ?></a>
+                  <?php endforeach; ?>
+                </div>
+              </div>
+              <?php endif; ?>
 
               <!-- Optional fields -->
               <?php $hasOptional = $resource['bc_curriculum'] || $resource['time_required'] || $resource['materials']; ?>
@@ -650,6 +696,17 @@ $downloadUrl = 'members/library-serve.php?id=' . $id;
               <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               Download <?= strtoupper($resource['file_ext']) ?>
             </a>
+            <!-- Bookmark toggle -->
+            <button id="bm-btn" data-id="<?= $id ?>" data-state="<?= $bookmarked ? '1' : '0' ?>"
+                    style="display:flex;align-items:center;justify-content:center;gap:.4rem;width:100%;margin-top:.6rem;padding:.55rem;background:none;border:1.5px solid var(--border);border-radius:var(--radius-s);font-size:.83rem;font-weight:600;color:var(--gray-600);cursor:pointer;transition:border-color .15s,color .15s;">
+              <svg id="bm-icon" width="15" height="15" viewBox="0 0 24 24"
+                   fill="<?= $bookmarked ? '#f59e0b' : 'none' ?>"
+                   stroke="<?= $bookmarked ? '#f59e0b' : 'currentColor' ?>"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+              </svg>
+              <span id="bm-label"><?= $bookmarked ? 'Saved' : 'Save for later' ?></span>
+            </button>
             <div class="res-stat-row">
               <div>Size</div>
               <span><?= libFormatSize($resource['file_size']) ?></span>
@@ -751,11 +808,70 @@ $downloadUrl = 'members/library-serve.php?id=' . $id;
   </footer>
 
   <script src="js/site.js"></script>
+
+  <?php if (!isset($notFound) && $resource['file_ext'] === 'pdf'): ?>
+  <!-- PDF.js preview -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    const pdfUrl     = '<?= $previewUrl ?>';
+    const canvas     = document.getElementById('pdf-canvas');
+    const loading    = document.getElementById('pdf-loading');
+    const errEl      = document.getElementById('pdf-error');
+
+    pdfjsLib.getDocument(pdfUrl).promise.then(pdf => {
+      return pdf.getPage(1);
+    }).then(page => {
+      const wrap      = document.getElementById('pdf-preview-wrap');
+      const maxWidth  = wrap.clientWidth - 40; // padding
+      const viewport0 = page.getViewport({ scale: 1 });
+      const scale     = Math.min(1.5, maxWidth / viewport0.width);
+      const viewport  = page.getViewport({ scale });
+
+      canvas.width  = viewport.width;
+      canvas.height = viewport.height;
+
+      return page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    }).then(() => {
+      loading.style.display = 'none';
+      canvas.style.display  = 'block';
+    }).catch(() => {
+      loading.style.display = 'none';
+      errEl.style.display   = 'block';
+    });
+  </script>
+  <?php endif; ?>
+
   <script>
     // Close flag modal on overlay click
     document.getElementById('flagModal')?.addEventListener('click', function(e) {
       if (e.target === this) this.classList.remove('open');
     });
+
+    // Bookmark toggle
+    const bmBtn = document.getElementById('bm-btn');
+    if (bmBtn) {
+      bmBtn.addEventListener('click', function() {
+        fetch('library-bookmark.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'id=' + this.dataset.id,
+        })
+        .then(r => r.json())
+        .then(data => {
+          const icon  = document.getElementById('bm-icon');
+          const label = document.getElementById('bm-label');
+          const c     = data.bookmarked ? '#f59e0b' : 'currentColor';
+          icon.setAttribute('fill',   data.bookmarked ? '#f59e0b' : 'none');
+          icon.setAttribute('stroke', c);
+          label.textContent = data.bookmarked ? 'Saved' : 'Save for later';
+          bmBtn.style.borderColor = data.bookmarked ? '#f59e0b' : '';
+          bmBtn.style.color       = data.bookmarked ? '#f59e0b' : '';
+        });
+      });
+    }
   </script>
 </body>
 </html>

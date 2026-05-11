@@ -72,6 +72,25 @@ function libEnsureTables(): void {
         INDEX idx_resource (resource_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+    $db->exec("CREATE TABLE IF NOT EXISTS library_bookmarks (
+        id           INT AUTO_INCREMENT PRIMARY KEY,
+        member_email VARCHAR(255) NOT NULL,
+        resource_id  INT NOT NULL,
+        created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_bookmark (member_email, resource_id),
+        INDEX idx_bm_member   (member_email),
+        INDEX idx_bm_resource (resource_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // Migrations for existing tables
+    try { $db->exec("ALTER TABLE library_resources ADD COLUMN tags VARCHAR(500) NOT NULL DEFAULT ''"); } catch (\PDOException $e) {}
+
+    // FULLTEXT index — check before adding to avoid repeated attempts
+    $ftExists = $db->query("SHOW INDEX FROM library_resources WHERE Key_name = 'ft_search'")->fetch();
+    if (!$ftExists) {
+        try { $db->exec("ALTER TABLE library_resources ADD FULLTEXT INDEX ft_search (title, description, tags, bc_curriculum)"); } catch (\PDOException $e) {}
+    }
+
     // Ensure upload directory exists and is web-inaccessible
     if (!is_dir(LIB_UPLOAD_DIR)) mkdir(LIB_UPLOAD_DIR, 0750, true);
     $htaccess = LIB_UPLOAD_DIR . '.htaccess';
@@ -84,14 +103,15 @@ function libSaveResource(array $d): int {
     $s = getDB()->prepare("INSERT INTO library_resources
         (uploader_email, uploader_name, anonymous, title, description,
          grade_levels, subject, resource_type, bc_curriculum, time_required,
-         materials, file_name, file_path, file_size, file_ext)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+         materials, tags, file_name, file_path, file_size, file_ext)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
     $s->execute([
         $d['uploader_email'], $d['uploader_name'], $d['anonymous'] ? 1 : 0,
         $d['title'], $d['description'],
         $d['grade_levels'], $d['subject'], $d['resource_type'],
         $d['bc_curriculum'] ?? null, $d['time_required'] ?? null,
         $d['materials'] ?? null,
+        $d['tags'] ?? '',
         $d['file_name'], $d['file_path'], $d['file_size'], $d['file_ext'],
     ]);
     return (int)getDB()->lastInsertId();
@@ -106,15 +126,19 @@ function libGetResource(int $id): ?array {
 
 /**
  * Returns filtered, sorted resources.
- * $filters keys: grades (array), subject, type, q (search), sort, status
+ * $filters keys: grades (array), subject, type, tag, uploader (email),
+ *                q (search), sort, status
  */
 function libGetResources(array $filters = [], bool $adminView = false): array {
     libEnsureTables();
-    $where  = [];
-    $params = [];
+    $where       = [];
+    $params      = [];
+    $useFulltext = false;
+    $ftScoreExpr = '';
+    $ftParams    = [];
 
     if (!$adminView) {
-        $where[]  = "status = 'published'";
+        $where[] = "status = 'published'";
     } elseif (!empty($filters['status'])) {
         $where[]  = "status = ?";
         $params[] = $filters['status'];
@@ -140,19 +164,54 @@ function libGetResources(array $filters = [], bool $adminView = false): array {
         $params[] = $filters['type'];
     }
 
-    // Keyword search across title and description
-    if (!empty($filters['q'])) {
-        $where[]  = "(title LIKE ? OR description LIKE ?)";
-        $term     = '%' . $filters['q'] . '%';
-        $params[] = $term;
-        $params[] = $term;
+    // Tag filter
+    if (!empty($filters['tag'])) {
+        $where[]  = "FIND_IN_SET(?, tags)";
+        $params[] = trim($filters['tag']);
     }
 
-    $sql = "SELECT * FROM library_resources";
+    // Uploader filter (non-anonymous only)
+    if (!empty($filters['uploader'])) {
+        $where[]  = "uploader_email = ? AND anonymous = 0";
+        $params[] = $filters['uploader'];
+    }
+
+    // Keyword search — FULLTEXT if index exists, LIKE fallback
+    if (!empty($filters['q'])) {
+        $q = trim($filters['q']);
+        static $hasFT = null;
+        if ($hasFT === null) {
+            $hasFT = (bool) getDB()->query("SHOW INDEX FROM library_resources WHERE Key_name = 'ft_search'")->fetch();
+        }
+        if ($hasFT) {
+            // Boolean mode: each word becomes +word*, ensuring all words present
+            $words = array_values(array_filter(array_map('trim', preg_split('/\s+/', preg_replace('/[+\-><\(\)~*"@]+/', ' ', $q)))));
+            if ($words) {
+                $ftq = implode(' ', array_map(fn($w) => '+' . $w . '*', $words));
+                $where[]       = "MATCH(title, description, tags, bc_curriculum) AGAINST(? IN BOOLEAN MODE)";
+                $params[]      = $ftq;
+                $ftScoreExpr   = ", MATCH(title, description, tags, bc_curriculum) AGAINST(? IN BOOLEAN MODE) AS _score";
+                $ftParams      = [$ftq];
+                $useFulltext   = true;
+            }
+        } else {
+            // LIKE fallback across all text fields
+            $term     = '%' . $q . '%';
+            $where[]  = "(title LIKE ? OR description LIKE ? OR tags LIKE ? OR bc_curriculum LIKE ? OR uploader_name LIKE ?)";
+            $params   = array_merge($params, [$term, $term, $term, $term, $term]);
+        }
+    }
+
+    // Build SELECT — prepend FT score params so they bind to the SELECT clause
+    $sql    = "SELECT *" . $ftScoreExpr . " FROM library_resources";
+    $allParams = array_merge($ftParams, $params);
+
     if ($where) $sql .= " WHERE " . implode(" AND ", $where);
 
     $sort = $filters['sort'] ?? 'newest';
-    if ($sort === 'downloads') {
+    if ($useFulltext && $sort === 'newest') {
+        $sql .= " ORDER BY _score DESC, created_at DESC";
+    } elseif ($sort === 'downloads') {
         $sql .= " ORDER BY download_count DESC, created_at DESC";
     } elseif ($sort === 'rating') {
         $sql .= " ORDER BY avg_rating DESC, rating_count DESC, created_at DESC";
@@ -161,7 +220,7 @@ function libGetResources(array $filters = [], bool $adminView = false): array {
     }
 
     $s = getDB()->prepare($sql);
-    $s->execute($params);
+    $s->execute($allParams);
     return $s->fetchAll();
 }
 
@@ -177,8 +236,9 @@ function libDelete(int $id): void {
         if (file_exists($path)) @unlink($path);
     }
     $db = getDB();
-    $db->prepare("DELETE FROM library_ratings WHERE resource_id=?")->execute([$id]);
-    $db->prepare("DELETE FROM library_flags  WHERE resource_id=?")->execute([$id]);
+    $db->prepare("DELETE FROM library_ratings    WHERE resource_id=?")->execute([$id]);
+    $db->prepare("DELETE FROM library_flags     WHERE resource_id=?")->execute([$id]);
+    $db->prepare("DELETE FROM library_bookmarks WHERE resource_id=?")->execute([$id]);
     $db->prepare("DELETE FROM library_resources WHERE id=?")->execute([$id]);
 }
 
@@ -298,4 +358,80 @@ Bulkley Valley Teachers' Union
 TEXT;
     $headers = "From: BVTU <noreply@bvtu.ca>\r\nReply-To: lp54@bctf.ca\r\nContent-Type: text/plain; charset=UTF-8";
     @mail($resource['uploader_email'], "New rating on \"{$title}\" — BVTU Library", $body, $headers);
+}
+
+// ── Bookmarks ─────────────────────────────────────────────────────────────────
+function libToggleBookmark(int $resourceId, string $email): bool {
+    libEnsureTables();
+    $db = getDB();
+    $s  = $db->prepare("SELECT id FROM library_bookmarks WHERE resource_id=? AND member_email=?");
+    $s->execute([$resourceId, $email]);
+    if ($s->fetch()) {
+        $db->prepare("DELETE FROM library_bookmarks WHERE resource_id=? AND member_email=?")->execute([$resourceId, $email]);
+        return false; // removed
+    }
+    $db->prepare("INSERT INTO library_bookmarks (resource_id, member_email) VALUES (?,?)")->execute([$resourceId, $email]);
+    return true; // added
+}
+
+function libIsBookmarked(int $resourceId, string $email): bool {
+    $s = getDB()->prepare("SELECT id FROM library_bookmarks WHERE resource_id=? AND member_email=?");
+    $s->execute([$resourceId, $email]);
+    return (bool) $s->fetch();
+}
+
+function libGetBookmarks(string $email): array {
+    libEnsureTables();
+    $s = getDB()->prepare(
+        "SELECT r.* FROM library_resources r
+         JOIN library_bookmarks b ON b.resource_id = r.id
+         WHERE b.member_email = ? AND r.status = 'published'
+         ORDER BY b.created_at DESC"
+    );
+    $s->execute([$email]);
+    return $s->fetchAll();
+}
+
+// ── Tags ──────────────────────────────────────────────────────────────────────
+/**
+ * Returns suggested tags based on subject, type, and grades.
+ * Used by the upload form to help lazy taggers.
+ */
+function libGetTagSuggestions(): array {
+    return [
+        'subject' => [
+            'Math'           => ['counting','number sense','place value','addition','subtraction',
+                                 'multiplication','division','fractions','decimals','algebra',
+                                 'geometry','measurement','statistics','patterns','integers','ratios'],
+            'ELA'            => ['reading','writing','phonics','grammar','comprehension',
+                                 'vocabulary','oral language','spelling','poetry','media literacy'],
+            'Science'        => ['inquiry','life science','physical science','earth science',
+                                 'experiments','organisms','ecosystems','matter','energy','forces'],
+            'Social Studies' => ['community','history','geography','culture','first nations',
+                                 'reconciliation','local history','government','economics','citizenship'],
+            'Arts'           => ['visual art','drama','music','dance','drawing','painting',
+                                 'sculpture','performance','creative expression'],
+            'PE'             => ['fitness','games','movement','cooperation','health','teamwork',
+                                 'outdoor education','wellness','sport','dance'],
+            'Other'          => ['cross-curricular','project-based','ADST','career education','life skills'],
+        ],
+        'type' => [
+            'Lesson Plan'  => ['direct instruction','inquiry-based','differentiated','centres'],
+            'Unit Plan'    => ['big ideas','cross-curricular','long-range planning','inquiry'],
+            'Rubric'       => ['self-assessment','peer assessment','criteria','performance standards'],
+            'Activity'     => ['hands-on','group work','independent practice','game','outdoor'],
+            'Assessment'   => ['formative','summative','portfolio','checklist','observation'],
+            'Other'        => ['template','parent communication','classroom management'],
+        ],
+        'grade' => [
+            'K'  => ['kindergarten','early learning','play-based','emergent'],
+            '1'  => ['grade 1','primary'],
+            '2'  => ['grade 2','primary'],
+            '3'  => ['grade 3','primary','intermediate'],
+            '4'  => ['grade 4','intermediate'],
+            '5'  => ['grade 5','intermediate'],
+            '6'  => ['grade 6','intermediate'],
+            '7'  => ['grade 7','intermediate','middle school'],
+        ],
+    ];
 }
