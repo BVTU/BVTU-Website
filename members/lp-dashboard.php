@@ -138,6 +138,12 @@ $grantSumJson      = json_encode(array_values($grantSum));
 <body>
 <div class="wrap">
 
+  <?php if (($_GET['deleted'] ?? '') === '1'): ?>
+  <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;font-size:.88rem;color:#dc2626;font-weight:600;">
+    Draft voucher deleted.
+  </div>
+  <?php endif; ?>
+
   <div class="portal-header">
     <div>
       <h1>LP Expense Tracker</h1>
@@ -212,23 +218,31 @@ $grantSumJson      = json_encode(array_values($grantSum));
   <?php else: ?>
   <div class="voucher-list">
     <?php foreach ($vouchers as $v): ?>
-    <a href="lp-voucher-view.php?id=<?= $v['id'] ?>" class="voucher-card">
-      <div class="voucher-info">
-        <div class="title">
-          <?php if ($v['voucher_number']): ?>#<?= htmlspecialchars($v['voucher_number']) ?> — <?php endif; ?>
-          <?= htmlspecialchars($v['name']) ?>
+    <div class="voucher-card" style="cursor:default;">
+      <a href="lp-voucher-view.php?id=<?= $v['id'] ?>" class="voucher-card-link" style="display:flex;flex:1;align-items:center;gap:1rem;flex-wrap:wrap;text-decoration:none;color:inherit;min-width:0;">
+        <div class="voucher-info">
+          <div class="title">
+            <?php if ($v['voucher_number']): ?>#<?= htmlspecialchars($v['voucher_number']) ?> — <?php endif; ?>
+            <?= htmlspecialchars($v['name']) ?>
+          </div>
+          <div class="meta">
+            <?= htmlspecialchars($v['submitted_by']) ?>
+            · <?= $v['expense_count'] ?> expense<?= $v['expense_count'] != 1 ? 's' : '' ?>
+            · <?= date('M j, Y', strtotime($v['created_at'])) ?>
+          </div>
         </div>
-        <div class="meta">
-          <?= htmlspecialchars($v['submitted_by']) ?>
-          · <?= $v['expense_count'] ?> expense<?= $v['expense_count'] != 1 ? 's' : '' ?>
-          · <?= date('M j, Y', strtotime($v['created_at'])) ?>
+        <div class="voucher-right">
+          <span class="voucher-total">$<?= number_format($v['total_amount'], 2) ?></span>
+          <span class="status-badge status-<?= $v['status'] ?>"><?= ucfirst($v['status']) ?></span>
         </div>
-      </div>
-      <div class="voucher-right">
-        <span class="voucher-total">$<?= number_format($v['total_amount'], 2) ?></span>
-        <span class="status-badge status-<?= $v['status'] ?>"><?= ucfirst($v['status']) ?></span>
-      </div>
-    </a>
+      </a>
+      <?php if ($v['status'] === 'draft' && $v['submitted_by_email'] === $member['email']): ?>
+      <form method="POST" action="lp-voucher-view.php?id=<?= $v['id'] ?>" style="display:inline;flex-shrink:0;" onsubmit="return confirm('Permanently delete this draft voucher and all its expenses? This cannot be undone.')">
+        <input type="hidden" name="action" value="delete">
+        <button type="submit" class="btn btn-outline" style="padding:.35rem .7rem;font-size:.78rem;color:#dc2626;border-color:#dc2626;">🗑 Delete</button>
+      </form>
+      <?php endif; ?>
+    </div>
     <?php endforeach; ?>
   </div>
   <?php endif; ?>

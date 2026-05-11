@@ -259,6 +259,20 @@ function lpGetExpensesByGrant(int $grantId): array {
     return $s->fetchAll(PDO::FETCH_ASSOC);
 }
 
+function lpDeleteVoucher(int $id): void {
+    $db = getDB();
+    // Delete receipt files from disk first
+    $s = $db->prepare("SELECT receipt_path FROM lp_expenses WHERE voucher_id=? AND receipt_path IS NOT NULL");
+    $s->execute([$id]);
+    foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $path) {
+        if ($path && file_exists(LP_RECEIPTS_DIR . basename($path))) {
+            @unlink(LP_RECEIPTS_DIR . basename($path));
+        }
+    }
+    $db->prepare("DELETE FROM lp_expenses WHERE voucher_id=?")->execute([$id]);
+    $db->prepare("DELETE FROM lp_vouchers WHERE id=?")->execute([$id]);
+}
+
 function lpBudgetSummary(int $year = 0): array {
     if (!$year) $year = lpCurrentYear();
     $lines = lpGetBudgetLines($year);
