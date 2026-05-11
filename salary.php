@@ -116,7 +116,7 @@ $member   = $loggedIn ? getMember() : null;
           <li class="has-dropdown">
             <a href="members.php" class="active">Members</a>
             <ul class="dropdown">
-              <li><a href="members.php">Member Resources</a></li><li><a href="members/prod-dashboard.php">Pro-D Portal</a></li>
+              <li><a href="members.php">Member Resources</a></li>
               <li><a href="benefits.php">Health &amp; Dental</a></li>
               <li><a href="life-insurance.php">Life Insurance</a></li>
               <li><a href="loan-forgiveness.php">Student Loan Forgiveness</a></li>
@@ -127,7 +127,7 @@ $member   = $loggedIn ? getMember() : null;
               <li><a href="collab-grant.php">Collaboration Grant</a></li>
             </ul>
           </li>
-          <li><a href="prod.php">PRO-D</a></li>
+          <li class="has-dropdown"><a href="prod.php">PRO-D</a><ul class="dropdown"><li><a href="prod.php">PRO-D Info</a></li><li><a href="members/prod-dashboard.php">Pro-D Portal</a></li></ul></li>
           <li><a href="health-safety.php">Health &amp; Safety</a></li>
           <li><a href="bctf.php">BCTF</a></li>
           <li><a href="library.php">Resource Library</a></li>
@@ -240,7 +240,7 @@ $member   = $loggedIn ? getMember() : null;
         <ul class="footer-nav-list">
           <li><a href="documents.php">Documents</a></li>
           <li><a href="members.php">Members</a></li>
-          <li><a href="prod.php">PRO-D</a></li>
+          <li class="has-dropdown"><a href="prod.php">PRO-D</a><ul class="dropdown"><li><a href="prod.php">PRO-D Info</a></li><li><a href="members/prod-dashboard.php">Pro-D Portal</a></li></ul></li>
           <li><a href="health-safety.php">Health &amp; Safety</a></li>
           <li><a href="bctf.php">BCTF</a></li>
           <li><a href="library.php">Resource Library</a></li>

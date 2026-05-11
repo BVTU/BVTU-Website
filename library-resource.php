@@ -455,7 +455,7 @@ $loginUrl    = 'members/login.php?redirect=' . urlencode('../library-resource.ph
         <ul>
           <li><a href="documents.php">Documents</a></li>
           <li><a href="members.php">Members</a></li>
-          <li><a href="prod.php">PRO-D</a></li>
+          <li class="has-dropdown"><a href="prod.php">PRO-D</a><ul class="dropdown"><li><a href="prod.php">PRO-D Info</a></li><li><a href="members/prod-dashboard.php">Pro-D Portal</a></li></ul></li>
           <li><a href="health-safety.php">Health &amp; Safety</a></li>
           <li><a href="bctf.php">BCTF</a></li>
           <li><a href="library.php" class="active">Resource Library</a></li>
