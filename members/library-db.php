@@ -377,6 +377,27 @@ function libNormaliseTags(string $raw): string {
  * Returns subjects in the DB that are not in the standard LIB_SUBJECTS list.
  * Used by the filter sidebar to surface teacher-entered custom subjects.
  */
+/**
+ * Returns all unique tags across published resources, most-used first.
+ * Used to power the upload form autocomplete so teachers pick existing
+ * tags rather than accidentally creating misspelled duplicates.
+ */
+function libGetAllTags(): array {
+    libEnsureTables();
+    $rows = getDB()->query(
+        "SELECT tags FROM library_resources WHERE tags != '' AND status = 'published'"
+    )->fetchAll(\PDO::FETCH_COLUMN);
+    $counts = [];
+    foreach ($rows as $row) {
+        foreach (explode(',', $row) as $t) {
+            $t = trim($t);
+            if ($t !== '') $counts[$t] = ($counts[$t] ?? 0) + 1;
+        }
+    }
+    arsort($counts);
+    return array_keys($counts);
+}
+
 function libGetCustomSubjects(): array {
     libEnsureTables();
     $known = array_map('strtolower', LIB_SUBJECTS);

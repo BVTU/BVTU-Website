@@ -298,7 +298,7 @@ $stats      = libStats();
         <ul>
           <li><a href="../documents.php">Documents</a></li>
           <li><a href="../members.php">Members</a></li>
-          <li><a href="../library.php">Library</a></li>
+          <li><a href="../library.php">Resource Library</a></li>
           <li><a href="dashboard.php">Dashboard</a></li>
           <li><a href="logout.php">Sign Out</a></li>
         </ul>

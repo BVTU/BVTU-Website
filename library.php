@@ -307,7 +307,7 @@ function buildUrl(array $overrides = []): string {
           <li class="has-dropdown"><a href="members.php">Members</a><ul class="dropdown"><li><a href="members.php">Member Resources</a></li><li><a href="benefits.php">Health &amp; Dental</a></li><li><a href="life-insurance.php">Life Insurance</a></li><li><a href="loan-forgiveness.php">Student Loan Forgiveness</a></li><li><a href="salary.php">Salary Grids</a></li><li><a href="ttoc.php">TTOC Resources</a></li><li><a href="atrieve.php">Release Time / Atrieve</a></li><li><a href="remedy-tracker.php">Remedy Tracker</a></li><li><a href="collab-grant.php">Collaboration Grant</a></li></ul></li>
           <li><a href="prod.php">PRO-D</a></li>
           <li><a href="health-safety.php">Health &amp; Safety</a></li>
-          <li><a href="library.php" class="active">Library</a></li>
+          <li><a href="library.php" class="active">Resource Library</a></li>
           <li><a href="bctf.php">BCTF</a></li>
           <li><a href="/members/dashboard.php" class="btn btn-primary" style="padding:.4rem .9rem;font-size:.88rem;margin-left:.5rem;background:#1a6b35;border-color:#1a6b35;">My Dashboard</a></li>
         </ul>

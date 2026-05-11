@@ -183,7 +183,7 @@ $loggedIn = isLoggedIn();
           <li class="has-dropdown"><a href="members.php">Members</a><ul class="dropdown"><li><a href="members.php">Member Resources</a></li><li><a href="benefits.php">Health &amp; Dental</a></li><li><a href="life-insurance.php">Life Insurance</a></li><li><a href="loan-forgiveness.php">Student Loan Forgiveness</a></li><li><a href="salary.php">Salary Grids</a></li><li><a href="ttoc.php">TTOC Resources</a></li><li><a href="atrieve.php">Release Time / Atrieve</a></li><li><a href="remedy-tracker.php">Remedy Tracker</a></li><li><a href="collab-grant.php">Collaboration Grant</a></li></ul></li>
           <li><a href="prod.php">PRO-D</a></li>
           <li><a href="health-safety.php">Health &amp; Safety</a></li>
-          <li><a href="library.php" class="active">Library</a></li>
+          <li><a href="library.php" class="active">Resource Library</a></li>
           <li><a href="bctf.php">BCTF</a></li>
           <li><a href="<?= $loggedIn ? '/members/dashboard.php' : 'members/login.php' ?>" class="btn btn-primary" style="padding:.4rem .9rem;font-size:.88rem;margin-left:.5rem;<?= $loggedIn ? 'background:#1a6b35;border-color:#1a6b35;' : '' ?>"><?= $loggedIn ? 'My Dashboard' : 'Member Login' ?></a></li>
         </ul>
@@ -325,10 +325,15 @@ $loggedIn = isLoggedIn();
                 Tags
                 <span class="hint">Comma-separated — e.g. fractions, hands-on, inquiry</span>
               </label>
-              <input type="text" id="ul-tags" name="tags" maxlength="500"
-                placeholder="Add tags…"
-                value="<?= htmlspecialchars($_POST['tags'] ?? '') ?>"
-                autocomplete="off">
+              <div style="position:relative;">
+                <input type="text" id="ul-tags" name="tags" maxlength="500"
+                  placeholder="Type a tag and press comma or Enter…"
+                  value="<?= htmlspecialchars($_POST['tags'] ?? '') ?>"
+                  autocomplete="off" spellcheck="true"
+                  style="padding-right:2rem;">
+                <div id="tag-ac-dropdown"
+                     style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--primary);border-top:none;border-radius:0 0 var(--radius-s) var(--radius-s);box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:50;max-height:180px;overflow-y:auto;"></div>
+              </div>
               <div id="tag-chips" style="display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.5rem;min-height:1.5rem;"></div>
               <div id="tag-suggestions" style="margin-top:.65rem;display:none;">
                 <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin-bottom:.4rem;">Suggested tags — click to add</div>
@@ -390,6 +395,9 @@ $loggedIn = isLoggedIn();
       }
     });
 
+    // ── Existing tags from DB (for autocomplete) ──────────────
+    const EXISTING_TAGS = <?= json_encode(libGetAllTags()) ?>;
+
     // ── Tag chip input + auto-suggestions ─────────────────────
     const TAG_SUGGESTIONS = <?= json_encode(libGetTagSuggestions()) ?>;
 
@@ -424,14 +432,69 @@ $loggedIn = isLoggedIn();
     window.removeTag = function(tag) {
       setTags(getTags().filter(t => t.toLowerCase() !== tag.toLowerCase()));
     };
-    tagInput.addEventListener('input', renderChips);
+    const acDropdown = document.getElementById('tag-ac-dropdown');
+
+    function currentPartial() {
+      const parts = tagInput.value.split(',');
+      return parts[parts.length - 1].trim().toLowerCase();
+    }
+    function commitPartial(val) {
+      const parts = tagInput.value.split(',');
+      parts[parts.length - 1] = ' ' + val;
+      tagInput.value = parts.join(',') + ', ';
+      addTag(val);
+      renderChips();
+      closeAC();
+    }
+    function closeAC() { acDropdown.style.display = 'none'; acDropdown.innerHTML = ''; }
+    function showAC(matches) {
+      if (!matches.length) { closeAC(); return; }
+      acDropdown.innerHTML = matches.slice(0, 8).map(m =>
+        `<div class="ac-item" style="padding:.5rem .85rem;font-size:.85rem;cursor:pointer;color:var(--text);"
+              onmousedown="event.preventDefault();"
+              onclick="window._acPick('${m.replace(/'/g,"\\'")}')">
+           ${m}
+         </div>`
+      ).join('');
+      acDropdown.style.display = 'block';
+    }
+    window._acPick = function(val) { commitPartial(val); tagInput.focus(); };
+
+    // Hover highlight for dropdown items
+    acDropdown.addEventListener('mouseover', e => {
+      if (e.target.classList.contains('ac-item')) {
+        acDropdown.querySelectorAll('.ac-item').forEach(el => el.style.background = '');
+        e.target.style.background = 'var(--accent)';
+      }
+    });
+
+    tagInput.addEventListener('input', function() {
+      renderChips();
+      const partial = currentPartial();
+      if (partial.length < 2) { closeAC(); return; }
+      const matches = EXISTING_TAGS.filter(t => t.startsWith(partial) && !getTags().includes(t));
+      showAC(matches);
+    });
     tagInput.addEventListener('keydown', e => {
       if (e.key === 'Enter' || e.key === ',') {
         e.preventDefault();
-        const val = tagInput.value.split(',').pop().trim();
-        if (val) { addTag(val); tagInput.value = getTags().join(', ') + ', '; renderChips(); }
+        // If dropdown is open and has items, pick first
+        const first = acDropdown.querySelector('.ac-item');
+        if (first && acDropdown.style.display !== 'none') {
+          window._acPick(first.textContent.trim());
+        } else {
+          const val = currentPartial();
+          if (val) { commitPartial(val); }
+        }
+      }
+      if (e.key === 'Escape') closeAC();
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const items = [...acDropdown.querySelectorAll('.ac-item')];
+        if (items.length) items[0].focus();
       }
     });
+    tagInput.addEventListener('blur', () => setTimeout(closeAC, 150));
 
     function updateSuggestions() {
       const subject = document.querySelector('[name=subject]')?.value;

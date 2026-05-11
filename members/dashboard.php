@@ -72,7 +72,7 @@ $welcome = isset($_GET['welcome']);
           <li><a href="../prod.php">PRO-D</a></li>
           <li><a href="../health-safety.php">Health &amp; Safety</a></li>
           <li><a href="../bctf.php">BCTF</a></li>
-          <li><a href="../library.php">Library</a></li>
+          <li><a href="../library.php">Resource Library</a></li>
           <li><a href="logout.php">Sign Out</a></li>
         </ul>
       </nav>
