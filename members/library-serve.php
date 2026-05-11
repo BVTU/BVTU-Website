@@ -7,7 +7,8 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/library-db.php';
 requireLogin();
 
-$id       = (int)($_GET['id'] ?? 0);
+$id       = (int)($_GET['id']   ?? 0);
+$fileId   = (int)($_GET['file'] ?? 0);   // optional: secondary file id
 $member   = getMember();
 $resource = $id ? libGetResource($id) : null;
 
@@ -17,29 +18,39 @@ if (!$resource || ($resource['status'] !== 'published' && !libIsAdmin($member['e
     exit('Resource not found.');
 }
 
-$filePath = LIB_UPLOAD_DIR . $resource['file_path'];
+$isPreview = isset($_GET['preview']);
+
+if ($fileId) {
+    // ── Serve an additional file ──────────────────────────────
+    $fileRow = libGetResourceFile($fileId);
+    if (!$fileRow || (int)$fileRow['resource_id'] !== $id) {
+        http_response_code(404);
+        exit('File not found.');
+    }
+    $filePath     = LIB_UPLOAD_DIR . $fileRow['file_path'];
+    $ext          = strtolower($fileRow['file_ext']);
+    $safeFileName = preg_replace('/[^A-Za-z0-9._\- ]/', '_', $fileRow['file_name']);
+    // Download counter is on the resource, not per-file
+    if (!$isPreview) libIncrementDownload($id);
+} else {
+    // ── Serve the primary file ────────────────────────────────
+    $filePath     = LIB_UPLOAD_DIR . $resource['file_path'];
+    $ext          = strtolower($resource['file_ext']);
+    $safeFileName = preg_replace('/[^A-Za-z0-9._\- ]/', '_', $resource['file_name']);
+    if (!$isPreview) libIncrementDownload($id);
+}
+
 if (!file_exists($filePath)) {
     http_response_code(404);
     exit('File not found on server.');
 }
 
-$isPreview = isset($_GET['preview']);
-
-// Only count as a download when actually downloading (not previewing)
-if (!$isPreview) {
-    libIncrementDownload($id);
-}
-
-$ext      = strtolower($resource['file_ext']);
 $mimeMap  = [
     'pdf'  => 'application/pdf',
     'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'pptx' => 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 ];
 $mime = $mimeMap[$ext] ?? 'application/octet-stream';
-
-// Sanitise the download filename
-$safeFileName = preg_replace('/[^A-Za-z0-9._\- ]/', '_', $resource['file_name']);
 
 // Preview mode: inline display for PDF.js; download mode: force save
 $disposition = $isPreview ? 'inline' : 'attachment';

@@ -109,6 +109,18 @@ function libEnsureTables(): void {
         INDEX idx_bm_resource (resource_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+    // Additional files for multi-file resources
+    $db->exec("CREATE TABLE IF NOT EXISTS library_resource_files (
+        id          INT AUTO_INCREMENT PRIMARY KEY,
+        resource_id INT NOT NULL,
+        file_name   VARCHAR(255) NOT NULL,
+        file_path   VARCHAR(500) NOT NULL,
+        file_size   INT DEFAULT 0,
+        file_ext    VARCHAR(10) DEFAULT '',
+        sort_order  TINYINT DEFAULT 0,
+        INDEX idx_rf_resource (resource_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
     // Migrations for existing tables
     try { $db->exec("ALTER TABLE library_resources ADD COLUMN tags VARCHAR(500) NOT NULL DEFAULT ''"); } catch (\PDOException $e) {}
 
@@ -266,11 +278,45 @@ function libDelete(int $id): void {
         $path = LIB_UPLOAD_DIR . $r['file_path'];
         if (file_exists($path)) @unlink($path);
     }
+    // Delete additional files from disk
+    foreach (libGetResourceFiles($id) as $f) {
+        $path = LIB_UPLOAD_DIR . $f['file_path'];
+        if (file_exists($path)) @unlink($path);
+    }
     $db = getDB();
-    $db->prepare("DELETE FROM library_ratings    WHERE resource_id=?")->execute([$id]);
-    $db->prepare("DELETE FROM library_flags     WHERE resource_id=?")->execute([$id]);
-    $db->prepare("DELETE FROM library_bookmarks WHERE resource_id=?")->execute([$id]);
-    $db->prepare("DELETE FROM library_resources WHERE id=?")->execute([$id]);
+    $db->prepare("DELETE FROM library_resource_files WHERE resource_id=?")->execute([$id]);
+    $db->prepare("DELETE FROM library_ratings        WHERE resource_id=?")->execute([$id]);
+    $db->prepare("DELETE FROM library_flags          WHERE resource_id=?")->execute([$id]);
+    $db->prepare("DELETE FROM library_bookmarks      WHERE resource_id=?")->execute([$id]);
+    $db->prepare("DELETE FROM library_resources      WHERE id=?")->execute([$id]);
+}
+
+// ── Additional files (multi-file resources) ───────────────────────────────────
+function libSaveResourceFiles(int $resourceId, array $files): void {
+    $stmt = getDB()->prepare(
+        "INSERT INTO library_resource_files
+         (resource_id, file_name, file_path, file_size, file_ext, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?)"
+    );
+    foreach ($files as $i => $f) {
+        $stmt->execute([$resourceId, $f['name'], $f['path'], $f['size'], $f['ext'], $i]);
+    }
+}
+
+function libGetResourceFiles(int $resourceId): array {
+    libEnsureTables();
+    $s = getDB()->prepare(
+        "SELECT * FROM library_resource_files
+         WHERE resource_id = ? ORDER BY sort_order, id"
+    );
+    $s->execute([$resourceId]);
+    return $s->fetchAll();
+}
+
+function libGetResourceFile(int $fileId): ?array {
+    $s = getDB()->prepare("SELECT * FROM library_resource_files WHERE id = ?");
+    $s->execute([$fileId]);
+    return $s->fetch() ?: null;
 }
 
 function libIncrementDownload(int $id): void {

@@ -40,26 +40,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['lib_upload'])) {
     elseif (empty($grades))$error = 'Please select at least one grade level.';
     elseif (!$subject || $subject === 'Other') $error = 'Please select a subject (or enter a custom one if you chose Other).';
     elseif (!$type)        $error = 'Please select a resource type.';
-    elseif (empty($_FILES['resource_file']['name'])) $error = 'Please choose a file to upload.';
+    elseif (empty($_FILES['resource_file']['name'][0])) $error = 'Please choose at least one file to upload.';
     else {
-        $file    = $_FILES['resource_file'];
-        $origName = basename($file['name']);
-        $ext     = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+        // Build a normalised array of files from the multi-file input
+        $rawFiles = $_FILES['resource_file'];
+        $fileCount = count($rawFiles['name']);
+        $uploadedFiles = [];
 
-        if ($file['error'] !== UPLOAD_ERR_OK)         $error = 'Upload failed — please try again.';
-        elseif (!in_array($ext, LIB_ALLOWED_EXT))     $error = 'Only PDF, DOCX, and PPTX files are accepted.';
-        elseif ($file['size'] > LIB_MAX_BYTES)        $error = 'File is too large (max 20 MB).';
-        else {
-            // Store under year sub-directory with unique name
-            $year    = date('Y');
-            $dir     = LIB_UPLOAD_DIR . $year . '/';
+        for ($i = 0; $i < $fileCount; $i++) {
+            $origName = basename($rawFiles['name'][$i]);
+            $ext      = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+            $size     = (int)$rawFiles['size'][$i];
+            $err      = (int)$rawFiles['error'][$i];
+
+            if ($err !== UPLOAD_ERR_OK) {
+                $error = "\"$origName\" failed to upload — please try again.";
+                break;
+            }
+            if (!in_array($ext, LIB_ALLOWED_EXT)) {
+                $error = "\"$origName\" is not supported. Only PDF, DOCX, and PPTX are accepted.";
+                break;
+            }
+            if ($size > LIB_MAX_BYTES) {
+                $error = "\"$origName\" exceeds the 20 MB limit.";
+                break;
+            }
+            $uploadedFiles[] = [
+                'orig'     => $origName,
+                'tmp_name' => $rawFiles['tmp_name'][$i],
+                'size'     => $size,
+                'ext'      => $ext,
+            ];
+        }
+
+        if (!$error && !empty($uploadedFiles)) {
+            $year = date('Y');
+            $dir  = LIB_UPLOAD_DIR . $year . '/';
             if (!is_dir($dir)) mkdir($dir, 0750, true);
-            $stored  = $year . '/' . uniqid('lib_', true) . '.' . $ext;
-            $dest    = LIB_UPLOAD_DIR . $stored;
 
-            if (!move_uploaded_file($file['tmp_name'], $dest)) {
-                $error = 'Could not save the file. Please contact the admin.';
-            } else {
+            // Move all files to permanent storage
+            $movedFiles = [];
+            foreach ($uploadedFiles as $f) {
+                $stored = $year . '/' . uniqid('lib_', true) . '.' . $f['ext'];
+                $dest   = LIB_UPLOAD_DIR . $stored;
+                if (!move_uploaded_file($f['tmp_name'], $dest)) {
+                    $error = "Could not save \"{$f['orig']}\". Please contact the admin.";
+                    // Clean up already-moved files on partial failure
+                    foreach ($movedFiles as $mf) @unlink(LIB_UPLOAD_DIR . $mf['stored']);
+                    break;
+                }
+                $movedFiles[] = ['name' => $f['orig'], 'stored' => $stored, 'size' => $f['size'], 'ext' => $f['ext']];
+            }
+
+            if (!$error) {
+                $primary = $movedFiles[0];
                 $newId = libSaveResource([
                     'uploader_email' => $member['email'],
                     'uploader_name'  => $member['name'],
@@ -73,11 +107,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['lib_upload'])) {
                     'time_required'  => $timeReq ?: null,
                     'materials'      => $materials ?: null,
                     'tags'           => $tags,
-                    'file_name'      => $origName,
-                    'file_path'      => $stored,
-                    'file_size'      => $file['size'],
-                    'file_ext'       => $ext,
+                    'file_name'      => $primary['name'],
+                    'file_path'      => $primary['stored'],
+                    'file_size'      => $primary['size'],
+                    'file_ext'       => $primary['ext'],
                 ]);
+
+                // Save any additional files
+                if (count($movedFiles) > 1) {
+                    $additionals = array_slice($movedFiles, 1);
+                    libSaveResourceFiles($newId, array_map(fn($f) => [
+                        'name' => $f['name'],
+                        'path' => $f['stored'],
+                        'size' => $f['size'],
+                        'ext'  => $f['ext'],
+                    ], $additionals));
+                }
+
                 $success = true;
             }
         }
@@ -393,21 +439,16 @@ $loggedIn = isLoggedIn();
                 <span class="hint">PDF, DOCX, or PPTX · max 20 MB</span>
               </label>
               <div class="drop-zone" id="drop-zone" role="button" tabindex="0"
-                   aria-label="Drag and drop file here, or click to browse">
-                <!-- Hidden real input sits over the zone for click-to-browse -->
-                <input type="file" id="ul-file" name="resource_file"
-                       accept=".pdf,.docx,.pptx" required>
+                   aria-label="Drag and drop files here, or click to browse">
+                <!-- Hidden real input — multiple files allowed -->
+                <input type="file" id="ul-file" name="resource_file[]"
+                       accept=".pdf,.docx,.pptx" required multiple>
                 <div class="dz-icon" id="dz-icon">📁</div>
-                <p class="dz-primary-text" id="dz-primary">Drag &amp; drop your file here</p>
-                <p class="dz-sub-text">or <strong style="color:var(--primary)">click to browse</strong> — PDF, DOCX, or PPTX up to 20 MB</p>
-                <div class="dz-file-info" id="dz-file-info">
-                  <span class="dz-file-icon" id="dz-file-icon">📄</span>
-                  <span class="dz-file-name" id="dz-file-name"></span>
-                  <span class="dz-file-size" id="dz-file-size"></span>
-                  <button type="button" class="dz-clear" id="dz-clear" title="Remove file"
-                          onclick="event.stopPropagation();clearFile();">✕</button>
-                </div>
+                <p class="dz-primary-text" id="dz-primary">Drag &amp; drop files here</p>
+                <p class="dz-sub-text">or <strong style="color:var(--primary)">click to browse</strong> — PDF, DOCX, or PPTX · 20 MB per file · multiple files OK</p>
               </div>
+              <!-- File list rendered below the zone -->
+              <div id="dz-file-list" style="display:flex;flex-direction:column;gap:.4rem;margin-top:.5rem;"></div>
             </div>
 
             <label class="anon-toggle">
@@ -443,17 +484,17 @@ $loggedIn = isLoggedIn();
   <script src="js/site.js"></script>
   <script src="js/search.js"></script>
   <script>
-    // ── Drag-and-drop + click-to-browse ───────────────────────
-    const dropZone   = document.getElementById('drop-zone');
-    const fileInput  = document.getElementById('ul-file');
-    const dzIcon     = document.getElementById('dz-icon');
-    const dzPrimary  = document.getElementById('dz-primary');
-    const dzFileInfo = document.getElementById('dz-file-info');
-    const dzFileName = document.getElementById('dz-file-name');
-    const dzFileSize = document.getElementById('dz-file-size');
-    const dzFileIcon = document.getElementById('dz-file-icon');
-    const MAX_BYTES  = 20971520; // 20 MB
-    const ALLOWED    = ['.pdf','.docx','.pptx'];
+    // ── Drag-and-drop + click-to-browse (multi-file) ──────────
+    const dropZone  = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('ul-file');
+    const dzIcon    = document.getElementById('dz-icon');
+    const dzPrimary = document.getElementById('dz-primary');
+    const fileList  = document.getElementById('dz-file-list');
+    const MAX_BYTES = 20971520; // 20 MB per file
+    const ALLOWED   = ['.pdf', '.docx', '.pptx'];
+
+    // Master list of File objects
+    let files = [];
 
     function extIcon(name) {
       const e = name.split('.').pop().toLowerCase();
@@ -463,78 +504,105 @@ $loggedIn = isLoggedIn();
       return '📄';
     }
 
-    function showFile(file) {
-      const ext = '.' + file.name.split('.').pop().toLowerCase();
-      const tooBig = file.size > MAX_BYTES;
-      const badExt = !ALLOWED.includes(ext);
+    function syncInput() {
+      try {
+        const dt = new DataTransfer();
+        files.forEach(f => dt.items.add(f));
+        fileInput.files = dt.files;
+      } catch (_) {}
+    }
 
-      if (tooBig || badExt) {
-        dropZone.classList.remove('dz-ready', 'dz-over');
-        dropZone.classList.add('dz-error');
-        dzIcon.textContent    = '⚠️';
-        dzPrimary.textContent = tooBig
-          ? 'File is too large (max 20 MB)'
-          : 'Unsupported file type — use PDF, DOCX, or PPTX';
-        dzPrimary.style.color = '#dc2626';
-        dzFileInfo.classList.remove('visible');
-        // Clear the input so server-side validation also catches it
-        fileInput.value = '';
+    function renderFileList() {
+      if (!files.length) {
+        fileList.innerHTML = '';
+        dropZone.classList.remove('dz-ready', 'dz-error');
+        dzIcon.textContent    = '📁';
+        dzPrimary.textContent = 'Drag & drop files here';
+        dzPrimary.style.color = '';
         return;
       }
 
-      dropZone.classList.remove('dz-over', 'dz-error');
+      dropZone.classList.remove('dz-error');
       dropZone.classList.add('dz-ready');
       dzIcon.textContent    = '✅';
-      dzPrimary.textContent = 'File ready to upload';
+      dzPrimary.textContent = files.length === 1
+        ? '1 file ready'
+        : files.length + ' files ready';
       dzPrimary.style.color = 'var(--primary)';
-      dzFileIcon.textContent = extIcon(file.name);
-      dzFileName.textContent = file.name;
-      dzFileSize.textContent = (file.size / 1048576).toFixed(1) + ' MB';
-      dzFileInfo.classList.add('visible');
+
+      fileList.innerHTML = files.map((f, i) => {
+        const ext     = '.' + f.name.split('.').pop().toLowerCase();
+        const tooBig  = f.size > MAX_BYTES;
+        const badExt  = !ALLOWED.includes(ext);
+        const mb      = (f.size / 1048576).toFixed(1);
+        const errMsg  = tooBig ? 'Too large (max 20 MB)' : badExt ? 'Unsupported type' : '';
+        return `<div style="display:flex;align-items:center;gap:.6rem;padding:.55rem .75rem;
+                            background:${errMsg ? '#fef2f2' : '#f0f9f3'};
+                            border:1px solid ${errMsg ? '#fecaca' : '#b3d9bf'};
+                            border-radius:7px;font-size:.84rem;">
+          <span style="font-size:1.1rem;">${extIcon(f.name)}</span>
+          <span style="flex:1;font-weight:600;color:var(--gray-800);
+                       white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+                title="${f.name}">${f.name}</span>
+          ${errMsg
+            ? `<span style="color:#dc2626;font-size:.75rem;font-weight:600;white-space:nowrap;">⚠ ${errMsg}</span>`
+            : `<span style="color:var(--gray-400);font-size:.75rem;white-space:nowrap;">${mb} MB</span>`}
+          ${i === 0 && files.length > 1
+            ? `<span style="font-size:.68rem;font-weight:700;color:var(--primary);
+                            background:var(--accent);padding:.1rem .4rem;border-radius:4px;
+                            white-space:nowrap;">Primary</span>`
+            : ''}
+          <button type="button" onclick="removeFile(${i})"
+                  style="background:none;border:none;cursor:pointer;color:var(--gray-400);
+                         font-size:1rem;line-height:1;padding:0;flex-shrink:0;"
+                  onmouseover="this.style.color='#dc2626'"
+                  onmouseout="this.style.color='var(--gray-400)'"
+                  title="Remove">✕</button>
+        </div>`;
+      }).join('');
     }
 
-    function clearFile() {
-      fileInput.value = '';
-      dropZone.classList.remove('dz-ready', 'dz-error', 'dz-over');
-      dzIcon.textContent    = '📁';
-      dzPrimary.textContent = 'Drag & drop your file here';
-      dzPrimary.style.color = '';
-      dzFileInfo.classList.remove('visible');
+    window.removeFile = function(index) {
+      files.splice(index, 1);
+      syncInput();
+      renderFileList();
+    };
+
+    function addFiles(newFiles) {
+      const added = [];
+      Array.from(newFiles).forEach(f => {
+        // Skip exact duplicates (same name + size)
+        if (!files.some(e => e.name === f.name && e.size === f.size)) {
+          added.push(f);
+        }
+      });
+      files = [...files, ...added];
+      syncInput();
+      renderFileList();
     }
 
-    // Click-to-browse: the hidden <input> already covers the zone, but
-    // keyboard Enter/Space also trigger it
+    // Keyboard access
     dropZone.addEventListener('keydown', e => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
     });
 
     fileInput.addEventListener('change', function () {
-      if (this.files[0]) showFile(this.files[0]);
+      if (this.files.length) addFiles(this.files);
+      // Reset so the same file can be re-added after removal
+      this.value = '';
     });
 
     // Drag events
-    ['dragenter','dragover'].forEach(evt => {
-      dropZone.addEventListener(evt, e => {
-        e.preventDefault(); e.stopPropagation();
-        if (!dropZone.classList.contains('dz-ready')) dropZone.classList.add('dz-over');
-      });
-    });
+    ['dragenter', 'dragover'].forEach(evt =>
+      dropZone.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); dropZone.classList.add('dz-over'); })
+    );
     dropZone.addEventListener('dragleave', e => {
-      // Only remove when leaving the zone itself, not a child
       if (!dropZone.contains(e.relatedTarget)) dropZone.classList.remove('dz-over');
     });
     dropZone.addEventListener('drop', e => {
       e.preventDefault(); e.stopPropagation();
       dropZone.classList.remove('dz-over');
-      const file = e.dataTransfer.files[0];
-      if (!file) return;
-      // Assign dropped file to the input via DataTransfer
-      try {
-        const dt = new DataTransfer();
-        dt.items.add(file);
-        fileInput.files = dt.files;
-      } catch (_) { /* Safari fallback — validation will still catch bad files */ }
-      showFile(file);
+      if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
     });
 
     // ── Existing tags from DB (for autocomplete) ──────────────

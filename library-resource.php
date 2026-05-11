@@ -62,9 +62,10 @@ $ratings     = isset($notFound) ? [] : libGetRatings($id);
 $myRating    = isset($notFound) ? null : libGetMemberRating($id, $member['email']);
 $grades      = isset($notFound) ? [] : ($resource['grade_levels'] ? explode(',', $resource['grade_levels']) : []);
 $tags        = isset($notFound) ? [] : ($resource['tags'] ? array_map('trim', explode(',', $resource['tags'])) : []);
-$bookmarked  = isset($notFound) ? false : libIsBookmarked($id, $member['email']);
-$downloadUrl = 'members/library-serve.php?id=' . $id;
-$previewUrl  = 'members/library-serve.php?id=' . $id . '&preview=1';
+$bookmarked    = isset($notFound) ? false : libIsBookmarked($id, $member['email']);
+$extraFiles    = isset($notFound) ? [] : libGetResourceFiles($id);
+$downloadUrl   = 'members/library-serve.php?id=' . $id;
+$previewUrl    = 'members/library-serve.php?id=' . $id . '&preview=1';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -691,11 +692,47 @@ $previewUrl  = 'members/library-serve.php?id=' . $id . '&preview=1';
 
           <!-- Download card -->
           <div class="res-side-card">
-            <div class="res-side-title">Download</div>
+            <div class="res-side-title">
+              Download<?= count($extraFiles) ? ' (' . (1 + count($extraFiles)) . ' files)' : '' ?>
+            </div>
+
+            <?php
+              function resFileIcon(string $ext): string {
+                $e = strtolower($ext);
+                if ($e === 'pdf')  return '📕';
+                if ($e === 'docx') return '📘';
+                if ($e === 'pptx') return '📙';
+                return '📄';
+              }
+            ?>
+
+            <!-- Primary file -->
             <a href="<?= $downloadUrl ?>" class="download-btn">
               <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Download <?= strtoupper($resource['file_ext']) ?>
+              <?php if (count($extraFiles)): ?>
+                <span style="flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                  <?= resFileIcon($resource['file_ext']) ?>
+                  <?= htmlspecialchars($resource['file_name']) ?>
+                  <span style="font-size:.72rem;font-weight:400;opacity:.7;"><?= libFormatSize($resource['file_size']) ?></span>
+                </span>
+              <?php else: ?>
+                Download <?= strtoupper($resource['file_ext']) ?>
+              <?php endif; ?>
             </a>
+
+            <!-- Additional files -->
+            <?php foreach ($extraFiles as $ef): ?>
+              <a href="members/library-serve.php?id=<?= $id ?>&file=<?= $ef['id'] ?>"
+                 class="download-btn" style="margin-top:.4rem;background:var(--accent);color:var(--primary);border:1.5px solid var(--border);">
+                <svg viewBox="0 0 24 24" stroke="var(--primary)" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <span style="flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                  <?= resFileIcon($ef['file_ext']) ?>
+                  <?= htmlspecialchars($ef['file_name']) ?>
+                  <span style="font-size:.72rem;font-weight:400;opacity:.7;"><?= libFormatSize($ef['file_size']) ?></span>
+                </span>
+              </a>
+            <?php endforeach; ?>
+
             <!-- Bookmark toggle -->
             <button id="bm-btn" data-id="<?= $id ?>" data-state="<?= $bookmarked ? '1' : '0' ?>"
                     style="display:flex;align-items:center;justify-content:center;gap:.4rem;width:100%;margin-top:.6rem;padding:.55rem;background:none;border:1.5px solid var(--border);border-radius:var(--radius-s);font-size:.83rem;font-weight:600;color:var(--gray-600);cursor:pointer;transition:border-color .15s,color .15s;">
@@ -709,7 +746,13 @@ $previewUrl  = 'members/library-serve.php?id=' . $id . '&preview=1';
             </button>
             <div class="res-stat-row">
               <div>Size</div>
-              <span><?= libFormatSize($resource['file_size']) ?></span>
+              <span><?php
+                $totalSize = $resource['file_size'];
+                foreach ($extraFiles as $ef) $totalSize += $ef['file_size'];
+                echo count($extraFiles)
+                  ? libFormatSize($totalSize) . ' total'
+                  : libFormatSize($resource['file_size']);
+              ?></span>
             </div>
             <div class="res-stat-row">
               <div>Downloads</div>
