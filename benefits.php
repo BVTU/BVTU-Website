@@ -301,24 +301,24 @@ $member   = $loggedIn ? getMember() : null;
       <!-- ── At-a-Glance Highlights ──────────────────────────────── -->
       <div class="benefit-highlights">
         <div class="benefit-hl">
-          <div class="benefit-hl-val">100%</div>
-          <div class="benefit-hl-label">Basic Dental</div>
+          <div class="benefit-hl-val">90%</div>
+          <div class="benefit-hl-label">Dental — Basic &amp; Preventive</div>
         </div>
         <div class="benefit-hl">
-          <div class="benefit-hl-val">80%</div>
-          <div class="benefit-hl-label">Major Dental / Extended Health</div>
+          <div class="benefit-hl-val">70%</div>
+          <div class="benefit-hl-label">Major Dental (Crowns, Bridges, Dentures)</div>
+        </div>
+        <div class="benefit-hl">
+          <div class="benefit-hl-val">$1,000</div>
+          <div class="benefit-hl-label">Massage / Physio / Chiro per Year</div>
         </div>
         <div class="benefit-hl">
           <div class="benefit-hl-val">$1,500</div>
-          <div class="benefit-hl-label">Major Dental Annual Max</div>
+          <div class="benefit-hl-label">Counselling per Year</div>
         </div>
         <div class="benefit-hl">
           <div class="benefit-hl-val">$240</div>
           <div class="benefit-hl-label">Vision / 2 Years</div>
-        </div>
-        <div class="benefit-hl">
-          <div class="benefit-hl-val">$250</div>
-          <div class="benefit-hl-label">Massage / Physio Per Provider</div>
         </div>
         <div class="benefit-hl">
           <div class="benefit-hl-val">100%</div>
@@ -339,33 +339,42 @@ $member   = $loggedIn ? getMember() : null;
       ══════════════════════════════════════════════════════════ -->
       <div class="benefits-panel active" id="tab-dental">
 
-        <p>Your dental plan covers you, your spouse/partner, and dependent children (under 21, or under 25 if a full-time student). Coverage is based on the <strong>BC Dental Fee Guide</strong> established by Pacific Blue Cross. Dental claims are usually submitted directly to PBC by your dentist — you only pay the difference, if any.</p>
+        <p>Your dental plan covers you, your spouse/partner, and dependent children (under 21, or under 25 if a full-time student). Coverage is based on the BC Dental Fee Guide. Claims are usually submitted directly to PBC by your dentist — you only pay the difference, if any.</p>
+
+        <div class="info-box" style="margin-bottom:1.5rem;font-size:.9rem;">
+          <strong>Pre-authorization tip:</strong> For crowns, bridges, dentures, implants, orthodontics, or any major procedure — ask your dentist to submit a <em>pre-determination</em> to Pacific Blue Cross <em>before</em> treatment begins. PBC will confirm exactly what they'll cover so there are no surprises.
+        </div>
 
         <!-- Basic & Preventive -->
         <div class="ben-section">
           <div class="ben-section-head">
             <div class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M12 22s-8-4-8-10V5l8-3 8 3v7c0 6-8 10-8 10z"/></svg></div>
             Basic &amp; Preventive Services
-            <span class="tier-badge tier-100">100% covered</span>
+            <span class="tier-badge tier-100">90% covered</span>
           </div>
           <table class="coverage-table">
             <thead>
-              <tr><th>Service</th><th>Frequency / Notes</th><th>Coverage</th></tr>
+              <tr><th>Service</th><th>Frequency / Limit</th><th>Coverage</th></tr>
             </thead>
             <tbody>
-              <tr><td>Complete oral exam</td><td><span class="coverage-note">Once per 3 years</span></td><td><span class="coverage-pct">100%</span></td></tr>
-              <tr><td>Recall exam</td><td><span class="coverage-note">Up to 2 per year</span></td><td><span class="coverage-pct">100%</span></td></tr>
-              <tr><td>Scaling &amp; polishing (cleanings)</td><td><span class="coverage-note">2 per calendar year</span></td><td><span class="coverage-pct">100%</span></td></tr>
-              <tr><td>Fluoride treatment</td><td><span class="coverage-note">2 per calendar year</span></td><td><span class="coverage-pct">100%</span></td></tr>
-              <tr><td>X-rays (diagnostic)</td><td><span class="coverage-note">Panoramic: 1 per 2 yrs · Full series: 1 per 3 yrs</span></td><td><span class="coverage-pct">100%</span></td></tr>
-              <tr><td>Amalgam (silver) fillings</td><td><span class="coverage-note">Per tooth, 2-year period limit</span></td><td><span class="coverage-pct">100%</span></td></tr>
-              <tr><td>Composite (white) fillings</td><td><span class="coverage-note">Front/bicuspid teeth; molar reimbursed at amalgam rate</span></td><td><span class="coverage-pct">100%</span></td></tr>
-              <tr><td>Root canals (endodontics)</td><td><span class="coverage-note">1 per tooth per 5 years</span></td><td><span class="coverage-pct">100%</span></td></tr>
-              <tr><td>Periodontics (gum treatment)</td><td><span class="coverage-note">Incl. root planing, osseous surgery (1 per sextant/5 yrs)</span></td><td><span class="coverage-pct">100%</span></td></tr>
-              <tr><td>Extractions &amp; oral surgery</td><td><span class="coverage-note">Routine procedures including anesthesia</span></td><td><span class="coverage-pct">100%</span></td></tr>
-              <tr><td>Bruxing (night) guards</td><td><span class="coverage-note">2 per 5 years (lost/broken not covered)</span></td><td><span class="coverage-pct">100%</span></td></tr>
-              <tr><td>Stainless steel crowns</td><td><span class="coverage-note">Once per tooth per 2 years</span></td><td><span class="coverage-pct">100%</span></td></tr>
-              <tr><td>Prosthetic repairs</td><td><span class="coverage-note">Removal, re-cement, reline of appliances</span></td><td><span class="coverage-pct">100%</span></td></tr>
+              <tr><td>Complete oral exam</td><td><span class="coverage-note">1 per 36 months</span></td><td><span class="coverage-pct">90%</span></td></tr>
+              <tr><td>Recall exam (dentist or hygienist)</td><td><span class="coverage-note">Combined limit: 2 per calendar year</span></td><td><span class="coverage-pct">90%</span></td></tr>
+              <tr><td>Specific / emergency exam</td><td><span class="coverage-note">Combined limit: 2 per calendar year</span></td><td><span class="coverage-pct">90%</span></td></tr>
+              <tr><td>Scaling (cleaning)</td><td><span class="coverage-note">Per calendar year</span></td><td><span class="coverage-pct">90%</span></td></tr>
+              <tr><td>Polishing</td><td><span class="coverage-note">2 per calendar year</span></td><td><span class="coverage-pct">90%</span></td></tr>
+              <tr><td>Fluoride treatment</td><td><span class="coverage-note">2 per calendar year</span></td><td><span class="coverage-pct">90%</span></td></tr>
+              <tr><td>Bitewing &amp; periapical x-rays</td><td><span class="coverage-note">Per calendar year · dental fee guide max</span></td><td><span class="coverage-pct">90%</span></td></tr>
+              <tr><td>Panoramic x-ray</td><td><span class="coverage-note">1 per 24 months</span></td><td><span class="coverage-pct">90%</span></td></tr>
+              <tr><td>Complete series x-rays</td><td><span class="coverage-note">1 per 36 months</span></td><td><span class="coverage-pct">90%</span></td></tr>
+              <tr><td>Silver (amalgam) fillings</td><td><span class="coverage-note">1 per tooth per 24 months</span></td><td><span class="coverage-pct">90%</span></td></tr>
+              <tr><td>White (composite) fillings</td><td><span class="coverage-note">1 per tooth per 24 months · molar paid at silver rate</span></td><td><span class="coverage-pct">90%</span></td></tr>
+              <tr><td>Prefabricated metal restorations</td><td><span class="coverage-note">1 per tooth per 24 months</span></td><td><span class="coverage-pct">90%</span></td></tr>
+              <tr><td>Root canals (all types)</td><td><span class="coverage-note">1 per tooth per 60 months</span></td><td><span class="coverage-pct">90%</span></td></tr>
+              <tr><td>Extractions (simple &amp; complex)</td><td><span class="coverage-note">1 per tooth per lifetime · combined limit</span></td><td><span class="coverage-pct">90%</span></td></tr>
+              <tr><td>Dental surgery &amp; anaesthesia</td><td><span class="coverage-note">Anaesthesia only on same day as oral/periodontal surgery</span></td><td><span class="coverage-pct">90%</span></td></tr>
+              <tr><td>Periodontal (gum) treatment</td><td><span class="coverage-note">Root planing, osseous surgery — 1 per sextant per 5 yrs</span></td><td><span class="coverage-pct">90%</span></td></tr>
+              <tr><td>Night guards (bruxing appliances)</td><td><span class="coverage-note">2 per 60 months · lost/stolen not covered</span></td><td><span class="coverage-pct">90%</span></td></tr>
+              <tr><td>Space maintainers</td><td><span class="coverage-note">1 per quadrant per calendar year</span></td><td><span class="coverage-pct">90%</span></td></tr>
             </tbody>
           </table>
         </div>
@@ -374,26 +383,46 @@ $member   = $loggedIn ? getMember() : null;
         <div class="ben-section">
           <div class="ben-section-head">
             <div class="ben-section-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></div>
-            Major Restorative Services
-            <span class="tier-badge tier-80">80% · $1,500/yr max</span>
+            Major Restorative — Crowns, Bridges &amp; Dentures
+            <span class="tier-badge tier-80">70% covered</span>
           </div>
-          <p style="font-size:.9rem;color:var(--gray-600);margin-bottom:.9rem;">Major restorative services are reimbursed at <strong>80%</strong> of the BC Dental Fee Guide, up to a combined maximum of <strong>$1,500 per calendar year</strong>.</p>
+          <p style="font-size:.9rem;color:var(--gray-600);margin-bottom:.9rem;">Major restorative services are reimbursed at <strong>70%</strong> of the BC Dental Fee Guide. There is no single annual dollar maximum — limits are per tooth per period as shown. Pre-authorization is strongly recommended.</p>
           <table class="coverage-table">
             <thead>
-              <tr><th>Service</th><th>Frequency / Notes</th><th>Coverage</th></tr>
+              <tr><th>Service</th><th>Frequency / Limit</th><th>Coverage</th></tr>
             </thead>
             <tbody>
-              <tr><td>Crowns (porcelain, gold)</td><td><span class="coverage-note">1 per tooth per 5 years · Molar: gold-equivalent rate</span></td><td><span class="coverage-pct">80%</span></td></tr>
-              <tr><td>Fixed bridges</td><td><span class="coverage-note">Permanent replacement of missing teeth</span></td><td><span class="coverage-pct">80%</span></td></tr>
-              <tr><td>Inlays &amp; onlays</td><td><span class="coverage-note">1 per tooth per 5 years</span></td><td><span class="coverage-pct">80%</span></td></tr>
-              <tr><td>Veneers</td><td><span class="coverage-note">Subject to Dental Fee Schedule conditions</span></td><td><span class="coverage-pct">80%</span></td></tr>
-              <tr><td>Complete dentures</td><td><span class="coverage-note">1 upper + 1 lower per 5 years (lost/broken not covered)</span></td><td><span class="coverage-pct">80%</span></td></tr>
-              <tr><td>Partial dentures</td><td><span class="coverage-note">1 per arch per 5 years</span></td><td><span class="coverage-pct">80%</span></td></tr>
+              <tr><td>Crowns (porcelain, gold, veneer)</td><td><span class="coverage-note">1 per tooth per 60 months · combined limit with bridges/inlays/veneers</span></td><td><span class="coverage-pct">70%</span></td></tr>
+              <tr><td>Bridge pontics, abutments &amp; retainers</td><td><span class="coverage-note">1 per tooth per 60 months · combined limit</span></td><td><span class="coverage-pct">70%</span></td></tr>
+              <tr><td>Bridge implants</td><td><span class="coverage-note">1 per tooth per 60 months · combined limit</span></td><td><span class="coverage-pct">70%</span></td></tr>
+              <tr><td>Inlays &amp; onlays</td><td><span class="coverage-note">1 per tooth per 60 months · combined limit</span></td><td><span class="coverage-pct">70%</span></td></tr>
+              <tr><td>Veneers</td><td><span class="coverage-note">1 per tooth per 60 months · combined limit</span></td><td><span class="coverage-pct">70%</span></td></tr>
+              <tr><td>Complete dentures (upper &amp; lower)</td><td><span class="coverage-note">1 per arch per 60 months · lost/stolen not covered</span></td><td><span class="coverage-pct">70%</span></td></tr>
+              <tr><td>Partial dentures</td><td><span class="coverage-note">1 per arch per 60 months</span></td><td><span class="coverage-pct">70%</span></td></tr>
             </tbody>
           </table>
-          <div class="info-box" style="margin-top:.5rem;font-size:.87rem;">
-            <strong>Tip:</strong> If a dental procedure is expected to cost over $500, ask your dentist to submit a <em>Treatment Plan</em> to Pacific Blue Cross <em>before</em> the work begins. PBC will confirm exactly what they'll cover so there are no surprises.
+        </div>
+
+        <!-- Denture Maintenance -->
+        <div class="ben-section">
+          <div class="ben-section-head">
+            <div class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+            Denture Maintenance &amp; Bridge Repairs
+            <span class="tier-badge tier-100">90% covered</span>
           </div>
+          <table class="coverage-table">
+            <thead>
+              <tr><th>Service</th><th>Limit</th><th>Coverage</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Denture repairs &amp; additions</td><td><span class="coverage-note">GP or denturist</span></td><td><span class="coverage-pct">90%</span></td></tr>
+              <tr><td>Denture adjustments</td><td><span class="coverage-note">4 per calendar year combined</span></td><td><span class="coverage-pct">90%</span></td></tr>
+              <tr><td>Denture rebases &amp; relines</td><td><span class="coverage-note">1 per arch per 24 months</span></td><td><span class="coverage-pct">90%</span></td></tr>
+              <tr><td>Tissue conditioning</td><td><span class="coverage-note">2 per arch per 60 months</span></td><td><span class="coverage-pct">90%</span></td></tr>
+              <tr><td>Bridge recementation &amp; repairs</td><td><span class="coverage-note">2 per tooth per day from first eligible claim</span></td><td><span class="coverage-pct">90%</span></td></tr>
+              <tr><td>Bridge removal</td><td><span class="coverage-note">2 per tooth per day from first eligible claim</span></td><td><span class="coverage-pct">90%</span></td></tr>
+            </tbody>
+          </table>
         </div>
 
         <!-- Orthodontics -->
@@ -401,9 +430,9 @@ $member   = $loggedIn ? getMember() : null;
           <div class="ben-section-head">
             <div class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
             Orthodontic Services
-            <span class="tier-badge tier-80">80% · Children under 19</span>
+            <span class="tier-badge tier-80">75% · $5,000 lifetime max</span>
           </div>
-          <p>Orthodontic coverage (braces, retainers) is available at <strong>80%</strong> for <strong>dependent children under age 19</strong>. Coverage does not apply to correction of temporomandibular joint (TMJ) dysfunction, or for replacement of lost or stolen appliances.</p>
+          <p>Orthodontic coverage (braces, retainers, appliances) is reimbursed at <strong>75%</strong> up to a <strong>$5,000 lifetime maximum per person</strong>. A pre-determination must be submitted to PBC before treatment begins. TMJ dysfunction and lost/stolen appliances are not covered.</p>
         </div>
 
       </div>
@@ -413,10 +442,10 @@ $member   = $loggedIn ? getMember() : null;
       ══════════════════════════════════════════════════════════ -->
       <div class="benefits-panel" id="tab-extended">
 
-        <p>Extended health coverage supplements the BC Medical Services Plan and covers expenses not paid by the provincial system. Your plan covers you, your spouse/partner, and dependent children (under 21, or under 25 if a full-time student).</p>
+        <p>Extended health coverage supplements the BC Medical Services Plan. Your plan covers you, your spouse/partner, and dependent children (under 21, or under 25 if a full-time student).</p>
 
         <div class="info-box" style="margin-bottom:1.5rem;font-size:.9rem;">
-          <strong>How reimbursement works:</strong> After a <strong>$25 annual deductible</strong> per family, the plan pays <strong>80%</strong> of your first $1,000 in eligible expenses per person per year. After that, it pays <strong>100%</strong> of further eligible expenses, up to a calendar year maximum of <strong>$1,000,000 per person</strong>.
+          <strong>How reimbursement works:</strong> After a <strong>$50 annual deductible per family</strong>, the plan pays <strong>80%</strong> of your first $1,000 in eligible expenses per person per calendar year. After that threshold, it pays <strong>100%</strong> of further eligible expenses. Vision and dental-accident benefits have no deductible or co-insurance.
         </div>
 
         <!-- Paramedical -->
@@ -425,54 +454,92 @@ $member   = $loggedIn ? getMember() : null;
             <div class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
             Paramedical Services
           </div>
+          <p style="font-size:.88rem;color:var(--gray-600);margin-bottom:.9rem;">All paramedical limits are <strong>per person per calendar year</strong>. Practitioners must be registered in BC. If visits exceed what PBC considers reasonable, a doctor's note may be requested.</p>
           <table class="coverage-table">
             <thead>
-              <tr><th>Practitioner</th><th>Annual Maximum (per person)</th><th>Coverage</th></tr>
+              <tr><th>Practitioner</th><th>Annual Maximum</th><th>Notes</th></tr>
             </thead>
             <tbody>
               <tr>
                 <td><strong>Physiotherapist</strong></td>
-                <td>$250 per practitioner</td>
-                <td><span class="coverage-pct">80/100%</span></td>
+                <td><span class="coverage-pct">$1,000</span>/person/year</td>
+                <td>In-person and online · 80/100% structure</td>
               </tr>
               <tr>
                 <td><strong>Registered Massage Therapist</strong></td>
-                <td>$250 per practitioner</td>
-                <td><span class="coverage-pct">80/100%</span></td>
-              </tr>
-              <tr>
-                <td><strong>Psychologist</strong></td>
-                <td>$960 per person<span class="coverage-note">No deductible or co-insurance applied</span></td>
-                <td><span class="coverage-pct">100%</span></td>
+                <td><span class="coverage-pct">$1,000</span>/person/year</td>
+                <td>In-person only · 80/100% structure</td>
               </tr>
               <tr>
                 <td><strong>Chiropractor</strong></td>
-                <td>$200 per practitioner<span class="coverage-note">Includes x-rays</span></td>
-                <td><span class="coverage-pct">80/100%</span></td>
-              </tr>
-              <tr>
-                <td><strong>Naturopath</strong></td>
-                <td>$200 per practitioner<span class="coverage-note">Includes x-rays</span></td>
-                <td><span class="coverage-pct">80/100%</span></td>
-              </tr>
-              <tr>
-                <td><strong>Podiatrist</strong></td>
-                <td>$200 per practitioner<span class="coverage-note">Includes x-rays</span></td>
-                <td><span class="coverage-pct">80/100%</span></td>
+                <td><span class="coverage-pct">$1,000</span>/person/year</td>
+                <td>Includes chiro x-rays · $131 initial / $77 subsequent visit · 80/100%</td>
               </tr>
               <tr>
                 <td><strong>Acupuncturist</strong></td>
-                <td>$100 per person</td>
-                <td><span class="coverage-pct">80/100%</span></td>
+                <td><span class="coverage-pct">$1,000</span>/person/year</td>
+                <td>In-person only · $135 initial / $115 subsequent · 80/100%</td>
               </tr>
               <tr>
-                <td><strong>Speech Language Pathologist</strong></td>
-                <td>$100 per person</td>
-                <td><span class="coverage-pct">80/100%</span></td>
+                <td><strong>Naturopath</strong></td>
+                <td><span class="coverage-pct">$1,000</span>/person/year</td>
+                <td>Treatments and testing · $257 initial / $189 subsequent · 80/100%<span class="coverage-note">X-rays, appliances, and remedies dispensed by naturopath are <em>not</em> covered</span></td>
+              </tr>
+              <tr>
+                <td><strong>Podiatrist</strong></td>
+                <td><span class="coverage-pct">$800</span>/person/year</td>
+                <td>In-person only · $180 initial / $105 subsequent · 80/100%<span class="coverage-note">Podiatry x-rays are <em>not</em> covered</span></td>
+              </tr>
+              <tr>
+                <td><strong>Speech Therapist</strong></td>
+                <td><span class="coverage-pct">$800</span>/person/year</td>
+                <td>In-person and online · $200 initial / $175 subsequent · 80/100%</td>
               </tr>
             </tbody>
           </table>
-          <p style="font-size:.83rem;color:var(--gray-500);">80/100% = 80% of first $1,000 eligible expenses, then 100% thereafter within the same calendar year, after the $25 family deductible.</p>
+        </div>
+
+        <!-- Counselling -->
+        <div class="ben-section">
+          <div class="ben-section-head">
+            <div class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+            Mental Health &amp; Counselling Services
+            <span class="tier-badge tier-80">$1,500/year combined</span>
+          </div>
+          <p style="font-size:.88rem;color:var(--gray-600);margin-bottom:.9rem;">All counselling providers below share a <strong>combined $1,500 per person per calendar year</strong> limit. Subject to the 80/100% reimbursement structure and $50 family deductible. Eligible amounts are based on a 60-minute visit — your actual reimbursement depends on visit length.</p>
+          <table class="coverage-table">
+            <thead>
+              <tr><th>Provider Type</th><th>Eligible Amount</th><th>Notes</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Registered Psychologist</strong></td>
+                <td><span class="coverage-pct">$300</span>/visit</td>
+                <td>In-person or online</td>
+              </tr>
+              <tr>
+                <td><strong>Counsellor / Psychotherapist</strong></td>
+                <td><span class="coverage-pct">$170</span>/visit</td>
+                <td>In-person or online · Must be registered with BCACC, CPCA, CCPA, ACCT, CRPO, or equivalent<span class="coverage-note">Group counselling is not eligible</span></td>
+              </tr>
+              <tr>
+                <td><strong>Clinical Social Worker</strong></td>
+                <td><span class="coverage-pct">$170</span>/visit</td>
+                <td>In-person or online</td>
+              </tr>
+              <tr>
+                <td><strong>Online Cognitive Behavioural Therapy (CBT)</strong></td>
+                <td>Covered</td>
+                <td>Must use a PBC-eligible vendor · Shares $1,500 combined limit<span class="coverage-note">Visit <a href="https://www.pac.bluecross.ca" target="_blank" rel="noopener">pac.bluecross.ca</a> to find eligible CBT vendors</span></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="pill-list" style="margin-top:.75rem;">
+            <span class="pill no">Psychoanalyst — not a benefit</span>
+            <span class="pill no">Marriage &amp; Family Therapy — not a benefit</span>
+            <span class="pill no">Parenting training — not a benefit</span>
+            <span class="pill no">Group counselling — not eligible</span>
+          </div>
         </div>
 
         <!-- Vision -->
@@ -480,6 +547,7 @@ $member   = $loggedIn ? getMember() : null;
           <div class="ben-section-head">
             <div class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div>
             Vision Care
+            <span class="tier-badge tier-100">No deductible</span>
           </div>
           <table class="coverage-table">
             <thead>
@@ -488,23 +556,23 @@ $member   = $loggedIn ? getMember() : null;
             <tbody>
               <tr>
                 <td><strong>Eyewear</strong> (frames, lenses, contacts)</td>
-                <td><span class="coverage-pct">$240</span> per person</td>
+                <td><span class="coverage-pct">$240</span>/person</td>
                 <td>Per 2-year period · No deductible or co-insurance</td>
               </tr>
               <tr>
                 <td><strong>Eye exam</strong></td>
-                <td><span class="coverage-pct">$50</span> per person</td>
+                <td><span class="coverage-pct">$50</span>/person</td>
                 <td>Per 2-year period · Ages 19–64 · No deductible or co-insurance</td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        <!-- Hospital & Medical Equipment -->
+        <!-- Hospital & Equipment -->
         <div class="ben-section">
           <div class="ben-section-head">
             <div class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>
-            Hospital &amp; Medical Equipment
+            Hospital, Equipment &amp; Other Benefits
           </div>
           <table class="coverage-table">
             <thead>
@@ -512,84 +580,91 @@ $member   = $loggedIn ? getMember() : null;
             </thead>
             <tbody>
               <tr>
-                <td><strong>Semi-private / private hospital room upgrade</strong></td>
-                <td>Actual cost difference</td>
-                <td>Difference between standard ward and semi-private/private</td>
+                <td><strong>Private hospital room</strong></td>
+                <td>$195/day eligible</td>
+                <td>80/100% structure · $50 family deductible</td>
               </tr>
               <tr>
-                <td><strong>Ambulance</strong></td>
-                <td>Full cost</td>
-                <td>Licensed ambulance to nearest equipped hospital</td>
+                <td><strong>Semi-private hospital room</strong></td>
+                <td>$165/day eligible</td>
+                <td>80/100% structure · $50 family deductible</td>
+              </tr>
+              <tr>
+                <td><strong>Local ambulance</strong></td>
+                <td>$80/service eligible</td>
+                <td>Licensed ambulance to nearest hospital · 80/100% structure</td>
               </tr>
               <tr>
                 <td><strong>Hearing aids</strong></td>
-                <td>$1,600 per person</td>
-                <td>Per 2-year period · Repairs/batteries: $200/yr</td>
+                <td><span class="coverage-pct">$3,500</span>/person per 48 months</td>
+                <td>Combined limit for aids + repairs · $50 family deductible · 80/100%</td>
               </tr>
               <tr>
-                <td><strong>Custom orthopaedic shoes &amp; orthotics</strong></td>
-                <td>$400 per person/yr</td>
-                <td>1 pair of orthotics per calendar year · Prescription required</td>
+                <td><strong>Custom orthotics (one pair)</strong></td>
+                <td><span class="coverage-pct">$500</span>/person/year</td>
+                <td>Must be custom-made · Doctor's letter required · 80/100%</td>
+              </tr>
+              <tr>
+                <td><strong>Custom orthopedic shoes</strong></td>
+                <td><span class="coverage-pct">$500</span>/person/year</td>
+                <td>Separate $500 limit from orthotics · Doctor's letter required · 80/100%</td>
+              </tr>
+              <tr>
+                <td><strong>Registered nurse (home care)</strong></td>
+                <td>$20,000/person/year</td>
+                <td>Doctor's letter required · Not covered in hospital</td>
               </tr>
               <tr>
                 <td><strong>Durable medical equipment</strong></td>
                 <td>Rental preferred</td>
-                <td>Wheelchairs, hospital beds, respiratory equipment, etc. Pre-auth required over $5,000</td>
+                <td>Wheelchairs, hospital beds, braces, prosthetics, respiratory equipment · Pre-auth required over $5,000</td>
               </tr>
               <tr>
-                <td><strong>Diabetic equipment</strong></td>
-                <td>$500 lifetime</td>
-                <td>50% of cost · Glucose meters, insulin injectors · 1 item per person</td>
+                <td><strong>Cochlear implant (speech processor &amp; headset)</strong></td>
+                <td>$8,000/unit eligible</td>
+                <td>80/100% structure</td>
               </tr>
               <tr>
-                <td><strong>Registered nurse (home/hospital)</strong></td>
-                <td>As required</td>
-                <td>Acute conditions in province of residence</td>
-              </tr>
-              <tr>
-                <td><strong>Prostheses &amp; support braces</strong></td>
+                <td><strong>Prostheses &amp; braces</strong></td>
                 <td>Actual cost</td>
-                <td>Rigid support braces, artificial eyes/limbs, mastectomy forms</td>
-              </tr>
-              <tr>
-                <td><strong>Surgical stockings</strong></td>
-                <td>2 pairs/yr</td>
-                <td>Per calendar year</td>
-              </tr>
-              <tr>
-                <td><strong>Wigs / hairpieces</strong></td>
-                <td>$500 lifetime</td>
-                <td>Required as a result of medical treatment</td>
+                <td>Rigid support braces, artificial limbs/eyes, mastectomy forms</td>
               </tr>
             </tbody>
           </table>
+          <div class="pill-list" style="margin-top:.75rem;">
+            <span class="pill no">Drug &amp; alcohol rehabilitation — not a benefit</span>
+            <span class="pill no">Athletic therapy — not a benefit</span>
+            <span class="pill no">Osteopath — not a benefit</span>
+            <span class="pill no">Nursing home / home care services — not a benefit</span>
+          </div>
         </div>
 
-        <!-- Out of Province -->
+        <!-- Travel -->
         <div class="ben-section">
           <div class="ben-section-head">
             <div class="ben-section-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></div>
-            Out-of-Province Emergency Coverage
+            Out-of-Province &amp; Out-of-Canada Emergency Coverage
             <span class="tier-badge tier-100">100% covered</span>
           </div>
-          <p>Emergency medical expenses incurred while travelling outside BC are reimbursed at <strong>100%</strong>. Notify the insurance company within <strong>5 days</strong> of hospital admission.</p>
+          <p>Emergency medical expenses incurred while travelling outside your province of residence or outside Canada are reimbursed at <strong>100%</strong>. <strong>Important: if your trip exceeds 30 days, contact PBC before you leave</strong> — trip duration limits may apply.</p>
           <table class="coverage-table">
             <thead>
               <tr><th>Benefit</th><th>Maximum</th></tr>
             </thead>
             <tbody>
-              <tr><td>Hospital room &amp; supplies</td><td>Up to 90 days per person</td></tr>
-              <tr><td>Physician, lab, x-ray services</td><td>100% · No limit</td></tr>
-              <tr><td>Emergency prescription drugs</td><td>Sufficient quantity for acute condition</td></tr>
-              <tr><td>Return airfare for travel companion (family visiting hospitalized person)</td><td>Economy class · Hospitalized &gt; 7 days alone</td></tr>
-              <tr><td>Air fares (all) combined</td><td>$5,000 per family per emergency</td></tr>
+              <tr><td>Hospital services &amp; physician/lab/x-ray (out of province)</td><td>100% · no limit</td></tr>
+              <tr><td>Hospital services &amp; physician/lab/x-ray (outside Canada)</td><td>100% · no limit</td></tr>
+              <tr><td>Air ambulance (attendants as required)</td><td>100%</td></tr>
+              <tr><td>Local ambulance during travel emergency</td><td>100%</td></tr>
+              <tr><td>Emergency prescription drugs during travel</td><td>100%</td></tr>
+              <tr><td>Airfare for family transport (all combined)</td><td>$5,000/family per emergency</td></tr>
               <tr><td>Convalescence accommodation after hospitalization</td><td>$75/day · Max 5 days per emergency</td></tr>
               <tr><td>Family accommodation &amp; meals</td><td>$100/day · Max 7 days per emergency</td></tr>
-              <tr><td>Vehicle return</td><td>$500 per emergency</td></tr>
-              <tr><td>Repatriation of remains</td><td>$5,000 · Cremation outside province: $1,500</td></tr>
+              <tr><td>Vehicle return</td><td>$500/emergency</td></tr>
+              <tr><td>Cremation/repatriation outside Canada</td><td>$1,500 cremation · $5,000 repatriation per lifetime</td></tr>
             </tbody>
           </table>
-          <p style="font-size:.85rem;color:var(--gray-600);margin-top:.5rem;">Travel assistance services (medical evacuation, locating care, coordinating transportation) are provided through <strong>Medi-assist</strong> at no additional charge.</p>
+          <p style="font-size:.85rem;color:var(--gray-600);margin-top:.75rem;"><strong>Medi-Assist</strong> provides 24/7 travel assistance — medical evacuation, locating care, interpreter services, contacting relatives. Call them immediately in an emergency abroad.</p>
         </div>
 
         <!-- Not Covered -->
@@ -605,12 +680,14 @@ $member   = $loggedIn ? getMember() : null;
             <span class="pill no">Over-the-counter medications</span>
             <span class="pill no">Cosmetic procedures</span>
             <span class="pill no">Preventive vaccines</span>
-            <span class="pill no">Occupational therapy</span>
-            <span class="pill no">Air humidifiers / purifiers</span>
+            <span class="pill no">Athletic therapy</span>
+            <span class="pill no">Osteopath treatments</span>
+            <span class="pill no">Drug &amp; alcohol rehabilitation</span>
+            <span class="pill no">Marriage &amp; family therapy</span>
+            <span class="pill no">Naturopath remedies &amp; x-rays</span>
+            <span class="pill no">Podiatry x-rays</span>
             <span class="pill no">Elective out-of-province treatment</span>
-            <span class="pill no">Allergy testing (by non-naturopath)</span>
-            <span class="pill no">Intentional self-inflicted injury</span>
-            <span class="pill no">Treatment during active military duty</span>
+            <span class="pill no">Ambulance (if not transported to hospital)</span>
           </div>
         </div>
 
@@ -621,7 +698,7 @@ $member   = $loggedIn ? getMember() : null;
       ══════════════════════════════════════════════════════════ -->
       <div class="benefits-panel" id="tab-drugs">
 
-        <p>Prescription drug coverage works through two complementary systems: your <strong>Pacific Blue Cross extended health plan</strong> (for drugs not covered by the province) and <strong>BC PharmaCare</strong> (the provincial drug plan). Together they provide broad coverage for most prescribed medications.</p>
+        <p>Prescription drug coverage works through two complementary systems: your <strong>Pacific Blue Cross extended health plan</strong> (for drugs not covered by the province) and <strong>BC PharmaCare</strong> (the provincial drug plan). Together they provide broad coverage for most prescribed medications. Drug claims share the extended health <strong>$50 family deductible</strong> and the 80/100% reimbursement structure.</p>
 
         <!-- Pay-Direct -->
         <div class="ben-section">
