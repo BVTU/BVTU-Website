@@ -104,7 +104,7 @@ $bookmarks = libGetBookmarks($member['email']);
           <li class="has-dropdown"><a href="prod.php">PRO-D</a><ul class="dropdown"><li><a href="prod.php">PRO-D Info</a></li><li><a href="members/prod-dashboard.php">Pro-D Portal</a></li></ul></li>
           <li><a href="health-safety.php">Health &amp; Safety</a></li>
           <li><a href="bctf.php">BCTF</a></li>
-          <li><a href="library.php" class="active">Resource Library</a></li>
+          <li><a href="library.php" class="active">Resource Library</a></li><li><a href="newsletter-archive.php">Newsletters</a></li>
           <li><a href="members/logout.php">Sign Out</a></li>
         </ul>
       </nav>
