@@ -410,6 +410,7 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
         <ul>
           <li><a href="dashboard.php">← Dashboard</a></li>
           <li><a href="lp-dashboard.php">LP Dashboard</a></li>
+          <li><a href="../library.php">Library</a></li>
           <li><a href="../collab-grant.php" target="_blank">View grant page ↗</a></li>
         </ul>
       </nav>
