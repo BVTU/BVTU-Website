@@ -424,8 +424,9 @@ $loggedIn = isLoggedIn();
       chipWrap.innerHTML = tags.map(t =>
         `<span style="display:inline-flex;align-items:center;gap:.25rem;background:#0369a1;color:#fff;padding:.18rem .55rem;border-radius:100px;font-size:.72rem;font-weight:600;">
            ${t}
-           <button type="button" onclick="removeTag('${t.replace(/'/g,"\\'")}'))"
-             style="background:none;border:none;color:#fff;cursor:pointer;font-size:.8rem;padding:0;line-height:1;">×</button>
+           <button type="button" onclick="removeTag('${t.replace(/'/g,"\\'")}')"
+             style="background:none;border:none;color:#fff;cursor:pointer;font-size:.85rem;padding:0 0 0 .15rem;line-height:1;opacity:.75;"
+             onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.75'">×</button>
          </span>`
       ).join('');
     }
