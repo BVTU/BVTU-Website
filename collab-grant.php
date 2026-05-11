@@ -62,10 +62,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
 
     if (!$formError) {
         try {
-            $appId = cgSubmitApplication($formData);
-            $formData['id'] = $appId;
-            cgSendNewApplicationNotification($formData);
-            cgSendSubmissionConfirmation($formData);
+            $appId  = cgSubmitApplication($formData);
+            $appRow = cgGetApplication($appId); // fetch DB record so column names match
+            cgSendNewApplicationNotification($appRow);
+            cgSendSubmissionConfirmation($appRow);
             $formSuccess = true;
             $formData = []; // clear form
         } catch (Exception $e) {
