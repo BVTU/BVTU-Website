@@ -158,6 +158,50 @@ $loggedIn = isLoggedIn();
       font-size: .9rem; color: var(--gray-700); cursor: pointer;
     }
     @media (max-width: 600px) { .upload-row { grid-template-columns: 1fr; } }
+
+    /* ── Drag-and-drop zone ─────────────────────────────────── */
+    .drop-zone {
+      border: 2px dashed var(--gray-200); border-radius: 10px;
+      padding: 2rem 1.5rem; text-align: center; cursor: pointer;
+      transition: border-color .2s, background .2s;
+      background: #fafafa; position: relative;
+    }
+    .drop-zone:hover, .drop-zone.dz-over {
+      border-color: var(--primary); background: #f0f9f3;
+    }
+    .drop-zone.dz-ready {
+      border-color: var(--primary); border-style: solid; background: #f0f9f3;
+    }
+    .drop-zone.dz-error {
+      border-color: #dc2626; background: #fef2f2;
+    }
+    .drop-zone input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer;
+      width: 100%; height: 100%; border: none; padding: 0;
+    }
+    .dz-icon { font-size: 2rem; line-height: 1; margin-bottom: .5rem; }
+    .dz-primary-text {
+      font-size: .95rem; font-weight: 600; color: var(--gray-700); margin: 0 0 .25rem;
+    }
+    .dz-sub-text {
+      font-size: .78rem; color: var(--gray-400);
+    }
+    .dz-file-info {
+      display: none; margin-top: .75rem; padding: .6rem .9rem;
+      background: #fff; border: 1px solid var(--gray-200); border-radius: 7px;
+      font-size: .85rem; color: var(--gray-700);
+      align-items: center; gap: .6rem; justify-content: center;
+    }
+    .dz-file-info.visible { display: flex; }
+    .dz-file-icon { font-size: 1.15rem; }
+    .dz-file-name { font-weight: 600; }
+    .dz-file-size { color: var(--gray-400); font-size: .78rem; }
+    .dz-clear {
+      margin-left: auto; background: none; border: none; cursor: pointer;
+      color: var(--gray-400); font-size: 1rem; line-height: 1; padding: 0;
+      transition: color .15s;
+    }
+    .dz-clear:hover { color: #dc2626; }
   </style>
 </head>
 <body>
@@ -344,12 +388,26 @@ $loggedIn = isLoggedIn();
             <div class="upload-section-label">File</div>
 
             <div class="upload-group">
-              <label class="upload-label" for="ul-file">
+              <label class="upload-label">
                 File <span class="req">*</span>
                 <span class="hint">PDF, DOCX, or PPTX · max 20 MB</span>
               </label>
-              <input type="file" id="ul-file" name="resource_file" accept=".pdf,.docx,.pptx" required>
-              <p id="ul-file-info" style="font-size:.78rem;color:var(--gray-400);margin-top:.25rem;"></p>
+              <div class="drop-zone" id="drop-zone" role="button" tabindex="0"
+                   aria-label="Drag and drop file here, or click to browse">
+                <!-- Hidden real input sits over the zone for click-to-browse -->
+                <input type="file" id="ul-file" name="resource_file"
+                       accept=".pdf,.docx,.pptx" required>
+                <div class="dz-icon" id="dz-icon">📁</div>
+                <p class="dz-primary-text" id="dz-primary">Drag &amp; drop your file here</p>
+                <p class="dz-sub-text">or <strong style="color:var(--primary)">click to browse</strong> — PDF, DOCX, or PPTX up to 20 MB</p>
+                <div class="dz-file-info" id="dz-file-info">
+                  <span class="dz-file-icon" id="dz-file-icon">📄</span>
+                  <span class="dz-file-name" id="dz-file-name"></span>
+                  <span class="dz-file-size" id="dz-file-size"></span>
+                  <button type="button" class="dz-clear" id="dz-clear" title="Remove file"
+                          onclick="event.stopPropagation();clearFile();">✕</button>
+                </div>
+              </div>
             </div>
 
             <label class="anon-toggle">
@@ -385,14 +443,98 @@ $loggedIn = isLoggedIn();
   <script src="js/site.js"></script>
   <script src="js/search.js"></script>
   <script>
-    // File size display
-    document.getElementById('ul-file').addEventListener('change', function () {
-      const info = document.getElementById('ul-file-info');
-      if (this.files[0]) {
-        const mb = (this.files[0].size / 1048576).toFixed(1);
-        info.textContent = this.files[0].name + ' — ' + mb + ' MB';
-        info.style.color = this.files[0].size > 20971520 ? '#dc2626' : 'var(--gray-500)';
+    // ── Drag-and-drop + click-to-browse ───────────────────────
+    const dropZone   = document.getElementById('drop-zone');
+    const fileInput  = document.getElementById('ul-file');
+    const dzIcon     = document.getElementById('dz-icon');
+    const dzPrimary  = document.getElementById('dz-primary');
+    const dzFileInfo = document.getElementById('dz-file-info');
+    const dzFileName = document.getElementById('dz-file-name');
+    const dzFileSize = document.getElementById('dz-file-size');
+    const dzFileIcon = document.getElementById('dz-file-icon');
+    const MAX_BYTES  = 20971520; // 20 MB
+    const ALLOWED    = ['.pdf','.docx','.pptx'];
+
+    function extIcon(name) {
+      const e = name.split('.').pop().toLowerCase();
+      if (e === 'pdf')  return '📕';
+      if (e === 'docx') return '📘';
+      if (e === 'pptx') return '📙';
+      return '📄';
+    }
+
+    function showFile(file) {
+      const ext = '.' + file.name.split('.').pop().toLowerCase();
+      const tooBig = file.size > MAX_BYTES;
+      const badExt = !ALLOWED.includes(ext);
+
+      if (tooBig || badExt) {
+        dropZone.classList.remove('dz-ready', 'dz-over');
+        dropZone.classList.add('dz-error');
+        dzIcon.textContent    = '⚠️';
+        dzPrimary.textContent = tooBig
+          ? 'File is too large (max 20 MB)'
+          : 'Unsupported file type — use PDF, DOCX, or PPTX';
+        dzPrimary.style.color = '#dc2626';
+        dzFileInfo.classList.remove('visible');
+        // Clear the input so server-side validation also catches it
+        fileInput.value = '';
+        return;
       }
+
+      dropZone.classList.remove('dz-over', 'dz-error');
+      dropZone.classList.add('dz-ready');
+      dzIcon.textContent    = '✅';
+      dzPrimary.textContent = 'File ready to upload';
+      dzPrimary.style.color = 'var(--primary)';
+      dzFileIcon.textContent = extIcon(file.name);
+      dzFileName.textContent = file.name;
+      dzFileSize.textContent = (file.size / 1048576).toFixed(1) + ' MB';
+      dzFileInfo.classList.add('visible');
+    }
+
+    function clearFile() {
+      fileInput.value = '';
+      dropZone.classList.remove('dz-ready', 'dz-error', 'dz-over');
+      dzIcon.textContent    = '📁';
+      dzPrimary.textContent = 'Drag & drop your file here';
+      dzPrimary.style.color = '';
+      dzFileInfo.classList.remove('visible');
+    }
+
+    // Click-to-browse: the hidden <input> already covers the zone, but
+    // keyboard Enter/Space also trigger it
+    dropZone.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+    });
+
+    fileInput.addEventListener('change', function () {
+      if (this.files[0]) showFile(this.files[0]);
+    });
+
+    // Drag events
+    ['dragenter','dragover'].forEach(evt => {
+      dropZone.addEventListener(evt, e => {
+        e.preventDefault(); e.stopPropagation();
+        if (!dropZone.classList.contains('dz-ready')) dropZone.classList.add('dz-over');
+      });
+    });
+    dropZone.addEventListener('dragleave', e => {
+      // Only remove when leaving the zone itself, not a child
+      if (!dropZone.contains(e.relatedTarget)) dropZone.classList.remove('dz-over');
+    });
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault(); e.stopPropagation();
+      dropZone.classList.remove('dz-over');
+      const file = e.dataTransfer.files[0];
+      if (!file) return;
+      // Assign dropped file to the input via DataTransfer
+      try {
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        fileInput.files = dt.files;
+      } catch (_) { /* Safari fallback — validation will still catch bad files */ }
+      showFile(file);
     });
 
     // ── Existing tags from DB (for autocomplete) ──────────────
