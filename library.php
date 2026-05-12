@@ -576,6 +576,17 @@ function buildUrl(array $overrides = []): string {
   <script src="js/site.js"></script>
   <script src="js/search.js"></script>
   <script>
+    // Clearing the search field (native × button or deleting all text) submits
+    // the form, which drops the ?tag= / ?uploader= params since they are not
+    // hidden inputs — returning the user to the unfiltered library.
+    const searchInput = document.querySelector('.lib-search-bar input[type="search"]');
+    if (searchInput) {
+      // 'search' fires when the native clear button is clicked
+      searchInput.addEventListener('search', function () {
+        if (!this.value) this.form.submit();
+      });
+    }
+
     // Bookmark toggle on library cards
     document.querySelectorAll('.lib-bm-btn').forEach(btn => {
       btn.addEventListener('click', function(e) {
