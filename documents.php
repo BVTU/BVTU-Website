@@ -81,7 +81,15 @@
       <nav class="main-nav" id="main-nav">
         <ul>
           
-          <li><a href="documents.php" class="active">Documents</a></li>
+          <li class="has-dropdown active">
+            <a href="documents.php" class="active">Documents</a>
+            <ul class="dropdown">
+              <li><a href="documents.php">All Documents</a></li>
+              <li><a href="collective-agreement.php">Collective Agreement</a></li>
+              <li><a href="lous.php">Letters of Understanding</a></li>
+              <li><a href="ca-assistant.php">Contract Assistant</a></li>
+            </ul>
+          </li>
 <li class="has-dropdown">
             <a href="members.php">Members</a>
             <ul class="dropdown">
@@ -162,13 +170,9 @@
         <div class="doc-category">
           <h3>BVTU Governance</h3>
           <div class="doc-list">
-            <a href="mailto:lp54@bctf.ca?subject=BVTU Bylaws" class="doc-item">
+            <a href="documents/BVTU-Constitution-and-Bylaws-2026.pdf" class="doc-item" target="_blank" rel="noopener">
               <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-              BVTU Bylaws <span style="font-size:.8rem;color:var(--gray-500);">(request from president)</span>
-            </a>
-            <a href="mailto:lp54@bctf.ca?subject=BVTU Constitution" class="doc-item">
-              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-              BVTU Constitution <span style="font-size:.8rem;color:var(--gray-500);">(request from president)</span>
+              BVTU Constitution &amp; Bylaws <span style="font-size:.8rem;color:var(--gray-500);">Approved May 2026</span>
             </a>
           </div>
         </div>
