@@ -514,8 +514,8 @@ function buildUrl(array $overrides = []): string {
 
                 <a href="library-resource.php?id=<?= $r['id'] ?>" class="lib-card-link" style="display:flex;flex-direction:column;flex:1;color:inherit;text-decoration:none;">
                   <div class="lib-card-top">
-                    <div></div>
                     <span class="lib-card-type"><?= htmlspecialchars($r['resource_type']) ?></span>
+                    <div></div>
                   </div>
                   <div class="lib-card-title"><?= htmlspecialchars($r['title']) ?></div>
                   <?php if (!$r['anonymous']): ?>
