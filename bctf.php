@@ -135,58 +135,6 @@ $member   = $loggedIn ? getMember() : null;
 
       </div>
 
-      <div class="content-block">
-        <h2>About the BCTF</h2>
-        <p>The BC Teachers' Federation is the union representing over 48,000 public school teachers in British Columbia. BVTU operates as a local within the BCTF, and all BVTU members are automatically BCTF members.</p>
-        <ul class="resource-list">
-          <li><a href="https://bctf.ca" target="_blank" rel="noopener">BCTF Website</a></li>
-          <li><a href="https://bctf.ca/about-bctf" target="_blank" rel="noopener">About the BCTF</a></li>
-        </ul>
-      </div>
-
-      <div class="content-block">
-        <h2>Provincial Collective Agreement</h2>
-        <p>The provincial collective agreement sets out the terms and conditions of employment for all BC public school teachers. It is negotiated between the BCTF and the BC Public School Employers' Association (BCPSEA).</p>
-        <div class="doc-list">
-          <a href="https://bctf.ca/bargaining/provincial-collective-agreement" class="doc-item" target="_blank" rel="noopener">
-            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            Provincial Collective Agreement (Current)
-          </a>
-        </div>
-        <ul class="resource-list" style="margin-top:1rem;">
-          <li><a href="https://bctf.ca/your-collective-agreement" target="_blank" rel="noopener">BCTF — Your Collective Agreement</a></li>
-        </ul>
-      </div>
-
-      <div class="content-block">
-        <h2>Bargaining Updates</h2>
-        <p>Bargaining between the BCTF and BCPSEA takes place on a regular cycle. Stay informed on the latest updates through the BCTF website.</p>
-        <div class="info-box">
-          <p>For the most current bargaining news, visit <a href="https://bctf.ca/bargaining" target="_blank" rel="noopener">bctf.ca/bargaining</a> or watch for communications from BVTU.</p>
-        </div>
-      </div>
-
-      <div class="content-block">
-        <h2>Member Discount Programs</h2>
-        <p>BCTF members have access to a wide range of discounts on insurance, travel, and services through the BCTF Member Benefits program.</p>
-        <ul class="resource-list">
-          <li><a href="https://bctf.ca/member-services/benefits-and-services" target="_blank" rel="noopener">BCTF Member Benefits &amp; Services</a></li>
-          <li><a href="https://bctf.ca/member-services/insurance" target="_blank" rel="noopener">BCTF Insurance Programs</a></li>
-          <li><a href="https://bctf.ca/member-services/travel" target="_blank" rel="noopener">BCTF Travel Discounts</a></li>
-        </ul>
-      </div>
-
-      <div class="content-block">
-        <h2>Useful BCTF Links</h2>
-        <ul class="resource-list">
-          <li><a href="https://bctf.ca/your-career" target="_blank" rel="noopener">Your Career — New Teacher Resources</a></li>
-          <li><a href="https://bctf.ca/social-justice" target="_blank" rel="noopener">Social Justice &amp; Equity</a></li>
-          <li><a href="https://bctf.ca/pro-d" target="_blank" rel="noopener">Professional Development</a></li>
-          <li><a href="https://bctf.ca/news" target="_blank" rel="noopener">BCTF News</a></li>
-          <li><a href="https://bctf.ca/contact" target="_blank" rel="noopener">Contact the BCTF</a></li>
-        </ul>
-      </div>
-
     </div>
   </main>
 

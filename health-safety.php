@@ -80,21 +80,21 @@ $member   = $loggedIn ? getMember() : null;
       </style>
       <div class="member-page-grid">
 
-        <a href="#safety-committee" class="member-page-card">
+        <a href="contact.php" class="member-page-card">
           <div class="member-page-card-icon">
             <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
           </div>
           <h3>Workplace Safety Committee</h3>
-          <p>Joint OH&amp;S committee — how to raise safety concerns and who to contact.</p>
-          <div class="member-page-card-arrow">Learn more →</div>
+          <p>Joint OH&amp;S committee — raise a safety concern with your school rep or union president.</p>
+          <div class="member-page-card-arrow">Contact us →</div>
         </a>
 
-        <a href="#violence" class="member-page-card">
+        <a href="https://www.worksafebc.com/en/health-safety/hazards-exposures/violence" target="_blank" rel="noopener" class="member-page-card">
           <div class="member-page-card-icon">
             <svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           </div>
           <h3>Violence in the Workplace</h3>
-          <p>Your rights, how to report incidents, and support resources.</p>
+          <p>Your rights, how to report incidents, and WorkSafe BC guidance on violence prevention.</p>
           <div class="member-page-card-arrow">View resources →</div>
         </a>
 
@@ -116,7 +116,7 @@ $member   = $loggedIn ? getMember() : null;
           <div class="member-page-card-arrow">Access EFAP →</div>
         </a>
 
-        <a href="#mental-health" class="member-page-card">
+        <a href="https://bctf.ca/member-services/health-and-wellness" target="_blank" rel="noopener" class="member-page-card">
           <div class="member-page-card-icon">
             <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
           </div>
@@ -125,68 +125,6 @@ $member   = $loggedIn ? getMember() : null;
           <div class="member-page-card-arrow">View resources →</div>
         </a>
 
-      </div>
-
-      <div class="content-block" id="safety-committee">
-        <h2>Workplace Safety Committee</h2>
-        <p>The joint Occupational Health &amp; Safety committee works with School District 54 to identify and address workplace hazards. Members can raise safety concerns through their school rep or the union president.</p>
-        <div class="info-box">
-          <p>Have a safety concern? Contact the union president or your school's OH&amp;S representative. All concerns are taken seriously and followed up promptly.</p>
-        </div>
-      </div>
-
-      <div class="content-block" id="violence">
-        <h2>Violence in the Workplace</h2>
-        <p>Teachers are entitled to a safe working environment. If you experience or witness violence in the workplace, you have the right to report it and receive support.</p>
-        <div class="doc-list">
-          <a href="https://www.worksafebc.com/en/claims" class="doc-item" target="_blank" rel="noopener">
-            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            Violence Incident Report Form (WorkSafeBC)
-          </a>
-          <a href="https://www.sd54.bc.ca" class="doc-item" target="_blank" rel="noopener">
-            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            Violence Prevention Policy (SD54 website)
-          </a>
-        </div>
-      </div>
-
-      <div class="content-block">
-        <h2>WorkSafe BC</h2>
-        <p>Work-related injuries must be reported to WorkSafe BC. Forms and guidance are available below. Contact the union if you need support navigating a WorkSafe claim.</p>
-        <div class="doc-list">
-          <a href="https://www.worksafebc.com/en/claims" class="doc-item" target="_blank" rel="noopener">
-            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            WorkSafe Claim Forms &amp; Guides (WorkSafeBC website)
-          </a>
-        </div>
-        <ul class="resource-list" style="margin-top:1rem;">
-          <li><a href="https://www.worksafebc.com" target="_blank" rel="noopener">WorkSafe BC Website</a></li>
-        </ul>
-      </div>
-
-      <div class="content-block">
-        <h2>Employee &amp; Family Assistance Program</h2>
-        <p>The Employee and Family Assistance Program (EFAP) provides free, confidential counselling and support services for teachers and their immediate family members.</p>
-        <div class="info-box">
-          <p>EFAP services are available 24/7. Access is confidential — your employer is not informed. Contact details are in your benefits package or ask the union president.</p>
-        </div>
-        <div class="doc-list">
-          <a href="https://bctf.ca/member-services/efap" class="doc-item" target="_blank" rel="noopener">
-            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            EFAP Information (BCTF website)
-          </a>
-        </div>
-      </div>
-
-      <div class="content-block" id="mental-health">
-        <h2>Mental Health Resources</h2>
-        <p>Teaching is demanding work. BVTU is committed to supporting member mental health and well-being.</p>
-        <ul class="resource-list">
-          <li><a href="https://bctf.ca/member-services/health-and-wellness" target="_blank" rel="noopener">BCTF Health &amp; Wellness Resources</a></li>
-          <li><a href="https://www.crisiscentre.bc.ca" target="_blank" rel="noopener">BC Crisis Centre (1-800-SUICIDE)</a></li>
-          <li><a href="https://www.bouncebackbc.ca" target="_blank" rel="noopener">BounceBack BC — Free Mental Health Program</a></li>
-          <li><a href="https://here2talk.ca" target="_blank" rel="noopener">Here2Talk — Counselling for Educators</a></li>
-        </ul>
       </div>
 
     </div>
