@@ -68,6 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['lib_edit'])) {
             'materials'     => $materials ?: null,
             'tags'          => $tags,
             'anonymous'     => $anonymous,
+            'preview_pages' => (int)($_POST['preview_pages'] ?? 3),
         ];
 
         if ($thumbAction === 'remove') {
@@ -379,6 +380,33 @@ $loggedIn = true; // we already auth-checked above
             </div>
             <div id="tag-chips" style="display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.5rem;min-height:1.5rem;"></div>
           </div>
+
+          <?php if ($resource['file_ext'] === 'pdf'): ?>
+          <div class="upload-section-label">Preview pages</div>
+          <div class="upload-group">
+            <label class="upload-label" for="ul-preview-pages">
+              Pages to preview
+              <span class="hint">How many pages visitors can see before downloading</span>
+            </label>
+            <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
+              <select id="ul-preview-pages" name="preview_pages"
+                      style="width:auto;border:1.5px solid var(--gray-200);border-radius:8px;padding:.55rem .85rem;font-size:.93rem;font-family:inherit;background:#fff;">
+                <?php for ($p = 1; $p <= 10; $p++): ?>
+                  <option value="<?= $p ?>" <?= (int)$resource['preview_pages'] === $p ? 'selected' : '' ?>>
+                    <?= $p ?> page<?= $p > 1 ? 's' : '' ?>
+                  </option>
+                <?php endfor; ?>
+              </select>
+              <span style="font-size:.82rem;color:var(--gray-400);">
+                <?php
+                  // We don't know total pages here (server-side) — just show current setting
+                  $pp = (int)$resource['preview_pages'];
+                  echo "Currently showing the first $pp page" . ($pp > 1 ? 's' : '') . " as a preview";
+                ?>
+              </span>
+            </div>
+          </div>
+          <?php endif; ?>
 
           <!-- ── Cover image ────────────────────────────────────── -->
           <div class="upload-section-label">

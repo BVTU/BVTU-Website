@@ -5,20 +5,25 @@
  */
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/library-db.php';
-requireLogin();
 
-$id       = (int)($_GET['id']   ?? 0);
-$fileId   = (int)($_GET['file'] ?? 0);   // optional: secondary file id
-$member   = getMember();
+$id        = (int)($_GET['id']   ?? 0);
+$fileId    = (int)($_GET['file'] ?? 0);
+$isPreview = isset($_GET['preview']);
+
+// Preview mode is public (no login required) — download mode requires auth
+if (!$isPreview) {
+    requireLogin();
+}
+
+$member   = isLoggedIn() ? getMember() : null;
+$isAdmin  = $member ? libIsAdmin($member['email']) : false;
 $resource = $id ? libGetResource($id) : null;
 
-// Admins can download unpublished resources; members cannot
-if (!$resource || ($resource['status'] !== 'published' && !libIsAdmin($member['email']))) {
+// Guests may only preview published resources; unpublished requires admin
+if (!$resource || ($resource['status'] !== 'published' && !$isAdmin)) {
     http_response_code(404);
     exit('Resource not found.');
 }
-
-$isPreview = isset($_GET['preview']);
 
 if ($fileId) {
     // ── Serve an additional file ──────────────────────────────

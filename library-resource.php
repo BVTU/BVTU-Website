@@ -412,6 +412,29 @@ $loginUrl    = 'members/login.php?redirect=' . urlencode('../library-resource.ph
     .admin-btn-pub   { background: #10b981; color: #fff; }
     .admin-btn-del   { background: #ef4444; color: #fff; }
 
+    /* ── PDF preview ─────────────────────────────────────────── */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .pdf-page-canvas {
+      max-width: 100%;
+      border-radius: 3px;
+      box-shadow: 0 2px 16px rgba(0,0,0,.45);
+      display: block;
+      margin: 0 auto;
+    }
+    .pdf-page-wrap {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: .3rem;
+      padding-bottom: 1rem;
+    }
+    .pdf-page-num {
+      font-size: .68rem;
+      color: rgba(255,255,255,.35);
+      letter-spacing: .04em;
+    }
+
     /* ── Not found ───────────────────────────────────────────── */
     .not-found-wrap {
       text-align: center;
@@ -556,23 +579,59 @@ $loginUrl    = 'members/login.php?redirect=' . urlencode('../library-resource.ph
 
             <!-- PDF Preview -->
             <?php if (!isset($notFound) && $resource['file_ext'] === 'pdf'): ?>
-            <div id="pdf-preview-wrap" style="background:#f3f4f6;border-bottom:1.5px solid var(--border);padding:1.25rem;text-align:center;">
-              <div id="pdf-loading" style="font-size:.85rem;color:var(--gray-400);padding:2rem 0;">Loading preview…</div>
-              <canvas id="pdf-canvas" style="max-width:100%;border-radius:4px;box-shadow:0 2px 12px rgba(0,0,0,.15);display:none;"></canvas>
-              <div id="pdf-error" style="display:none;font-size:.83rem;color:var(--gray-400);padding:1.5rem 0;">
-                Preview unavailable — <a href="<?= $downloadUrl ?>" style="color:var(--primary);font-weight:600;">download the file</a> to view it.
+            <div id="pdf-preview-wrap" style="background:#525659;border-bottom:1.5px solid var(--border);">
+
+              <!-- Header bar -->
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem 1rem;background:rgba(0,0,0,.25);flex-wrap:wrap;gap:.5rem;">
+                <span id="pdf-page-info" style="font-size:.75rem;color:rgba(255,255,255,.7);font-weight:500;">Loading preview…</span>
+                <div style="display:flex;align-items:center;gap:.6rem;">
+                  <?php if ($isOwner || $isAdmin): ?>
+                  <button id="use-preview-btn" onclick="captureCanvasAsThumb(false)"
+                          style="display:none;font-size:.72rem;font-weight:600;color:rgba(255,255,255,.8);background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:5px;padding:.2rem .65rem;cursor:pointer;transition:background .15s;"
+                          onmouseover="this.style.background='rgba(255,255,255,.22)'"
+                          onmouseout="this.style.background='rgba(255,255,255,.12)'">
+                    🖼 Use as thumbnail
+                  </button>
+                  <?php endif; ?>
+                  <span style="font-size:.72rem;color:rgba(255,255,255,.5);">PDF preview</span>
+                </div>
               </div>
-              <div style="display:flex;align-items:center;justify-content:center;gap:1rem;flex-wrap:wrap;margin-top:.65rem;">
-                <p style="font-size:.72rem;color:var(--gray-400);margin:0;">Page 1 preview · <a href="<?= $downloadUrl ?>" style="color:var(--primary);font-weight:600;">Download full file</a></p>
-                <?php if ($isOwner || $isAdmin): ?>
-                <button id="use-preview-btn"
-                        onclick="captureCanvasAsThumb(false)"
-                        style="display:none;align-items:center;gap:.3rem;font-size:.72rem;font-weight:600;color:var(--primary);background:none;border:1px solid var(--primary);border-radius:5px;padding:.2rem .6rem;cursor:pointer;transition:background .15s;"
-                        onmouseover="this.style.background='var(--accent)'"
-                        onmouseout="this.style.background='none'">
-                  🖼 Use as thumbnail
-                </button>
-                <?php endif; ?>
+
+              <!-- Pages will be injected here -->
+              <div id="pdf-pages" style="display:flex;flex-direction:column;align-items:center;gap:0;padding:1rem 1.25rem;"></div>
+
+              <!-- Loading spinner (shown while rendering) -->
+              <div id="pdf-loading" style="text-align:center;padding:3rem 1rem;color:rgba(255,255,255,.5);font-size:.88rem;">
+                <div style="font-size:1.5rem;margin-bottom:.5rem;animation:spin 1s linear infinite;display:inline-block;">⟳</div><br>
+                Loading preview…
+              </div>
+
+              <!-- Locked overlay (shown when there are more pages) -->
+              <div id="pdf-locked" style="display:none;position:relative;overflow:hidden;margin:0 1.25rem 1rem;border-radius:8px;">
+                <canvas id="pdf-locked-canvas" style="width:100%;display:block;filter:blur(5px);transform:scale(1.05);opacity:.55;"></canvas>
+                <div style="position:absolute;inset:0;background:linear-gradient(to bottom,rgba(82,86,89,0) 0%,rgba(82,86,89,.7) 35%,rgba(82,86,89,.97) 100%);display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:1.5rem 1rem;">
+                  <div style="text-align:center;">
+                    <div style="font-size:.88rem;color:rgba(255,255,255,.85);font-weight:600;margin-bottom:.35rem;" id="pdf-locked-msg"></div>
+                    <div style="font-size:.8rem;color:rgba(255,255,255,.6);margin-bottom:.85rem;">Download the full resource to read more.</div>
+                    <?php if ($loggedIn): ?>
+                    <a href="<?= $downloadUrl ?>" class="download-btn"
+                       data-download data-filename="<?= htmlspecialchars($resource['file_name']) ?>"
+                       style="display:inline-flex;width:auto;padding:.55rem 1.5rem;font-size:.88rem;">
+                      <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                      Download full PDF
+                    </a>
+                    <?php else: ?>
+                    <a href="<?= $loginUrl ?>" style="display:inline-block;background:var(--primary);color:#fff;font-weight:700;font-size:.88rem;padding:.55rem 1.5rem;border-radius:var(--radius-s);text-decoration:none;">
+                      Log in to download
+                    </a>
+                    <?php endif; ?>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Error state -->
+              <div id="pdf-error" style="display:none;text-align:center;padding:2rem 1rem;color:rgba(255,255,255,.5);font-size:.85rem;">
+                Preview unavailable — <a href="<?= $downloadUrl ?>" style="color:rgba(255,255,255,.8);font-weight:600;">download the file</a> to view it.
               </div>
             </div>
             <?php elseif (!isset($notFound) && in_array($resource['file_ext'], ['docx','pptx'])): ?>
@@ -955,33 +1014,38 @@ $loginUrl    = 'members/login.php?redirect=' . urlencode('../library-resource.ph
   <script src="js/site.js"></script>
 
   <?php if (!isset($notFound) && $resource['file_ext'] === 'pdf'): ?>
-  <!-- PDF.js preview -->
+  <!-- PDF.js multi-page preview -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
     pdfjsLib.GlobalWorkerOptions.workerSrc =
       'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-    const pdfUrl  = '<?= $previewUrl ?>';
-    const canvas  = document.getElementById('pdf-canvas');
-    const loading = document.getElementById('pdf-loading');
-    const errEl   = document.getElementById('pdf-error');
+    const pdfUrl        = '<?= $previewUrl ?>';
+    const MAX_PREVIEW   = <?= max(1, min(10, (int)($resource['preview_pages'] ?? 3))) ?>;
+    const pagesWrap     = document.getElementById('pdf-pages');
+    const loadingEl     = document.getElementById('pdf-loading');
+    const errEl         = document.getElementById('pdf-error');
+    const pageInfoEl    = document.getElementById('pdf-page-info');
+    const lockedEl      = document.getElementById('pdf-locked');
+    const lockedCanvas  = document.getElementById('pdf-locked-canvas');
+    const lockedMsg     = document.getElementById('pdf-locked-msg');
 
     <?php if ($isOwner || $isAdmin): ?>
-    const RESOURCE_ID    = <?= $id ?>;
-    const HAS_THUMBNAIL  = <?= empty($resource['thumbnail_path']) ? 'false' : 'true' ?>;
+    const RESOURCE_ID   = <?= $id ?>;
+    const HAS_THUMBNAIL = <?= empty($resource['thumbnail_path']) ? 'false' : 'true' ?>;
+    let   firstCanvas   = null; // for thumbnail capture
 
-    // Capture the rendered canvas and POST to the save endpoint
     function captureCanvasAsThumb(silent) {
+      if (!firstCanvas) return;
       try {
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
+        const dataUrl = firstCanvas.toDataURL('image/jpeg', 0.88);
         const fd = new FormData();
         fd.append('id',    RESOURCE_ID);
         fd.append('image', dataUrl);
-        fetch('library-thumb-capture.php', { method: 'POST', credentials: 'same-origin', body: fd })
+        fetch('library-thumb-capture.php', { method:'POST', credentials:'same-origin', body:fd })
           .then(r => r.json())
           .then(data => {
             if (data.ok) {
-              // Update the thumbnail image in the Details sidebar (if present)
               const sideThumb = document.getElementById('side-thumb-img');
               if (sideThumb) {
                 sideThumb.src = data.path + '?t=' + Date.now();
@@ -989,44 +1053,85 @@ $loginUrl    = 'members/login.php?redirect=' . urlencode('../library-resource.ph
               }
               if (!silent) {
                 const btn = document.getElementById('use-preview-btn');
-                if (btn) { btn.textContent = '✓ Saved as thumbnail'; btn.disabled = true; }
+                if (btn) { btn.textContent = '✓ Saved'; btn.disabled = true; }
               }
             }
-          })
-          .catch(() => {});
+          }).catch(() => {});
       } catch(e) {}
     }
     <?php endif; ?>
 
+    function renderPage(pdf, pageNum, totalPages, maxWidth) {
+      return pdf.getPage(pageNum).then(page => {
+        const vp0   = page.getViewport({ scale: 1 });
+        const scale = Math.min(1.8, maxWidth / vp0.width);
+        const vp    = page.getViewport({ scale });
+
+        const canvas  = document.createElement('canvas');
+        canvas.width  = vp.width;
+        canvas.height = vp.height;
+        canvas.className = 'pdf-page-canvas';
+
+        const wrap = document.createElement('div');
+        wrap.className = 'pdf-page-wrap';
+        wrap.appendChild(canvas);
+        const lbl = document.createElement('span');
+        lbl.className   = 'pdf-page-num';
+        lbl.textContent = 'Page ' + pageNum + (totalPages > MAX_PREVIEW ? ' of ' + totalPages : '');
+        wrap.appendChild(lbl);
+        pagesWrap.appendChild(wrap);
+
+        return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise
+          .then(() => canvas);
+      });
+    }
+
     pdfjsLib.getDocument(pdfUrl).promise.then(pdf => {
-      return pdf.getPage(1);
-    }).then(page => {
-      const wrap      = document.getElementById('pdf-preview-wrap');
-      const maxWidth  = wrap.clientWidth - 40;
-      const viewport0 = page.getViewport({ scale: 1 });
-      const scale     = Math.min(1.5, maxWidth / viewport0.width);
-      const viewport  = page.getViewport({ scale });
+      const totalPages  = pdf.numPages;
+      const showPages   = Math.min(MAX_PREVIEW, totalPages);
+      const wrap        = document.getElementById('pdf-preview-wrap');
+      const maxWidth    = Math.min(wrap.clientWidth - 40, 800);
 
-      canvas.width  = viewport.width;
-      canvas.height = viewport.height;
+      // Update header info
+      pageInfoEl.textContent = showPages < totalPages
+        ? 'Preview — ' + showPages + ' of ' + totalPages + ' pages'
+        : 'Preview — ' + totalPages + ' page' + (totalPages > 1 ? 's' : '');
 
-      return page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-    }).then(() => {
-      loading.style.display = 'none';
-      canvas.style.display  = 'block';
+      // Render preview pages sequentially
+      const renderSequential = (n) => {
+        if (n > showPages) return Promise.resolve();
+        return renderPage(pdf, n, totalPages, maxWidth).then(canvas => {
+          if (n === 1) {
+            loadingEl.style.display = 'none';
+            <?php if ($isOwner || $isAdmin): ?>
+            firstCanvas = canvas;
+            document.getElementById('use-preview-btn').style.display = 'inline-flex';
+            if (!HAS_THUMBNAIL) captureCanvasAsThumb(true);
+            <?php endif; ?>
+          }
+          return renderSequential(n + 1);
+        });
+      };
 
-      <?php if ($isOwner || $isAdmin): ?>
-      // Show the "Use as thumbnail" button now that we have a rendered canvas
-      const btn = document.getElementById('use-preview-btn');
-      if (btn) btn.style.display = 'inline-flex';
-
-      // Auto-capture silently if there's no thumbnail yet
-      if (!HAS_THUMBNAIL) captureCanvasAsThumb(true);
-      <?php endif; ?>
-
+      return renderSequential(1).then(() => {
+        // If document has more pages, show blurred locked section
+        if (totalPages > showPages) {
+          const remaining = totalPages - showPages;
+          lockedMsg.textContent = remaining + ' more page' + (remaining > 1 ? 's' : '') + ' in this document';
+          // Render next page blurred as a teaser
+          return pdf.getPage(showPages + 1).then(page => {
+            const vp0   = page.getViewport({ scale: 1 });
+            const scale = Math.min(1.8, maxWidth / vp0.width);
+            const vp    = page.getViewport({ scale });
+            lockedCanvas.width  = vp.width;
+            lockedCanvas.height = vp.height;
+            return page.render({ canvasContext: lockedCanvas.getContext('2d'), viewport: vp }).promise;
+          }).then(() => { lockedEl.style.display = 'block'; });
+        }
+      });
     }).catch(() => {
-      loading.style.display = 'none';
-      errEl.style.display   = 'block';
+      loadingEl.style.display = 'none';
+      errEl.style.display     = 'block';
     });
   </script>
   <?php endif; ?>

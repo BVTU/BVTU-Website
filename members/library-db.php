@@ -130,6 +130,7 @@ function libEnsureTables(): void {
     // Migrations for existing tables
     try { $db->exec("ALTER TABLE library_resources ADD COLUMN tags VARCHAR(500) NOT NULL DEFAULT ''"); } catch (\PDOException $e) {}
     try { $db->exec("ALTER TABLE library_resources ADD COLUMN thumbnail_path VARCHAR(500) NOT NULL DEFAULT ''"); } catch (\PDOException $e) {}
+    try { $db->exec("ALTER TABLE library_resources ADD COLUMN preview_pages TINYINT UNSIGNED NOT NULL DEFAULT 3"); } catch (\PDOException $e) {}
 
     // FULLTEXT index — check before adding to avoid repeated attempts
     $ftExists = $db->query("SHOW INDEX FROM library_resources WHERE Key_name = 'ft_search'")->fetch();
@@ -184,10 +185,14 @@ function libUpdateResource(int $id, array $d): void {
         $tags, $d['anonymous'] ? 1 : 0,
     ];
 
-    // Only update thumbnail_path when it was explicitly changed
+    // Only update thumbnail_path / preview_pages when explicitly provided
     if (array_key_exists('thumbnail_path', $d)) {
         $sql    .= ", thumbnail_path=?";
         $params[] = $d['thumbnail_path'];
+    }
+    if (array_key_exists('preview_pages', $d)) {
+        $sql    .= ", preview_pages=?";
+        $params[] = max(1, min(10, (int)$d['preview_pages']));
     }
 
     $sql    .= " WHERE id=?";
