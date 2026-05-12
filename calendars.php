@@ -123,14 +123,14 @@ $member   = $loggedIn ? getMember() : null;
       <div class="cal-grid">
 
         <div class="cal-card">
-          <a href="images/calendars/cal-2526.png" target="_blank">
+          <a href="documents/calendars/SD54-School-Calendar-2025-2026.pdf" target="_blank">
             <img src="images/calendars/cal-2526-thumb.jpg" alt="SD54 2025–2026 School Calendar" class="cal-card-img">
           </a>
           <div class="cal-card-body">
             <h2>2025–2026 School Calendar</h2>
             <p>Days in Session: 188 &nbsp;·&nbsp; Days of Instruction: 181</p>
             <div class="cal-card-actions">
-              <a href="images/calendars/cal-2526.png" target="_blank" class="cal-btn-view">
+              <a href="documents/calendars/SD54-School-Calendar-2025-2026.pdf" target="_blank" class="cal-btn-view">
                 <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 View Full Calendar
               </a>
@@ -143,14 +143,14 @@ $member   = $loggedIn ? getMember() : null;
         </div>
 
         <div class="cal-card">
-          <a href="images/calendars/cal-2627.png" target="_blank">
+          <a href="documents/calendars/SD54-School-Calendar-2026-2027.pdf" target="_blank">
             <img src="images/calendars/cal-2627-thumb.jpg" alt="SD54 2026–2027 School Calendar" class="cal-card-img">
           </a>
           <div class="cal-card-body">
             <h2>2026–2027 School Calendar</h2>
             <p>Days in Session: 187 &nbsp;·&nbsp; Days of Instruction: 180</p>
             <div class="cal-card-actions">
-              <a href="images/calendars/cal-2627.png" target="_blank" class="cal-btn-view">
+              <a href="documents/calendars/SD54-School-Calendar-2026-2027.pdf" target="_blank" class="cal-btn-view">
                 <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 View Full Calendar
               </a>
@@ -185,7 +185,7 @@ $member   = $loggedIn ? getMember() : null;
       <div>
         <h3>Navigate</h3>
         <ul class="footer-nav-list">
-          <li class="has-dropdown"><a href="documents.php">Documents</a><ul class="dropdown"><li><a href="documents.php">All Documents</a></li><li><a href="collective-agreement.php">Collective Agreement</a></li><li><a href="lous.php">Letters of Understanding</a></li><li><a href="ca-assistant.php">Contract Assistant</a></li><li><a href="documents/BVTU-Constitution-and-Bylaws-2026.pdf" target="_blank">Constitution &amp; Bylaws</a></li></ul></li>
+          <li class="has-dropdown"><a href="documents.php">Documents</a><ul class="dropdown"><li><a href="documents.php">All Documents</a></li><li><a href="collective-agreement.php">Collective Agreement</a></li><li><a href="lous.php">Letters of Understanding</a></li><li><a href="ca-assistant.php">Contract Assistant</a></li><li><a href="documents/BVTU-Constitution-and-Bylaws-2026.pdf" target="_blank">Constitution &amp; Bylaws</a></li><li><a href="calendars.php">School Calendars</a></li></ul></li>
           <li><a href="members.php">Members</a></li>
           <li class="has-dropdown"><a href="prod.php">PRO-D</a><ul class="dropdown"><li><a href="prod.php">PRO-D Info</a></li><li><a href="members/prod-dashboard.php">Pro-D Portal</a></li></ul></li>
           <li class="has-dropdown"><a href="health-safety.php">Health &amp; Safety</a><ul class="dropdown"><li><a href="health-safety.php">H&amp;S Resources</a></li><li><a href="https://www.worksafebc.com" target="_blank" rel="noopener">WorkSafe BC</a></li><li><a href="https://bctf.ca/member-services/efap" target="_blank" rel="noopener">EFAP</a></li></ul></li>
