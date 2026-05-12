@@ -53,6 +53,7 @@ if (!isset($notFound) && $isAdmin && isset($_GET['action'])) {
     exit;
 }
 
+$isOwner     = $loggedIn && !isset($notFound) && $member['email'] === $resource['uploader_email'];
 $ratings     = isset($notFound) ? [] : libGetRatings($id);
 $myRating    = ($loggedIn && !isset($notFound)) ? libGetMemberRating($id, $member['email']) : null;
 $grades      = isset($notFound) ? [] : ($resource['grade_levels'] ? explode(',', $resource['grade_levels']) : []);
@@ -554,7 +555,18 @@ $loginUrl    = 'members/login.php?redirect=' . urlencode('../library-resource.ph
               <div id="pdf-error" style="display:none;font-size:.83rem;color:var(--gray-400);padding:1.5rem 0;">
                 Preview unavailable — <a href="<?= $downloadUrl ?>" style="color:var(--primary);font-weight:600;">download the file</a> to view it.
               </div>
-              <p style="font-size:.72rem;color:var(--gray-400);margin-top:.65rem;margin-bottom:0;">Page 1 preview · <a href="<?= $downloadUrl ?>" style="color:var(--primary);font-weight:600;">Download full file</a></p>
+              <div style="display:flex;align-items:center;justify-content:center;gap:1rem;flex-wrap:wrap;margin-top:.65rem;">
+                <p style="font-size:.72rem;color:var(--gray-400);margin:0;">Page 1 preview · <a href="<?= $downloadUrl ?>" style="color:var(--primary);font-weight:600;">Download full file</a></p>
+                <?php if ($isOwner || $isAdmin): ?>
+                <button id="use-preview-btn"
+                        onclick="captureCanvasAsThumb(false)"
+                        style="display:none;align-items:center;gap:.3rem;font-size:.72rem;font-weight:600;color:var(--primary);background:none;border:1px solid var(--primary);border-radius:5px;padding:.2rem .6rem;cursor:pointer;transition:background .15s;"
+                        onmouseover="this.style.background='var(--accent)'"
+                        onmouseout="this.style.background='none'">
+                  🖼 Use as thumbnail
+                </button>
+                <?php endif; ?>
+              </div>
             </div>
             <?php elseif (!isset($notFound) && in_array($resource['file_ext'], ['docx','pptx'])): ?>
             <div style="background:#f3f4f6;border-bottom:1.5px solid var(--border);padding:2rem;text-align:center;">
@@ -782,6 +794,19 @@ $loginUrl    = 'members/login.php?redirect=' . urlencode('../library-resource.ph
               <span id="bm-label"><?= $bookmarked ? 'Saved' : 'Save for later' ?></span>
             </button>
             <?php endif; ?>
+
+            <?php if ($isOwner || $isAdmin): ?>
+            <a href="library-edit.php?id=<?= $id ?>"
+               style="display:flex;align-items:center;justify-content:center;gap:.4rem;width:100%;margin-top:.5rem;padding:.55rem;background:none;border:1.5px solid var(--border);border-radius:var(--radius-s);font-size:.83rem;font-weight:600;color:var(--gray-600);text-decoration:none;transition:border-color .15s,color .15s;"
+               onmouseover="this.style.borderColor='var(--primary)';this.style.color='var(--primary)'"
+               onmouseout="this.style.borderColor='';this.style.color=''">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+              Edit this resource
+            </a>
+            <?php endif; ?>
             <div class="res-stat-row">
               <div>Size</div>
               <span><?php
@@ -806,6 +831,11 @@ $loginUrl    = 'members/login.php?redirect=' . urlencode('../library-resource.ph
 
           <!-- Resource info card -->
           <div class="res-side-card">
+            <div class="side-thumb-wrap" style="<?= empty($resource['thumbnail_path']) ? 'display:none;' : '' ?>margin:-1.25rem -1.25rem .95rem;border-radius:calc(var(--radius) - 1.5px) calc(var(--radius) - 1.5px) 0 0;overflow:hidden;height:140px;">
+              <img id="side-thumb-img"
+                   src="<?= !empty($resource['thumbnail_path']) ? htmlspecialchars(LIB_THUMB_URL . basename($resource['thumbnail_path'])) : '' ?>"
+                   alt="" style="width:100%;height:100%;object-fit:cover;display:block;">
+            </div>
             <div class="res-side-title">Details</div>
             <div style="display:flex;flex-direction:column;gap:.55rem;">
               <div class="res-stat-row" style="margin-top:0;">
@@ -907,16 +937,48 @@ $loginUrl    = 'members/login.php?redirect=' . urlencode('../library-resource.ph
     pdfjsLib.GlobalWorkerOptions.workerSrc =
       'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-    const pdfUrl     = '<?= $previewUrl ?>';
-    const canvas     = document.getElementById('pdf-canvas');
-    const loading    = document.getElementById('pdf-loading');
-    const errEl      = document.getElementById('pdf-error');
+    const pdfUrl  = '<?= $previewUrl ?>';
+    const canvas  = document.getElementById('pdf-canvas');
+    const loading = document.getElementById('pdf-loading');
+    const errEl   = document.getElementById('pdf-error');
+
+    <?php if ($isOwner || $isAdmin): ?>
+    const RESOURCE_ID    = <?= $id ?>;
+    const HAS_THUMBNAIL  = <?= empty($resource['thumbnail_path']) ? 'false' : 'true' ?>;
+
+    // Capture the rendered canvas and POST to the save endpoint
+    function captureCanvasAsThumb(silent) {
+      try {
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
+        const fd = new FormData();
+        fd.append('id',    RESOURCE_ID);
+        fd.append('image', dataUrl);
+        fetch('library-thumb-capture.php', { method: 'POST', credentials: 'same-origin', body: fd })
+          .then(r => r.json())
+          .then(data => {
+            if (data.ok) {
+              // Update the thumbnail image in the Details sidebar (if present)
+              const sideThumb = document.getElementById('side-thumb-img');
+              if (sideThumb) {
+                sideThumb.src = data.path + '?t=' + Date.now();
+                sideThumb.closest('.side-thumb-wrap').style.display = 'block';
+              }
+              if (!silent) {
+                const btn = document.getElementById('use-preview-btn');
+                if (btn) { btn.textContent = '✓ Saved as thumbnail'; btn.disabled = true; }
+              }
+            }
+          })
+          .catch(() => {});
+      } catch(e) {}
+    }
+    <?php endif; ?>
 
     pdfjsLib.getDocument(pdfUrl).promise.then(pdf => {
       return pdf.getPage(1);
     }).then(page => {
       const wrap      = document.getElementById('pdf-preview-wrap');
-      const maxWidth  = wrap.clientWidth - 40; // padding
+      const maxWidth  = wrap.clientWidth - 40;
       const viewport0 = page.getViewport({ scale: 1 });
       const scale     = Math.min(1.5, maxWidth / viewport0.width);
       const viewport  = page.getViewport({ scale });
@@ -928,6 +990,16 @@ $loginUrl    = 'members/login.php?redirect=' . urlencode('../library-resource.ph
     }).then(() => {
       loading.style.display = 'none';
       canvas.style.display  = 'block';
+
+      <?php if ($isOwner || $isAdmin): ?>
+      // Show the "Use as thumbnail" button now that we have a rendered canvas
+      const btn = document.getElementById('use-preview-btn');
+      if (btn) btn.style.display = 'inline-flex';
+
+      // Auto-capture silently if there's no thumbnail yet
+      if (!HAS_THUMBNAIL) captureCanvasAsThumb(true);
+      <?php endif; ?>
+
     }).catch(() => {
       loading.style.display = 'none';
       errEl.style.display   = 'block';

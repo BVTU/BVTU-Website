@@ -14,6 +14,12 @@ define('LIB_ALLOWED_MIME', [
     'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 ]);
 
+// Thumbnail constants — stored in a publicly-accessible directory at the site root
+define('LIB_THUMB_DIR',         dirname(__DIR__) . '/lib-thumbs/');
+define('LIB_THUMB_URL',         'lib-thumbs/');     // relative URL from site root
+define('LIB_THUMB_MAX_BYTES',   2 * 1024 * 1024);  // 2 MB
+define('LIB_THUMB_ALLOWED_EXT', ['jpg', 'jpeg', 'png', 'webp']);
+
 const LIB_GRADES   = ['K','1','2','3','4','5','6','7','8','9','10','11','12'];
 
 // Standard BC subjects — K-12.
@@ -123,6 +129,7 @@ function libEnsureTables(): void {
 
     // Migrations for existing tables
     try { $db->exec("ALTER TABLE library_resources ADD COLUMN tags VARCHAR(500) NOT NULL DEFAULT ''"); } catch (\PDOException $e) {}
+    try { $db->exec("ALTER TABLE library_resources ADD COLUMN thumbnail_path VARCHAR(500) NOT NULL DEFAULT ''"); } catch (\PDOException $e) {}
 
     // FULLTEXT index — check before adding to avoid repeated attempts
     $ftExists = $db->query("SHOW INDEX FROM library_resources WHERE Key_name = 'ft_search'")->fetch();
@@ -134,6 +141,9 @@ function libEnsureTables(): void {
     if (!is_dir(LIB_UPLOAD_DIR)) mkdir(LIB_UPLOAD_DIR, 0750, true);
     $htaccess = LIB_UPLOAD_DIR . '.htaccess';
     if (!file_exists($htaccess)) file_put_contents($htaccess, "Require all denied\n");
+
+    // Ensure thumbnail directory exists (publicly accessible — images are displayed directly)
+    if (!is_dir(LIB_THUMB_DIR)) mkdir(LIB_THUMB_DIR, 0755, true);
 }
 
 // ── Resource CRUD ─────────────────────────────────────────────────────────────
@@ -142,8 +152,8 @@ function libSaveResource(array $d): int {
     $s = getDB()->prepare("INSERT INTO library_resources
         (uploader_email, uploader_name, anonymous, title, description,
          grade_levels, subject, resource_type, bc_curriculum, time_required,
-         materials, tags, file_name, file_path, file_size, file_ext)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+         materials, tags, file_name, file_path, file_size, file_ext, thumbnail_path)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
     // Normalise subject: title-case custom values; lowercase all tags
     $subject = libNormaliseSubject($d['subject'] ?? '');
     $tags    = libNormaliseTags($d['tags'] ?? '');
@@ -156,8 +166,34 @@ function libSaveResource(array $d): int {
         $d['materials'] ?? null,
         $tags,
         $d['file_name'], $d['file_path'], $d['file_size'], $d['file_ext'],
+        $d['thumbnail_path'] ?? '',
     ]);
     return (int)getDB()->lastInsertId();
+}
+
+function libUpdateResource(int $id, array $d): void {
+    $subject = libNormaliseSubject($d['subject'] ?? '');
+    $tags    = libNormaliseTags($d['tags'] ?? '');
+
+    $sql = "UPDATE library_resources SET
+        title=?, description=?, grade_levels=?, subject=?, resource_type=?,
+        bc_curriculum=?, time_required=?, materials=?, tags=?, anonymous=?";
+    $params = [
+        $d['title'], $d['description'], $d['grade_levels'], $subject, $d['resource_type'],
+        $d['bc_curriculum'] ?? null, $d['time_required'] ?? null, $d['materials'] ?? null,
+        $tags, $d['anonymous'] ? 1 : 0,
+    ];
+
+    // Only update thumbnail_path when it was explicitly changed
+    if (array_key_exists('thumbnail_path', $d)) {
+        $sql    .= ", thumbnail_path=?";
+        $params[] = $d['thumbnail_path'];
+    }
+
+    $sql    .= " WHERE id=?";
+    $params[] = $id;
+
+    getDB()->prepare($sql)->execute($params);
 }
 
 function libGetResource(int $id): ?array {
@@ -277,6 +313,11 @@ function libDelete(int $id): void {
     if ($r) {
         $path = LIB_UPLOAD_DIR . $r['file_path'];
         if (file_exists($path)) @unlink($path);
+        // Delete thumbnail if one exists
+        if (!empty($r['thumbnail_path'])) {
+            $tp = LIB_THUMB_DIR . basename($r['thumbnail_path']);
+            if (file_exists($tp)) @unlink($tp);
+        }
     }
     // Delete additional files from disk
     foreach (libGetResourceFiles($id) as $f) {
@@ -456,6 +497,51 @@ function libGetCustomSubjects(): array {
         $s->fetchAll(\PDO::FETCH_COLUMN),
         fn($sub) => !in_array(strtolower($sub), $known, true)
     ));
+}
+
+// ── Thumbnail helpers ─────────────────────────────────────────────────────────
+
+/**
+ * Returns a CSS background value (gradient) for the placeholder based on subject.
+ */
+function libSubjectGradient(string $subject): string {
+    $map = [
+        'math'               => 'linear-gradient(135deg,#1e40af,#3b82f6)',
+        'english / ela'      => 'linear-gradient(135deg,#7c3aed,#a78bfa)',
+        'science'            => 'linear-gradient(135deg,#065f46,#10b981)',
+        'social studies'     => 'linear-gradient(135deg,#92400e,#f59e0b)',
+        'french'             => 'linear-gradient(135deg,#1e3a5f,#3b82f6)',
+        'arts'               => 'linear-gradient(135deg,#be185d,#f472b6)',
+        'pe / health'        => 'linear-gradient(135deg,#064e3b,#34d399)',
+        'adst'               => 'linear-gradient(135deg,#78350f,#fb923c)',
+        'physics'            => 'linear-gradient(135deg,#1e3a8a,#60a5fa)',
+        'chemistry'          => 'linear-gradient(135deg,#4c1d95,#818cf8)',
+        'biology'            => 'linear-gradient(135deg,#14532d,#4ade80)',
+        'earth science'      => 'linear-gradient(135deg,#7c2d12,#fb923c)',
+        'computer science'   => 'linear-gradient(135deg,#0c4a6e,#38bdf8)',
+        'business education' => 'linear-gradient(135deg,#1c1917,#a8a29e)',
+        'psychology'         => 'linear-gradient(135deg,#4a044e,#d946ef)',
+        'drama'              => 'linear-gradient(135deg,#7f1d1d,#f87171)',
+        'visual art'         => 'linear-gradient(135deg,#831843,#f9a8d4)',
+        'music'              => 'linear-gradient(135deg,#1e1b4b,#818cf8)',
+    ];
+    return $map[strtolower(trim($subject))] ?? 'linear-gradient(135deg,#1a6b35,#22c55e)';
+}
+
+/**
+ * Returns an emoji icon for a given resource type.
+ */
+function libTypeIcon(string $type): string {
+    $map = [
+        'Lesson Plan' => '📝',
+        'Unit Plan'   => '📚',
+        'Rubric'      => '📋',
+        'Activity'    => '🎯',
+        'Assessment'  => '✏️',
+        'Book'        => '📖',
+        'Other'       => '📄',
+    ];
+    return $map[$type] ?? '📄';
 }
 
 function libFormatSize(int $bytes): string {

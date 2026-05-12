@@ -176,6 +176,25 @@ function buildUrl(array $overrides = []): string {
       box-shadow: 0 4px 16px rgba(27,107,66,.1);
       transform: translateY(-2px);
     }
+
+    /* ── Card thumbnail / placeholder ────────────────────────── */
+    .lib-card-thumb {
+      height: 130px;
+      /* bleed to card edges, matching the card's padding */
+      margin: -1.2rem -1.25rem .9rem;
+      border-radius: calc(var(--radius) - 1.5px) calc(var(--radius) - 1.5px) 0 0;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .lib-card-thumb img {
+      width: 100%; height: 100%; object-fit: cover; display: block;
+    }
+    .lib-card-placeholder {
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2.4rem;
+    }
+
     .lib-card-top {
       display: flex;
       justify-content: space-between;
@@ -463,14 +482,28 @@ function buildUrl(array $overrides = []): string {
                 $bookmarked  = !empty($myBookmarks[$r['id']]);
               ?>
               <div class="lib-card" style="position:relative;">
+
+                <!-- Thumbnail or gradient placeholder -->
+                <div class="lib-card-thumb">
+                  <?php if (!empty($r['thumbnail_path'])): ?>
+                    <img src="<?= htmlspecialchars(LIB_THUMB_URL . basename($r['thumbnail_path'])) ?>"
+                         alt="" loading="lazy">
+                  <?php else: ?>
+                    <div class="lib-card-placeholder"
+                         style="background:<?= libSubjectGradient($r['subject']) ?>;">
+                      <span><?= libTypeIcon($r['resource_type']) ?></span>
+                    </div>
+                  <?php endif; ?>
+                </div>
+
                 <!-- Bookmark button — members only -->
                 <?php if ($loggedIn): ?>
                 <button class="lib-bm-btn" data-id="<?= $r['id'] ?>"
                         title="<?= $bookmarked ? 'Remove bookmark' : 'Save for later' ?>"
                         aria-label="<?= $bookmarked ? 'Remove bookmark' : 'Save for later' ?>"
-                        style="position:absolute;top:.55rem;right:.55rem;background:none;border:none;cursor:pointer;padding:.3rem;border-radius:50%;transition:background .15s;z-index:2;"
+                        style="position:absolute;top:calc(130px + .2rem);right:.55rem;background:white;border:none;cursor:pointer;padding:.3rem;border-radius:50%;transition:background .15s;z-index:2;box-shadow:0 1px 4px rgba(0,0,0,.12);"
                         onmouseover="this.style.background='rgba(0,0,0,.07)'"
-                        onmouseout="this.style.background='none'">
+                        onmouseout="this.style.background='white'">
                   <svg width="17" height="17" viewBox="0 0 24 24" fill="<?= $bookmarked ? '#f59e0b' : 'none' ?>"
                        stroke="<?= $bookmarked ? '#f59e0b' : 'var(--gray-300)' ?>" stroke-width="2"
                        stroke-linecap="round" stroke-linejoin="round">

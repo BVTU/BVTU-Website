@@ -93,38 +93,71 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['lib_upload'])) {
             }
 
             if (!$error) {
-                $primary = $movedFiles[0];
-                $newId = libSaveResource([
-                    'uploader_email' => $member['email'],
-                    'uploader_name'  => $member['name'],
-                    'anonymous'      => $anonymous,
-                    'title'          => $title,
-                    'description'    => $description,
-                    'grade_levels'   => implode(',', $grades),
-                    'subject'        => $subject,
-                    'resource_type'  => $type,
-                    'bc_curriculum'  => $bcCurric ?: null,
-                    'time_required'  => $timeReq ?: null,
-                    'materials'      => $materials ?: null,
-                    'tags'           => $tags,
-                    'file_name'      => $primary['name'],
-                    'file_path'      => $primary['stored'],
-                    'file_size'      => $primary['size'],
-                    'file_ext'       => $primary['ext'],
-                ]);
-
-                // Save any additional files
-                if (count($movedFiles) > 1) {
-                    $additionals = array_slice($movedFiles, 1);
-                    libSaveResourceFiles($newId, array_map(fn($f) => [
-                        'name' => $f['name'],
-                        'path' => $f['stored'],
-                        'size' => $f['size'],
-                        'ext'  => $f['ext'],
-                    ], $additionals));
+                // ── Optional thumbnail upload ─────────────────────────────
+                $thumbPath = '';
+                $tErr = (int)($_FILES['thumbnail']['error'] ?? UPLOAD_ERR_NO_FILE);
+                if ($tErr === UPLOAD_ERR_OK) {
+                    $tOrig = basename($_FILES['thumbnail']['name'] ?? '');
+                    $tExt  = strtolower(pathinfo($tOrig, PATHINFO_EXTENSION));
+                    if ($tExt === 'jpeg') $tExt = 'jpg';
+                    $tSize = (int)($_FILES['thumbnail']['size'] ?? 0);
+                    $tTmp  = $_FILES['thumbnail']['tmp_name'] ?? '';
+                    if (!in_array($tExt, LIB_THUMB_ALLOWED_EXT)) {
+                        $error = 'Thumbnail must be JPG, PNG, or WebP.';
+                    } elseif ($tSize > LIB_THUMB_MAX_BYTES) {
+                        $error = 'Thumbnail must be 2 MB or smaller.';
+                    } elseif (!@getimagesize($tTmp)) {
+                        $error = 'Thumbnail does not appear to be a valid image.';
+                    } else {
+                        if (!is_dir(LIB_THUMB_DIR)) mkdir(LIB_THUMB_DIR, 0755, true);
+                        $tStored = 'thumb_' . uniqid('', true) . '.' . $tExt;
+                        if (!move_uploaded_file($tTmp, LIB_THUMB_DIR . $tStored)) {
+                            $error = 'Could not save the thumbnail. Please try again.';
+                        } else {
+                            $thumbPath = $tStored;
+                        }
+                    }
                 }
+                // UPLOAD_ERR_NO_FILE means no thumbnail selected — perfectly fine
 
-                $success = true;
+                if (!$error) {
+                    $primary = $movedFiles[0];
+                    $newId = libSaveResource([
+                        'uploader_email' => $member['email'],
+                        'uploader_name'  => $member['name'],
+                        'anonymous'      => $anonymous,
+                        'title'          => $title,
+                        'description'    => $description,
+                        'grade_levels'   => implode(',', $grades),
+                        'subject'        => $subject,
+                        'resource_type'  => $type,
+                        'bc_curriculum'  => $bcCurric ?: null,
+                        'time_required'  => $timeReq ?: null,
+                        'materials'      => $materials ?: null,
+                        'tags'           => $tags,
+                        'file_name'      => $primary['name'],
+                        'file_path'      => $primary['stored'],
+                        'file_size'      => $primary['size'],
+                        'file_ext'       => $primary['ext'],
+                        'thumbnail_path' => $thumbPath,
+                    ]);
+
+                    // Save any additional files
+                    if (count($movedFiles) > 1) {
+                        $additionals = array_slice($movedFiles, 1);
+                        libSaveResourceFiles($newId, array_map(fn($f) => [
+                            'name' => $f['name'],
+                            'path' => $f['stored'],
+                            'size' => $f['size'],
+                            'ext'  => $f['ext'],
+                        ], $additionals));
+                    }
+
+                    $success = true;
+                } else {
+                    // Clean up moved resource files on thumbnail error
+                    foreach ($movedFiles as $mf) @unlink(LIB_UPLOAD_DIR . $mf['stored']);
+                }
             }
         }
     }
@@ -451,6 +484,37 @@ $loggedIn = isLoggedIn();
               <div id="dz-file-list" style="display:flex;flex-direction:column;gap:.4rem;margin-top:.5rem;"></div>
             </div>
 
+            <!-- ── Thumbnail ─────────────────────────────────────── -->
+            <div class="upload-section-label">
+              Cover Image
+              <span style="font-weight:400;text-transform:none;font-size:.78rem;color:var(--gray-400);">(optional)</span>
+            </div>
+            <div class="upload-group">
+              <label class="upload-label" for="ul-thumb">
+                Thumbnail
+                <span class="hint">JPG, PNG, or WebP · max 2 MB · shown on library cards</span>
+              </label>
+              <div id="thumb-zone" style="border:2px dashed var(--gray-200);border-radius:10px;padding:1.25rem;text-align:center;cursor:pointer;background:#fafafa;position:relative;transition:border-color .2s,background .2s;"
+                   onmouseover="this.style.borderColor='var(--primary)';this.style.background='#f0f9f3'"
+                   onmouseout="if(!document.getElementById('ul-thumb').files.length){this.style.borderColor='';this.style.background='';}">
+                <input type="file" id="ul-thumb" name="thumbnail"
+                       accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                       style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;border:none;padding:0;">
+                <div id="thumb-icon" style="font-size:1.5rem;line-height:1;margin-bottom:.35rem;">🖼️</div>
+                <p style="font-size:.88rem;font-weight:600;color:var(--gray-700);margin:0 0 .2rem;">Add a cover image</p>
+                <p style="font-size:.75rem;color:var(--gray-400);margin:0;">or <strong style="color:var(--primary)">click to browse</strong> — optional, shows on library cards</p>
+              </div>
+              <!-- Preview shown after file selected -->
+              <div id="thumb-preview" style="display:none;margin-top:.6rem;position:relative;border-radius:8px;overflow:hidden;background:var(--gray-100);">
+                <img id="thumb-img" src="" alt="Thumbnail preview"
+                     style="width:100%;max-height:180px;object-fit:cover;display:block;border-radius:8px;">
+                <button type="button" id="thumb-clear"
+                        style="position:absolute;top:.4rem;right:.4rem;background:rgba(0,0,0,.55);color:#fff;border:none;border-radius:50%;width:24px;height:24px;font-size:.85rem;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;"
+                        title="Remove thumbnail">✕</button>
+                <div id="thumb-name" style="font-size:.75rem;color:var(--gray-500);padding:.3rem .5rem;"></div>
+              </div>
+            </div>
+
             <label class="anon-toggle">
               <input type="checkbox" name="anonymous" <?= isset($_POST['anonymous']) ? 'checked' : '' ?>>
               Post anonymously (your name will not appear on the resource)
@@ -774,6 +838,35 @@ $loggedIn = isLoggedIn();
     // Render on load if form was re-submitted with errors
     renderChips();
     updateSuggestions();
+
+    // ── Thumbnail preview ─────────────────────────────────────
+    const thumbInput   = document.getElementById('ul-thumb');
+    const thumbZone    = document.getElementById('thumb-zone');
+    const thumbPreview = document.getElementById('thumb-preview');
+    const thumbImg     = document.getElementById('thumb-img');
+    const thumbName    = document.getElementById('thumb-name');
+    const thumbClear   = document.getElementById('thumb-clear');
+    const thumbIcon    = document.getElementById('thumb-icon');
+
+    thumbInput.addEventListener('change', function() {
+      const file = this.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        thumbImg.src            = e.target.result;
+        thumbName.textContent   = file.name + ' (' + (file.size / 1048576).toFixed(1) + ' MB)';
+        thumbPreview.style.display = 'block';
+        thumbZone.style.display    = 'none';
+      };
+      reader.readAsDataURL(file);
+    });
+
+    thumbClear.addEventListener('click', function() {
+      thumbInput.value           = '';
+      thumbPreview.style.display = 'none';
+      thumbZone.style.display    = 'block';
+      thumbImg.src               = '';
+    });
   </script>
 </body>
 </html>
