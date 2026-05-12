@@ -397,8 +397,8 @@ $member   = $loggedIn ? getMember() : null;
               <tr><td>Bridge implants</td><td><span class="coverage-note">1 per tooth per 60 months · combined limit</span></td><td><span class="coverage-pct">70%</span></td></tr>
               <tr><td>Inlays &amp; onlays</td><td><span class="coverage-note">1 per tooth per 60 months · combined limit</span></td><td><span class="coverage-pct">70%</span></td></tr>
               <tr><td>Veneers</td><td><span class="coverage-note">1 per tooth per 60 months · combined limit</span></td><td><span class="coverage-pct">70%</span></td></tr>
-              <tr><td>Complete dentures (upper &amp; lower)</td><td><span class="coverage-note">1 per arch per 60 months · lost/stolen not covered</span></td><td><span class="coverage-pct">70%</span></td></tr>
-              <tr><td>Partial dentures</td><td><span class="coverage-note">1 per arch per 60 months</span></td><td><span class="coverage-pct">70%</span></td></tr>
+              <tr><td>Complete dentures (upper &amp; lower)</td><td><span class="coverage-note">1 per person per 60 months · lost/stolen not covered</span></td><td><span class="coverage-pct">70%</span></td></tr>
+              <tr><td>Partial dentures</td><td><span class="coverage-note">1 per person per 60 months</span></td><td><span class="coverage-pct">70%</span></td></tr>
             </tbody>
           </table>
         </div>
@@ -636,7 +636,7 @@ $member   = $loggedIn ? getMember() : null;
             <span class="pill no">Drug &amp; alcohol rehabilitation — not a benefit</span>
             <span class="pill no">Athletic therapy — not a benefit</span>
             <span class="pill no">Osteopath — not a benefit</span>
-            <span class="pill no">Nursing home / home care services — not a benefit</span>
+            <span class="pill no">Nursing home (residential) care — not a benefit</span>
           </div>
         </div>
 
@@ -658,9 +658,9 @@ $member   = $loggedIn ? getMember() : null;
               <tr><td>Air ambulance (attendants as required)</td><td>100%</td></tr>
               <tr><td>Local ambulance during travel emergency</td><td>100%</td></tr>
               <tr><td>Emergency prescription drugs during travel</td><td>100%</td></tr>
-              <tr><td>Airfare for family transport (all combined)</td><td>$5,000/family per emergency</td></tr>
-              <tr><td>Convalescence accommodation after hospitalization</td><td>$75/day · Max 5 days per emergency</td></tr>
-              <tr><td>Family accommodation &amp; meals</td><td>$100/day · Max 7 days per emergency</td></tr>
+              <tr><td>Airfare for family transport (all combined)</td><td>$5,000/family per calendar year</td></tr>
+              <tr><td>Convalescence accommodation after hospitalization</td><td>$75/day · Max 5 days per calendar year</td></tr>
+              <tr><td>Family accommodation &amp; meals</td><td>$100/day · Max 7 days per calendar year</td></tr>
               <tr><td>Vehicle return</td><td>$500/emergency</td></tr>
               <tr><td>Cremation/repatriation outside Canada</td><td>$1,500 cremation · $5,000 repatriation per lifetime</td></tr>
             </tbody>
