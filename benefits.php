@@ -317,8 +317,8 @@ $member   = $loggedIn ? getMember() : null;
           <div class="benefit-hl-label">Counselling per Year</div>
         </div>
         <div class="benefit-hl">
-          <div class="benefit-hl-val">$240</div>
-          <div class="benefit-hl-label">Vision / 2 Years</div>
+          <div class="benefit-hl-val">$650</div>
+          <div class="benefit-hl-label">Vision Eyewear / 2 Years</div>
         </div>
         <div class="benefit-hl">
           <div class="benefit-hl-val">100%</div>
@@ -445,7 +445,7 @@ $member   = $loggedIn ? getMember() : null;
         <p>Extended health coverage supplements the BC Medical Services Plan. Your plan covers you, your spouse/partner, and dependent children (under 21, or under 25 if a full-time student).</p>
 
         <div class="info-box" style="margin-bottom:1.5rem;font-size:.9rem;">
-          <strong>How reimbursement works:</strong> After a <strong>$50 annual deductible per family</strong>, the plan pays <strong>80%</strong> of your first $1,000 in eligible expenses per person per calendar year. After that threshold, it pays <strong>100%</strong> of further eligible expenses. Vision and dental-accident benefits have no deductible or co-insurance.
+          <strong>How reimbursement works:</strong> After a <strong>$50 annual deductible per family</strong>, the plan pays <strong>80%</strong> of your first $1,000 in eligible expenses per person per calendar year. After that threshold, it pays <strong>100%</strong> of further eligible expenses. Vision, paramedical, and drug benefits all share this same deductible and reimbursement structure.
         </div>
 
         <!-- Paramedical -->
@@ -547,22 +547,23 @@ $member   = $loggedIn ? getMember() : null;
           <div class="ben-section-head">
             <div class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div>
             Vision Care
-            <span class="tier-badge tier-100">No deductible</span>
+            <span class="tier-badge tier-80">80/100% · $50 deductible</span>
           </div>
+          <p style="font-size:.88rem;color:var(--gray-600);margin-bottom:.9rem;">Vision benefits are subject to the standard extended health <strong>$50 annual family deductible</strong> and the <strong>80/100% reimbursement structure</strong> (same as paramedical). All eyewear types share a single combined dollar maximum.</p>
           <table class="coverage-table">
             <thead>
               <tr><th>Benefit</th><th>Maximum</th><th>Notes</th></tr>
             </thead>
             <tbody>
               <tr>
-                <td><strong>Eyewear</strong> (frames, lenses, contacts)</td>
-                <td><span class="coverage-pct">$240</span>/person</td>
-                <td>Per 2-year period · No deductible or co-insurance</td>
+                <td><strong>Eyewear — combined limit</strong><span class="coverage-note">Includes: complete prescription glasses, frames, prescription lenses, prescription contact lenses, prescription sunglasses, prescription safety glasses/goggles, and vision care repairs</span></td>
+                <td><span class="coverage-pct">$650</span>/person</td>
+                <td>Per 24-month period from date of first eligible claim · All eyewear types share this combined limit<span class="coverage-note">Non-prescription sunglasses — not a benefit</span></td>
               </tr>
               <tr>
                 <td><strong>Eye exam</strong></td>
-                <td><span class="coverage-pct">$50</span>/person</td>
-                <td>Per 2-year period · Ages 19–64 · No deductible or co-insurance</td>
+                <td><span class="coverage-pct">$145</span> eligible/visit</td>
+                <td>1 visit per person per 24-month period · Subject to $50 deductible and 80/100% structure</td>
               </tr>
             </tbody>
           </table>
