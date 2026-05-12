@@ -71,9 +71,9 @@ function algoliaRequest(string $method, string $path, array $body): array {
 /** Send a batch of records to Algolia */
 function algoliaAddBatch(array $records): void {
     global $log;
-    $ops = array_map(fn($r) => ['action' => 'addObject', 'body' => $r], $records);
+    $ops = array_map(function($r) { return ['action' => 'addObject', 'body' => $r]; }, $records);
     $res = algoliaRequest('POST', '/1/indexes/' . ALGOLIA_INDEX . '/batch', ['requests' => $ops]);
-    $ok  = str_contains($res['status'], '200') || str_contains($res['status'], '201');
+    $ok  = (strpos($res['status'], '200') !== false) || (strpos($res['status'], '201') !== false);
     $log .= $ok
         ? "  ✓ Batch of " . count($records) . " records sent.\n"
         : "  ✗ Batch failed: {$res['status']}\n";
@@ -91,7 +91,7 @@ $log .= str_repeat('=', 50) . "\n\n";
 // ── 1. Clear existing index ───────────────────────────────────────────────────
 $log .= "Clearing index '" . ALGOLIA_INDEX . "'...\n";
 $res  = algoliaRequest('POST', '/1/indexes/' . ALGOLIA_INDEX . '/clear', []);
-$log .= str_contains($res['status'], '200') ? "  ✓ Index cleared.\n\n" : "  ✗ Clear failed: {$res['status']}\n\n";
+$log .= (strpos($res['status'], '200') !== false) ? "  ✓ Index cleared.\n\n" : "  ✗ Clear failed: {$res['status']}\n\n";
 
 // ── 2. Configure index settings ───────────────────────────────────────────────
 $log .= "Configuring index settings...\n";
@@ -107,7 +107,7 @@ $settings = [
     'minWordSizefor2Typos' => 8,
 ];
 $res  = algoliaRequest('PUT', '/1/indexes/' . ALGOLIA_INDEX . '/settings', $settings);
-$log .= str_contains($res['status'], '200') ? "  ✓ Settings saved.\n\n" : "  ✗ Settings failed: {$res['status']}\n\n";
+$log .= (strpos($res['status'], '200') !== false) ? "  ✓ Settings saved.\n\n" : "  ✗ Settings failed: {$res['status']}\n\n";
 
 // ── 2b. Push synonyms ─────────────────────────────────────────────────────────
 $log .= "Pushing synonyms...\n";
@@ -123,7 +123,7 @@ $synonyms = [
     ['objectID' => 'syn-benefits',  'type' => 'synonym', 'synonyms' => ['benefits', 'extended health', 'dental', 'msp', 'health benefits']],
 ];
 $res  = algoliaRequest('POST', '/1/indexes/' . ALGOLIA_INDEX . '/synonyms/batch?replaceExistingSynonyms=true', $synonyms);
-$log .= str_contains($res['status'], '200') || str_contains($res['status'], '201')
+$log .= ((strpos($res['status'], '200') !== false) || (strpos($res['status'], '201') !== false))
     ? "  ✓ " . count($synonyms) . " synonym groups pushed.\n\n"
     : "  ✗ Synonyms failed: {$res['status']}\n\n";
 
