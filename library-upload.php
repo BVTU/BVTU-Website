@@ -587,9 +587,13 @@ $loggedIn = isLoggedIn();
     });
 
     fileInput.addEventListener('change', function () {
-      if (this.files.length) addFiles(this.files);
-      // Reset so the same file can be re-added after removal
+      if (!this.files.length) return;
+      // Capture the FileList before clearing, so the input can be re-used
+      // for the same filename. addFiles → syncInput() will reassign the
+      // input's files at the end, after the reset.
+      const selected = Array.from(this.files);
       this.value = '';
+      addFiles(selected);
     });
 
     // Drag events
