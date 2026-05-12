@@ -1,4 +1,6 @@
 <?php
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
 /**
  * reindex.php — Push all BVTU content to Algolia
  *
