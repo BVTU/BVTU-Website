@@ -132,10 +132,21 @@ function libEnsureTables(): void {
     try { $db->exec("ALTER TABLE library_resources ADD COLUMN thumbnail_path VARCHAR(500) NOT NULL DEFAULT ''"); } catch (\PDOException $e) {}
     try { $db->exec("ALTER TABLE library_resources ADD COLUMN preview_pages TINYINT UNSIGNED NOT NULL DEFAULT 3"); } catch (\PDOException $e) {}
 
-    // FULLTEXT index — check before adding to avoid repeated attempts
-    $ftExists = $db->query("SHOW INDEX FROM library_resources WHERE Key_name = 'ft_search'")->fetch();
-    if (!$ftExists) {
-        try { $db->exec("ALTER TABLE library_resources ADD FULLTEXT INDEX ft_search (title, description, tags, bc_curriculum)"); } catch (\PDOException $e) {}
+    // FULLTEXT index — covers all searchable fields including subject, grade_levels,
+    // resource_type, and materials so searches like "grade 5 math lesson plan" work.
+    // We check the column list and rebuild only if the index doesn't already include
+    // the full set of fields.
+    $ftCols = $db->query(
+        "SELECT GROUP_CONCAT(Column_name ORDER BY Seq_in_index) AS cols
+         FROM information_schema.STATISTICS
+         WHERE Table_schema = DATABASE()
+           AND Table_name = 'library_resources'
+           AND Index_name = 'ft_search'"
+    )->fetchColumn();
+    $wantCols = 'bc_curriculum,description,grade_levels,materials,resource_type,subject,tags,title';
+    if ($ftCols !== $wantCols) {
+        try { $db->exec("ALTER TABLE library_resources DROP INDEX ft_search"); } catch (\PDOException $e) {}
+        try { $db->exec("ALTER TABLE library_resources ADD FULLTEXT INDEX ft_search (title, description, tags, bc_curriculum, subject, grade_levels, resource_type, materials)"); } catch (\PDOException $e) {}
     }
 
     // Ensure upload directory exists and is web-inaccessible
@@ -272,17 +283,18 @@ function libGetResources(array $filters = [], bool $adminView = false): array {
             $words = array_values(array_filter(array_map('trim', preg_split('/\s+/', preg_replace('/[+\-><\(\)~*"@]+/', ' ', $q)))));
             if ($words) {
                 $ftq = implode(' ', array_map(fn($w) => '+' . $w . '*', $words));
-                $where[]       = "MATCH(title, description, tags, bc_curriculum) AGAINST(? IN BOOLEAN MODE)";
+                $ftCols        = 'title, description, tags, bc_curriculum, subject, grade_levels, resource_type, materials';
+                $where[]       = "MATCH({$ftCols}) AGAINST(? IN BOOLEAN MODE)";
                 $params[]      = $ftq;
-                $ftScoreExpr   = ", MATCH(title, description, tags, bc_curriculum) AGAINST(? IN BOOLEAN MODE) AS _score";
+                $ftScoreExpr   = ", MATCH({$ftCols}) AGAINST(? IN BOOLEAN MODE) AS _score";
                 $ftParams      = [$ftq];
                 $useFulltext   = true;
             }
         } else {
-            // LIKE fallback across all text fields
+            // LIKE fallback across all text fields including subject, grade, and type
             $term     = '%' . $q . '%';
-            $where[]  = "(title LIKE ? OR description LIKE ? OR tags LIKE ? OR bc_curriculum LIKE ? OR uploader_name LIKE ?)";
-            $params   = array_merge($params, [$term, $term, $term, $term, $term]);
+            $where[]  = "(title LIKE ? OR description LIKE ? OR tags LIKE ? OR bc_curriculum LIKE ? OR subject LIKE ? OR grade_levels LIKE ? OR resource_type LIKE ? OR materials LIKE ? OR uploader_name LIKE ?)";
+            $params   = array_merge($params, [$term, $term, $term, $term, $term, $term, $term, $term, $term]);
         }
     }
 
