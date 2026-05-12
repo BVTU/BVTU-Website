@@ -34,7 +34,7 @@ $member   = $loggedIn ? getMember() : null;
       <nav class="main-nav" id="main-nav">
         <ul>
           
-          <li class="has-dropdown"><a href="documents.php">Documents</a><ul class="dropdown"><li><a href="documents.php">All Documents</a></li><li><a href="collective-agreement.php">Collective Agreement</a></li><li><a href="lous.php">Letters of Understanding</a></li><li><a href="ca-assistant.php">Contract Assistant</a></li></ul></li>
+          <li class="has-dropdown"><a href="documents.php">Documents</a><ul class="dropdown"><li><a href="documents.php">All Documents</a></li><li><a href="collective-agreement.php">Collective Agreement</a></li><li><a href="lous.php">Letters of Understanding</a></li><li><a href="ca-assistant.php">Contract Assistant</a></li><li><a href="documents/BVTU-Constitution-and-Bylaws-2026.pdf" target="_blank">Constitution &amp; Bylaws</a></li></ul></li>
 <li class="has-dropdown">
             <a href="members.php">Members</a>
             <ul class="dropdown">
@@ -44,8 +44,8 @@ $member   = $loggedIn ? getMember() : null;
             </ul>
           </li>
           <li class="has-dropdown"><a href="prod.php">PRO-D</a><ul class="dropdown"><li><a href="prod.php">PRO-D Info</a></li><li><a href="members/prod-dashboard.php">Pro-D Portal</a></li></ul></li>
-          <li><a href="health-safety.php" class="active">Health &amp; Safety</a></li>
-          <li><a href="bctf.php">BCTF</a></li>
+          <li class="has-dropdown active"><a href="health-safety.php" class="active">Health &amp; Safety</a><ul class="dropdown"><li><a href="health-safety.php">H&amp;S Resources</a></li><li><a href="https://www.worksafebc.com" target="_blank" rel="noopener">WorkSafe BC</a></li><li><a href="https://bctf.ca/member-services/efap" target="_blank" rel="noopener">EFAP</a></li></ul></li>
+          <li class="has-dropdown"><a href="bctf.php">BCTF</a><ul class="dropdown"><li><a href="bctf.php">BCTF Resources</a></li><li><a href="https://bctf.ca" target="_blank" rel="noopener">BCTF Website</a></li><li><a href="https://bctf.ca/member-services/benefits-and-services" target="_blank" rel="noopener">Member Benefits</a></li><li><a href="https://bctf.ca/bargaining" target="_blank" rel="noopener">Bargaining</a></li></ul></li>
           <li><a href="library.php">Resource Library</a></li><li><a href="newsletter-archive.php">Newsletters</a></li>
           <li><a href="<?= $loggedIn ? '/members/dashboard.php' : 'members/login.php' ?>"
               class="btn btn-primary"
@@ -67,7 +67,67 @@ $member   = $loggedIn ? getMember() : null;
   <main class="page-content">
     <div class="container">
 
-      <div class="content-block">
+      <!-- QUICK-ACCESS CARDS -->
+      <style>
+        .member-page-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1rem; margin-bottom: 2.5rem; }
+        .member-page-card { display: flex; flex-direction: column; background: var(--white); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 1.4rem 1.25rem 1.2rem; text-decoration: none; color: var(--text); transition: border-color .15s, box-shadow .15s, transform .12s; }
+        .member-page-card:hover { border-color: var(--primary); box-shadow: 0 4px 18px rgba(27,107,66,.1); transform: translateY(-2px); color: var(--text); }
+        .member-page-card-icon { width: 40px; height: 40px; background: var(--accent); border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-bottom: .9rem; flex-shrink: 0; }
+        .member-page-card-icon svg { width: 20px; height: 20px; stroke: var(--primary); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .member-page-card h3 { font-size: 1rem; font-weight: 800; color: var(--primary); margin: 0 0 .35rem; }
+        .member-page-card p { font-size: .85rem; color: var(--gray-500); margin: 0; line-height: 1.55; flex: 1; }
+        .member-page-card-arrow { font-size: .82rem; font-weight: 700; color: var(--primary); margin-top: .9rem; }
+      </style>
+      <div class="member-page-grid">
+
+        <a href="#safety-committee" class="member-page-card">
+          <div class="member-page-card-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <h3>Workplace Safety Committee</h3>
+          <p>Joint OH&amp;S committee — how to raise safety concerns and who to contact.</p>
+          <div class="member-page-card-arrow">Learn more →</div>
+        </a>
+
+        <a href="#violence" class="member-page-card">
+          <div class="member-page-card-icon">
+            <svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </div>
+          <h3>Violence in the Workplace</h3>
+          <p>Your rights, how to report incidents, and support resources.</p>
+          <div class="member-page-card-arrow">View resources →</div>
+        </a>
+
+        <a href="https://www.worksafebc.com" target="_blank" rel="noopener" class="member-page-card">
+          <div class="member-page-card-icon">
+            <svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          </div>
+          <h3>WorkSafe BC</h3>
+          <p>Report workplace injuries, access claim forms, and get guidance from WorkSafe BC.</p>
+          <div class="member-page-card-arrow">Visit WorkSafe BC →</div>
+        </a>
+
+        <a href="https://bctf.ca/member-services/efap" target="_blank" rel="noopener" class="member-page-card">
+          <div class="member-page-card-icon">
+            <svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          </div>
+          <h3>EFAP</h3>
+          <p>Free, confidential counselling and support services — available 24/7 for you and your family.</p>
+          <div class="member-page-card-arrow">Access EFAP →</div>
+        </a>
+
+        <a href="#mental-health" class="member-page-card">
+          <div class="member-page-card-icon">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+          </div>
+          <h3>Mental Health Resources</h3>
+          <p>Support programs and crisis resources for teacher well-being.</p>
+          <div class="member-page-card-arrow">View resources →</div>
+        </a>
+
+      </div>
+
+      <div class="content-block" id="safety-committee">
         <h2>Workplace Safety Committee</h2>
         <p>The joint Occupational Health &amp; Safety committee works with School District 54 to identify and address workplace hazards. Members can raise safety concerns through their school rep or the union president.</p>
         <div class="info-box">
@@ -75,7 +135,7 @@ $member   = $loggedIn ? getMember() : null;
         </div>
       </div>
 
-      <div class="content-block">
+      <div class="content-block" id="violence">
         <h2>Violence in the Workplace</h2>
         <p>Teachers are entitled to a safe working environment. If you experience or witness violence in the workplace, you have the right to report it and receive support.</p>
         <div class="doc-list">
@@ -118,7 +178,7 @@ $member   = $loggedIn ? getMember() : null;
         </div>
       </div>
 
-      <div class="content-block">
+      <div class="content-block" id="mental-health">
         <h2>Mental Health Resources</h2>
         <p>Teaching is demanding work. BVTU is committed to supporting member mental health and well-being.</p>
         <ul class="resource-list">
@@ -149,11 +209,11 @@ $member   = $loggedIn ? getMember() : null;
         <h3>Navigate</h3>
         <ul class="footer-nav-list">
           
-          <li class="has-dropdown"><a href="documents.php">Documents</a><ul class="dropdown"><li><a href="documents.php">All Documents</a></li><li><a href="collective-agreement.php">Collective Agreement</a></li><li><a href="lous.php">Letters of Understanding</a></li><li><a href="ca-assistant.php">Contract Assistant</a></li></ul></li>
+          <li class="has-dropdown"><a href="documents.php">Documents</a><ul class="dropdown"><li><a href="documents.php">All Documents</a></li><li><a href="collective-agreement.php">Collective Agreement</a></li><li><a href="lous.php">Letters of Understanding</a></li><li><a href="ca-assistant.php">Contract Assistant</a></li><li><a href="documents/BVTU-Constitution-and-Bylaws-2026.pdf" target="_blank">Constitution &amp; Bylaws</a></li></ul></li>
           <li><a href="members.php">Members</a></li>
           <li class="has-dropdown"><a href="prod.php">PRO-D</a><ul class="dropdown"><li><a href="prod.php">PRO-D Info</a></li><li><a href="members/prod-dashboard.php">Pro-D Portal</a></li></ul></li>
-          <li><a href="health-safety.php">Health &amp; Safety</a></li>
-          <li><a href="bctf.php">BCTF</a></li>
+          <li class="has-dropdown"><a href="health-safety.php">Health &amp; Safety</a><ul class="dropdown"><li><a href="health-safety.php">H&amp;S Resources</a></li><li><a href="https://www.worksafebc.com" target="_blank" rel="noopener">WorkSafe BC</a></li><li><a href="https://bctf.ca/member-services/efap" target="_blank" rel="noopener">EFAP</a></li></ul></li>
+          <li class="has-dropdown"><a href="bctf.php">BCTF</a><ul class="dropdown"><li><a href="bctf.php">BCTF Resources</a></li><li><a href="https://bctf.ca" target="_blank" rel="noopener">BCTF Website</a></li><li><a href="https://bctf.ca/member-services/benefits-and-services" target="_blank" rel="noopener">Member Benefits</a></li><li><a href="https://bctf.ca/bargaining" target="_blank" rel="noopener">Bargaining</a></li></ul></li>
           <li><a href="library.php">Resource Library</a></li><li><a href="newsletter-archive.php">Newsletters</a></li>
         </ul>
       </div>
