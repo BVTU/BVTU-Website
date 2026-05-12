@@ -103,39 +103,37 @@ function algoliaRequest(string $method, string $path, array $body): array {
     $err    = curl_error($ch);
     curl_close($ch);
 
-    if ($err) echo "  cURL error: {$err}\n";
+    if ($err) { global $log; $log .= "  cURL error: {$err}\n"; }
     return ['status' => $status, 'body' => json_decode($resp ?: '{}', true)];
 }
 
 /** Send a batch of records to Algolia */
 function algoliaAddBatch(array $records): void {
+    global $log;
     $ops = array_map(fn($r) => ['action' => 'addObject', 'body' => $r], $records);
     $res = algoliaRequest('POST', '/1/indexes/' . ALGOLIA_INDEX . '/batch', ['requests' => $ops]);
     $ok  = str_contains($res['status'], '200') || str_contains($res['status'], '201');
-    echo $ok
+    $log .= $ok
         ? "  ✓ Batch of " . count($records) . " records sent.\n"
         : "  ✗ Batch failed: {$res['status']}\n";
 }
 
 // ── Output ────────────────────────────────────────────────────────────────────
-// Force real-time output — disable buffering
-@ini_set('output_buffering', 'off');
-@ini_set('zlib.output_compression', false);
-while (ob_get_level()) ob_end_flush();
-ob_implicit_flush(true);
+// Collect all output into a buffer, then send at the end.
+// Streaming/flush-based approaches don't work reliably behind Hostinger's nginx proxy.
+set_time_limit(120);
+$log = '';
 
-header('Content-Type: text/plain; charset=utf-8');
-header('X-Accel-Buffering: no'); // disable nginx buffering
-echo "BVTU Algolia Reindex\n";
-echo str_repeat('=', 50) . "\n\n";
+$log .= "BVTU Algolia Reindex\n";
+$log .= str_repeat('=', 50) . "\n\n";
 
 // ── 1. Clear existing index ───────────────────────────────────────────────────
-echo "Clearing index '" . ALGOLIA_INDEX . "'...\n";
-$res = algoliaRequest('POST', '/1/indexes/' . ALGOLIA_INDEX . '/clear', []);
-echo str_contains($res['status'], '200') ? "  ✓ Index cleared.\n\n" : "  ✗ Clear failed: {$res['status']}\n\n";
+$log .= "Clearing index '" . ALGOLIA_INDEX . "'...\n";
+$res  = algoliaRequest('POST', '/1/indexes/' . ALGOLIA_INDEX . '/clear', []);
+$log .= str_contains($res['status'], '200') ? "  ✓ Index cleared.\n\n" : "  ✗ Clear failed: {$res['status']}\n\n";
 
 // ── 2. Configure index settings ───────────────────────────────────────────────
-echo "Configuring index settings...\n";
+$log .= "Configuring index settings...\n";
 $settings = [
     'searchableAttributes' => ['title', 'description', 'content'],
     'attributesForFaceting'=> ['type', 'members_only'],
@@ -147,11 +145,11 @@ $settings = [
     'minWordSizefor1Typo'  => 4,
     'minWordSizefor2Typos' => 8,
 ];
-$res = algoliaRequest('PUT', '/1/indexes/' . ALGOLIA_INDEX . '/settings', $settings);
-echo str_contains($res['status'], '200') ? "  ✓ Settings saved.\n\n" : "  ✗ Settings failed: {$res['status']}\n\n";
+$res  = algoliaRequest('PUT', '/1/indexes/' . ALGOLIA_INDEX . '/settings', $settings);
+$log .= str_contains($res['status'], '200') ? "  ✓ Settings saved.\n\n" : "  ✗ Settings failed: {$res['status']}\n\n";
 
 // ── 2b. Push synonyms ─────────────────────────────────────────────────────────
-echo "Pushing synonyms...\n";
+$log .= "Pushing synonyms...\n";
 $synonyms = [
     ['objectID' => 'syn-prep',      'type' => 'synonym', 'synonyms' => ['prep time', 'preparation time', 'preparation period']],
     ['objectID' => 'syn-prod',      'type' => 'synonym', 'synonyms' => ['pro-d', 'prod', 'professional development', 'pro d']],
@@ -163,13 +161,13 @@ $synonyms = [
     ['objectID' => 'syn-release',   'type' => 'synonym', 'synonyms' => ['release time', 'released time', 'release day', 'time release']],
     ['objectID' => 'syn-benefits',  'type' => 'synonym', 'synonyms' => ['benefits', 'extended health', 'dental', 'msp', 'health benefits']],
 ];
-$res = algoliaRequest('POST', '/1/indexes/' . ALGOLIA_INDEX . '/synonyms/batch?replaceExistingSynonyms=true', $synonyms);
-echo str_contains($res['status'], '200') || str_contains($res['status'], '201')
+$res  = algoliaRequest('POST', '/1/indexes/' . ALGOLIA_INDEX . '/synonyms/batch?replaceExistingSynonyms=true', $synonyms);
+$log .= str_contains($res['status'], '200') || str_contains($res['status'], '201')
     ? "  ✓ " . count($synonyms) . " synonym groups pushed.\n\n"
     : "  ✗ Synonyms failed: {$res['status']}\n\n";
 
 // ── 3. Index public pages ─────────────────────────────────────────────────────
-echo "Indexing public pages...\n";
+$log .= "Indexing public pages...\n";
 
 $root = __DIR__;
 $baseUrl = 'https://new.bvtu.ca'; // switch to https://bvtu.ca when live domain is ready
@@ -193,7 +191,7 @@ $records = [];
 foreach ($publicPages as $page) {
     $path = $root . '/' . $page['file'];
     if (!file_exists($path)) {
-        echo "  - Skipped (not found): {$page['file']}\n";
+        $log .= "  - Skipped (not found): {$page['file']}\n";
         continue;
     }
 
@@ -229,7 +227,7 @@ foreach ($publicPages as $page) {
         'members_only'=> false,
     ];
 
-    echo "  + {$page['file']} — {$title}\n";
+    $log .= "  + {$page['file']} — {$title}\n";
 }
 
 if ($records) {
@@ -237,7 +235,7 @@ if ($records) {
 }
 
 // ── 4. Index public PDFs ──────────────────────────────────────────────────────
-echo "\nIndexing public documents...\n";
+$log .= "\nIndexing public documents...\n";
 
 $publicDocsDir = $root . '/documents/';
 $pdfRecords    = [];
@@ -257,10 +255,10 @@ if (is_dir($publicDocsDir)) {
             'priority'    => 5,
             'members_only'=> false,
         ];
-        echo "  + {$f->getFilename()}\n";
+        $log .= "  + {$f->getFilename()}\n";
     }
 } else {
-    echo "  (no /documents/ directory found)\n";
+    $log .= "  (no /documents/ directory found)\n";
 }
 
 if ($pdfRecords) {
@@ -268,7 +266,7 @@ if ($pdfRecords) {
 }
 
 // ── 5. Index protected (members-only) PDFs ───────────────────────────────────
-echo "\nIndexing members-only documents...\n";
+$log .= "\nIndexing members-only documents...\n";
 
 $protectedDocsDir = $root . '/members/protected-docs/';
 $memberRecords    = [];
@@ -288,10 +286,10 @@ if (is_dir($protectedDocsDir)) {
             'priority'    => 5,
             'members_only'=> true,
         ];
-        echo "  + {$f->getFilename()} (members only)\n";
+        $log .= "  + {$f->getFilename()} (members only)\n";
     }
 } else {
-    echo "  (no /members/protected-docs/ directory found)\n";
+    $log .= "  (no /members/protected-docs/ directory found)\n";
 }
 
 if ($memberRecords) {
@@ -300,6 +298,10 @@ if ($memberRecords) {
 
 // ── Done ──────────────────────────────────────────────────────────────────────
 $total = count($records) + count($pdfRecords) + count($memberRecords);
-echo "\n" . str_repeat('=', 50) . "\n";
-echo "Done. {$total} total records sent to Algolia.\n";
-echo "Visit https://dashboard.algolia.com to verify the index.\n";
+$log  .= "\n" . str_repeat('=', 50) . "\n";
+$log  .= "Done. {$total} total records sent to Algolia.\n";
+$log  .= "Visit https://dashboard.algolia.com to verify the index.\n";
+
+// Output everything at once — avoids Hostinger nginx buffering cutting off the response
+header('Content-Type: text/plain; charset=utf-8');
+echo $log;
