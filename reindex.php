@@ -177,7 +177,8 @@ $baseUrl = 'https://new.bvtu.ca'; // switch to https://bvtu.ca when live domain 
 $publicPages = [
     ['file' => 'index.php',                'url' => '/',                           'priority' => 10],
     ['file' => 'documents.php',           'url' => '/documents.php',              'priority' => 8],
-    ['file' => 'collective-agreement.php','url' => '/collective-agreement.php',   'priority' => 9],
+    // collective-agreement.php is intentionally excluded from search — too large and
+    // the Collective Agreement has its own dedicated page linked in the nav.
     ['file' => 'contact.php',             'url' => '/contact.php',                'priority' => 5],
     ['file' => 'members.php',             'url' => '/members.php',                'priority' => 7],
     ['file' => 'prod.php',                'url' => '/prod.php',                   'priority' => 7],

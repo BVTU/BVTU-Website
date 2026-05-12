@@ -20,6 +20,7 @@ if ($query !== '') {
     $payload = json_encode([
         'query'                => $query,
         'hitsPerPage'          => 20,
+        'filters'              => 'NOT type:collective-agreement',
         'attributesToHighlight'=> ['title', 'content'],
         'attributesToSnippet'  => ['content:40'],
         'snippetEllipsisText'  => '…',
