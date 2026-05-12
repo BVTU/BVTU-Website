@@ -236,6 +236,28 @@ $loginUrl    = 'members/login.php?redirect=' . urlencode('../library-resource.ph
     }
     .res-stars-display .empty { color: var(--gray-200); }
 
+    /* ── Download progress toast ─────────────────────────────── */
+    #dl-toast {
+      position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%) translateY(120%);
+      background: #1e293b; color: #fff; border-radius: 12px;
+      padding: .9rem 1.25rem; min-width: 280px; max-width: 420px; width: calc(100vw - 2rem);
+      box-shadow: 0 8px 32px rgba(0,0,0,.35);
+      transition: transform .3s cubic-bezier(.34,1.56,.64,1);
+      z-index: 9999; pointer-events: none;
+    }
+    #dl-toast.visible { transform: translateX(-50%) translateY(0); }
+    .dl-toast-row { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .55rem; }
+    .dl-toast-name { font-size: .82rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+    .dl-toast-pct  { font-size: .82rem; font-weight: 700; color: #94a3b8; white-space: nowrap; flex-shrink: 0; }
+    .dl-track {
+      height: 5px; background: rgba(255,255,255,.15); border-radius: 100px; overflow: hidden;
+    }
+    .dl-fill {
+      height: 100%; background: #22c55e; border-radius: 100px;
+      width: 0%; transition: width .15s ease;
+    }
+    .dl-toast-status { font-size: .75rem; color: #94a3b8; margin-top: .4rem; }
+
     /* ── Rating form ─────────────────────────────────────────── */
     .star-picker {
       display: flex;
@@ -540,7 +562,8 @@ $loginUrl    = 'members/login.php?redirect=' . urlencode('../library-resource.ph
               <div style="font-size:2.5rem;margin-bottom:.5rem;"><?= $icon ?></div>
               <div style="font-size:.88rem;font-weight:700;color:var(--text);margin-bottom:.25rem;"><?= strtoupper($resource['file_ext']) ?> Document</div>
               <div style="font-size:.78rem;color:var(--gray-400);margin-bottom:.85rem;">Preview not available for this file type</div>
-              <a href="<?= $downloadUrl ?>" class="download-btn" style="display:inline-flex;width:auto;padding:.55rem 1.25rem;font-size:.85rem;">
+              <a href="<?= $downloadUrl ?>" class="download-btn" style="display:inline-flex;width:auto;padding:.55rem 1.25rem;font-size:.85rem;"
+                 data-download data-filename="<?= htmlspecialchars($resource['file_name']) ?>">
                 <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 Download to view
               </a>
@@ -716,6 +739,8 @@ $loginUrl    = 'members/login.php?redirect=' . urlencode('../library-resource.ph
             </a>
             <?php else: ?>
             <!-- Primary file -->
+            <a href="<?= $downloadUrl ?>" class="download-btn"
+               data-download data-filename="<?= htmlspecialchars($resource['file_name']) ?>">
               <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               <?php if (count($extraFiles)): ?>
                 <span style="flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
@@ -731,7 +756,8 @@ $loginUrl    = 'members/login.php?redirect=' . urlencode('../library-resource.ph
             <!-- Additional files -->
             <?php foreach ($extraFiles as $ef): ?>
               <a href="members/library-serve.php?id=<?= $id ?>&file=<?= $ef['id'] ?>"
-                 class="download-btn" style="margin-top:.4rem;background:var(--accent);color:var(--primary);border:1.5px solid var(--border);">
+                 class="download-btn" style="margin-top:.4rem;background:var(--accent);color:var(--primary);border:1.5px solid var(--border);"
+                 data-download data-filename="<?= htmlspecialchars($ef['file_name']) ?>">
                 <svg viewBox="0 0 24 24" stroke="var(--primary)" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 <span style="flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
                   <?= resFileIcon($ef['file_ext']) ?>
@@ -834,6 +860,16 @@ $loginUrl    = 'members/login.php?redirect=' . urlencode('../library-resource.ph
     </div><!-- /container -->
   </main>
 
+  <!-- Download progress toast -->
+  <div id="dl-toast" role="status" aria-live="polite">
+    <div class="dl-toast-row">
+      <span class="dl-toast-name" id="dl-toast-name">Preparing download…</span>
+      <span class="dl-toast-pct"  id="dl-toast-pct">0%</span>
+    </div>
+    <div class="dl-track"><div class="dl-fill" id="dl-fill"></div></div>
+    <div class="dl-toast-status" id="dl-toast-status">Starting…</div>
+  </div>
+
   <!-- Flag modal -->
   <?php if (!isset($notFound)): ?>
   <div class="flag-modal-overlay" id="flagModal">
@@ -904,6 +940,89 @@ $loginUrl    = 'members/login.php?redirect=' . urlencode('../library-resource.ph
     document.getElementById('flagModal')?.addEventListener('click', function(e) {
       if (e.target === this) this.classList.remove('open');
     });
+
+    // ── Download progress bar ─────────────────────────────────
+    (function() {
+      const toast      = document.getElementById('dl-toast');
+      const toastName  = document.getElementById('dl-toast-name');
+      const toastPct   = document.getElementById('dl-toast-pct');
+      const fill       = document.getElementById('dl-fill');
+      const statusEl   = document.getElementById('dl-toast-status');
+      let hideTimer    = null;
+
+      function showToast(filename) {
+        clearTimeout(hideTimer);
+        toastName.textContent  = filename;
+        toastPct.textContent   = '0%';
+        fill.style.width       = '0%';
+        statusEl.textContent   = 'Starting…';
+        toast.classList.add('visible');
+      }
+      function setProgress(pct) {
+        const p = Math.round(Math.min(100, Math.max(0, pct)));
+        fill.style.width     = p + '%';
+        toastPct.textContent = p + '%';
+        statusEl.textContent = p < 100 ? 'Downloading…' : 'Finishing…';
+      }
+      function doneToast() {
+        fill.style.width       = '100%';
+        toastPct.textContent   = '100%';
+        statusEl.textContent   = '✓ Download complete';
+        hideTimer = setTimeout(() => toast.classList.remove('visible'), 2500);
+      }
+      function errorToast() {
+        statusEl.textContent = '✗ Download failed — please try again';
+        fill.style.background = '#ef4444';
+        hideTimer = setTimeout(() => {
+          toast.classList.remove('visible');
+          fill.style.background = '';
+        }, 3500);
+      }
+
+      document.querySelectorAll('a[data-download]').forEach(link => {
+        link.addEventListener('click', async function(e) {
+          e.preventDefault();
+          const url      = this.href;
+          const filename = this.dataset.filename || 'file';
+          showToast(filename);
+
+          try {
+            const response = await fetch(url, { credentials: 'same-origin' });
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+
+            const total  = parseInt(response.headers.get('Content-Length') || '0', 10);
+            const reader = response.body.getReader();
+            const chunks = [];
+            let received = 0;
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              chunks.push(value);
+              received += value.length;
+              setProgress(total ? received / total * 100 : -1);
+            }
+
+            // If no Content-Length, animate indeterminate then snap to 100
+            if (!total) setProgress(100);
+
+            const blob   = new Blob(chunks);
+            const dlUrl  = URL.createObjectURL(blob);
+            const anchor = document.createElement('a');
+            anchor.href     = dlUrl;
+            anchor.download = filename;
+            document.body.appendChild(anchor);
+            anchor.click();
+            document.body.removeChild(anchor);
+            setTimeout(() => URL.revokeObjectURL(dlUrl), 10000);
+
+            doneToast();
+          } catch (err) {
+            errorToast();
+          }
+        });
+      });
+    })();
 
     // Bookmark toggle
     const bmBtn = document.getElementById('bm-btn');

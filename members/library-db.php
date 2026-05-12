@@ -43,7 +43,7 @@ const LIB_SUBJECTS = [
     'Other',
 ];
 
-const LIB_TYPES    = ['Lesson Plan','Unit Plan','Rubric','Activity','Assessment','Other'];
+const LIB_TYPES    = ['Lesson Plan','Unit Plan','Rubric','Activity','Assessment','Book','Other'];
 
 // ── Table creation ────────────────────────────────────────────────────────────
 function libEnsureTables(): void {
