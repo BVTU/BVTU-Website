@@ -37,47 +37,6 @@ const ALGOLIA_INDEX  = 'bvtu_content';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Strip HTML tags and compress whitespace */
-function extractText(string $html): string {
-    $text = preg_replace('/<(style|script|noscript)[^>]*>.*?<\/\1>/is', '', $html);
-    $text = strip_tags($text);
-    $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-    $text = preg_replace('/\s+/', ' ', $text);
-    return trim($text);
-}
-
-/** Extract <title> from HTML */
-function extractTitle(string $html): string {
-    if (preg_match('/<title[^>]*>(.*?)<\/title>/is', $html, $m)) {
-        $t = html_entity_decode(trim($m[1]), ENT_QUOTES | ENT_HTML5, 'UTF-8');
-        // Strip " — BVTU" suffix
-        $t = preg_replace('/\s*[—\-–]\s*BVTU.*$/u', '', $t);
-        return trim($t);
-    }
-    return '';
-}
-
-/** Extract <meta name="description"> */
-function extractDescription(string $html): string {
-    if (preg_match('/<meta\s[^>]*name=["\']description["\'][^>]*content=["\'](.*?)["\']/is', $html, $m)) {
-        return html_entity_decode(trim($m[1]), ENT_QUOTES | ENT_HTML5, 'UTF-8');
-    }
-    return '';
-}
-
-/** Extract <main> or <article> body text */
-function extractMainContent(string $html): string {
-    // Try <main>
-    if (preg_match('/<main[^>]*>(.*?)<\/main>/is', $html, $m)) {
-        return extractText($m[1]);
-    }
-    // Try <article>
-    if (preg_match('/<article[^>]*>(.*?)<\/article>/is', $html, $m)) {
-        return extractText($m[1]);
-    }
-    return extractText($html);
-}
-
 /** POST records to Algolia batch endpoint (cURL) */
 function algoliaRequest(string $method, string $path, array $body): array {
     global $adminKey;
@@ -167,67 +126,187 @@ $log .= str_contains($res['status'], '200') || str_contains($res['status'], '201
     : "  ✗ Synonyms failed: {$res['status']}\n\n";
 
 // ── 3. Index public pages ─────────────────────────────────────────────────────
+// Hardcoded records — avoids including PHP files which causes session/auth side-effects.
+// Update content here whenever a page's text changes significantly.
 $log .= "Indexing public pages...\n";
 
-$root = __DIR__;
-$baseUrl = 'https://new.bvtu.ca'; // switch to https://bvtu.ca when live domain is ready
+$baseUrl = 'https://new.bvtu.ca';
 
-$publicPages = [
-    ['file' => 'index.php',                'url' => '/',                           'priority' => 10],
-    ['file' => 'documents.php',           'url' => '/documents.php',              'priority' => 8],
-    // collective-agreement.php is intentionally excluded from search — too large and
-    // the Collective Agreement has its own dedicated page linked in the nav.
-    ['file' => 'contact.php',             'url' => '/contact.php',                'priority' => 5],
-    ['file' => 'members.php',             'url' => '/members.php',                'priority' => 7],
-    ['file' => 'prod.php',                'url' => '/prod.php',                   'priority' => 7],
-    ['file' => 'health-safety.php', 'url' => '/health-safety.php',   'priority' => 7],
-    ['file' => 'bctf.php',          'url' => '/bctf.php',            'priority' => 6],
-    ['file' => 'remedy-tracker.php','url' => '/remedy-tracker.php',  'priority' => 6],
-    ['file' => 'collab-grant.php', 'url' => '/collab-grant.php',   'priority' => 7],
+$records = [
+    [
+        'objectID'    => 'page_index',
+        'type'        => 'page',
+        'title'       => 'Home',
+        'description' => 'Bulkley Valley Teachers\' Union — local of the BC Teachers\' Federation representing educators in Smithers, Telkwa, and Houston.',
+        'content'     => 'Bulkley Valley Teachers Union BVTU local BC Teachers Federation SD54 School District 54 Smithers Telkwa Houston collective agreement member resources professional development health safety benefits',
+        'url'         => $baseUrl . '/',
+        'priority'    => 10,
+        'members_only'=> false,
+    ],
+    [
+        'objectID'    => 'page_documents',
+        'type'        => 'page',
+        'title'       => 'Documents',
+        'description' => 'BVTU documents — collective agreement, letters of understanding, constitution and bylaws, school calendars.',
+        'content'     => 'documents collective agreement letters of understanding LOUs constitution bylaws school calendars contract assistant settlements',
+        'url'         => $baseUrl . '/documents.php',
+        'priority'    => 8,
+        'members_only'=> false,
+    ],
+    [
+        'objectID'    => 'page_lous',
+        'type'        => 'page',
+        'title'       => 'Letters of Understanding',
+        'description' => 'BVTU Letters of Understanding — local agreements between BVTU and SD54.',
+        'content'     => 'letters of understanding LOUs local agreements SD54 BVTU memorandum side agreements',
+        'url'         => $baseUrl . '/lous.php',
+        'priority'    => 7,
+        'members_only'=> false,
+    ],
+    [
+        'objectID'    => 'page_members',
+        'type'        => 'page',
+        'title'       => 'Member Resources',
+        'description' => 'Resources for BVTU members — benefits, salary grids, TTOC, release time, and more.',
+        'content'     => 'member resources health dental benefits life insurance loan forgiveness salary grids TTOC teacher on call release time atrieve remedy tracker collaboration grant',
+        'url'         => $baseUrl . '/members.php',
+        'priority'    => 8,
+        'members_only'=> false,
+    ],
+    [
+        'objectID'    => 'page_benefits',
+        'type'        => 'page',
+        'title'       => 'Health & Dental Benefits',
+        'description' => 'Pacific Blue Cross health and dental benefits for SD54 teachers — extended health, dental, prescription drugs, vision, paramedical, and how to make a claim.',
+        'content'     => 'health dental benefits Pacific Blue Cross extended health prescription drugs vision paramedical physiotherapy massage chiropractor counselling naturopath podiatrist speech therapy travel emergency hearing aids orthotics hospital ambulance deductible reimbursement claims',
+        'url'         => $baseUrl . '/benefits.php',
+        'priority'    => 8,
+        'members_only'=> false,
+    ],
+    [
+        'objectID'    => 'page_salary',
+        'type'        => 'page',
+        'title'       => 'Salary Grids',
+        'description' => 'SD54 teacher salary grids — pay scales by category and experience.',
+        'content'     => 'salary grid pay scale category experience teachers compensation wages annual',
+        'url'         => $baseUrl . '/salary.php',
+        'priority'    => 7,
+        'members_only'=> false,
+    ],
+    [
+        'objectID'    => 'page_ttoc',
+        'type'        => 'page',
+        'title'       => 'TTOC Resources',
+        'description' => 'Resources for Teachers Teaching on Call in SD54.',
+        'content'     => 'TTOC teacher on call substitute teacher resources pay rate rights seniority',
+        'url'         => $baseUrl . '/ttoc.php',
+        'priority'    => 7,
+        'members_only'=> false,
+    ],
+    [
+        'objectID'    => 'page_prod',
+        'type'        => 'page',
+        'title'       => 'PRO-D',
+        'description' => 'Professional development resources for BVTU members — Pro-D portal, collaboration grants, and BCTF PRO-D programs.',
+        'content'     => 'professional development PRO-D pro d portal collaboration grant BCTF learning committee independent learning',
+        'url'         => $baseUrl . '/prod.php',
+        'priority'    => 7,
+        'members_only'=> false,
+    ],
+    [
+        'objectID'    => 'page_collab-grant',
+        'type'        => 'page',
+        'title'       => 'Collaboration Grant',
+        'description' => 'BVTU collaboration grant for teacher professional development projects.',
+        'content'     => 'collaboration grant professional development funding application teachers project',
+        'url'         => $baseUrl . '/collab-grant.php',
+        'priority'    => 7,
+        'members_only'=> false,
+    ],
+    [
+        'objectID'    => 'page_health-safety',
+        'type'        => 'page',
+        'title'       => 'Health & Safety',
+        'description' => 'BVTU health and safety resources — workplace committees, WorkSafe forms, employee assistance, and mental health support.',
+        'content'     => 'health safety workplace committee WorkSafe BC violence incident report EFAP employee family assistance mental health wellness occupational',
+        'url'         => $baseUrl . '/health-safety.php',
+        'priority'    => 7,
+        'members_only'=> false,
+    ],
+    [
+        'objectID'    => 'page_bctf',
+        'type'        => 'page',
+        'title'       => 'BCTF',
+        'description' => 'BC Teachers\' Federation resources — provincial agreement, member benefits, and bargaining updates.',
+        'content'     => 'BCTF BC Teachers Federation provincial collective agreement bargaining member benefits services professional development social justice equity',
+        'url'         => $baseUrl . '/bctf.php',
+        'priority'    => 6,
+        'members_only'=> false,
+    ],
+    [
+        'objectID'    => 'page_remedy-tracker',
+        'type'        => 'page',
+        'title'       => 'Remedy Tracker',
+        'description' => 'Track BVTU remedy requests and grievance outcomes.',
+        'content'     => 'remedy tracker grievance dispute resolution outcome arbitration',
+        'url'         => $baseUrl . '/remedy-tracker.php',
+        'priority'    => 6,
+        'members_only'=> false,
+    ],
+    [
+        'objectID'    => 'page_atrieve',
+        'type'        => 'page',
+        'title'       => 'Release Time / Atrieve',
+        'description' => 'Information on release time and the Atrieve system for BVTU members.',
+        'content'     => 'release time atrieve system union leave pro-d days scheduling',
+        'url'         => $baseUrl . '/atrieve.php',
+        'priority'    => 6,
+        'members_only'=> false,
+    ],
+    [
+        'objectID'    => 'page_life-insurance',
+        'type'        => 'page',
+        'title'       => 'Life Insurance',
+        'description' => 'Life insurance coverage for BVTU members through the BCTF.',
+        'content'     => 'life insurance coverage beneficiary BCTF death benefit',
+        'url'         => $baseUrl . '/life-insurance.php',
+        'priority'    => 6,
+        'members_only'=> false,
+    ],
+    [
+        'objectID'    => 'page_loan-forgiveness',
+        'type'        => 'page',
+        'title'       => 'Student Loan Forgiveness',
+        'description' => 'Student loan forgiveness programs available to BC teachers.',
+        'content'     => 'student loan forgiveness BC teacher rural remote repayment program',
+        'url'         => $baseUrl . '/loan-forgiveness.php',
+        'priority'    => 6,
+        'members_only'=> false,
+    ],
+    [
+        'objectID'    => 'page_calendars',
+        'type'        => 'page',
+        'title'       => 'School Calendars',
+        'description' => 'SD54 school year calendars — instructional days, Pro-D days, and key dates.',
+        'content'     => 'school calendar SD54 2025 2026 2027 instructional days pro-d days key dates schedule',
+        'url'         => $baseUrl . '/calendars.php',
+        'priority'    => 6,
+        'members_only'=> false,
+    ],
+    [
+        'objectID'    => 'page_contact',
+        'type'        => 'page',
+        'title'       => 'Contact',
+        'description' => 'Contact the Bulkley Valley Teachers\' Union.',
+        'content'     => 'contact BVTU president Cody Lind Smithers address phone email',
+        'url'         => $baseUrl . '/contact.php',
+        'priority'    => 5,
+        'members_only'=> false,
+    ],
 ];
 
-$records = [];
-
-foreach ($publicPages as $page) {
-    $path = $root . '/' . $page['file'];
-    if (!file_exists($path)) {
-        $log .= "  - Skipped (not found): {$page['file']}\n";
-        continue;
-    }
-
-    // Capture rendered output (PHP pages)
-    ob_start();
-    // Simple include — pages that call requireLogin() will redirect; we avoid members/ pages here
-    // For public pages, we fake minimal superglobals
-    $_GET = $_POST = [];
-    try {
-        include $path;
-    } catch (Throwable $e) {
-        // ignore render errors; we'll still try to parse what we got
-    }
-    $html = ob_get_clean();
-
-    if (!$html) {
-        // Fallback: read file as-is
-        $html = file_get_contents($path);
-    }
-
-    $title   = extractTitle($html)         ?: basename($page['file'], '.php');
-    $content = extractMainContent($html);
-    $desc    = extractDescription($html);
-
-    $records[] = [
-        'objectID'    => 'page_' . basename($page['file'], '.php'),
-        'type'        => 'page',
-        'title'       => $title,
-        'description' => $desc,
-        'content'     => mb_substr($content, 0, 8000),
-        'url'         => $baseUrl . $page['url'],
-        'priority'    => $page['priority'],
-        'members_only'=> false,
-    ];
-
-    $log .= "  + {$page['file']} — {$title}\n";
+foreach ($records as $r) {
+    $log .= "  + {$r['url']} — {$r['title']}\n";
 }
 
 if ($records) {
