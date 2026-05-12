@@ -501,11 +501,11 @@ function buildUrl(array $overrides = []): string {
                 <button class="lib-bm-btn" data-id="<?= $r['id'] ?>"
                         title="<?= $bookmarked ? 'Remove bookmark' : 'Save for later' ?>"
                         aria-label="<?= $bookmarked ? 'Remove bookmark' : 'Save for later' ?>"
-                        style="position:absolute;top:calc(130px + .2rem);right:.55rem;background:white;border:none;cursor:pointer;padding:.3rem;border-radius:50%;transition:background .15s;z-index:2;box-shadow:0 1px 4px rgba(0,0,0,.12);"
+                        style="position:absolute;top:calc(130px + .2rem);right:.55rem;background:white;border:1.5px solid rgba(0,0,0,.18);cursor:pointer;padding:.3rem;border-radius:50%;transition:background .15s,border-color .15s;z-index:2;box-shadow:0 1px 4px rgba(0,0,0,.15);"
                         onmouseover="this.style.background='rgba(0,0,0,.07)'"
                         onmouseout="this.style.background='white'">
                   <svg width="17" height="17" viewBox="0 0 24 24" fill="<?= $bookmarked ? '#f59e0b' : 'none' ?>"
-                       stroke="<?= $bookmarked ? '#f59e0b' : 'var(--gray-300)' ?>" stroke-width="2"
+                       stroke="<?= $bookmarked ? '#f59e0b' : '#1f2937' ?>" stroke-width="2"
                        stroke-linecap="round" stroke-linejoin="round">
                     <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                   </svg>
@@ -590,9 +590,8 @@ function buildUrl(array $overrides = []): string {
         })
         .then(r => r.json())
         .then(data => {
-          const c = data.bookmarked ? '#f59e0b' : 'var(--gray-300)';
           svg.setAttribute('fill',   data.bookmarked ? '#f59e0b' : 'none');
-          svg.setAttribute('stroke', c);
+          svg.setAttribute('stroke', data.bookmarked ? '#f59e0b' : '#1f2937');
           this.title     = data.bookmarked ? 'Remove bookmark' : 'Save for later';
           this.ariaLabel = this.title;
         });

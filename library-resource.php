@@ -53,7 +53,14 @@ if (!isset($notFound) && $isAdmin && isset($_GET['action'])) {
     exit;
 }
 
-$isOwner     = $loggedIn && !isset($notFound) && $member['email'] === $resource['uploader_email'];
+// Owner delete — POST only, separate from the admin GET action to avoid accidental triggers
+$isOwner = $loggedIn && !isset($notFound) && $member['email'] === $resource['uploader_email'];
+if ($isOwner && !isset($notFound) && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'owner_delete') {
+    libDelete($id);
+    header('Location: library.php?deleted=1');
+    exit;
+}
+
 $ratings     = isset($notFound) ? [] : libGetRatings($id);
 $myRating    = ($loggedIn && !isset($notFound)) ? libGetMemberRating($id, $member['email']) : null;
 $grades      = isset($notFound) ? [] : ($resource['grade_levels'] ? explode(',', $resource['grade_levels']) : []);
@@ -806,6 +813,23 @@ $loginUrl    = 'members/login.php?redirect=' . urlencode('../library-resource.ph
               </svg>
               Edit this resource
             </a>
+
+            <?php if ($isOwner): ?>
+            <form method="POST" style="width:100%;margin-top:.4rem;"
+                  onsubmit="return confirm('Permanently delete this resource and all its files? This cannot be undone.')">
+              <input type="hidden" name="action" value="owner_delete">
+              <button type="submit"
+                      style="display:flex;align-items:center;justify-content:center;gap:.4rem;width:100%;padding:.55rem;background:none;border:1.5px solid var(--border);border-radius:var(--radius-s);font-size:.83rem;font-weight:600;color:var(--gray-600);cursor:pointer;transition:border-color .15s,color .15s;"
+                      onmouseover="this.style.borderColor='#dc2626';this.style.color='#dc2626'"
+                      onmouseout="this.style.borderColor='';this.style.color=''">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                  <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+                </svg>
+                Remove this resource
+              </button>
+            </form>
+            <?php endif; ?>
             <?php endif; ?>
             <div class="res-stat-row">
               <div>Size</div>
