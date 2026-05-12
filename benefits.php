@@ -360,7 +360,7 @@ $member   = $loggedIn ? getMember() : null;
               <tr><td>Complete oral exam</td><td><span class="coverage-note">1 per 36 months</span></td><td><span class="coverage-pct">90%</span></td></tr>
               <tr><td>Recall exam (dentist or hygienist)</td><td><span class="coverage-note">Combined limit: 2 per calendar year</span></td><td><span class="coverage-pct">90%</span></td></tr>
               <tr><td>Specific / emergency exam</td><td><span class="coverage-note">Combined limit: 2 per calendar year</span></td><td><span class="coverage-pct">90%</span></td></tr>
-              <tr><td>Scaling (cleaning)</td><td><span class="coverage-note">Per calendar year</span></td><td><span class="coverage-pct">90%</span></td></tr>
+              <tr><td>Scaling (cleaning)</td><td><span class="coverage-note">No stated unit limit</span></td><td><span class="coverage-pct">90%</span></td></tr>
               <tr><td>Polishing</td><td><span class="coverage-note">2 per calendar year</span></td><td><span class="coverage-pct">90%</span></td></tr>
               <tr><td>Fluoride treatment</td><td><span class="coverage-note">2 per calendar year</span></td><td><span class="coverage-pct">90%</span></td></tr>
               <tr><td>Bitewing &amp; periapical x-rays</td><td><span class="coverage-note">Per calendar year · dental fee guide max</span></td><td><span class="coverage-pct">90%</span></td></tr>
@@ -417,8 +417,8 @@ $member   = $loggedIn ? getMember() : null;
             <tbody>
               <tr><td>Denture repairs &amp; additions</td><td><span class="coverage-note">GP or denturist</span></td><td><span class="coverage-pct">90%</span></td></tr>
               <tr><td>Denture adjustments</td><td><span class="coverage-note">4 per calendar year combined</span></td><td><span class="coverage-pct">90%</span></td></tr>
-              <tr><td>Denture rebases &amp; relines</td><td><span class="coverage-note">1 per arch per 24 months</span></td><td><span class="coverage-pct">90%</span></td></tr>
-              <tr><td>Tissue conditioning</td><td><span class="coverage-note">2 per arch per 60 months</span></td><td><span class="coverage-pct">90%</span></td></tr>
+              <tr><td>Denture rebases &amp; relines</td><td><span class="coverage-note">1 per person per 24 months · upper and lower tracked separately</span></td><td><span class="coverage-pct">90%</span></td></tr>
+              <tr><td>Tissue conditioning</td><td><span class="coverage-note">2 per person per 60 months · 2 per arch per 5-year overall cap</span></td><td><span class="coverage-pct">90%</span></td></tr>
               <tr><td>Bridge recementation &amp; repairs</td><td><span class="coverage-note">2 per tooth per day from first eligible claim</span></td><td><span class="coverage-pct">90%</span></td></tr>
               <tr><td>Bridge removal</td><td><span class="coverage-note">2 per tooth per day from first eligible claim</span></td><td><span class="coverage-pct">90%</span></td></tr>
             </tbody>
