@@ -61,7 +61,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $cn = trim($_POST['curator_name']  ?? '');
         if ($ce && filter_var($ce, FILTER_VALIDATE_EMAIL)) {
             curatedAddCurator($ce, $cn, $member['email']);
-            header('Location: curated-admin.php?tab=curators&success=Curator+added.');
+
+            // Email the new curator
+            $fromEmail   = defined('CONTACT_EMAIL') ? CONTACT_EMAIL : 'noreply@bvtu.ca';
+            $adminName   = $member['name'] ?? $member['email'];
+            $curatorName = $cn ?: 'there';
+            $host        = $_SERVER['HTTP_HOST'] ?? 'new.bvtu.ca';
+            $protocol    = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $adminUrl    = "{$protocol}://{$host}/members/curated-admin.php";
+            $publicUrl   = "{$protocol}://{$host}/curated.php";
+
+            $subject = 'BVTU — You\'ve been added as a Curated Resources curator';
+            $body    = "Hi {$curatorName},\n\n"
+                     . "{$adminName} has given you curator access to the BVTU Curated Resources page.\n\n"
+                     . "As a curator, you can add, edit, and remove curated teaching resources "
+                     . "that appear on the public Resources page.\n\n"
+                     . "Manage resources here (requires your BVTU member login):\n"
+                     . "{$adminUrl}\n\n"
+                     . "View the public page:\n"
+                     . "{$publicUrl}\n\n"
+                     . "— Bulkley Valley Teachers' Union";
+
+            $headers  = "From: BVTU Member Portal <{$fromEmail}>\r\n";
+            $headers .= "Reply-To: {$fromEmail}\r\n";
+            $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
+
+            mail($ce, $subject, $body, $headers);
+
+            header('Location: curated-admin.php?tab=curators&success=Curator+added+and+notified+by+email.');
             exit;
         }
         $errors[] = 'Valid email required to add a curator.';
