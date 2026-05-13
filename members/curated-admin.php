@@ -126,9 +126,6 @@ function selOpt(string $val, string $current): string {
     .form-group textarea { min-height: 80px; resize: vertical; }
     .form-hint  { font-size: .78rem; color: var(--gray-500); margin-top: .15rem; }
 
-    .url-row    { display: flex; gap: .4rem; align-items: flex-start; }
-    .url-row input { flex: 1; min-width: 0; }
-    #fetch-meta-btn { white-space: nowrap; font-size: .82rem; padding: .52rem .9rem; flex-shrink: 0; }
     #fetch-status   { display: none; font-size: .78rem; margin-top: .3rem; }
     #thumb-preview  { display: none; max-height: 72px; max-width: 128px; border-radius: 6px;
                       object-fit: cover; border: 1px solid var(--border); margin-top: .4rem; }
@@ -209,10 +206,7 @@ function selOpt(string $val, string $current): string {
           <div class="form-row">
             <div class="form-group">
               <label>URL *</label>
-              <div class="url-row">
-                <input type="url" name="url" id="curated-url" value="<?= htmlspecialchars($editResource['url'] ?? '') ?>" placeholder="https://…" required>
-                <button type="button" id="fetch-meta-btn" class="btn btn-outline">Fetch Preview</button>
-              </div>
+              <input type="url" name="url" id="curated-url" value="<?= htmlspecialchars($editResource['url'] ?? '') ?>" placeholder="https://…" required>
               <span id="fetch-status"></span>
             </div>
             <div class="form-group">
@@ -375,7 +369,6 @@ function selOpt(string $val, string $current): string {
   <script src="../js/site.js"></script>
   <script>
   (function () {
-    var btn      = document.getElementById('fetch-meta-btn');
     var urlIn    = document.getElementById('curated-url');
     var thumbIn  = document.getElementById('curated-thumb');
     var thumbImg = document.getElementById('thumb-preview');
@@ -383,7 +376,9 @@ function selOpt(string $val, string $current): string {
     var titleIn  = document.querySelector('input[name="title"]');
     var descIn   = document.querySelector('textarea[name="description"]');
 
-    if (!btn) return;
+    if (!urlIn) return;
+
+    var lastFetched = '';
 
     function showThumb(src) {
       if (src && src.match(/^https?:\/\//)) {
@@ -394,7 +389,7 @@ function selOpt(string $val, string $current): string {
       }
     }
 
-    // Show on page load if editing an existing resource
+    // Show existing thumbnail on page load (edit mode)
     if (thumbIn.value) showThumb(thumbIn.value);
 
     // Update preview when thumbnail URL is manually typed
@@ -402,29 +397,18 @@ function selOpt(string $val, string $current): string {
       showThumb(thumbIn.value.trim());
     });
 
-    btn.addEventListener('click', function () {
-      var url = urlIn.value.trim();
-      if (!url) {
-        status.textContent = 'Enter a URL first.';
-        status.style.color = '#b91c1c';
-        status.style.display = 'block';
-        return;
-      }
-
-      btn.textContent = 'Fetching…';
-      btn.disabled    = true;
-      status.style.display = 'none';
+    function doFetch(url) {
+      lastFetched = url;
+      status.textContent  = 'Fetching preview…';
+      status.style.color  = 'var(--gray-500)';
+      status.style.display = 'block';
 
       fetch('curated-fetch-meta.php?url=' + encodeURIComponent(url))
         .then(function (r) { return r.json(); })
         .then(function (d) {
-          btn.textContent = 'Fetch Preview';
-          btn.disabled    = false;
-
           if (!d.ok) {
-            status.textContent  = d.error || 'Could not fetch a preview.';
-            status.style.color  = '#b91c1c';
-            status.style.display = 'block';
+            status.textContent = d.error || 'Could not fetch a preview.';
+            status.style.color = '#b91c1c';
             return;
           }
 
@@ -435,18 +419,24 @@ function selOpt(string $val, string $current): string {
           if (d.thumbnail) {
             thumbIn.value = d.thumbnail;
             showThumb(d.thumbnail);
-            status.textContent = 'Preview fetched!';
+            status.textContent = 'Preview fetched.';
             status.style.color = '#166534';
-            status.style.display = 'block';
+          } else {
+            status.style.display = 'none';
           }
         })
         .catch(function () {
-          btn.textContent = 'Fetch Preview';
-          btn.disabled    = false;
-          status.textContent  = 'Network error — could not reach the server.';
-          status.style.color  = '#b91c1c';
-          status.style.display = 'block';
+          status.textContent = 'Could not reach the server for a preview.';
+          status.style.color = '#b91c1c';
         });
+    }
+
+    // Auto-fetch when the curator leaves the URL field
+    urlIn.addEventListener('blur', function () {
+      var url = urlIn.value.trim();
+      if (!url || url === lastFetched) return;
+      if (!url.match(/^https?:\/\/.+/)) return;
+      doFetch(url);
     });
   })();
   </script>
