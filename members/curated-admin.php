@@ -437,11 +437,8 @@ function selOpt(string $val, string $current): string {
             showThumb(d.thumbnail);
             status.textContent = 'Preview fetched!';
             status.style.color = '#166534';
-          } else {
-            status.textContent = 'Fetched — no preview image found on this site.';
-            status.style.color = '#92400e';
+            status.style.display = 'block';
           }
-          status.style.display = 'block';
         })
         .catch(function () {
           btn.textContent = 'Fetch Preview';

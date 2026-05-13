@@ -83,6 +83,11 @@ if ($thumbnail && strpos($thumbnail, 'http') !== 0) {
     }
 }
 
+// No og:image found — fall back to a live screenshot via thum.io (free, no key needed)
+if (!$thumbnail) {
+    $thumbnail = 'https://image.thum.io/get/width/600/crop/400/' . $url;
+}
+
 // ── Extract title ─────────────────────────────────────────────────────────────
 $title = ogMeta($head, 'og:title');
 if (!$title) $title = ogMeta($head, 'twitter:title');
