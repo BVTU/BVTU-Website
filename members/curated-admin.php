@@ -126,6 +126,13 @@ function selOpt(string $val, string $current): string {
     .form-group textarea { min-height: 80px; resize: vertical; }
     .form-hint  { font-size: .78rem; color: var(--gray-500); margin-top: .15rem; }
 
+    .url-row    { display: flex; gap: .4rem; align-items: flex-start; }
+    .url-row input { flex: 1; min-width: 0; }
+    #fetch-meta-btn { white-space: nowrap; font-size: .82rem; padding: .52rem .9rem; flex-shrink: 0; }
+    #fetch-status   { display: none; font-size: .78rem; margin-top: .3rem; }
+    #thumb-preview  { display: none; max-height: 72px; max-width: 128px; border-radius: 6px;
+                      object-fit: cover; border: 1px solid var(--border); margin-top: .4rem; }
+
     .adm-table  { width: 100%; border-collapse: collapse; font-size: .88rem; }
     .adm-table th { background: var(--primary); color: white; padding: .6rem .9rem; text-align: left; font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; }
     .adm-table td { padding: .65rem .9rem; border-bottom: 1px solid var(--gray-200); vertical-align: middle; }
@@ -202,7 +209,11 @@ function selOpt(string $val, string $current): string {
           <div class="form-row">
             <div class="form-group">
               <label>URL *</label>
-              <input type="url" name="url" value="<?= htmlspecialchars($editResource['url'] ?? '') ?>" placeholder="https://…" required>
+              <div class="url-row">
+                <input type="url" name="url" id="curated-url" value="<?= htmlspecialchars($editResource['url'] ?? '') ?>" placeholder="https://…" required>
+                <button type="button" id="fetch-meta-btn" class="btn btn-outline">Fetch Preview</button>
+              </div>
+              <span id="fetch-status"></span>
             </div>
             <div class="form-group">
               <label>Type</label>
@@ -238,9 +249,10 @@ function selOpt(string $val, string $current): string {
 
           <div class="form-row">
             <div class="form-group">
-              <label>Thumbnail URL <span style="font-weight:400;color:var(--gray-400)">(optional)</span></label>
-              <input type="url" name="thumbnail_url" value="<?= htmlspecialchars($editResource['thumbnail_url'] ?? '') ?>" placeholder="https://… (image URL)">
-              <span class="form-hint">Link to a screenshot or logo. Leave blank to use the default icon.</span>
+              <label>Preview Image <span style="font-weight:400;color:var(--gray-400)">(auto-fetched)</span></label>
+              <input type="url" name="thumbnail_url" id="curated-thumb" value="<?= htmlspecialchars($editResource['thumbnail_url'] ?? '') ?>" placeholder="Paste a URL or click Fetch Preview above">
+              <img id="thumb-preview" src="<?= htmlspecialchars($editResource['thumbnail_url'] ?? '') ?>" alt="Preview">
+              <span class="form-hint">Click "Fetch Preview" to pull automatically, or paste a direct image URL.</span>
             </div>
             <div class="form-group">
               <label>Sort Order <span style="font-weight:400;color:var(--gray-400)">(lower = first)</span></label>
@@ -361,5 +373,85 @@ function selOpt(string $val, string $current): string {
   </div>
 
   <script src="../js/site.js"></script>
+  <script>
+  (function () {
+    var btn      = document.getElementById('fetch-meta-btn');
+    var urlIn    = document.getElementById('curated-url');
+    var thumbIn  = document.getElementById('curated-thumb');
+    var thumbImg = document.getElementById('thumb-preview');
+    var status   = document.getElementById('fetch-status');
+    var titleIn  = document.querySelector('input[name="title"]');
+    var descIn   = document.querySelector('textarea[name="description"]');
+
+    if (!btn) return;
+
+    function showThumb(src) {
+      if (src && src.match(/^https?:\/\//)) {
+        thumbImg.src = src;
+        thumbImg.style.display = 'block';
+      } else {
+        thumbImg.style.display = 'none';
+      }
+    }
+
+    // Show on page load if editing an existing resource
+    if (thumbIn.value) showThumb(thumbIn.value);
+
+    // Update preview when thumbnail URL is manually typed
+    thumbIn.addEventListener('input', function () {
+      showThumb(thumbIn.value.trim());
+    });
+
+    btn.addEventListener('click', function () {
+      var url = urlIn.value.trim();
+      if (!url) {
+        status.textContent = 'Enter a URL first.';
+        status.style.color = '#b91c1c';
+        status.style.display = 'block';
+        return;
+      }
+
+      btn.textContent = 'Fetching…';
+      btn.disabled    = true;
+      status.style.display = 'none';
+
+      fetch('curated-fetch-meta.php?url=' + encodeURIComponent(url))
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          btn.textContent = 'Fetch Preview';
+          btn.disabled    = false;
+
+          if (!d.ok) {
+            status.textContent  = d.error || 'Could not fetch a preview.';
+            status.style.color  = '#b91c1c';
+            status.style.display = 'block';
+            return;
+          }
+
+          // Only auto-fill fields that are still blank
+          if (d.title       && !titleIn.value.trim()) titleIn.value = d.title;
+          if (d.description && !descIn.value.trim())  descIn.value  = d.description;
+
+          if (d.thumbnail) {
+            thumbIn.value = d.thumbnail;
+            showThumb(d.thumbnail);
+            status.textContent = 'Preview fetched!';
+            status.style.color = '#166534';
+          } else {
+            status.textContent = 'Fetched — no preview image found on this site.';
+            status.style.color = '#92400e';
+          }
+          status.style.display = 'block';
+        })
+        .catch(function () {
+          btn.textContent = 'Fetch Preview';
+          btn.disabled    = false;
+          status.textContent  = 'Network error — could not reach the server.';
+          status.style.color  = '#b91c1c';
+          status.style.display = 'block';
+        });
+    });
+  })();
+  </script>
 </body>
 </html>
