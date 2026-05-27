@@ -131,6 +131,12 @@ $budgetLinesJson = json_encode(array_values($budgetLines));
 
 // Pass existing expenses to JS
 $expensesJson = json_encode(array_values($expenses));
+
+// Generate a mobile upload token for QR code
+$uploadToken   = lpCreateUploadToken($id, $member['email']);
+$protocol      = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+$host          = $_SERVER['HTTP_HOST'] ?? 'new.bvtu.ca';
+$mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$uploadToken}";
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -192,6 +198,35 @@ $expensesJson = json_encode(array_values($expenses));
     .save-bar .total-display span { font-size: .75rem; font-weight: 600; color: var(--gray-400); }
     .error-list { background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: .75rem 1rem; margin-bottom: 1rem; font-size: .85rem; color: #dc2626; }
     .saved-notice { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: .75rem 1rem; margin-bottom: 1rem; font-size: .88rem; color: #166534; }
+
+    /* ── Phone upload QR panel ── */
+    .qr-panel { display:none; background:#fff; border:1px solid var(--gray-200); border-radius:12px; padding:1.25rem 1.5rem; margin-bottom:1.25rem; }
+    .qr-panel.open { display:flex; gap:1.5rem; align-items:flex-start; flex-wrap:wrap; }
+    .qr-box { flex-shrink:0; }
+    #qrCanvas { border-radius:8px; }
+    .qr-instructions { flex:1; min-width:200px; }
+    .qr-instructions h3 { font-size:.95rem; font-weight:800; color:var(--primary); margin:0 0 .5rem; }
+    .qr-instructions p  { font-size:.83rem; color:var(--gray-500); line-height:1.5; margin-bottom:.6rem; }
+    .qr-url { font-size:.72rem; color:var(--gray-400); word-break:break-all; background:var(--off-white); padding:.4rem .6rem; border-radius:5px; }
+    .qr-expiry { font-size:.73rem; color:#92400e; margin-top:.5rem; }
+    .btn-phone { background:#f0fdf4; color:var(--primary); border:1.5px solid #86efac; border-radius:8px; padding:.5rem .9rem; font-size:.85rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:.4rem; }
+    .btn-phone:hover { background:#dcfce7; }
+
+    /* ── Pending receipts tray ── */
+    .pending-tray { display:none; background:#f0fdf4; border:1.5px solid #86efac; border-radius:12px; padding:1rem 1.25rem; margin-bottom:1.25rem; }
+    .pending-tray.has-items { display:block; }
+    .pending-tray-header { display:flex; align-items:center; gap:.6rem; margin-bottom:.85rem; }
+    .pending-tray-header h3 { font-size:.9rem; font-weight:800; color:var(--primary); margin:0; }
+    .pending-badge { background:var(--primary); color:#fff; font-size:.7rem; font-weight:800; border-radius:100px; padding:.1rem .5rem; }
+    .pending-tray-scroll { display:flex; gap:.75rem; flex-wrap:wrap; }
+    .pending-card { background:#fff; border:1px solid #bbf7d0; border-radius:10px; padding:.75rem; width:180px; flex-shrink:0; }
+    .pending-card img { width:100%; height:90px; object-fit:cover; border-radius:6px; margin-bottom:.5rem; cursor:pointer; }
+    .pending-card .pdf-thumb { width:100%; height:90px; background:#f9fafb; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:2rem; margin-bottom:.5rem; }
+    .pending-card .p-desc { font-size:.78rem; font-weight:700; color:#1a2e1a; margin-bottom:.15rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .pending-card .p-amt  { font-size:.8rem; color:var(--primary); font-weight:800; margin-bottom:.5rem; }
+    .pending-card .p-flag { font-size:.7rem; color:#92400e; margin-bottom:.4rem; }
+    .btn-claim { width:100%; background:var(--primary); color:#fff; border:none; border-radius:6px; padding:.4rem; font-size:.78rem; font-weight:700; cursor:pointer; }
+    .btn-claim:hover { background:var(--primary-dk); }
   </style>
 </head>
 <body>
@@ -232,7 +267,31 @@ $expensesJson = json_encode(array_values($expenses));
 
   <div class="toolbar">
     <button type="button" class="btn-add" onclick="addRow()">+ Add Row</button>
+    <button type="button" class="btn-phone" onclick="toggleQR()">📱 Phone Upload</button>
     <span class="mileage-note">Mileage: $<?= number_format($mileageRate, 2) ?>/km · attach receipts with 📎</span>
+  </div>
+
+  <!-- QR code panel -->
+  <div class="qr-panel" id="qrPanel">
+    <div class="qr-box">
+      <div id="qrCanvas"></div>
+    </div>
+    <div class="qr-instructions">
+      <h3>📱 Upload receipts from your phone</h3>
+      <p>Scan this code with your phone's camera. Take a photo of any receipt and it will appear here automatically — no AirDrop needed.</p>
+      <p>Or copy the link and text it to yourself:</p>
+      <div class="qr-url" id="qrUrlText"><?= htmlspecialchars($mobileUrl) ?></div>
+      <p class="qr-expiry">⏱ This link is valid for 4 hours.</p>
+    </div>
+  </div>
+
+  <!-- Pending receipts tray (shown when phone receipts arrive) -->
+  <div class="pending-tray" id="pendingTray">
+    <div class="pending-tray-header">
+      <h3>📥 Receipts from your phone</h3>
+      <span class="pending-badge" id="pendingBadge">0</span>
+    </div>
+    <div class="pending-tray-scroll" id="pendingCards"></div>
   </div>
 
   <div class="expense-table-wrap">
@@ -492,6 +551,148 @@ function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&
 EXISTING.forEach(e => addRow(e));
 const minRows = Math.max(0, 10 - EXISTING.length);
 for (let i = 0; i < minRows; i++) addRow();
+
+// ── QR code panel ─────────────────────────────────────────────────────────────
+const VOUCHER_ID  = <?= $id ?>;
+const MOBILE_URL  = <?= json_encode($mobileUrl) ?>;
+let qrGenerated   = false;
+let qrPanelOpen   = false;
+
+function toggleQR() {
+    const panel = document.getElementById('qrPanel');
+    qrPanelOpen = !qrPanelOpen;
+    panel.classList.toggle('open', qrPanelOpen);
+    if (qrPanelOpen && !qrGenerated) {
+        generateQR();
+    }
+}
+
+function generateQR() {
+    if (typeof QRCode === 'undefined') return;
+    const el = document.getElementById('qrCanvas');
+    el.innerHTML = '';
+    new QRCode(el, {
+        text:           MOBILE_URL,
+        width:          180,
+        height:         180,
+        colorDark:      '#1a2e1a',
+        colorLight:     '#ffffff',
+        correctLevel:   QRCode.CorrectLevel.M,
+    });
+    qrGenerated = true;
+}
+
+// ── Pending receipts polling ──────────────────────────────────────────────────
+const seenReceiptIds = {};
+
+function pollPending() {
+    fetch('lp-poll-receipts.php?voucher_id=' + VOUCHER_ID)
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (!d.receipts || d.receipts.length === 0) return;
+            var newOnes = d.receipts.filter(function(r) { return !seenReceiptIds[r.id]; });
+            if (newOnes.length === 0) return;
+
+            // Show tray
+            var tray = document.getElementById('pendingTray');
+            tray.classList.add('has-items');
+            document.getElementById('pendingBadge').textContent = d.receipts.length;
+
+            newOnes.forEach(function(receipt) {
+                seenReceiptIds[receipt.id] = true;
+                addPendingCard(receipt);
+            });
+        })
+        .catch(function() {}); // silently ignore poll errors
+}
+
+function addPendingCard(receipt) {
+    var sd       = receipt.scan_data || {};
+    var desc     = sd.description || receipt.original_name || 'Receipt';
+    var isPdf    = /\.pdf$/i.test(receipt.saved_path || '');
+    var thumbHtml = isPdf
+        ? '<div class="pdf-thumb">📄</div>'
+        : '<img src="' + escHtml(receipt.preview_url) + '" alt="Receipt" onclick="lightboxOpen(\'' + escHtml(receipt.preview_url) + '\')">';
+
+    // Find best amount
+    var amount = null;
+    ['travel_amount','meals_amount','gifts_amount','misc_amount','office_amount','phone_amount','total_amount'].forEach(function(k) {
+        if (!amount && sd[k] && parseFloat(sd[k]) > 0) amount = parseFloat(sd[k]);
+    });
+
+    var cardHtml = '<div class="pending-card" id="pc-' + receipt.id + '">'
+        + thumbHtml
+        + '<div class="p-desc" title="' + escHtml(desc) + '">' + escHtml(desc) + '</div>'
+        + (amount ? '<div class="p-amt">$' + amount.toFixed(2) + '</div>' : '')
+        + (sd.concerns ? '<div class="p-flag">⚠️ ' + escHtml(sd.concerns) + '</div>' : '')
+        + '<button class="btn-claim" onclick="claimReceipt(' + receipt.id + ')">+ Add to Voucher</button>'
+        + '</div>';
+
+    document.getElementById('pendingCards').insertAdjacentHTML('beforeend', cardHtml);
+}
+
+function claimReceipt(pendingId) {
+    // Find the receipt data
+    var card = document.getElementById('pc-' + pendingId);
+    if (!card) return;
+
+    // Collect scan data from the polled data (we stash it on the element via dataset trick)
+    // Re-fetch so we have the full data object
+    fetch('lp-poll-receipts.php?voucher_id=' + VOUCHER_ID)
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            var receipt = null;
+            if (d.receipts) {
+                d.receipts.forEach(function(r) { if (r.id === pendingId) receipt = r; });
+            }
+            if (!receipt) return;
+
+            var sd = receipt.scan_data || {};
+            // Add a new expense row pre-populated with scan data + receipt
+            var rowId = addRow({
+                date:               sd.date || '',
+                description:        sd.description || '',
+                travel_amount:      sd.travel_amount  || '',
+                meals_amount:       sd.meals_amount   || '',
+                gifts_amount:       sd.gifts_amount   || '',
+                misc_amount:        sd.misc_amount    || '',
+                office_amount:      sd.office_amount  || '',
+                phone_amount:       sd.phone_amount   || '',
+                suggested_grant_id: sd.suggested_grant_id || '',
+                suggested_bl_id:    sd.suggested_bl_id    || '',
+                saved_path:         receipt.saved_path,
+                original_name:      receipt.original_name,
+                concerns:           sd.concerns || '',
+                flag:               sd.flag || '',
+            });
+
+            // Scroll the new row into view
+            var newRow = document.getElementById('row-' + rowId);
+            if (newRow) newRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            // Mark claimed on server
+            var fd = new FormData();
+            fd.append('pending_id', pendingId);
+            fetch('lp-claim-receipt.php', { method: 'POST', body: fd });
+
+            // Remove card from tray
+            card.remove();
+            var remaining = document.getElementById('pendingCards').children.length;
+            if (remaining === 0) {
+                document.getElementById('pendingTray').classList.remove('has-items');
+            } else {
+                document.getElementById('pendingBadge').textContent = remaining;
+            }
+        });
+}
+
+// Poll every 5 seconds
+pollPending();
+setInterval(pollPending, 5000);
 </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"
+        integrity="sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSt7Jd/diHNN3E/45NFbFMOes/NMEk0WDRNYQ=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"
+        onload="if(qrPanelOpen && !qrGenerated) generateQR()"></script>
 </body>
 </html>

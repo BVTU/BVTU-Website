@@ -144,10 +144,76 @@ function lpEnsureTables(): void {
         foreach (LP_BUDGET_LINES_SEED as $b) $ins->execute([$b['name'], $b['budget'], $yr]);
     }
 
+    // Mobile upload tokens
+    $db->exec("CREATE TABLE IF NOT EXISTS lp_upload_tokens (
+        id          INT AUTO_INCREMENT PRIMARY KEY,
+        token       VARCHAR(64) NOT NULL UNIQUE,
+        voucher_id  INT NOT NULL,
+        created_by  VARCHAR(255) NOT NULL,
+        expires_at  DATETIME NOT NULL,
+        created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_token   (token),
+        INDEX idx_voucher (voucher_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // Pending receipts uploaded from phone (not yet assigned to an expense row)
+    $db->exec("CREATE TABLE IF NOT EXISTS lp_pending_receipts (
+        id            INT AUTO_INCREMENT PRIMARY KEY,
+        voucher_id    INT NOT NULL,
+        saved_path    VARCHAR(500) NOT NULL,
+        original_name VARCHAR(255),
+        scan_json     TEXT,
+        claimed       TINYINT(1) DEFAULT 0,
+        created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_voucher (voucher_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
     // Receipts directory
     if (!is_dir(LP_RECEIPTS_DIR)) mkdir(LP_RECEIPTS_DIR, 0750, true);
     $htaccess = LP_RECEIPTS_DIR . '.htaccess';
     if (!file_exists($htaccess)) file_put_contents($htaccess, "Require all denied\n");
+}
+
+// ── Mobile upload token helpers ───────────────────────────────────────────────
+function lpCreateUploadToken(int $voucherId, string $email): string {
+    $token   = bin2hex(random_bytes(16));
+    $expires = date('Y-m-d H:i:s', strtotime('+4 hours'));
+    $db      = getDB();
+    // Clean expired tokens
+    $db->prepare("DELETE FROM lp_upload_tokens WHERE expires_at < NOW()")->execute([]);
+    $db->prepare("INSERT INTO lp_upload_tokens (token, voucher_id, created_by, expires_at) VALUES (?,?,?,?)")
+       ->execute([$token, $voucherId, $email, $expires]);
+    return $token;
+}
+
+function lpValidateUploadToken(string $token): ?array {
+    $s = getDB()->prepare("SELECT * FROM lp_upload_tokens WHERE token=? AND expires_at > NOW() LIMIT 1");
+    $s->execute([$token]);
+    return $s->fetch() ?: null;
+}
+
+// ── Pending receipts helpers ──────────────────────────────────────────────────
+function lpAddPendingReceipt(int $voucherId, string $savedPath, string $origName, array $scanData): int {
+    $db = getDB();
+    $st = $db->prepare("INSERT INTO lp_pending_receipts (voucher_id, saved_path, original_name, scan_json) VALUES (?,?,?,?)");
+    $st->execute([$voucherId, $savedPath, $origName, json_encode($scanData)]);
+    return (int)$db->lastInsertId();
+}
+
+function lpGetPendingReceipts(int $voucherId): array {
+    $s = getDB()->prepare(
+        "SELECT * FROM lp_pending_receipts WHERE voucher_id=? AND claimed=0 ORDER BY created_at ASC"
+    );
+    $s->execute([$voucherId]);
+    $rows = $s->fetchAll();
+    foreach ($rows as &$r) {
+        $r['scan_data'] = $r['scan_json'] ? json_decode($r['scan_json'], true) : [];
+    }
+    return $rows;
+}
+
+function lpClaimPendingReceipt(int $id): void {
+    getDB()->prepare("UPDATE lp_pending_receipts SET claimed=1 WHERE id=?")->execute([$id]);
 }
 
 // ── Access helpers ────────────────────────────────────────────────────────────
