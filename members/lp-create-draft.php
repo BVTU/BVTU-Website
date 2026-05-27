@@ -6,6 +6,7 @@
  * Returns JSON: { ok, voucher_id, mobile_url }
  */
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/prod-db.php';
 require_once __DIR__ . '/lp-db.php';
 requireLogin();
 
