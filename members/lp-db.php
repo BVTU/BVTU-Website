@@ -176,13 +176,14 @@ function lpEnsureTables(): void {
 
 // ── Mobile upload token helpers ───────────────────────────────────────────────
 function lpCreateUploadToken(int $voucherId, string $email): string {
-    $token   = bin2hex(random_bytes(16));
-    $expires = date('Y-m-d H:i:s', strtotime('+4 hours'));
-    $db      = getDB();
+    $token = bin2hex(random_bytes(16));
+    $db    = getDB();
     // Clean expired tokens
     $db->prepare("DELETE FROM lp_upload_tokens WHERE expires_at < NOW()")->execute([]);
-    $db->prepare("INSERT INTO lp_upload_tokens (token, voucher_id, created_by, expires_at) VALUES (?,?,?,?)")
-       ->execute([$token, $voucherId, $email, $expires]);
+    // Use MySQL DATE_ADD(NOW(), ...) so expiry and validation both use the DB clock
+    $db->prepare("INSERT INTO lp_upload_tokens (token, voucher_id, created_by, expires_at)
+                  VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL 4 HOUR))")
+       ->execute([$token, $voucherId, $email]);
     return $token;
 }
 
