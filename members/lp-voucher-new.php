@@ -224,6 +224,11 @@ $initRowsJson = json_encode($initRows);
 
     .btn-row-remove { background: none; border: none; cursor: pointer; color: var(--gray-300); font-size: 1rem; padding: .2rem .4rem; border-radius: 4px; transition: color .12s; }
     .btn-row-remove:hover { color: #dc2626; background: #fef2f2; }
+    /* ── Receipt toast ── */
+    #receiptToast { position:fixed; bottom:5rem; left:50%; transform:translateX(-50%) translateY(20px); background:#1a6b35; color:#fff; font-size:.9rem; font-weight:700; padding:.75rem 1.25rem; border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,.2); opacity:0; transition:opacity .3s, transform .3s; pointer-events:none; z-index:9999; white-space:nowrap; }
+    #receiptToast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+    @keyframes rowFlash { 0%,100%{background:transparent} 30%{background:#dcfce7} }
+    .row-flash { animation: rowFlash 1.6s ease; }
 
     /* Column total row */
     .total-label { font-size: .72rem; font-weight: 800; text-transform: uppercase; color: var(--gray-500); letter-spacing: .05em; }
@@ -871,7 +876,14 @@ function addPendingCard(receipt) {
         fd.append('pending_id', receipt.id);
         fetch('lp-claim-receipt.php', { method: 'POST', body: fd });
         var tr = document.getElementById('row-' + tid);
-        if (tr) tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (tr) {
+            tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            tr.classList.add('row-flash');
+            setTimeout(function() { tr.classList.remove('row-flash'); }, 1600);
+        }
+        var sd2 = receipt.scan_data || {};
+        var label = sd2.description ? sd2.description : 'Receipt';
+        showToast('✅ ' + label + ' attached to row');
         return;
     }
 
@@ -899,6 +911,10 @@ function addPendingCard(receipt) {
         + '</select>'
         + '</div>';
     document.getElementById('pendingCards').insertAdjacentHTML('beforeend', html);
+
+    // Scroll tray into view and notify
+    document.getElementById('pendingTray').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    showToast('📱 Receipt arrived — tap "+ New Row" or attach to a row');
 }
 
 function rebuildAttachOptions(pendingId) {
@@ -985,6 +1001,17 @@ function dismissPendingCard(pendingId) {
         document.getElementById('pendingBadge').textContent = remaining;
     }
 }
+
+// ── Toast notification ────────────────────────────────────────────────────────
+var toastTimer = null;
+function showToast(msg) {
+    var t = document.getElementById('receiptToast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function() { t.classList.remove('show'); }, 4000);
+}
 </script>
+<div id="receiptToast"></div>
 </body>
 </html>

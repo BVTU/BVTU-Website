@@ -206,6 +206,11 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
     .save-bar .total-display span { font-size: .75rem; font-weight: 600; color: var(--gray-400); }
     .error-list { background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: .75rem 1rem; margin-bottom: 1rem; font-size: .85rem; color: #dc2626; }
     .saved-notice { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: .75rem 1rem; margin-bottom: 1rem; font-size: .88rem; color: #166534; }
+    /* ── Receipt toast notification ── */
+    #receiptToast { position:fixed; bottom:5rem; left:50%; transform:translateX(-50%) translateY(20px); background:#1a6b35; color:#fff; font-size:.9rem; font-weight:700; padding:.75rem 1.25rem; border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,.2); opacity:0; transition:opacity .3s, transform .3s; pointer-events:none; z-index:9999; white-space:nowrap; }
+    #receiptToast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+    @keyframes rowFlash { 0%,100%{background:transparent} 30%{background:#dcfce7} }
+    .row-flash { animation: rowFlash 1.6s ease; }
 
     /* ── Phone upload QR panel ── */
     .qr-panel { display:none; background:#fff; border:1px solid var(--gray-200); border-radius:12px; padding:1.25rem 1.5rem; margin-bottom:1.25rem; }
@@ -673,11 +678,18 @@ function addPendingCard(receipt) {
         fd.append('pending_id', receipt.id);
         fetch('lp-claim-receipt.php', { method: 'POST', body: fd });
         var tr = document.getElementById('row-' + tid);
-        if (tr) tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (tr) {
+            tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            tr.classList.add('row-flash');
+            setTimeout(function() { tr.classList.remove('row-flash'); }, 1600);
+        }
+        var sd2 = receipt.scan_data || {};
+        var label = (sd2.description) ? sd2.description : 'receipt';
+        showToast('✅ ' + label + ' attached to row');
         return;
     }
 
-    // No target — show in pending tray as before
+    // No target — show in pending tray
     var sd      = receipt.scan_data || {};
     var desc    = sd.description || receipt.original_name || 'Receipt';
     var isPdf   = /\.pdf$/i.test(receipt.saved_path || '');
@@ -703,6 +715,11 @@ function addPendingCard(receipt) {
         + '</div>';
 
     document.getElementById('pendingCards').insertAdjacentHTML('beforeend', html);
+
+    // Scroll the tray into view and toast
+    var tray = document.getElementById('pendingTray');
+    tray.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    showToast('📱 Receipt arrived — tap "+ New Row" or attach to a row');
 }
 
 // Populate the "Attach to row" dropdown with rows that have no receipt yet
@@ -804,6 +821,17 @@ function dismissPendingCard(pendingId) {
 // Poll every 5 seconds
 pollPending();
 setInterval(pollPending, 5000);
+
+// ── Toast notification ────────────────────────────────────────────────────────
+var toastTimer = null;
+function showToast(msg) {
+    var t = document.getElementById('receiptToast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function() { t.classList.remove('show'); }, 4000);
+}
 </script>
+<div id="receiptToast"></div>
 </body>
 </html>
