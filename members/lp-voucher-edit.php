@@ -573,6 +573,36 @@ function positionPreview(e) {
 }
 function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+// Fill row fields from scan data — only overwrites empty fields
+function fillRowFromScan(rowId, sd) {
+    if (!sd) return;
+    var tr = document.getElementById('row-' + rowId);
+    if (!tr) return;
+    var dateEl = tr.querySelector('[name="expense_date[]"]');
+    if (dateEl && !dateEl.value && sd.date) dateEl.value = sd.date;
+    var descEl = tr.querySelector('[name="description[]"]');
+    if (descEl && !descEl.value && sd.description) descEl.value = sd.description;
+    var amts = {'travel_amt[]': sd.travel_amount, 'meals[]': sd.meals_amount,
+                'gifts[]': sd.gifts_amount, 'misc[]': sd.misc_amount,
+                'office[]': sd.office_amount, 'phone[]': sd.phone_amount};
+    Object.keys(amts).forEach(function(name) {
+        var v = parseFloat(amts[name]);
+        if (v > 0) {
+            var el = tr.querySelector('[name="' + name + '"]');
+            if (el && !parseFloat(el.value)) el.value = v.toFixed(2);
+        }
+    });
+    if (sd.suggested_grant_id) {
+        var gEl = tr.querySelector('[name="grant_id[]"]');
+        if (gEl && !gEl.value) gEl.value = sd.suggested_grant_id;
+    }
+    if (sd.suggested_bl_id) {
+        var bEl = tr.querySelector('[name="budget_line_id[]"]');
+        if (bEl && !bEl.value) bEl.value = sd.suggested_bl_id;
+    }
+    updateRow(rowId);
+}
+
 // Load existing expenses, then add blank rows up to 10 minimum
 EXISTING.forEach(e => addRow(e));
 const minRows = Math.max(0, 10 - EXISTING.length);
@@ -674,6 +704,7 @@ function addPendingCard(receipt) {
         if (rpathEl) rpathEl.value = receipt.saved_path;
         if (rorigEl) rorigEl.value = receipt.original_name || '';
         showThumb(tid, receipt.saved_path, null);
+        fillRowFromScan(tid, receipt.scan_data || {});
         var fd = new FormData();
         fd.append('pending_id', receipt.id);
         fetch('lp-claim-receipt.php', { method: 'POST', body: fd });
@@ -768,9 +799,16 @@ function attachToRow(pendingId, selectEl) {
     if (rorigEl) rorigEl.value = receipt.original_name || '';
 
     showThumb(rowId, receipt.saved_path, null);
+    fillRowFromScan(rowId, receipt.scan_data || {});
 
     var tr = document.getElementById('row-' + rowId);
-    if (tr) tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (tr) {
+        tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        tr.classList.add('row-flash');
+        setTimeout(function() { tr.classList.remove('row-flash'); }, 1600);
+    }
+    var sd2 = (receipt.scan_data || {});
+    showToast('✅ ' + (sd2.description || 'Receipt') + ' attached to row');
 
     dismissPendingCard(pendingId);
 }

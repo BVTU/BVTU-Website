@@ -11,7 +11,7 @@ $path   = basename($_GET['f'] ?? '');
 
 if (!$path) { http_response_code(400); exit('Invalid request.'); }
 
-// Find which voucher owns this receipt and check access
+// Find which voucher owns this receipt — check saved expenses first, then pending tray
 $s = getDB()->prepare(
     "SELECT v.submitted_by_email FROM lp_expenses e
      JOIN lp_vouchers v ON v.id = e.voucher_id
@@ -19,6 +19,17 @@ $s = getDB()->prepare(
 );
 $s->execute([$path]);
 $row = $s->fetch();
+
+// Phone-uploaded receipts live in lp_pending_receipts until claimed
+if (!$row) {
+    $s2 = getDB()->prepare(
+        "SELECT v.submitted_by_email FROM lp_pending_receipts pr
+         JOIN lp_vouchers v ON v.id = pr.voucher_id
+         WHERE pr.saved_path = ? LIMIT 1"
+    );
+    $s2->execute([$path]);
+    $row = $s2->fetch();
+}
 
 if (!$row) { http_response_code(404); exit('Receipt not found.'); }
 
