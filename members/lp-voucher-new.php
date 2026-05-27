@@ -39,6 +39,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $blIds       = $_POST['budget_line_id'] ?? [];
     $expNotes    = $_POST['exp_notes']      ?? [];
 
+    // Draft voucher created by AJAX when Phone Upload was clicked
+    $draftId = (int)($_POST['draft_voucher_id'] ?? 0);
+
     if (!$voucherName) $errors[] = 'Please enter a voucher name.';
 
     // Check at least one non-empty expense row
@@ -48,11 +51,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!$errors) {
         $db = getDB();
-        $db->prepare("INSERT INTO lp_vouchers (voucher_number, name, submitted_by, submitted_by_email, notes, year, mileage_rate)
-                      VALUES (?,?,?,?,?,?,?)")
-           ->execute([$voucherNum ?: null, $voucherName, $member['name'], $member['email'],
-                      $notes ?: null, lpCurrentYear(), $mileageRate]);
-        $voucherId = (int)$db->lastInsertId();
+
+        if ($draftId) {
+            // Verify this draft belongs to the current user, then update it
+            $chk = $db->prepare("SELECT id FROM lp_vouchers WHERE id=? AND submitted_by_email=? AND name='(draft)'");
+            $chk->execute([$draftId, $member['email']]);
+            if ($chk->fetch()) {
+                $db->prepare("UPDATE lp_vouchers SET voucher_number=?, name=?, notes=?, mileage_rate=?, status='draft'
+                              WHERE id=?")
+                   ->execute([$voucherNum ?: null, $voucherName, $notes ?: null, $mileageRate, $draftId]);
+                $voucherId = $draftId;
+            } else {
+                $draftId = 0; // draft not found or doesn't belong to user — fall through to insert
+            }
+        }
+
+        if (!$draftId) {
+            $db->prepare("INSERT INTO lp_vouchers (voucher_number, name, submitted_by, submitted_by_email, notes, year, mileage_rate)
+                          VALUES (?,?,?,?,?,?,?)")
+               ->execute([$voucherNum ?: null, $voucherName, $member['name'], $member['email'],
+                          $notes ?: null, lpCurrentYear(), $mileageRate]);
+            $voucherId = (int)$db->lastInsertId();
+        }
 
         $ins = $db->prepare(
             "INSERT INTO lp_expenses
@@ -207,6 +227,36 @@ $initRowsJson = json_encode($initRows);
 
     .error-list { background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: .75rem 1rem; margin-bottom: 1rem; font-size: .85rem; color: #dc2626; }
 
+    /* ── Phone upload QR panel ── */
+    .qr-panel { display:none; background:#fff; border:1px solid var(--gray-200); border-radius:12px; padding:1.25rem 1.5rem; margin-bottom:1.25rem; }
+    .qr-panel.open { display:flex; gap:1.5rem; align-items:flex-start; flex-wrap:wrap; }
+    .qr-box { flex-shrink:0; }
+    #qrCanvas { border-radius:8px; }
+    .qr-instructions h3 { font-size:.95rem; font-weight:800; color:var(--primary); margin:0 0 .5rem; }
+    .qr-instructions p  { font-size:.83rem; color:var(--gray-500); line-height:1.5; margin-bottom:.6rem; }
+    .qr-url { font-size:.72rem; color:var(--gray-400); word-break:break-all; background:var(--off-white); padding:.4rem .6rem; border-radius:5px; }
+    .qr-expiry { font-size:.73rem; color:#92400e; margin-top:.5rem; }
+    .qr-loading { display:flex; align-items:center; gap:.6rem; font-size:.85rem; color:var(--gray-500); padding:.5rem 0; }
+    .qr-spinner { width:18px; height:18px; border:2px solid var(--gray-200); border-top-color:var(--primary); border-radius:50%; animation:spin .7s linear infinite; flex-shrink:0; }
+    .btn-phone { background:#f0fdf4; color:var(--primary); border:1.5px solid #86efac; border-radius:8px; padding:.5rem .9rem; font-size:.85rem; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:.4rem; }
+    .btn-phone:hover { background:#dcfce7; }
+
+    /* ── Pending receipts tray ── */
+    .pending-tray { display:none; background:#f0fdf4; border:1.5px solid #86efac; border-radius:12px; padding:1rem 1.25rem; margin-bottom:1.25rem; }
+    .pending-tray.has-items { display:block; }
+    .pending-tray-header { display:flex; align-items:center; gap:.6rem; margin-bottom:.85rem; }
+    .pending-tray-header h3 { font-size:.9rem; font-weight:800; color:var(--primary); margin:0; }
+    .pending-badge { background:var(--primary); color:#fff; font-size:.7rem; font-weight:800; border-radius:100px; padding:.1rem .5rem; }
+    .pending-tray-scroll { display:flex; gap:.75rem; flex-wrap:wrap; }
+    .pending-card { background:#fff; border:1px solid #bbf7d0; border-radius:10px; padding:.75rem; width:180px; flex-shrink:0; }
+    .pending-card img { width:100%; height:90px; object-fit:cover; border-radius:6px; margin-bottom:.5rem; cursor:pointer; }
+    .pending-card .pdf-thumb { width:100%; height:90px; background:#f9fafb; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:2rem; margin-bottom:.5rem; }
+    .pending-card .p-desc { font-size:.78rem; font-weight:700; color:#1a2e1a; margin-bottom:.15rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .pending-card .p-amt  { font-size:.8rem; color:var(--primary); font-weight:800; margin-bottom:.5rem; }
+    .pending-card .p-flag { font-size:.7rem; color:#92400e; margin-bottom:.4rem; }
+    .btn-claim { width:100%; background:var(--primary); color:#fff; border:none; border-radius:6px; padding:.4rem; font-size:.78rem; font-weight:700; cursor:pointer; }
+    .btn-claim:hover { background:var(--primary-dk); }
+
     /* Lightbox */
     .lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.85); z-index: 9999; align-items: center; justify-content: center; }
     .lightbox.open { display: flex; }
@@ -245,6 +295,7 @@ $initRowsJson = json_encode($initRows);
   <?php endif; ?>
 
   <form method="POST" id="voucherForm">
+  <input type="hidden" name="draft_voucher_id" id="draftVoucherId" value="<?= (int)($_POST['draft_voucher_id'] ?? 0) ?>">
 
   <!-- Voucher header -->
   <div class="voucher-header">
@@ -269,7 +320,32 @@ $initRowsJson = json_encode($initRows);
   <!-- Toolbar -->
   <div class="toolbar">
     <button type="button" class="btn-add" onclick="addRow()">+ Add Row</button>
+    <button type="button" class="btn-phone" onclick="openPhoneUpload()">📱 Phone Upload</button>
     <span class="mileage-note">Mileage rate: $<?= number_format($mileageRate, 2) ?>/km · auto-calculated · attach receipts with 📎 on each row</span>
+  </div>
+
+  <!-- QR code panel -->
+  <div class="qr-panel" id="qrPanel">
+    <div class="qr-box">
+      <div id="qrCanvas"></div>
+      <div class="qr-loading" id="qrLoading"><div class="qr-spinner"></div> Setting up…</div>
+    </div>
+    <div class="qr-instructions" id="qrInstructions" style="display:none;">
+      <h3>📱 Upload receipts from your phone</h3>
+      <p>Scan this code with your phone's camera. Take a photo of any receipt and it will appear here automatically — no AirDrop needed.</p>
+      <p>Or copy the link and text it to yourself:</p>
+      <div class="qr-url" id="qrUrlText"></div>
+      <p class="qr-expiry">⏱ This link is valid for 4 hours.</p>
+    </div>
+  </div>
+
+  <!-- Pending receipts tray -->
+  <div class="pending-tray" id="pendingTray">
+    <div class="pending-tray-header">
+      <h3>📥 Receipts from your phone</h3>
+      <span class="pending-badge" id="pendingBadge">0</span>
+    </div>
+    <div class="pending-tray-scroll" id="pendingCards"></div>
   </div>
 
   <!-- Expense table -->
@@ -640,11 +716,148 @@ function escHtml(s) {
 // Restore submitted rows on validation error, otherwise start with 10 blank rows
 if (INIT_ROWS.length > 0) {
     INIT_ROWS.forEach(row => addRow(row));
-    // Always leave a few blank rows at the bottom ready to use
     for (let i = 0; i < 3; i++) addRow();
 } else {
     for (let i = 0; i < 10; i++) addRow();
 }
+
+// ── Phone upload / QR panel ───────────────────────────────────────────────────
+let draftVoucherId  = parseInt(document.getElementById('draftVoucherId').value) || 0;
+let mobileUrl       = '';
+let qrGenerated     = false;
+let qrPanelOpen     = false;
+let pollInterval    = null;
+const seenReceiptIds = {};
+
+function openPhoneUpload() {
+    qrPanelOpen = true;
+    document.getElementById('qrPanel').classList.add('open');
+
+    if (draftVoucherId) {
+        // Already have a draft — just show the QR
+        showQR();
+        startPolling();
+        return;
+    }
+
+    // Create a draft voucher via AJAX
+    document.getElementById('qrLoading').style.display = 'flex';
+    document.getElementById('qrInstructions').style.display = 'none';
+    document.getElementById('qrCanvas').innerHTML = '';
+
+    fetch('lp-create-draft.php', { method: 'POST' })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (!d.ok) { alert('Could not create upload session. Try again.'); return; }
+            draftVoucherId = d.voucher_id;
+            mobileUrl      = d.mobile_url;
+            document.getElementById('draftVoucherId').value = draftVoucherId;
+            showQR();
+            startPolling();
+        })
+        .catch(function() { alert('Network error. Try again.'); });
+}
+
+function showQR() {
+    document.getElementById('qrLoading').style.display = 'none';
+    document.getElementById('qrInstructions').style.display = 'block';
+    document.getElementById('qrUrlText').textContent = mobileUrl;
+    if (!qrGenerated && typeof QRCode !== 'undefined' && mobileUrl) {
+        var el = document.getElementById('qrCanvas');
+        el.innerHTML = '';
+        new QRCode(el, {
+            text: mobileUrl, width: 180, height: 180,
+            colorDark: '#1a2e1a', colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.M,
+        });
+        qrGenerated = true;
+    }
+}
+
+function startPolling() {
+    if (pollInterval || !draftVoucherId) return;
+    pollPending();
+    pollInterval = setInterval(pollPending, 5000);
+}
+
+function pollPending() {
+    if (!draftVoucherId) return;
+    fetch('lp-poll-receipts.php?voucher_id=' + draftVoucherId)
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (!d.receipts || d.receipts.length === 0) return;
+            var newOnes = d.receipts.filter(function(r) { return !seenReceiptIds[r.id]; });
+            if (newOnes.length === 0) return;
+            var tray = document.getElementById('pendingTray');
+            tray.classList.add('has-items');
+            document.getElementById('pendingBadge').textContent = d.receipts.length;
+            newOnes.forEach(function(receipt) {
+                seenReceiptIds[receipt.id] = true;
+                addPendingCard(receipt);
+            });
+        })
+        .catch(function() {});
+}
+
+function addPendingCard(receipt) {
+    var sd      = receipt.scan_data || {};
+    var desc    = sd.description || receipt.original_name || 'Receipt';
+    var isPdf   = /\.pdf$/i.test(receipt.saved_path || '');
+    var thumbHtml = isPdf
+        ? '<div class="pdf-thumb">📄</div>'
+        : '<img src="' + escHtml(receipt.preview_url) + '" alt="Receipt">';
+    var amount = null;
+    ['travel_amount','meals_amount','gifts_amount','misc_amount','office_amount','phone_amount','total_amount'].forEach(function(k) {
+        if (!amount && sd[k] && parseFloat(sd[k]) > 0) amount = parseFloat(sd[k]);
+    });
+    var html = '<div class="pending-card" id="pc-' + receipt.id + '">'
+        + thumbHtml
+        + '<div class="p-desc" title="' + escHtml(desc) + '">' + escHtml(desc) + '</div>'
+        + (amount ? '<div class="p-amt">$' + amount.toFixed(2) + '</div>' : '')
+        + (sd.concerns ? '<div class="p-flag">⚠️ ' + escHtml(sd.concerns) + '</div>' : '')
+        + '<button class="btn-claim" onclick="claimReceipt(' + receipt.id + ', ' + JSON.stringify(receipt).replace(/</g,'\\u003c') + ')">+ Add to Voucher</button>'
+        + '</div>';
+    document.getElementById('pendingCards').insertAdjacentHTML('beforeend', html);
+}
+
+function claimReceipt(pendingId, receipt) {
+    var sd = receipt.scan_data || {};
+    var rowId = addRow({
+        date:               sd.date || '',
+        description:        sd.description || '',
+        travel_amount:      sd.travel_amount  || '',
+        meals_amount:       sd.meals_amount   || '',
+        gifts_amount:       sd.gifts_amount   || '',
+        misc_amount:        sd.misc_amount    || '',
+        office_amount:      sd.office_amount  || '',
+        phone_amount:       sd.phone_amount   || '',
+        suggested_grant_id: sd.suggested_grant_id || '',
+        suggested_bl_id:    sd.suggested_bl_id    || '',
+        saved_path:         receipt.saved_path,
+        original_name:      receipt.original_name,
+        concerns:           sd.concerns || '',
+        flag:               sd.flag || '',
+    });
+    var newRow = document.getElementById('row-' + rowId);
+    if (newRow) newRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    var fd = new FormData();
+    fd.append('pending_id', pendingId);
+    fetch('lp-claim-receipt.php', { method: 'POST', body: fd });
+
+    var card = document.getElementById('pc-' + pendingId);
+    if (card) card.remove();
+    var remaining = document.getElementById('pendingCards').children.length;
+    if (remaining === 0) {
+        document.getElementById('pendingTray').classList.remove('has-items');
+    } else {
+        document.getElementById('pendingBadge').textContent = remaining;
+    }
+}
 </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"
+        integrity="sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSt7Jd/diHNN3E/45NFbFMOes/NMEk0WDRNYQ=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"
+        onload="if(qrPanelOpen && !qrGenerated && mobileUrl) showQR()"></script>
 </body>
 </html>
