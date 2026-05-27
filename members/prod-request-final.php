@@ -82,6 +82,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $dates = json_decode($req['request_dates'], true) ?: [];
+
+// Generate phone QR upload token
+$uploadToken = prodCreateUploadToken($id, $member['email']);
+$protocol    = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+$host        = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'new.bvtu.ca';
+$mobileUrl   = "{$protocol}://{$host}/members/prod-mobile-receipt.php?token={$uploadToken}";
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -155,6 +161,19 @@ $dates = json_decode($req['request_dates'], true) ?: [];
     .success-card { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 2rem; text-align: center; }
     .success-card h2 { color: var(--primary); font-size: 1.2rem; margin: 0 0 .5rem; }
     .success-card p { color: var(--gray-600); font-size: .9rem; margin: .4rem 0; line-height: 1.6; }
+
+    /* Phone QR panel */
+    .phone-upload-btn { background:#f0fdf4; color:var(--primary); border:1.5px solid #86efac; border-radius:8px; padding:.5rem .9rem; font-size:.85rem; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:.4rem; margin-bottom:.75rem; }
+    .phone-upload-btn:hover { background:#dcfce7; }
+    .qr-panel { display:none; background:#f0fdf4; border:1.5px solid #86efac; border-radius:12px; padding:1.25rem 1.5rem; margin-bottom:1rem; }
+    .qr-panel.open { display:flex; gap:1.5rem; align-items:flex-start; flex-wrap:wrap; }
+    .qr-box { flex-shrink:0; }
+    .qr-instructions h3 { font-size:.9rem; font-weight:800; color:var(--primary); margin:0 0 .4rem; }
+    .qr-instructions p { font-size:.82rem; color:var(--gray-500); line-height:1.5; margin-bottom:.4rem; }
+    .qr-url { font-size:.7rem; color:var(--gray-400); word-break:break-all; background:#fff; padding:.4rem .6rem; border-radius:5px; }
+    #receiptToast { position:fixed; bottom:4rem; left:50%; transform:translateX(-50%) translateY(20px); background:#1a6b35; color:#fff; font-size:.9rem; font-weight:700; padding:.75rem 1.25rem; border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,.2); opacity:0; transition:opacity .3s, transform .3s; pointer-events:none; z-index:9999; white-space:nowrap; }
+    #receiptToast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+    .or-divider { text-align:center; font-size:.78rem; color:var(--gray-400); font-weight:600; margin:.75rem 0; letter-spacing:.04em; }
   </style>
 </head>
 <body>
@@ -199,7 +218,7 @@ $dates = json_decode($req['request_dates'], true) ?: [];
       </div>
       <div class="summary-item">
         <div class="lbl">Dates</div>
-        <div class="val"><?= implode(', ', array_map(fn($d) => date('M j, Y', strtotime($d)), $dates)) ?></div>
+        <div class="val"><?php $dateFmt = array_map(function($d) { return date('M j, Y', strtotime($d)); }, $dates); echo implode(', ', $dateFmt); ?></div>
       </div>
       <div class="summary-item">
         <div class="lbl">Days</div>
@@ -220,6 +239,23 @@ $dates = json_decode($req['request_dates'], true) ?: [];
       <p class="section-label">Receipt Upload</p>
 
       <div class="field">
+        <!-- Phone QR upload button -->
+        <button type="button" class="phone-upload-btn" onclick="toggleQR()">📱 Upload from phone</button>
+
+        <!-- QR panel -->
+        <div class="qr-panel" id="qrPanel">
+          <div class="qr-box">
+            <img id="qrImg" src="" width="160" height="160" alt="QR code" style="border-radius:8px;display:block;">
+          </div>
+          <div class="qr-instructions">
+            <h3>Scan with your phone</h3>
+            <p>Open your camera app and point it at the QR code. Take a photo of your receipt and it'll appear here automatically.</p>
+            <div class="qr-url" id="qrUrlText"></div>
+          </div>
+        </div>
+
+        <div class="or-divider">— or upload from this device —</div>
+
         <div class="upload-zone" id="uploadZone">
           <input type="file" id="receiptFile" accept="image/*,.pdf" onchange="handleFile(this.files[0])">
           <div class="upload-icon">📄</div>
@@ -294,7 +330,91 @@ $dates = json_decode($req['request_dates'], true) ?: [];
   <?php endif; ?>
 </div>
 
+<div id="receiptToast"></div>
+
 <script>
+const REQUEST_ID = <?= $id ?>;
+const MOBILE_URL = <?= json_encode($mobileUrl) ?>;
+var qrGenerated  = false;
+var qrPanelOpen  = false;
+var pollInterval = null;
+var toastTimer   = null;
+
+function toggleQR() {
+    qrPanelOpen = !qrPanelOpen;
+    var panel = document.getElementById('qrPanel');
+    panel.classList.toggle('open', qrPanelOpen);
+    if (qrPanelOpen && !qrGenerated) {
+        var img = document.getElementById('qrImg');
+        img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&color=1a2e1a&bgcolor=ffffff&data=' + encodeURIComponent(MOBILE_URL);
+        document.getElementById('qrUrlText').textContent = MOBILE_URL;
+        qrGenerated = true;
+        if (!pollInterval) {
+            pollReceipt();
+            pollInterval = setInterval(pollReceipt, 5000);
+        }
+    }
+}
+
+function pollReceipt() {
+    fetch('prod-poll-receipt.php?request_id=' + REQUEST_ID)
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (!d.receipt) return;
+            clearInterval(pollInterval);
+            pollInterval = null;
+            applyPhoneReceipt(d.receipt);
+            // Mark as claimed
+            var fd = new FormData();
+            fd.append('pending_id', d.receipt.id);
+            fetch('prod-claim-receipt.php', { method: 'POST', body: fd });
+        })
+        .catch(function() {});
+}
+
+function applyPhoneReceipt(receipt) {
+    var sd = receipt.scan_data || {};
+    // Fill hidden fields
+    document.getElementById('saved_path').value    = receipt.saved_path || '';
+    document.getElementById('original_name').value = receipt.original_name || '';
+    document.getElementById('ext_vendor').value    = sd.vendor        || '';
+    document.getElementById('ext_date').value      = sd.date          || '';
+    document.getElementById('ext_amount').value    = sd.total_amount  || sd.amount || '';
+    document.getElementById('ext_flag').value      = sd.flag          || '';
+    document.getElementById('ext_concerns').value  = sd.concerns      || '';
+    // Auto-fill visible fields if empty
+    var amt = sd.total_amount || sd.amount;
+    if (amt && !document.getElementById('final_amount').value) {
+        document.getElementById('final_amount').value = parseFloat(amt).toFixed(2);
+    }
+    // Show scan result card
+    document.getElementById('sr_vendor').textContent   = sd.vendor          || '—';
+    document.getElementById('sr_date').textContent     = sd.date            || '—';
+    document.getElementById('sr_amount').textContent   = amt ? '$' + parseFloat(amt).toFixed(2) : '—';
+    document.getElementById('sr_category').textContent = sd.likely_category || sd.category || '—';
+    document.getElementById('scanResult').style.display = 'block';
+    if (sd.concerns || sd.flag) {
+        var msg = sd.concerns ? '⚠ Reviewer flag: ' + sd.concerns : '⚠ This receipt has been flagged for review.';
+        document.getElementById('flagBanner').textContent = msg;
+        document.getElementById('flagBanner').style.display = 'block';
+    }
+    // Close QR panel and show preview
+    document.getElementById('qrPanel').classList.remove('open');
+    qrPanelOpen = false;
+    showToast('✅ Receipt received from phone — form auto-filled');
+    // Show thumbnail in upload zone
+    var zone = document.getElementById('uploadZone');
+    zone.innerHTML = '<div style="font-size:2rem;margin-bottom:.5rem;">✅</div><p><strong>Receipt from phone</strong></p><p style="font-size:.8rem;color:var(--gray-400);">' + (receipt.original_name || receipt.saved_path) + '</p>';
+}
+
+function showToast(msg) {
+    var t = document.getElementById('receiptToast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function() { t.classList.remove('show'); }, 4000);
+}
+
 function handleFile(file) {
   if (!file) return;
   const zone = document.getElementById('uploadZone');

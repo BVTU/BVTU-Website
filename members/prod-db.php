@@ -148,6 +148,29 @@ function prodEnsureTables(): void {
         INDEX idx_school      (school_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+    // Mobile upload tokens for phone QR receipt upload
+    $db->exec("CREATE TABLE IF NOT EXISTS prod_upload_tokens (
+        id         INT AUTO_INCREMENT PRIMARY KEY,
+        token      VARCHAR(64) NOT NULL UNIQUE,
+        request_id INT NOT NULL,
+        created_by VARCHAR(255) NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_token   (token),
+        INDEX idx_request (request_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // Pending receipts uploaded from phone (not yet claimed by desktop)
+    $db->exec("CREATE TABLE IF NOT EXISTS prod_pending_receipts (
+        id            INT AUTO_INCREMENT PRIMARY KEY,
+        request_id    INT NOT NULL,
+        saved_path    VARCHAR(500) NOT NULL,
+        original_name VARCHAR(255),
+        scan_json     TEXT,
+        claimed       TINYINT(1) DEFAULT 0,
+        created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_request (request_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
     // Seed schools if none exist
     $count = (int)$db->query("SELECT COUNT(*) FROM prod_schools")->fetchColumn();
     if ($count === 0) {
@@ -161,6 +184,46 @@ function prodEnsureTables(): void {
     if (!is_dir(PROD_RECEIPTS_DIR)) mkdir(PROD_RECEIPTS_DIR, 0750, true);
     $htaccess = PROD_RECEIPTS_DIR . '.htaccess';
     if (!file_exists($htaccess)) file_put_contents($htaccess, "Require all denied\n");
+}
+
+// ── Mobile upload token helpers ───────────────────────────────────────────────
+
+function prodCreateUploadToken(int $requestId, string $email): string {
+    $token = bin2hex(random_bytes(16));
+    $db    = getDB();
+    // One token per request — delete old ones
+    $db->prepare("DELETE FROM prod_upload_tokens WHERE request_id=?")->execute([$requestId]);
+    $db->prepare("INSERT INTO prod_upload_tokens (token, request_id, created_by) VALUES (?,?,?)")
+       ->execute([$token, $requestId, $email]);
+    return $token;
+}
+
+function prodValidateUploadToken(string $token): ?array {
+    $s = getDB()->prepare("SELECT * FROM prod_upload_tokens WHERE token=? LIMIT 1");
+    $s->execute([$token]);
+    return $s->fetch() ?: null;
+}
+
+// ── Pending receipts helpers ──────────────────────────────────────────────────
+
+function prodAddPendingReceipt(int $requestId, string $savedPath, string $origName, array $scanData): int {
+    $db = getDB();
+    $db->prepare("INSERT INTO prod_pending_receipts (request_id, saved_path, original_name, scan_json) VALUES (?,?,?,?)")
+       ->execute([$requestId, $savedPath, $origName, json_encode($scanData)]);
+    return (int)$db->lastInsertId();
+}
+
+function prodGetPendingReceipt(int $requestId): ?array {
+    $s = getDB()->prepare("SELECT * FROM prod_pending_receipts WHERE request_id=? AND claimed=0 ORDER BY created_at DESC LIMIT 1");
+    $s->execute([$requestId]);
+    $r = $s->fetch();
+    if (!$r) return null;
+    $r['scan_data'] = $r['scan_json'] ? json_decode($r['scan_json'], true) : [];
+    return $r;
+}
+
+function prodClaimPendingReceipt(int $id): void {
+    getDB()->prepare("UPDATE prod_pending_receipts SET claimed=1 WHERE id=?")->execute([$id]);
 }
 
 // ── Role helpers ──────────────────────────────────────────────────────────────
