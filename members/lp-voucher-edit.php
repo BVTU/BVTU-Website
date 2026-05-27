@@ -181,11 +181,19 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
     .cell-dollar { width: 82px; }
     .cell-select { width: 100%; border: 1px solid transparent; border-radius: 5px; padding: .3rem .4rem; font-size: .78rem; font-family: inherit; background: transparent; cursor: pointer; }
     .cell-select:hover, .cell-select:focus { border-color: var(--primary); background: #fff; outline: none; }
-    .receipt-cell { width: 52px; text-align: center; }
-    .receipt-attach-btn { background: none; border: 1px dashed var(--gray-300); border-radius: 5px; width: 34px; height: 28px; cursor: pointer; font-size: .85rem; color: var(--gray-400); display: flex; align-items: center; justify-content: center; margin: auto; transition: border-color .12s, color .12s, background .12s; }
+    .receipt-cell { width: 68px; text-align: center; }
+    .receipt-attach-btn { background: none; border: 1px dashed var(--gray-300); border-radius: 5px; width: 28px; height: 28px; cursor: pointer; font-size: .82rem; color: var(--gray-400); display: flex; align-items: center; justify-content: center; transition: border-color .12s, color .12s, background .12s; }
     .receipt-attach-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--accent); }
-    .receipt-has-file { width: 34px; height: 28px; border-radius: 5px; background: #dcfce7; border: 1px solid #86efac; display: flex; align-items: center; justify-content: center; margin: auto; cursor: pointer; font-size: .85rem; }
+    .receipt-has-file { width: 28px; height: 28px; border-radius: 5px; background: #dcfce7; border: 1px solid #86efac; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: .82rem; }
     .receipt-has-file:hover { background: #bbf7d0; }
+    .receipt-phone-btn { background: none; border: 1px dashed #86efac; border-radius: 5px; width: 28px; height: 28px; cursor: pointer; font-size: .78rem; color: var(--primary); display: flex; align-items: center; justify-content: center; transition: border-color .12s, background .12s; }
+    .receipt-phone-btn:hover { background: #f0fdf4; border-style: solid; }
+    .receipt-phone-btn.targeting { background: #dcfce7; border-style: solid; border-color: var(--primary); }
+    .receipt-btn-group { display: flex; gap: 3px; align-items: center; justify-content: center; }
+    .qr-target { display:none; background:#f0fdf4; border:1.5px solid #86efac; border-radius:8px; padding:.5rem .75rem; margin-top:.6rem; font-size:.82rem; color:#166534; align-items:center; gap:.5rem; flex-wrap:wrap; }
+    .qr-target strong { font-weight:800; }
+    .qr-target-clear { background:none; border:none; cursor:pointer; color:#9ca3af; font-size:.9rem; margin-left:auto; padding:.1rem .3rem; border-radius:4px; }
+    .qr-target-clear:hover { color:#dc2626; background:#fef2f2; }
     .scan-spinner { display: none; width: 18px; height: 18px; border: 2px solid var(--gray-200); border-top-color: var(--primary); border-radius: 50%; animation: spin .7s linear infinite; margin: auto; }
     @keyframes spin { to { transform: rotate(360deg); } }
     #receiptPreview { position: fixed; z-index: 9998; display: none; background: #fff; border: 1px solid var(--gray-200); border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,.2); padding: 6px; pointer-events: none; }
@@ -288,6 +296,10 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
       <p>Or copy the link and text it to yourself:</p>
       <div class="qr-url" id="qrUrlText"><?= htmlspecialchars($mobileUrl) ?></div>
       <p class="qr-expiry">⏱ This link is valid for 4 hours.</p>
+      <div class="qr-target" id="qrTarget">
+        📌 Next receipt → <strong id="qrTargetLabel"></strong>
+        <button class="qr-target-clear" onclick="clearPhoneTarget()" title="Clear target">✕</button>
+      </div>
     </div>
   </div>
 
@@ -381,8 +393,12 @@ function addRow(data = {}) {
     tr.innerHTML = `
       <td class="receipt-cell">
         <div id="receipt-wrap-${id}">
-          <button type="button" class="receipt-attach-btn" id="attach-btn-${id}"
-            title="Attach receipt" onclick="triggerRowScan(${id})">📎</button>
+          <div class="receipt-btn-group">
+            <button type="button" class="receipt-attach-btn" id="attach-btn-${id}"
+              title="Attach file" onclick="triggerRowScan(${id})">📎</button>
+            <button type="button" class="receipt-phone-btn" id="phone-btn-${id}"
+              title="Upload from phone" onclick="phoneForRow(${id})">📱</button>
+          </div>
           <div class="scan-spinner" id="spinner-${id}"></div>
           <input type="file" id="file-${id}" accept="image/*,.pdf" capture="environment" style="display:none"
             onchange="handleRowScan(this, ${id})">
@@ -563,6 +579,7 @@ const VOUCHER_ID  = <?= $id ?>;
 const MOBILE_URL  = <?= json_encode($mobileUrl) ?>;
 let qrGenerated   = false;
 let qrPanelOpen   = false;
+let targetRowId   = null;
 
 function toggleQR() {
     const panel = document.getElementById('qrPanel');
@@ -571,6 +588,35 @@ function toggleQR() {
     if (qrPanelOpen && !qrGenerated) {
         generateQR();
     }
+}
+
+function phoneForRow(rowId) {
+    // Open QR panel if not already open
+    if (!qrPanelOpen) {
+        qrPanelOpen = true;
+        const panel = document.getElementById('qrPanel');
+        panel.classList.add('open');
+        if (!qrGenerated) generateQR();
+    }
+    // Set target row
+    targetRowId = rowId;
+    const tr      = document.getElementById('row-' + rowId);
+    const descEl  = tr ? tr.querySelector('[name="description[]"]') : null;
+    const label   = (descEl && descEl.value.trim()) ? descEl.value.trim() : 'Row ' + rowId;
+    document.getElementById('qrTargetLabel').textContent = label;
+    document.getElementById('qrTarget').style.display   = 'flex';
+    // Highlight active button, clear others
+    document.querySelectorAll('.receipt-phone-btn').forEach(function(b) { b.classList.remove('targeting'); });
+    const btn = document.getElementById('phone-btn-' + rowId);
+    if (btn) btn.classList.add('targeting');
+    // Scroll QR panel into view
+    document.getElementById('qrPanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function clearPhoneTarget() {
+    targetRowId = null;
+    document.getElementById('qrTarget').style.display = 'none';
+    document.querySelectorAll('.receipt-phone-btn').forEach(function(b) { b.classList.remove('targeting'); });
 }
 
 function generateQR() {
@@ -613,6 +659,26 @@ function pollPending() {
 }
 
 function addPendingCard(receipt) {
+    receiptStore[receipt.id] = receipt;
+
+    // If a row is targeted, auto-attach directly — no tray card needed
+    if (targetRowId) {
+        var tid    = targetRowId;
+        clearPhoneTarget();
+        var rpathEl = document.getElementById('rpath-' + tid);
+        var rorigEl = document.getElementById('rorig-' + tid);
+        if (rpathEl) rpathEl.value = receipt.saved_path;
+        if (rorigEl) rorigEl.value = receipt.original_name || '';
+        showThumb(tid, receipt.saved_path, null);
+        var fd = new FormData();
+        fd.append('pending_id', receipt.id);
+        fetch('lp-claim-receipt.php', { method: 'POST', body: fd });
+        var tr = document.getElementById('row-' + tid);
+        if (tr) tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+    }
+
+    // No target — show in pending tray as before
     var sd      = receipt.scan_data || {};
     var desc    = sd.description || receipt.original_name || 'Receipt';
     var isPdf   = /\.pdf$/i.test(receipt.saved_path || '');
