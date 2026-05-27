@@ -240,6 +240,9 @@ $initRowsJson = json_encode($initRows);
     .qr-spinner { width:18px; height:18px; border:2px solid var(--gray-200); border-top-color:var(--primary); border-radius:50%; animation:spin .7s linear infinite; flex-shrink:0; }
     .btn-phone { background:#f0fdf4; color:var(--primary); border:1.5px solid #86efac; border-radius:8px; padding:.5rem .9rem; font-size:.85rem; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:.4rem; }
     .btn-phone:hover { background:#dcfce7; }
+    .btn-wide { background:#fff; color:var(--gray-500); border:1.5px solid var(--gray-300); border-radius:8px; padding:.5rem .9rem; font-size:.85rem; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:.4rem; margin-left:auto; }
+    .btn-wide:hover { background:#f9fafb; }
+    .wrap.full-wide { max-width: none !important; }
 
     /* ── Pending receipts tray ── */
     .pending-tray { display:none; background:#f0fdf4; border:1.5px solid #86efac; border-radius:12px; padding:1rem 1.25rem; margin-bottom:1.25rem; }
@@ -324,12 +327,13 @@ $initRowsJson = json_encode($initRows);
     <button type="button" class="btn-add" onclick="addRow()">+ Add Row</button>
     <button type="button" class="btn-phone" onclick="openPhoneUpload()">📱 Phone Upload</button>
     <span class="mileage-note">Mileage rate: $<?= number_format($mileageRate, 2) ?>/km · auto-calculated · attach receipts with 📎 on each row</span>
+    <button type="button" class="btn-wide" id="btnWide" onclick="toggleWide()">⟷ Widen</button>
   </div>
 
   <!-- QR code panel -->
   <div class="qr-panel" id="qrPanel">
     <div class="qr-box">
-      <div id="qrCanvas"></div>
+      <img id="qrImg" src="" width="180" height="180" style="border-radius:8px;display:none;" alt="QR code">
       <div class="qr-loading" id="qrLoading"><div class="qr-spinner"></div> Setting up…</div>
     </div>
     <div class="qr-instructions" id="qrInstructions" style="display:none;">
@@ -765,15 +769,21 @@ function showQR() {
     document.getElementById('qrLoading').style.display = 'none';
     document.getElementById('qrInstructions').style.display = 'block';
     document.getElementById('qrUrlText').textContent = mobileUrl;
-    if (!qrGenerated && typeof QRCode !== 'undefined' && mobileUrl) {
-        var el = document.getElementById('qrCanvas');
-        el.innerHTML = '';
-        new QRCode(el, {
-            text: mobileUrl, width: 180, height: 180,
-            colorDark: '#1a2e1a', colorLight: '#ffffff',
-            correctLevel: QRCode.CorrectLevel.M,
-        });
+    if (!qrGenerated && mobileUrl) {
+        var img = document.getElementById('qrImg');
+        img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&color=1a2e1a&bgcolor=ffffff&data=' + encodeURIComponent(mobileUrl);
+        img.style.display = 'block';
         qrGenerated = true;
+    }
+}
+
+function toggleWide() {
+    var wrap = document.querySelector('.wrap');
+    var btn  = document.getElementById('btnWide');
+    if (wrap.classList.toggle('full-wide')) {
+        btn.textContent = '⟵ Narrow';
+    } else {
+        btn.textContent = '⟷ Widen';
     }
 }
 
@@ -914,9 +924,5 @@ function dismissPendingCard(pendingId) {
     }
 }
 </script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"
-        integrity="sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSt7Jd/diHNN3E/45NFbFMOes/NMEk0WDRNYQ=="
-        crossorigin="anonymous" referrerpolicy="no-referrer"
-        onload="if(qrPanelOpen && !qrGenerated && mobileUrl) showQR()"></script>
 </body>
 </html>

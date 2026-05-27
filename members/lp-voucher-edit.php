@@ -211,6 +211,9 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
     .qr-expiry { font-size:.73rem; color:#92400e; margin-top:.5rem; }
     .btn-phone { background:#f0fdf4; color:var(--primary); border:1.5px solid #86efac; border-radius:8px; padding:.5rem .9rem; font-size:.85rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:.4rem; }
     .btn-phone:hover { background:#dcfce7; }
+    .btn-wide { background:#fff; color:var(--gray-500); border:1.5px solid var(--gray-300); border-radius:8px; padding:.5rem .9rem; font-size:.85rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:.4rem; margin-left:auto; }
+    .btn-wide:hover { background:#f9fafb; }
+    .wrap.full-wide { max-width: none !important; }
 
     /* ── Pending receipts tray ── */
     .pending-tray { display:none; background:#f0fdf4; border:1.5px solid #86efac; border-radius:12px; padding:1rem 1.25rem; margin-bottom:1.25rem; }
@@ -271,12 +274,13 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
     <button type="button" class="btn-add" onclick="addRow()">+ Add Row</button>
     <button type="button" class="btn-phone" onclick="toggleQR()">📱 Phone Upload</button>
     <span class="mileage-note">Mileage: $<?= number_format($mileageRate, 2) ?>/km · attach receipts with 📎</span>
+    <button type="button" class="btn-wide" id="btnWide" onclick="toggleWide()">⟷ Widen</button>
   </div>
 
   <!-- QR code panel -->
   <div class="qr-panel" id="qrPanel">
     <div class="qr-box">
-      <div id="qrCanvas"></div>
+      <img id="qrImg" src="" width="180" height="180" style="border-radius:8px;display:block;" alt="QR code">
     </div>
     <div class="qr-instructions">
       <h3>📱 Upload receipts from your phone</h3>
@@ -570,18 +574,19 @@ function toggleQR() {
 }
 
 function generateQR() {
-    if (typeof QRCode === 'undefined') return;
-    const el = document.getElementById('qrCanvas');
-    el.innerHTML = '';
-    new QRCode(el, {
-        text:           MOBILE_URL,
-        width:          180,
-        height:         180,
-        colorDark:      '#1a2e1a',
-        colorLight:     '#ffffff',
-        correctLevel:   QRCode.CorrectLevel.M,
-    });
+    var img = document.getElementById('qrImg');
+    img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&color=1a2e1a&bgcolor=ffffff&data=' + encodeURIComponent(MOBILE_URL);
     qrGenerated = true;
+}
+
+function toggleWide() {
+    var wrap = document.querySelector('.wrap');
+    var btn  = document.getElementById('btnWide');
+    if (wrap.classList.toggle('full-wide')) {
+        btn.textContent = '⟵ Narrow';
+    } else {
+        btn.textContent = '⟷ Widen';
+    }
 }
 
 // ── Pending receipts polling ──────────────────────────────────────────────────
@@ -735,9 +740,5 @@ function dismissPendingCard(pendingId) {
 pollPending();
 setInterval(pollPending, 5000);
 </script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"
-        integrity="sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSt7Jd/diHNN3E/45NFbFMOes/NMEk0WDRNYQ=="
-        crossorigin="anonymous" referrerpolicy="no-referrer"
-        onload="if(qrPanelOpen && !qrGenerated) generateQR()"></script>
 </body>
 </html>
