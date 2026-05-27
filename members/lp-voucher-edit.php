@@ -142,7 +142,7 @@ $expensesJson = json_encode(array_values($expenses));
   <link rel="icon" href="../favicon.ico">
   <style>
     body { background: #f4f6f8; }
-    .wrap { max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    .wrap { max-width: 1500px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
     .portal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
     .portal-header h1 { font-size: 1.35rem; font-weight: 800; color: var(--gray-800); margin: 0; }
     .back-link { font-size: .85rem; color: var(--primary); text-decoration: none; }

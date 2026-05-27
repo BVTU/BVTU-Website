@@ -98,6 +98,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // JSON for JS
 $grantsJson      = json_encode(array_values($grants));
 $budgetLinesJson = json_encode(array_values($budgetLines));
+
+// If validation failed, pass submitted row data back to JS so nothing is lost
+$initRows = [];
+if ($errors && !empty($descs)) {
+    foreach ($descs as $i => $desc) {
+        $initRows[] = [
+            'date'               => $dates[$i]       ?? '',
+            'description'        => $desc,
+            'travel_km'          => $travelKms[$i]   ?? '',
+            'travel_amount'      => $travelAmts[$i]  ?? '',
+            'meals_amount'       => $meals[$i]        ?? '',
+            'gifts_amount'       => $gifts[$i]        ?? '',
+            'misc_amount'        => $misc[$i]         ?? '',
+            'office_amount'      => $office[$i]       ?? '',
+            'phone_amount'       => $phone[$i]        ?? '',
+            'saved_path'         => $receiptPath[$i]  ?? '',
+            'original_name'      => $receiptOrig[$i]  ?? '',
+            'suggested_grant_id' => $grantIds[$i]     ?? '',
+            'suggested_bl_id'    => $blIds[$i]        ?? '',
+        ];
+    }
+}
+$initRowsJson = json_encode($initRows);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -109,7 +132,7 @@ $budgetLinesJson = json_encode(array_values($budgetLines));
   <link rel="icon" href="../favicon.ico">
   <style>
     body { background: #f4f6f8; }
-    .wrap { max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    .wrap { max-width: 1500px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
     .portal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
     .portal-header h1 { font-size: 1.35rem; font-weight: 800; color: var(--gray-800); margin: 0; }
     .back-link { font-size: .85rem; color: var(--primary); text-decoration: none; }
@@ -307,6 +330,7 @@ $budgetLinesJson = json_encode(array_values($budgetLines));
 const GRANTS       = <?= $grantsJson ?>;
 const BUDGET_LINES = <?= $budgetLinesJson ?>;
 const MILEAGE_RATE = <?= $mileageRate ?>;
+const INIT_ROWS    = <?= $initRowsJson ?>;
 let rowCount = 0;
 
 // ── Build option HTML ─────────────────────────────────────────────────────────
@@ -613,8 +637,14 @@ function escHtml(s) {
     return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// Start with 10 empty rows
-for (let i = 0; i < 10; i++) addRow();
+// Restore submitted rows on validation error, otherwise start with 10 blank rows
+if (INIT_ROWS.length > 0) {
+    INIT_ROWS.forEach(row => addRow(row));
+    // Always leave a few blank rows at the bottom ready to use
+    for (let i = 0; i < 3; i++) addRow();
+} else {
+    for (let i = 0; i < 10; i++) addRow();
+}
 </script>
 </body>
 </html>
