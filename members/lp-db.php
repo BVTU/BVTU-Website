@@ -144,13 +144,12 @@ function lpEnsureTables(): void {
         foreach (LP_BUDGET_LINES_SEED as $b) $ins->execute([$b['name'], $b['budget'], $yr]);
     }
 
-    // Mobile upload tokens
+    // Mobile upload tokens (no time-based expiry — token is valid until voucher is finalized)
     $db->exec("CREATE TABLE IF NOT EXISTS lp_upload_tokens (
         id          INT AUTO_INCREMENT PRIMARY KEY,
         token       VARCHAR(64) NOT NULL UNIQUE,
         voucher_id  INT NOT NULL,
         created_by  VARCHAR(255) NOT NULL,
-        expires_at  DATETIME NOT NULL,
         created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_token   (token),
         INDEX idx_voucher (voucher_id)
@@ -178,17 +177,15 @@ function lpEnsureTables(): void {
 function lpCreateUploadToken(int $voucherId, string $email): string {
     $token = bin2hex(random_bytes(16));
     $db    = getDB();
-    // Clean expired tokens
-    $db->prepare("DELETE FROM lp_upload_tokens WHERE expires_at < NOW()")->execute([]);
-    // Use MySQL DATE_ADD(NOW(), ...) so expiry and validation both use the DB clock
-    $db->prepare("INSERT INTO lp_upload_tokens (token, voucher_id, created_by, expires_at)
-                  VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL 4 HOUR))")
+    // Delete any existing tokens for this voucher so we don't accumulate stale rows
+    $db->prepare("DELETE FROM lp_upload_tokens WHERE voucher_id=?")->execute([$voucherId]);
+    $db->prepare("INSERT INTO lp_upload_tokens (token, voucher_id, created_by) VALUES (?,?,?)")
        ->execute([$token, $voucherId, $email]);
     return $token;
 }
 
 function lpValidateUploadToken(string $token): ?array {
-    $s = getDB()->prepare("SELECT * FROM lp_upload_tokens WHERE token=? AND expires_at > NOW() LIMIT 1");
+    $s = getDB()->prepare("SELECT * FROM lp_upload_tokens WHERE token=? LIMIT 1");
     $s->execute([$token]);
     return $s->fetch() ?: null;
 }

@@ -349,7 +349,6 @@ $initRowsJson = json_encode($initRows);
       <p>Scan this code with your phone's camera. Take a photo of any receipt and it will appear here automatically — no AirDrop needed.</p>
       <p>Or copy the link and text it to yourself:</p>
       <div class="qr-url" id="qrUrlText"></div>
-      <p class="qr-expiry">⏱ This link is valid for 4 hours.</p>
       <div class="qr-target" id="qrTarget">
         📌 Next receipt → <strong id="qrTargetLabel"></strong>
         <button class="qr-target-clear" onclick="clearPhoneTarget()" title="Clear target">✕</button>

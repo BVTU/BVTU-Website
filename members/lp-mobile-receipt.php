@@ -10,7 +10,6 @@ lpEnsureTables();
 $token    = trim($_GET['token'] ?? '');
 $tokenRow = $token ? lpValidateUploadToken($token) : null;
 $voucher  = $tokenRow ? lpGetVoucher((int)$tokenRow['voucher_id']) : null;
-$expired  = ($token && !$tokenRow);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -150,16 +149,7 @@ $expired  = ($token && !$tokenRow);
 <div class="card">
   <div class="logo">B</div>
 
-  <?php if ($expired): ?>
-    <!-- ── Expired token ── -->
-    <div class="error-card" style="display:block;">
-      <div class="error-icon">⏱️</div>
-      <h2>Link Expired</h2>
-      <p>This QR code has expired (links are valid for 4 hours).<br><br>
-         Ask the LP to open the voucher in the portal — a fresh QR code will appear automatically.</p>
-    </div>
-
-  <?php elseif (!$voucher): ?>
+  <?php if (!$voucher): ?>
     <!-- ── Invalid token ── -->
     <div class="error-card" style="display:block;">
       <div class="error-icon">🔒</div>
