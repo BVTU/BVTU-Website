@@ -225,8 +225,10 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
     .pending-card .p-desc { font-size:.78rem; font-weight:700; color:#1a2e1a; margin-bottom:.15rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .pending-card .p-amt  { font-size:.8rem; color:var(--primary); font-weight:800; margin-bottom:.5rem; }
     .pending-card .p-flag { font-size:.7rem; color:#92400e; margin-bottom:.4rem; }
-    .btn-claim { width:100%; background:var(--primary); color:#fff; border:none; border-radius:6px; padding:.4rem; font-size:.78rem; font-weight:700; cursor:pointer; }
+    .btn-claim { width:100%; background:var(--primary); color:#fff; border:none; border-radius:6px; padding:.4rem; font-size:.78rem; font-weight:700; cursor:pointer; margin-bottom:.3rem; }
     .btn-claim:hover { background:var(--primary-dk); }
+    .attach-select { width:100%; border:1px solid #86efac; border-radius:6px; padding:.32rem .4rem; font-size:.74rem; font-family:inherit; background:#f0fdf4; color:var(--primary); font-weight:600; cursor:pointer; }
+    .attach-select:focus { outline:none; border-color:var(--primary); }
   </style>
 </head>
 <body>
@@ -584,6 +586,7 @@ function generateQR() {
 
 // ── Pending receipts polling ──────────────────────────────────────────────────
 const seenReceiptIds = {};
+const receiptStore   = {}; // keyed by pending receipt id
 
 function pollPending() {
     fetch('lp-poll-receipts.php?voucher_id=' + VOUCHER_ID)
@@ -592,98 +595,140 @@ function pollPending() {
             if (!d.receipts || d.receipts.length === 0) return;
             var newOnes = d.receipts.filter(function(r) { return !seenReceiptIds[r.id]; });
             if (newOnes.length === 0) return;
-
-            // Show tray
             var tray = document.getElementById('pendingTray');
             tray.classList.add('has-items');
             document.getElementById('pendingBadge').textContent = d.receipts.length;
-
             newOnes.forEach(function(receipt) {
                 seenReceiptIds[receipt.id] = true;
+                receiptStore[receipt.id]   = receipt;
                 addPendingCard(receipt);
             });
         })
-        .catch(function() {}); // silently ignore poll errors
+        .catch(function() {});
 }
 
 function addPendingCard(receipt) {
-    var sd       = receipt.scan_data || {};
-    var desc     = sd.description || receipt.original_name || 'Receipt';
-    var isPdf    = /\.pdf$/i.test(receipt.saved_path || '');
+    var sd      = receipt.scan_data || {};
+    var desc    = sd.description || receipt.original_name || 'Receipt';
+    var isPdf   = /\.pdf$/i.test(receipt.saved_path || '');
     var thumbHtml = isPdf
         ? '<div class="pdf-thumb">📄</div>'
-        : '<img src="' + escHtml(receipt.preview_url) + '" alt="Receipt" onclick="lightboxOpen(\'' + escHtml(receipt.preview_url) + '\')">';
-
-    // Find best amount
+        : '<img src="' + escHtml(receipt.preview_url) + '" alt="Receipt">';
     var amount = null;
     ['travel_amount','meals_amount','gifts_amount','misc_amount','office_amount','phone_amount','total_amount'].forEach(function(k) {
         if (!amount && sd[k] && parseFloat(sd[k]) > 0) amount = parseFloat(sd[k]);
     });
 
-    var cardHtml = '<div class="pending-card" id="pc-' + receipt.id + '">'
+    var html = '<div class="pending-card" id="pc-' + receipt.id + '">'
         + thumbHtml
         + '<div class="p-desc" title="' + escHtml(desc) + '">' + escHtml(desc) + '</div>'
         + (amount ? '<div class="p-amt">$' + amount.toFixed(2) + '</div>' : '')
         + (sd.concerns ? '<div class="p-flag">⚠️ ' + escHtml(sd.concerns) + '</div>' : '')
-        + '<button class="btn-claim" onclick="claimReceipt(' + receipt.id + ')">+ Add to Voucher</button>'
+        + '<button class="btn-claim" onclick="claimReceipt(' + receipt.id + ')">+ New Row</button>'
+        + '<select class="attach-select" id="as-' + receipt.id + '"'
+        +   ' onclick="rebuildAttachOptions(' + receipt.id + ')"'
+        +   ' onchange="attachToRow(' + receipt.id + ', this)">'
+        + '<option value="">📎 Attach to existing row…</option>'
+        + '</select>'
         + '</div>';
 
-    document.getElementById('pendingCards').insertAdjacentHTML('beforeend', cardHtml);
+    document.getElementById('pendingCards').insertAdjacentHTML('beforeend', html);
 }
 
+// Populate the "Attach to row" dropdown with rows that have no receipt yet
+function rebuildAttachOptions(pendingId) {
+    var sel = document.getElementById('as-' + pendingId);
+    if (!sel) return;
+    while (sel.options.length > 1) sel.remove(1);
+    var found = 0;
+    document.querySelectorAll('#expenseRows tr').forEach(function(tr) {
+        var rowId  = tr.id ? tr.id.replace('row-', '') : '';
+        if (!rowId) return;
+        var rpath  = document.getElementById('rpath-' + rowId);
+        if (!rpath || rpath.value.trim()) return; // already has receipt
+        var descEl = tr.querySelector('[name="description[]"]');
+        var dateEl = tr.querySelector('[name="expense_date[]"]');
+        var desc   = descEl ? descEl.value.trim() : '';
+        var date   = dateEl ? dateEl.value : '';
+        if (!desc && !date) return; // skip blank rows
+        var label  = (date ? date + ' — ' : '') + (desc || '(no description)');
+        var opt    = document.createElement('option');
+        opt.value  = rowId;
+        opt.textContent = label;
+        sel.appendChild(opt);
+        found++;
+    });
+    if (!found) {
+        var opt = document.createElement('option');
+        opt.disabled = true;
+        opt.textContent = 'No rows without a receipt';
+        sel.appendChild(opt);
+    }
+}
+
+// Snap a pending receipt onto an existing row (persisted when form is saved)
+function attachToRow(pendingId, selectEl) {
+    var rowId = selectEl.value;
+    if (!rowId) return;
+    selectEl.value = '';
+
+    var receipt = receiptStore[pendingId];
+    if (!receipt) return;
+
+    var rpathEl = document.getElementById('rpath-' + rowId);
+    var rorigEl = document.getElementById('rorig-' + rowId);
+    if (rpathEl) rpathEl.value = receipt.saved_path;
+    if (rorigEl) rorigEl.value = receipt.original_name || '';
+
+    showThumb(rowId, receipt.saved_path, null);
+
+    var tr = document.getElementById('row-' + rowId);
+    if (tr) tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    dismissPendingCard(pendingId);
+}
+
+// Add a brand-new row pre-filled with scan data
 function claimReceipt(pendingId) {
-    // Find the receipt data
+    var receipt = receiptStore[pendingId];
+    if (!receipt) return;
+    var sd = receipt.scan_data || {};
+
+    var rowId = addRow({
+        date:               sd.date || '',
+        description:        sd.description || '',
+        travel_amount:      sd.travel_amount  || '',
+        meals_amount:       sd.meals_amount   || '',
+        gifts_amount:       sd.gifts_amount   || '',
+        misc_amount:        sd.misc_amount    || '',
+        office_amount:      sd.office_amount  || '',
+        phone_amount:       sd.phone_amount   || '',
+        suggested_grant_id: sd.suggested_grant_id || '',
+        suggested_bl_id:    sd.suggested_bl_id    || '',
+        saved_path:         receipt.saved_path,
+        original_name:      receipt.original_name,
+        concerns:           sd.concerns || '',
+        flag:               sd.flag || '',
+    });
+    var newRow = document.getElementById('row-' + rowId);
+    if (newRow) newRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    dismissPendingCard(pendingId);
+}
+
+function dismissPendingCard(pendingId) {
+    var fd = new FormData();
+    fd.append('pending_id', pendingId);
+    fetch('lp-claim-receipt.php', { method: 'POST', body: fd });
+
     var card = document.getElementById('pc-' + pendingId);
-    if (!card) return;
-
-    // Collect scan data from the polled data (we stash it on the element via dataset trick)
-    // Re-fetch so we have the full data object
-    fetch('lp-poll-receipts.php?voucher_id=' + VOUCHER_ID)
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-            var receipt = null;
-            if (d.receipts) {
-                d.receipts.forEach(function(r) { if (r.id === pendingId) receipt = r; });
-            }
-            if (!receipt) return;
-
-            var sd = receipt.scan_data || {};
-            // Add a new expense row pre-populated with scan data + receipt
-            var rowId = addRow({
-                date:               sd.date || '',
-                description:        sd.description || '',
-                travel_amount:      sd.travel_amount  || '',
-                meals_amount:       sd.meals_amount   || '',
-                gifts_amount:       sd.gifts_amount   || '',
-                misc_amount:        sd.misc_amount    || '',
-                office_amount:      sd.office_amount  || '',
-                phone_amount:       sd.phone_amount   || '',
-                suggested_grant_id: sd.suggested_grant_id || '',
-                suggested_bl_id:    sd.suggested_bl_id    || '',
-                saved_path:         receipt.saved_path,
-                original_name:      receipt.original_name,
-                concerns:           sd.concerns || '',
-                flag:               sd.flag || '',
-            });
-
-            // Scroll the new row into view
-            var newRow = document.getElementById('row-' + rowId);
-            if (newRow) newRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-            // Mark claimed on server
-            var fd = new FormData();
-            fd.append('pending_id', pendingId);
-            fetch('lp-claim-receipt.php', { method: 'POST', body: fd });
-
-            // Remove card from tray
-            card.remove();
-            var remaining = document.getElementById('pendingCards').children.length;
-            if (remaining === 0) {
-                document.getElementById('pendingTray').classList.remove('has-items');
-            } else {
-                document.getElementById('pendingBadge').textContent = remaining;
-            }
-        });
+    if (card) card.remove();
+    var remaining = document.getElementById('pendingCards').children.length;
+    if (remaining === 0) {
+        document.getElementById('pendingTray').classList.remove('has-items');
+    } else {
+        document.getElementById('pendingBadge').textContent = remaining;
+    }
 }
 
 // Poll every 5 seconds

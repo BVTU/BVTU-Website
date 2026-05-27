@@ -254,8 +254,10 @@ $initRowsJson = json_encode($initRows);
     .pending-card .p-desc { font-size:.78rem; font-weight:700; color:#1a2e1a; margin-bottom:.15rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .pending-card .p-amt  { font-size:.8rem; color:var(--primary); font-weight:800; margin-bottom:.5rem; }
     .pending-card .p-flag { font-size:.7rem; color:#92400e; margin-bottom:.4rem; }
-    .btn-claim { width:100%; background:var(--primary); color:#fff; border:none; border-radius:6px; padding:.4rem; font-size:.78rem; font-weight:700; cursor:pointer; }
+    .btn-claim { width:100%; background:var(--primary); color:#fff; border:none; border-radius:6px; padding:.4rem; font-size:.78rem; font-weight:700; cursor:pointer; margin-bottom:.3rem; }
     .btn-claim:hover { background:var(--primary-dk); }
+    .attach-select { width:100%; border:1px solid #86efac; border-radius:6px; padding:.32rem .4rem; font-size:.74rem; font-family:inherit; background:#f0fdf4; color:var(--primary); font-weight:600; cursor:pointer; }
+    .attach-select:focus { outline:none; border-color:var(--primary); }
 
     /* Lightbox */
     .lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.85); z-index: 9999; align-items: center; justify-content: center; }
@@ -728,6 +730,7 @@ let qrGenerated     = false;
 let qrPanelOpen     = false;
 let pollInterval    = null;
 const seenReceiptIds = {};
+const receiptStore   = {};
 
 function openPhoneUpload() {
     qrPanelOpen = true;
@@ -793,6 +796,7 @@ function pollPending() {
             document.getElementById('pendingBadge').textContent = d.receipts.length;
             newOnes.forEach(function(receipt) {
                 seenReceiptIds[receipt.id] = true;
+                receiptStore[receipt.id]   = receipt;
                 addPendingCard(receipt);
             });
         })
@@ -815,12 +819,65 @@ function addPendingCard(receipt) {
         + '<div class="p-desc" title="' + escHtml(desc) + '">' + escHtml(desc) + '</div>'
         + (amount ? '<div class="p-amt">$' + amount.toFixed(2) + '</div>' : '')
         + (sd.concerns ? '<div class="p-flag">⚠️ ' + escHtml(sd.concerns) + '</div>' : '')
-        + '<button class="btn-claim" onclick="claimReceipt(' + receipt.id + ', ' + JSON.stringify(receipt).replace(/</g,'\\u003c') + ')">+ Add to Voucher</button>'
+        + '<button class="btn-claim" onclick="claimReceipt(' + receipt.id + ')">+ New Row</button>'
+        + '<select class="attach-select" id="as-' + receipt.id + '"'
+        +   ' onclick="rebuildAttachOptions(' + receipt.id + ')"'
+        +   ' onchange="attachToRow(' + receipt.id + ', this)">'
+        + '<option value="">📎 Attach to existing row…</option>'
+        + '</select>'
         + '</div>';
     document.getElementById('pendingCards').insertAdjacentHTML('beforeend', html);
 }
 
-function claimReceipt(pendingId, receipt) {
+function rebuildAttachOptions(pendingId) {
+    var sel = document.getElementById('as-' + pendingId);
+    if (!sel) return;
+    while (sel.options.length > 1) sel.remove(1);
+    var found = 0;
+    document.querySelectorAll('#expenseRows tr').forEach(function(tr) {
+        var rowId  = tr.id ? tr.id.replace('row-', '') : '';
+        if (!rowId) return;
+        var rpath  = document.getElementById('rpath-' + rowId);
+        if (!rpath || rpath.value.trim()) return;
+        var descEl = tr.querySelector('[name="description[]"]');
+        var dateEl = tr.querySelector('[name="expense_date[]"]');
+        var desc   = descEl ? descEl.value.trim() : '';
+        var date   = dateEl ? dateEl.value : '';
+        if (!desc && !date) return;
+        var label  = (date ? date + ' — ' : '') + (desc || '(no description)');
+        var opt    = document.createElement('option');
+        opt.value  = rowId;
+        opt.textContent = label;
+        sel.appendChild(opt);
+        found++;
+    });
+    if (!found) {
+        var opt = document.createElement('option');
+        opt.disabled = true;
+        opt.textContent = 'No rows without a receipt';
+        sel.appendChild(opt);
+    }
+}
+
+function attachToRow(pendingId, selectEl) {
+    var rowId = selectEl.value;
+    if (!rowId) return;
+    selectEl.value = '';
+    var receipt = receiptStore[pendingId];
+    if (!receipt) return;
+    var rpathEl = document.getElementById('rpath-' + rowId);
+    var rorigEl = document.getElementById('rorig-' + rowId);
+    if (rpathEl) rpathEl.value = receipt.saved_path;
+    if (rorigEl) rorigEl.value = receipt.original_name || '';
+    showThumb(rowId, receipt.saved_path, null);
+    var tr = document.getElementById('row-' + rowId);
+    if (tr) tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    dismissPendingCard(pendingId);
+}
+
+function claimReceipt(pendingId) {
+    var receipt = receiptStore[pendingId];
+    if (!receipt) return;
     var sd = receipt.scan_data || {};
     var rowId = addRow({
         date:               sd.date || '',
@@ -840,11 +897,13 @@ function claimReceipt(pendingId, receipt) {
     });
     var newRow = document.getElementById('row-' + rowId);
     if (newRow) newRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    dismissPendingCard(pendingId);
+}
 
+function dismissPendingCard(pendingId) {
     var fd = new FormData();
     fd.append('pending_id', pendingId);
     fetch('lp-claim-receipt.php', { method: 'POST', body: fd });
-
     var card = document.getElementById('pc-' + pendingId);
     if (card) card.remove();
     var remaining = document.getElementById('pendingCards').children.length;
