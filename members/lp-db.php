@@ -3,6 +3,7 @@
  * lp-db.php — Local President Expense Tracker database helpers
  */
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/exec-db.php';
 date_default_timezone_set('America/Vancouver');
 
 define('LP_RECEIPTS_DIR', __DIR__ . '/lp-receipts/');
@@ -215,12 +216,13 @@ function lpClaimPendingReceipt(int $id): void {
 }
 
 // ── Access helpers ────────────────────────────────────────────────────────────
+// LP = Local President expenses — president only.
 function lpCanCreate(string $email): bool {
-    return prodIsExec($email);
+    return execIsAdmin($email);
 }
 
 function lpCanView(string $email): bool {
-    return prodIsExec($email) || prodIsTreasurer($email);
+    return execIsAdmin($email);
 }
 
 // ── Data helpers ──────────────────────────────────────────────────────────────
