@@ -2,11 +2,42 @@
 require_once 'auth.php';
 require_once 'exp-db.php';
 require_once 'exec-db.php';
+require_once 'prod-db.php';
 requireLogin();
 $member  = getMember();
 $welcome = isset($_GET['welcome']);
 expEnsureTables();
 execEnsureTables();
+prodEnsureTables();
+
+$myEmail = strtolower(trim($member['email']));
+
+// ── Gather this member's roles for the dashboard badge display ────────────────
+// EC roles (official positions)
+$s = getDB()->prepare("SELECT role FROM exec_roles WHERE user_email=? ORDER BY created_at");
+$s->execute([$myEmail]);
+$myExecRoleSlugs = $s->fetchAll(PDO::FETCH_COLUMN);
+
+// Expense system roles
+$s = getDB()->prepare("SELECT role FROM exp_roles WHERE user_email=?");
+$s->execute([$myEmail]);
+$myExpRoleSlugs = $s->fetchAll(PDO::FETCH_COLUMN);
+
+// Pro-D roles
+$s = getDB()->prepare("SELECT role, school_id FROM prod_roles WHERE user_email=?");
+$s->execute([$myEmail]);
+$myProdRoleRows = $s->fetchAll();
+
+// Build display labels for EC roles
+$allExecRoles = execGetAllRoles();
+$myRoleLabels = [];
+foreach ($myExecRoleSlugs as $slug) {
+    if (isset($allExecRoles[$slug])) $myRoleLabels[] = $allExecRoles[$slug];
+}
+// Constant admin badge
+if (execIsAdmin($myEmail) && empty($myExecRoleSlugs)) {
+    $myRoleLabels[] = 'President';
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -55,6 +86,10 @@ execEnsureTables();
     .doc-item:hover { background: var(--accent); border-color: var(--blue); transform: translateX(4px); text-decoration: none; color: var(--primary); }
     .doc-item svg { width: 20px; height: 20px; flex-shrink: 0; color: var(--blue); fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     .lock-badge { margin-left: auto; font-size: .75rem; font-weight: 600; color: var(--gray-500); background: var(--gray-100); padding: .2rem .55rem; border-radius: 100px; }
+    .role-chips { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .6rem; }
+    .role-chip { font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+                 background: rgba(255,255,255,.18); color: #fff; border: 1px solid rgba(255,255,255,.3);
+                 border-radius: 100px; padding: .22rem .7rem; }
   </style>
 </head>
 <body>
@@ -88,6 +123,13 @@ execEnsureTables();
       <div>
         <h1>Welcome, <?= htmlspecialchars($member['name']) ?></h1>
         <p>Members-only documents and resources</p>
+        <?php if (!empty($myRoleLabels)): ?>
+        <div class="role-chips">
+          <?php foreach ($myRoleLabels as $label): ?>
+          <span class="role-chip"><?= htmlspecialchars($label) ?></span>
+          <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
       </div>
       <a href="logout.php" class="btn btn-outline-white">Sign Out</a>
     </div>
@@ -109,14 +151,18 @@ execEnsureTables();
             <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
             Professional Development Portal
           </a>
+          <?php if (prodIsExec($myEmail) || prodIsSiteRep($myEmail)): ?>
           <a href="prod-admin.php" class="doc-item">
             <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
             Pro-D Review Queue
           </a>
+          <?php endif; ?>
+          <?php if (prodIsExec($myEmail)): ?>
           <a href="prod-manage.php" class="doc-item">
             <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
             Pro-D Schools &amp; Roles
           </a>
+          <?php endif; ?>
         </div>
       </div>
 
@@ -141,10 +187,12 @@ execEnsureTables();
             <svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
             Browse &amp; Search Newsletters
           </a>
+          <?php if (execIsAdmin($myEmail) || prodIsExec($myEmail)): ?>
           <a href="newsletter-admin.php" class="doc-item">
             <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             Sync from Mailchimp (Admin)
           </a>
+          <?php endif; ?>
         </div>
       </div>
 
@@ -159,13 +207,16 @@ execEnsureTables();
             <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             Upload a Resource
           </a>
+          <?php if (execIsAdmin($myEmail) || prodIsExec($myEmail)): ?>
           <a href="library-admin.php" class="doc-item">
             <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
             Library Admin Panel
           </a>
+          <?php endif; ?>
         </div>
       </div>
 
+      <?php if (execIsAdmin($myEmail) || prodIsExec($myEmail)): ?>
       <div class="doc-section" style="margin-bottom:1.5rem;">
         <h2>Collaboration Grant</h2>
         <div class="doc-list">
@@ -175,6 +226,7 @@ execEnsureTables();
           </a>
         </div>
       </div>
+      <?php endif; ?>
 
       <div class="doc-section" style="margin-bottom:1.5rem;">
         <h2>EC Mileage</h2>
@@ -236,6 +288,7 @@ execEnsureTables();
         </div>
       </div>
 
+      <?php if (execIsAdmin($myEmail) || prodIsExec($myEmail) || expIsAdmin($myEmail)): ?>
       <div class="doc-section" style="margin-bottom:1.5rem;">
         <h2>Administration</h2>
         <div class="doc-list">
@@ -243,12 +296,15 @@ execEnsureTables();
             <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             Executive &amp; Roles Directory
           </a>
+          <?php if (execIsAdmin($myEmail)): ?>
           <a href="token-usage.php" class="doc-item">
             <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
             Claude API Token Usage
           </a>
+          <?php endif; ?>
         </div>
       </div>
+      <?php endif; ?>
 
     </div>
   </main>
