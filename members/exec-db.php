@@ -64,6 +64,29 @@ function execHasRole(string $email, string $role): bool {
     return (int)$s->fetchColumn() > 0;
 }
 
+// ── Full role list (static + dynamic school reps) ─────────────────────────────
+
+/**
+ * Returns the complete role map: the 15 static EC positions PLUS a dynamically
+ * generated "Staff Rep — SchoolName" entry for every active school.
+ * Slugs for staff reps are "staff_rep_N" where N is the school's DB id.
+ * Falls back gracefully if prod_schools doesn't exist yet.
+ */
+function execGetAllRoles(): array {
+    $roles = EXEC_ROLES;
+    try {
+        $schools = getDB()->query(
+            "SELECT id, name FROM prod_schools WHERE active=1 ORDER BY name"
+        )->fetchAll();
+        foreach ($schools as $s) {
+            $roles['staff_rep_' . (int)$s['id']] = 'Staff Rep — ' . $s['name'];
+        }
+    } catch (Exception $e) {
+        // prod_schools not yet initialised — skip staff rep slots silently
+    }
+    return $roles;
+}
+
 // ── Data access ────────────────────────────────────────────────────────────────
 
 /** All rows, ordered by name then role */
@@ -101,12 +124,13 @@ function execCountRoles(string $email): int {
  * e.g. ['president' => [...row...], 'treasurer' => null, ...]
  */
 function execGetRosterMap(): array {
+    $allRoles = execGetAllRoles();
     $rows = getDB()->query(
         "SELECT * FROM exec_roles ORDER BY created_at"
     )->fetchAll();
 
     $map = [];
-    foreach (array_keys(EXEC_ROLES) as $slug) {
+    foreach (array_keys($allRoles) as $slug) {
         $map[$slug] = null;
     }
     foreach ($rows as $r) {

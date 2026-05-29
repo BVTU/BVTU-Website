@@ -28,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $role1  = trim($_POST['role1']  ?? '');
         $role2  = trim($_POST['role2']  ?? '');
 
-        $validRoles = array_keys(EXEC_ROLES);
+        $validRoles = array_keys(execGetAllRoles());
 
         if (!$email || !$name || !$role1 || !in_array($role1, $validRoles)) {
             $error = 'Name, email, and at least one valid role are required.';
@@ -52,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $assigned = [];
                     foreach ($toAssign as $r) {
                         execAssignRole($email, $name, $r, $member['email']);
-                        $assigned[] = EXEC_ROLES[$r];
+                        $assigned[] = $allRoles[$r] ?? $r;
                     }
                     $notice = htmlspecialchars($name) . ' assigned: ' . implode(' + ', $assigned) . '.';
                 }
@@ -72,8 +72,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // ── Load data ──────────────────────────────────────────────────────────────────
+$allRoles  = execGetAllRoles();
 $rosterMap = execGetRosterMap();
 $people    = execGetPeople();
+
+// Split into EC positions vs staff rep positions
+$ecPositions   = array_filter($allRoles, function($label, $slug) {
+    return strpos($slug, 'staff_rep_') !== 0;
+}, ARRAY_FILTER_USE_BOTH);
+
+$staffRepRoles = array_filter($allRoles, function($label, $slug) {
+    return strpos($slug, 'staff_rep_') === 0;
+}, ARRAY_FILTER_USE_BOTH);
 
 // Count filled / vacant
 $filled  = count(array_filter($rosterMap, function($v) { return $v !== null; }));
@@ -181,39 +191,45 @@ $vacant  = count($rosterMap) - $filled;
   </div>
 
   <!-- ── Full roster ──────────────────────────────────────────────────────────── -->
-  <div class="sec-head">Complete Roster (<?= count(EXEC_ROLES) ?> positions)</div>
+  <div class="sec-head">Complete Roster (<?= count($allRoles) ?> positions)</div>
 
-  <div class="roster-table-wrap">
-    <table>
-      <thead>
-        <tr><th>Position</th><th>Name</th><th>Email</th><th></th></tr>
-      </thead>
-      <tbody>
-        <?php foreach (EXEC_ROLES as $slug => $label):
-          $row = $rosterMap[$slug];
-        ?>
-        <tr>
-          <td style="font-weight:600;color:var(--gray-700);"><?= htmlspecialchars($label) ?></td>
-          <?php if ($row): ?>
-            <td><strong><?= htmlspecialchars($row['user_name']) ?></strong></td>
-            <td style="font-size:.8rem;color:var(--gray-400);"><?= htmlspecialchars($row['user_email']) ?></td>
-            <td>
-              <form method="POST" onsubmit="return confirm('Remove <?= htmlspecialchars(addslashes($row['user_name'])) ?> from <?= htmlspecialchars(addslashes($label)) ?>?')">
-                <input type="hidden" name="action"  value="remove">
-                <input type="hidden" name="role_id" value="<?= (int)$row['id'] ?>">
-                <button type="submit" class="remove-btn" title="Remove">&#x2715;</button>
-              </form>
-            </td>
-          <?php else: ?>
-            <td class="vacant-name">Vacant</td>
-            <td class="vacant-email">&#x2014;</td>
-            <td></td>
-          <?php endif; ?>
-        </tr>
-        <?php endforeach; ?>
-      </tbody>
-    </table>
-  </div>
+  <?php
+  // Helper to render a roster table for a given subset of roles
+  function renderRosterSection(array $roles, array $rosterMap) {
+      echo '<div class="roster-table-wrap"><table>';
+      echo '<thead><tr><th>Position</th><th>Name</th><th>Email</th><th></th></tr></thead><tbody>';
+      foreach ($roles as $slug => $label):
+          $row = $rosterMap[$slug] ?? null;
+          echo '<tr>';
+          echo '<td style="font-weight:600;color:var(--gray-700);">' . htmlspecialchars($label) . '</td>';
+          if ($row) {
+              echo '<td><strong>' . htmlspecialchars($row['user_name']) . '</strong></td>';
+              echo '<td style="font-size:.8rem;color:var(--gray-400);">' . htmlspecialchars($row['user_email']) . '</td>';
+              $safeName  = htmlspecialchars(addslashes($row['user_name']));
+              $safeLabel = htmlspecialchars(addslashes($label));
+              echo '<td><form method="POST" onsubmit="return confirm(\'Remove ' . $safeName . ' from ' . $safeLabel . '?\')">';
+              echo '<input type="hidden" name="action"  value="remove">';
+              echo '<input type="hidden" name="role_id" value="' . (int)$row['id'] . '">';
+              echo '<button type="submit" class="remove-btn" title="Remove">&#x2715;</button>';
+              echo '</form></td>';
+          } else {
+              echo '<td class="vacant-name">Vacant</td><td class="vacant-email">&#x2014;</td><td></td>';
+          }
+          echo '</tr>';
+      endforeach;
+      echo '</tbody></table></div>';
+  }
+  ?>
+
+  <div class="sec-head" style="margin-top:0;">Executive Positions (<?= count($ecPositions) ?>)</div>
+  <?php renderRosterSection($ecPositions, $rosterMap); ?>
+
+  <div class="sec-head">School Staff Representatives (<?= count($staffRepRoles) ?>)</div>
+  <?php if (empty($staffRepRoles)): ?>
+    <p style="font-size:.85rem;color:var(--gray-400);margin-bottom:1.5rem;">No schools found. Add schools via <a href="prod-manage.php?tab=schools">Pro-D Schools</a> first.</p>
+  <?php else: ?>
+    <?php renderRosterSection($staffRepRoles, $rosterMap); ?>
+  <?php endif; ?>
 
   <!-- ── Assign roles ─────────────────────────────────────────────────────────── -->
   <div class="sec-head">Assign a Role</div>
@@ -243,18 +259,36 @@ $vacant  = count($rosterMap) - $filled;
           <label>Role 1 *</label>
           <select name="role1" required>
             <option value="">Choose position&hellip;</option>
-            <?php foreach (EXEC_ROLES as $slug => $label): ?>
-            <option value="<?= $slug ?>"><?= htmlspecialchars($label) ?></option>
-            <?php endforeach; ?>
+            <optgroup label="Executive Positions">
+              <?php foreach ($ecPositions as $slug => $label): ?>
+              <option value="<?= $slug ?>"><?= htmlspecialchars($label) ?></option>
+              <?php endforeach; ?>
+            </optgroup>
+            <?php if ($staffRepRoles): ?>
+            <optgroup label="School Staff Representatives">
+              <?php foreach ($staffRepRoles as $slug => $label): ?>
+              <option value="<?= $slug ?>"><?= htmlspecialchars($label) ?></option>
+              <?php endforeach; ?>
+            </optgroup>
+            <?php endif; ?>
           </select>
         </div>
         <div class="field">
           <label>Role 2 <span style="font-weight:400;color:var(--gray-400);">(optional)</span></label>
           <select name="role2">
             <option value="">None</option>
-            <?php foreach (EXEC_ROLES as $slug => $label): ?>
-            <option value="<?= $slug ?>"><?= htmlspecialchars($label) ?></option>
-            <?php endforeach; ?>
+            <optgroup label="Executive Positions">
+              <?php foreach ($ecPositions as $slug => $label): ?>
+              <option value="<?= $slug ?>"><?= htmlspecialchars($label) ?></option>
+              <?php endforeach; ?>
+            </optgroup>
+            <?php if ($staffRepRoles): ?>
+            <optgroup label="School Staff Representatives">
+              <?php foreach ($staffRepRoles as $slug => $label): ?>
+              <option value="<?= $slug ?>"><?= htmlspecialchars($label) ?></option>
+              <?php endforeach; ?>
+            </optgroup>
+            <?php endif; ?>
           </select>
           <div class="field-hint">Only if this person holds two positions.</div>
         </div>

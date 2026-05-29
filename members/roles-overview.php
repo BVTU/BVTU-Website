@@ -21,10 +21,17 @@ if (!execIsAdmin($member['email']) && !prodIsExec($member['email']) && !expIsAdm
 }
 
 // ── Executive Committee data ───────────────────────────────────────────────────
-$ecRosterMap = execGetRosterMap();
-$ecPeople    = execGetPeople();
-$ecFilled    = count(array_filter($ecRosterMap, function($v) { return $v !== null; }));
-$ecVacant    = count($ecRosterMap) - $ecFilled;
+$ecAllRoles    = execGetAllRoles();
+$ecRosterMap   = execGetRosterMap();
+$ecPeople      = execGetPeople();
+$ecFilled      = count(array_filter($ecRosterMap, function($v) { return $v !== null; }));
+$ecVacant      = count($ecRosterMap) - $ecFilled;
+$ecPositions   = array_filter($ecAllRoles, function($label, $slug) {
+    return strpos($slug, 'staff_rep_') !== 0;
+}, ARRAY_FILTER_USE_BOTH);
+$ecStaffReps   = array_filter($ecAllRoles, function($label, $slug) {
+    return strpos($slug, 'staff_rep_') === 0;
+}, ARRAY_FILTER_USE_BOTH);
 
 // ── Load raw role data ─────────────────────────────────────────────────────────
 
@@ -300,40 +307,50 @@ $allSchools = prodGetSchools(false);
   </div>
 
   <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;overflow:hidden;margin-bottom:1.75rem;">
-    <table style="width:100%;border-collapse:collapse;font-size:.86rem;">
-      <thead><tr style="background:#f8f9fa;">
-        <th style="padding:.55rem 1rem;text-align:left;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);border-bottom:1px solid var(--gray-200);">Position</th>
-        <th style="padding:.55rem 1rem;text-align:left;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);border-bottom:1px solid var(--gray-200);">Name</th>
-        <th style="padding:.55rem 1rem;text-align:left;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);border-bottom:1px solid var(--gray-200);">Email</th>
-      </tr></thead>
-      <tbody>
-        <?php foreach (EXEC_ROLES as $slug => $label):
-          $row = $ecRosterMap[$slug];
-        ?>
-        <tr style="border-bottom:1px solid var(--gray-100);">
-          <td style="padding:.6rem 1rem;font-weight:600;color:var(--gray-700);"><?= htmlspecialchars($label) ?></td>
-          <?php if ($row): ?>
-            <td style="padding:.6rem 1rem;">
-              <strong><?= htmlspecialchars($row['user_name']) ?></strong>
-              <?php
-                // Show a second-role badge if this person also holds another EC role
-                $otherRoles = array_filter($ecRosterMap, function($r) use ($row, $slug) {
-                    return $r !== null && $r['user_email'] === $row['user_email'] && $r['role'] !== $slug;
-                });
-                foreach ($otherRoles as $oSlug => $oRow): ?>
-                <span style="font-size:.7rem;background:#eff6ff;color:#1e40af;border-radius:100px;padding:.1rem .5rem;margin-left:.35rem;font-weight:700;">also <?= htmlspecialchars(EXEC_ROLES[$oSlug] ?? $oSlug) ?></span>
-              <?php endforeach; ?>
-            </td>
-            <td style="padding:.6rem 1rem;font-size:.79rem;color:var(--gray-400);"><?= htmlspecialchars($row['user_email']) ?></td>
-          <?php else: ?>
-            <td style="padding:.6rem 1rem;color:var(--gray-300);font-style:italic;font-size:.84rem;">Vacant</td>
-            <td style="padding:.6rem 1rem;color:var(--gray-200);">&#x2014;</td>
-          <?php endif; ?>
-        </tr>
-        <?php endforeach; ?>
-      </tbody>
-    </table>
+  <?php
+  // Shared helper: render one roster table for a given role subset
+  function renderEcSection(array $roles, array $rosterMap, array $allRoles) {
+      echo '<table style="width:100%;border-collapse:collapse;font-size:.86rem;">';
+      echo '<thead><tr style="background:#f8f9fa;">';
+      $thStyle = 'padding:.55rem 1rem;text-align:left;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);border-bottom:1px solid var(--gray-200);';
+      echo "<th style=\"$thStyle\">Position</th><th style=\"$thStyle\">Name</th><th style=\"$thStyle\">Email</th>";
+      echo '</tr></thead><tbody>';
+      foreach ($roles as $slug => $label) {
+          $row = $rosterMap[$slug] ?? null;
+          echo '<tr style="border-bottom:1px solid var(--gray-100);">';
+          echo '<td style="padding:.6rem 1rem;font-weight:600;color:var(--gray-700);">' . htmlspecialchars($label) . '</td>';
+          if ($row) {
+              // Second-role badge
+              $extra = '';
+              foreach ($rosterMap as $oSlug => $oRow) {
+                  if ($oRow && $oRow['user_email'] === $row['user_email'] && $oSlug !== $slug) {
+                      $extra .= '<span style="font-size:.7rem;background:#eff6ff;color:#1e40af;border-radius:100px;padding:.1rem .5rem;margin-left:.35rem;font-weight:700;">also ' . htmlspecialchars($allRoles[$oSlug] ?? $oSlug) . '</span>';
+                  }
+              }
+              echo '<td style="padding:.6rem 1rem;"><strong>' . htmlspecialchars($row['user_name']) . '</strong>' . $extra . '</td>';
+              echo '<td style="padding:.6rem 1rem;font-size:.79rem;color:var(--gray-400);">' . htmlspecialchars($row['user_email']) . '</td>';
+          } else {
+              echo '<td style="padding:.6rem 1rem;color:var(--gray-300);font-style:italic;font-size:.84rem;">Vacant</td>';
+              echo '<td style="padding:.6rem 1rem;color:var(--gray-200);">&#x2014;</td>';
+          }
+          echo '</tr>';
+      }
+      echo '</tbody></table>';
+  }
+  ?>
+    <?php renderEcSection($ecPositions, $ecRosterMap, $ecAllRoles); ?>
   </div>
+
+  <?php if (!empty($ecStaffReps)): ?>
+  <div class="section-heading" style="margin-top:1.5rem;">
+    School Staff Representatives
+    <?php $srVacant = count(array_filter(array_intersect_key($ecRosterMap, $ecStaffReps), function($v) { return $v === null; }));
+          if ($srVacant > 0) echo '<span style="font-weight:500;color:#d97706;margin-left:.5rem;">' . $srVacant . ' vacant</span>'; ?>
+  </div>
+  <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;overflow:hidden;margin-bottom:1.75rem;">
+    <?php renderEcSection($ecStaffReps, $ecRosterMap, $ecAllRoles); ?>
+  </div>
+  <?php endif; ?>
 
   <!-- ── Executive & role holders ──────────────────────────────────────────── -->
   <div class="section-heading">Executive &amp; Role Holders</div>
