@@ -35,3 +35,8 @@ define('SESSION_SECRET', 'change-this-to-a-long-random-string-xyz');
 // Set lower for stricter monitoring, e.g. 200000 for ~$0.20/month.
 // define('TOKEN_ALERT_THRESHOLD', 500000);
 // define('TOKEN_ALERT_EMAIL',     'lp54@bctf.ca');
+
+// ── Expense Reimbursement Portal ──────────────────────────────────────────────
+// Email that always has admin + Local President access to the expense portal.
+// Falls back to PROD_ADMIN_EMAIL if this is not set.
+// define('EXPENSE_ADMIN_EMAIL', 'your-email@bctf.ca');
