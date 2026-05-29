@@ -7,7 +7,16 @@
  * POST /members/mileage-admin.php           — delete a claim (action=delete&id=N)
  */
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/exec-db.php';
 requireLogin();
+$member = getMember();
+execEnsureTables();
+
+if (!execIsEC($member['email'])) {
+    header('Location: dashboard.php');
+    exit;
+}
+
 require_once __DIR__ . '/db.php';
 
 date_default_timezone_set('America/Vancouver');

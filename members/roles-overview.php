@@ -1,22 +1,30 @@
 <?php
 /**
  * roles-overview.php — Unified executive & role directory
- * Shows all role-holders across the Pro-D and Expense portal systems in one place.
+ * Shows all role-holders across EC, Pro-D, and Expense portal systems.
  */
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/prod-db.php';
 require_once __DIR__ . '/exp-db.php';
+require_once __DIR__ . '/exec-db.php';
 
 requireLogin();
 $member = getMember();
 prodEnsureTables();
 expEnsureTables();
+execEnsureTables();
 
-// Accessible to exec or expense admin
-if (!prodIsExec($member['email']) && !expIsAdmin($member['email'])) {
+// Accessible to EC admin, prod exec, or expense admin
+if (!execIsAdmin($member['email']) && !prodIsExec($member['email']) && !expIsAdmin($member['email'])) {
     header('Location: dashboard.php');
     exit;
 }
+
+// ── Executive Committee data ───────────────────────────────────────────────────
+$ecRosterMap = execGetRosterMap();
+$ecPeople    = execGetPeople();
+$ecFilled    = count(array_filter($ecRosterMap, function($v) { return $v !== null; }));
+$ecVacant    = count($ecRosterMap) - $ecFilled;
 
 // ── Load raw role data ─────────────────────────────────────────────────────────
 
@@ -241,6 +249,7 @@ $allSchools = prodGetSchools(false);
       <h1 style="margin-top:.3rem;">Roles &amp; Executive Directory</h1>
     </div>
     <div class="header-actions">
+      <a href="exec-manage.php" class="btn-sm">&#x270F; Edit EC Roster</a>
       <a href="prod-manage.php" class="btn-sm">Pro-D Roles</a>
       <a href="exp-manage.php"  class="btn-sm">Expense Roles</a>
     </div>
@@ -249,8 +258,12 @@ $allSchools = prodGetSchools(false);
   <!-- ── Stat strip ─────────────────────────────────────────────────────────── -->
   <div class="stat-strip">
     <div class="stat-chip">
-      <div class="num"><?= count($people) ?></div>
-      <div class="lbl">Role holders</div>
+      <div class="num"><?= $ecFilled ?> / <?= count(EXEC_ROLES) ?></div>
+      <div class="lbl">EC positions filled</div>
+    </div>
+    <div class="stat-chip">
+      <div class="num"><?= count($ecPeople) ?></div>
+      <div class="lbl">EC members</div>
     </div>
     <div class="stat-chip">
       <div class="num"><?= $totalSiteReps ?></div>
@@ -277,6 +290,50 @@ $allSchools = prodGetSchools(false);
     <?php endif; ?>
   </div>
   <?php endif; ?>
+
+  <!-- ── EC Roster ────────────────────────────────────────────────────────────── -->
+  <div class="section-heading">
+    Executive Committee Roster
+    <?php if ($ecVacant > 0): ?>
+      <span style="font-weight:500;color:#d97706;margin-left:.5rem;"><?= $ecVacant ?> vacant</span>
+    <?php endif; ?>
+  </div>
+
+  <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;overflow:hidden;margin-bottom:1.75rem;">
+    <table style="width:100%;border-collapse:collapse;font-size:.86rem;">
+      <thead><tr style="background:#f8f9fa;">
+        <th style="padding:.55rem 1rem;text-align:left;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);border-bottom:1px solid var(--gray-200);">Position</th>
+        <th style="padding:.55rem 1rem;text-align:left;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);border-bottom:1px solid var(--gray-200);">Name</th>
+        <th style="padding:.55rem 1rem;text-align:left;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);border-bottom:1px solid var(--gray-200);">Email</th>
+      </tr></thead>
+      <tbody>
+        <?php foreach (EXEC_ROLES as $slug => $label):
+          $row = $ecRosterMap[$slug];
+        ?>
+        <tr style="border-bottom:1px solid var(--gray-100);">
+          <td style="padding:.6rem 1rem;font-weight:600;color:var(--gray-700);"><?= htmlspecialchars($label) ?></td>
+          <?php if ($row): ?>
+            <td style="padding:.6rem 1rem;">
+              <strong><?= htmlspecialchars($row['user_name']) ?></strong>
+              <?php
+                // Show a second-role badge if this person also holds another EC role
+                $otherRoles = array_filter($ecRosterMap, function($r) use ($row, $slug) {
+                    return $r !== null && $r['user_email'] === $row['user_email'] && $r['role'] !== $slug;
+                });
+                foreach ($otherRoles as $oSlug => $oRow): ?>
+                <span style="font-size:.7rem;background:#eff6ff;color:#1e40af;border-radius:100px;padding:.1rem .5rem;margin-left:.35rem;font-weight:700;">also <?= htmlspecialchars(EXEC_ROLES[$oSlug] ?? $oSlug) ?></span>
+              <?php endforeach; ?>
+            </td>
+            <td style="padding:.6rem 1rem;font-size:.79rem;color:var(--gray-400);"><?= htmlspecialchars($row['user_email']) ?></td>
+          <?php else: ?>
+            <td style="padding:.6rem 1rem;color:var(--gray-300);font-style:italic;font-size:.84rem;">Vacant</td>
+            <td style="padding:.6rem 1rem;color:var(--gray-200);">&#x2014;</td>
+          <?php endif; ?>
+        </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
 
   <!-- ── Executive & role holders ──────────────────────────────────────────── -->
   <div class="section-heading">Executive &amp; Role Holders</div>
