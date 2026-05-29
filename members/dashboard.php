@@ -166,6 +166,7 @@ if (execIsAdmin($myEmail) && empty($myExecRoleSlugs)) {
         </div>
       </div>
 
+      <?php if (prodIsExec($myEmail) || prodIsTreasurer($myEmail)): ?>
       <div class="doc-section" style="margin-bottom:1.5rem;">
         <h2>LP Expense Tracker</h2>
         <div class="doc-list">
@@ -179,6 +180,7 @@ if (execIsAdmin($myEmail) && empty($myExecRoleSlugs)) {
           </a>
         </div>
       </div>
+      <?php endif; ?>
 
       <div class="doc-section" style="margin-bottom:1.5rem;">
         <h2>Newsletter Archive</h2>
