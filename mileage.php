@@ -90,7 +90,7 @@ function sendNotification(array $claim): void {
              . "Rate:       \$" . number_format($claim['rate'], 2) . "/km\n"
              . "Amount:     \${$amt}\n\n"
              . "View all claims and export CSV:\n"
-             . " . (defined("SITE_URL") ? SITE_URL : "https://bvtu.ca") . "/members/mileage-admin.php\n";
+             . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . "/members/mileage-admin.php\n";
 
     mail(NOTIFY_EMAIL, $subject, $body,
          "From: noreply@bvtu.ca\r\nReply-To: noreply@bvtu.ca\r\nContent-Type: text/plain; charset=UTF-8\r\n");

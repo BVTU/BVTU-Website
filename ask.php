@@ -105,7 +105,7 @@ if (file_exists($caPath)) {
             $hits[] = [
                 'title'       => $art['title'],
                 'content'     => $art['content'],
-                'url'         => ' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/collective-agreement.php',
+                'url'         => (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/collective-agreement.php',
                 'type'        => 'collective-agreement',
                 'members_only'=> false,
             ];
@@ -116,7 +116,7 @@ if (file_exists($caPath)) {
     if ($hits) {
         $sources[] = [
             'title' => 'Collective Agreement (SD54–BVTU)',
-            'url'   => ' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/collective-agreement.php',
+            'url'   => (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/collective-agreement.php',
             'type'  => 'collective-agreement',
         ];
     }
