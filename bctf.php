@@ -45,7 +45,7 @@ $member   = $loggedIn ? getMember() : null;
           </li>
           <li class="has-dropdown"><a href="prod.php">PRO-D</a><ul class="dropdown"><li><a href="prod.php">PRO-D Info</a></li><li><a href="members/prod-dashboard.php">Pro-D Portal</a></li></ul></li>
           <li class="has-dropdown"><a href="health-safety.php">Health &amp; Safety</a><ul class="dropdown"><li><a href="health-safety.php">H&amp;S Resources</a></li><li><a href="https://www.worksafebc.com" target="_blank" rel="noopener">WorkSafe BC</a></li><li><a href="https://bctf.ca/member-services/efap" target="_blank" rel="noopener">EFAP</a></li></ul></li>
-          <li class="has-dropdown"><a href="library.php">Resources</a><ul class="dropdown"><li><a href="library.php">Resource Library</a></li><li><a href="curated.php">Curated Resources</a></li></ul></li><li><a href="newsletter-archive.php">Newsletters</a></li><li class="has-dropdown active"><a href="bctf.php" class="active">BCTF</a><ul class="dropdown"><li><a href="bctf.php">BCTF Resources</a></li><li><a href="https://bctf.ca" target="_blank" rel="noopener">BCTF Website</a></li><li><a href="https://bctf.ca/member-services/benefits-and-services" target="_blank" rel="noopener">Member Benefits</a></li><li><a href="https://bctf.ca/bargaining" target="_blank" rel="noopener">Bargaining</a></li></ul></li>
+          <li class="has-dropdown"><a href="library.php">Resources</a><ul class="dropdown"><li><a href="library.php">Resource Library</a></li><li><a href="curated.php">Curated Resources</a></li></ul></li><li><a href="newsletter-archive.php">Newsletters</a></li><li class="has-dropdown active"><a href="bctf.php" class="active">BCTF</a><ul class="dropdown"><li><a href="bctf.php">BCTF Resources</a></li><li><a href="https://bctf.ca" target="_blank" rel="noopener">BCTF Website</a></li><li><a href="https://www.bctf.ca/topics/services-information/benefits/view-member-discounts-bctf-advantage" target="_blank" rel="noopener">Benefits &amp; Discounts</a></li></ul></li>
           <li><a href="<?= $loggedIn ? '/members/dashboard.php' : 'members/login.php' ?>"
               class="btn btn-primary"
               style="padding:.4rem .9rem;font-size:.88rem;margin-left:.5rem;<?= $loggedIn ? 'background:#1a6b35;border-color:#1a6b35;' : '' ?>">
@@ -88,31 +88,22 @@ $member   = $loggedIn ? getMember() : null;
           <div class="member-page-card-arrow">Visit bctf.ca →</div>
         </a>
 
-        <a href="https://bctf.ca/bargaining/provincial-collective-agreement" target="_blank" rel="noopener" class="member-page-card">
+        <a href="https://www.bctf.ca/docs/default-source/services-guidance/provincial-collective-agreement-2022_20254aa7ce568c65449f8ea5792651628efc.pdf?sfvrsn=bfc28a35_0" target="_blank" rel="noopener" class="member-page-card">
           <div class="member-page-card-icon">
             <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
           </div>
           <h3>Provincial Collective Agreement</h3>
           <p>The current provincial CA setting terms and conditions for all BC public school teachers.</p>
-          <div class="member-page-card-arrow">Read the PCA →</div>
+          <div class="member-page-card-arrow">Read the PCA (PDF) →</div>
         </a>
 
-        <a href="https://bctf.ca/member-services/benefits-and-services" target="_blank" rel="noopener" class="member-page-card">
+        <a href="https://www.bctf.ca/topics/services-information/benefits/view-member-discounts-bctf-advantage" target="_blank" rel="noopener" class="member-page-card">
           <div class="member-page-card-icon">
             <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
           </div>
-          <h3>Member Benefits &amp; Services</h3>
-          <p>Insurance programs, travel discounts, and other benefits available to all BCTF members.</p>
-          <div class="member-page-card-arrow">Explore benefits →</div>
-        </a>
-
-        <a href="https://bctf.ca/bargaining" target="_blank" rel="noopener" class="member-page-card">
-          <div class="member-page-card-icon">
-            <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-          </div>
-          <h3>Bargaining Updates</h3>
-          <p>Latest news on provincial bargaining between the BCTF and BCPSEA.</p>
-          <div class="member-page-card-arrow">Stay informed →</div>
+          <h3>Benefits &amp; Discounts</h3>
+          <p>Member discounts and BCTF Advantage benefits available to all BCTF members.</p>
+          <div class="member-page-card-arrow">View discounts →</div>
         </a>
 
         <a href="https://bctf.ca/pro-d" target="_blank" rel="noopener" class="member-page-card">
@@ -159,7 +150,7 @@ $member   = $loggedIn ? getMember() : null;
           <li><a href="members.php">Members</a></li>
           <li class="has-dropdown"><a href="prod.php">PRO-D</a><ul class="dropdown"><li><a href="prod.php">PRO-D Info</a></li><li><a href="members/prod-dashboard.php">Pro-D Portal</a></li></ul></li>
           <li class="has-dropdown"><a href="health-safety.php">Health &amp; Safety</a><ul class="dropdown"><li><a href="health-safety.php">H&amp;S Resources</a></li><li><a href="https://www.worksafebc.com" target="_blank" rel="noopener">WorkSafe BC</a></li><li><a href="https://bctf.ca/member-services/efap" target="_blank" rel="noopener">EFAP</a></li></ul></li>
-          <li class="has-dropdown"><a href="bctf.php">BCTF</a><ul class="dropdown"><li><a href="bctf.php">BCTF Resources</a></li><li><a href="https://bctf.ca" target="_blank" rel="noopener">BCTF Website</a></li><li><a href="https://bctf.ca/member-services/benefits-and-services" target="_blank" rel="noopener">Member Benefits</a></li><li><a href="https://bctf.ca/bargaining" target="_blank" rel="noopener">Bargaining</a></li></ul></li>
+          <li class="has-dropdown"><a href="bctf.php">BCTF</a><ul class="dropdown"><li><a href="bctf.php">BCTF Resources</a></li><li><a href="https://bctf.ca" target="_blank" rel="noopener">BCTF Website</a></li><li><a href="https://www.bctf.ca/topics/services-information/benefits/view-member-discounts-bctf-advantage" target="_blank" rel="noopener">Benefits &amp; Discounts</a></li></ul></li>
           <li class="has-dropdown"><a href="library.php">Resources</a><ul class="dropdown"><li><a href="library.php">Resource Library</a></li><li><a href="curated.php">Curated Resources</a></li></ul></li><li><a href="newsletter-archive.php">Newsletters</a></li>
           <li><a href="<?= $loggedIn ? '/members/dashboard.php' : 'members/login.php' ?>"
               class="btn btn-primary"
