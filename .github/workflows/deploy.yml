@@ -22,6 +22,7 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           server-dir: /new/
           dangerous-clean-slate: false
+          state-name: .ftp-sync-state-v2.json
           exclude: |
             **/.git*
             **/.git*/**
