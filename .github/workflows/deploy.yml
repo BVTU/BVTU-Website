@@ -1,7 +1,9 @@
 name: Deploy to Hostinger
 
 on:
-  workflow_dispatch: # manual trigger only — auto-deploy disabled until FTP path confirmed
+  push:
+    branches: [ main ]
+  workflow_dispatch: # also allow manual trigger
 
 jobs:
   deploy:
