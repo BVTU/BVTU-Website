@@ -135,7 +135,7 @@ $expensesJson = json_encode(array_values($expenses));
 // Generate a mobile upload token for QR code
 $uploadToken   = lpCreateUploadToken($id, $member['email']);
 $protocol      = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$host          = $_SERVER['HTTP_HOST'] ?? 'new.bvtu.ca';
+$host          = $_SERVER['HTTP_HOST'] ?? 'bvtu.ca';
 $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$uploadToken}";
 ?>
 <!DOCTYPE html>

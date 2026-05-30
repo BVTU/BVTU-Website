@@ -34,7 +34,7 @@ $expenseId  = (int)$db->lastInsertId();
 $token      = expCreateUploadToken($expenseId, $member['email']);
 
 $protocol  = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$host      = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'new.bvtu.ca';
+$host      = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'bvtu.ca';
 $mobileUrl = "{$protocol}://{$host}/members/exp-mobile-receipt.php?token={$token}";
 
 echo json_encode([

@@ -132,7 +132,7 @@ $log .= ((strpos($res['status'], '200') !== false) || (strpos($res['status'], '2
 // Update content here whenever a page's text changes significantly.
 $log .= "Indexing public pages...\n";
 
-$baseUrl = 'https://new.bvtu.ca';
+$baseUrl = ' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '';
 
 $records = [
     [

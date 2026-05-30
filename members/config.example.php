@@ -9,6 +9,10 @@
 //  3. config.php is gitignored — it will NEVER be uploaded to GitHub
 // ============================================================
 
+// ── Site URL (no trailing slash) ──────────────────────────────────────────────
+// Used in email notifications and internal links. Update when switching domains.
+define('SITE_URL', 'https://bvtu.ca');
+
 define('DB_HOST', 'localhost');
 define('DB_NAME', 'your_database_name');   // e.g. u123456789_bvtu
 define('DB_USER', 'your_database_user');   // e.g. u123456789_bvtu

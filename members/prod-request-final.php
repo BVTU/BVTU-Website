@@ -86,7 +86,7 @@ $dates = json_decode($req['request_dates'], true) ?: [];
 // Generate phone QR upload token
 $uploadToken = prodCreateUploadToken($id, $member['email']);
 $protocol    = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$host        = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'new.bvtu.ca';
+$host        = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'bvtu.ca';
 $mobileUrl   = "{$protocol}://{$host}/members/prod-mobile-receipt.php?token={$uploadToken}";
 ?>
 <!DOCTYPE html>

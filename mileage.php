@@ -90,7 +90,7 @@ function sendNotification(array $claim): void {
              . "Rate:       \$" . number_format($claim['rate'], 2) . "/km\n"
              . "Amount:     \${$amt}\n\n"
              . "View all claims and export CSV:\n"
-             . "https://new.bvtu.ca/members/mileage-admin.php\n";
+             . " . (defined("SITE_URL") ? SITE_URL : "https://bvtu.ca") . "/members/mileage-admin.php\n";
 
     mail(NOTIFY_EMAIL, $subject, $body,
          "From: noreply@bvtu.ca\r\nReply-To: noreply@bvtu.ca\r\nContent-Type: text/plain; charset=UTF-8\r\n");
@@ -180,7 +180,7 @@ if ($action === 'delete') {
         $body = "A mileage claim has been deleted by the member.\n\n"
               . "Claim ID: #{$delId}\n"
               . "Name:     {$delName}\n\n"
-              . "View all claims:\nhttps://new.bvtu.ca/members/mileage-admin.php\n";
+              . "View all claims:\n" . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . "/members/mileage-admin.php\n";
         mail(NOTIFY_EMAIL, "Mileage Claim Deleted — {$delName} (#{$delId})", $body,
              "From: noreply@bvtu.ca\r\nReply-To: noreply@bvtu.ca\r\nContent-Type: text/plain; charset=UTF-8\r\n");
 
@@ -233,7 +233,7 @@ if ($action === 'edit') {
               . "Event:      {$editEvent}\n"
               . "Kilometres: " . number_format($editKm, 1) . " km\n"
               . "Amount:     \$" . number_format($editAmount, 2) . "\n\n"
-              . "View all claims:\nhttps://new.bvtu.ca/members/mileage-admin.php\n";
+              . "View all claims:\n" . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . "/members/mileage-admin.php\n";
         mail(NOTIFY_EMAIL, "Mileage Claim Edited — {$editName} (#{$editId})", $body,
              "From: noreply@bvtu.ca\r\nReply-To: noreply@bvtu.ca\r\nContent-Type: text/plain; charset=UTF-8\r\n");
 

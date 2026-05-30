@@ -66,7 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $fromEmail   = defined('CONTACT_EMAIL') ? CONTACT_EMAIL : 'noreply@bvtu.ca';
             $adminName   = $member['name'] ?? $member['email'];
             $curatorName = $cn ?: 'there';
-            $host        = $_SERVER['HTTP_HOST'] ?? 'new.bvtu.ca';
+            $host        = $_SERVER['HTTP_HOST'] ?? 'bvtu.ca';
             $protocol    = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
             $adminUrl    = "{$protocol}://{$host}/members/curated-admin.php";
             $publicUrl   = "{$protocol}://{$host}/curated.php";
