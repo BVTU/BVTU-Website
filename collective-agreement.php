@@ -123,6 +123,10 @@ if (is_dir($docsDir)) {
             <ul class="dropdown">
               <li><a href="documents.php">All Documents</a></li>
               <li><a href="collective-agreement.php" class="active">Collective Agreement</a></li>
+              <li><a href="lous.php">Letters of Understanding</a></li>
+              <li><a href="ca-assistant.php">Contract Assistant</a></li>
+              <li><a href="documents/BVTU-Constitution-and-Bylaws-2026.pdf" target="_blank">Constitution &amp; Bylaws</a></li>
+              <li><a href="calendars.php">School Calendars</a></li>
             </ul>
           </li>
           <li class="has-dropdown">

@@ -140,7 +140,7 @@ $member   = $loggedIn ? getMember() : null;
       <nav class="main-nav" id="main-nav">
         <ul>
           
-          <li class="has-dropdown"><a href="documents.php" class="active">Documents</a><ul class="dropdown"><li><a href="documents.php">All Documents</a></li><li><a href="collective-agreement.php">Collective Agreement</a></li><li><a href="lous.php" class="active">Letters of Understanding</a></li><li><a href="ca-assistant.php">Contract Assistant</a></li></ul></li>
+          <li class="has-dropdown"><a href="documents.php" class="active">Documents</a><ul class="dropdown"><li><a href="documents.php">All Documents</a></li><li><a href="collective-agreement.php">Collective Agreement</a></li><li><a href="lous.php" class="active">Letters of Understanding</a></li><li><a href="ca-assistant.php">Contract Assistant</a></li><li><a href="documents/BVTU-Constitution-and-Bylaws-2026.pdf" target="_blank">Constitution &amp; Bylaws</a></li><li><a href="calendars.php">School Calendars</a></li></ul></li>
 <li class="has-dropdown">
             <a href="members.php">Members</a>
             <ul class="dropdown">
