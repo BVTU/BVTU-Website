@@ -39,7 +39,7 @@ if (is_dir($docsDir)) {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="site-root" content="">
   <title>Collective Agreement 2022–2025 — BVTU</title>
   <meta name="description" content="Download the SD54 Bulkley Valley Collective Agreement 2022–2025. Covers salary, leaves, working conditions, TTOC rights, and more.">

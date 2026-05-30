@@ -78,7 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="site-root" content="">
   <title>Collaboration Grant — BVTU</title>
   <meta name="description" content="The BVTU Collaboration Grant supports mentorship and professional collaboration for SD54 educators. Up to 3 release days per year — apply online.">

@@ -7,7 +7,7 @@ $member   = $loggedIn ? getMember() : null;
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="site-root" content="">
   <title>Release Time &amp; Atrieve Entries — Bulkley Valley Teachers' Union</title>
   <meta name="description" content="How to enter union-paid release time in Atrieve for SD54 teachers — BCTF and BVTU events, codes, approval process.">

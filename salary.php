@@ -7,7 +7,7 @@ $member   = $loggedIn ? getMember() : null;
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="site-root" content="">
   <title>Salary Grids — Bulkley Valley Teachers' Union</title>
   <meta name="description" content="SD54 salary grids for 2024–2028 — view and download annual teacher salary grids for BVTU members.">

@@ -59,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="site-root" content="">
   <title>Contact — Bulkley Valley Teachers' Union</title>
   <meta name="description" content="Contact the Bulkley Valley Teachers' Union. Send a message to union leadership in School District 54.">

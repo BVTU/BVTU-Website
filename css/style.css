@@ -58,8 +58,7 @@ ul { list-style: none; }
   right: 0;
   z-index: 100;
   background: var(--primary);
-  height: calc(var(--hdr-h) + env(safe-area-inset-top, 0px));
-  padding-top: env(safe-area-inset-top, 0px);
+  height: var(--hdr-h);
   box-shadow: 0 2px 8px rgba(0,0,0,.25);
   transition: background .32s ease, box-shadow .32s ease;
 }

@@ -7,7 +7,7 @@ $member   = $loggedIn ? getMember() : null;
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="site-root" content="">
   <title>Health &amp; Dental Benefits — Bulkley Valley Teachers' Union</title>
   <meta name="description" content="Pacific Blue Cross health and dental benefits for SD54 teachers — extended health, dental, prescription drugs, vision, paramedical, and how to make a claim.">

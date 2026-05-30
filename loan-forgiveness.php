@@ -7,7 +7,7 @@ $member   = $loggedIn ? getMember() : null;
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="site-root" content="">
   <title>Canada Student Loan Forgiveness — Bulkley Valley Teachers' Union</title>
   <meta name="description" content="BVTU teachers qualify for up to $30,000 in Canada Student Loan Forgiveness. Houston, Telkwa, and Smithers postal codes are all eligible. Learn how to apply.">

@@ -16,7 +16,7 @@ $resources = curatedGetAll($selBand ?: null, $selSubject ?: null);
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="site-root" content="">
   <title>Curated Resources — Bulkley Valley Teachers' Union</title>
   <meta name="description" content="Hand-picked teaching resources organised by grade band and subject — curated by BVTU educators.">

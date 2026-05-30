@@ -248,7 +248,7 @@ if ($action === 'edit') {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="site-root" content="">
   <title>Mileage Claims — Bulkley Valley Teachers' Union</title>
   <meta name="description" content="Submit your BVTU EC mileage claim for reimbursement.">
