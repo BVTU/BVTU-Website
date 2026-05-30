@@ -834,7 +834,18 @@ body.so-lock { overflow: hidden; }
 @media (max-width: 680px) {
   :root { --hdr-h: 64px; }
 
-  .nav-toggle { display: flex; }
+  /* Tighten header padding so logo + hamburger both fit */
+  .header-inner { padding-left: 1rem; padding-right: 1rem; gap: .25rem; }
+
+  /* Let the logo shrink rather than pushing the hamburger off-screen */
+  .logo { flex-shrink: 1; min-width: 0; gap: .5rem; }
+  .logo img { height: 36px; }
+  .logo-text { min-width: 0; }
+  .logo-name { font-size: .85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .logo-sub  { display: none; }
+
+  /* Hamburger must never shrink or clip */
+  .nav-toggle { display: flex; flex-shrink: 0; }
 
   .main-nav {
     position: fixed;
