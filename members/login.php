@@ -3,6 +3,7 @@ require_once 'auth.php';
 require_once 'db.php';
 
 startSession();
+ensureMembersColumns();
 if (isLoggedIn()) { header('Location: dashboard.php'); exit; }
 
 // Safe redirect: only allow relative paths starting with ../ (root-level pages)
@@ -20,13 +21,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($email && $password) {
         $db   = getDB();
-        $stmt = $db->prepare("SELECT id, name, email, password_hash FROM members WHERE email = ?");
+        $stmt = $db->prepare("SELECT id, name, email, password_hash, must_change_password FROM members WHERE email = ?");
         $stmt->execute([$email]);
         $member = $stmt->fetch();
 
         if ($member && password_verify($password, $member['password_hash'])) {
             loginMember($member);
-            header('Location: ' . ($redirect ?: 'dashboard.php'));
+            if (!empty($member['must_change_password'])) {
+                header('Location: change-password.php?forced=1');
+            } else {
+                header('Location: ' . ($redirect ?: 'dashboard.php'));
+            }
             exit;
         } else {
             $error = 'Incorrect email or password. Please try again.';

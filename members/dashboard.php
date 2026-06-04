@@ -290,10 +290,26 @@ if (execIsAdmin($myEmail) && empty($myExecRoleSlugs)) {
         </div>
       </div>
 
+      <div class="doc-section" style="margin-bottom:1.5rem;">
+        <h2>My Account</h2>
+        <div class="doc-list">
+          <a href="change-password.php" class="doc-item">
+            <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            Change Password
+          </a>
+        </div>
+      </div>
+
       <?php if (execIsAdmin($myEmail) || prodIsExec($myEmail) || expIsAdmin($myEmail)): ?>
       <div class="doc-section" style="margin-bottom:1.5rem;">
         <h2>Administration</h2>
         <div class="doc-list">
+          <?php if (execIsAdmin($myEmail)): ?>
+          <a href="member-manage.php" class="doc-item">
+            <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+            Manage Members
+          </a>
+          <?php endif; ?>
           <a href="roles-overview.php" class="doc-item">
             <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             Executive &amp; Roles Directory
