@@ -14,14 +14,26 @@ if (!$id) { header('Location: lp-dashboard.php'); exit; }
 $voucher = lpGetVoucher($id);
 if (!$voucher) { header('Location: lp-dashboard.php'); exit; }
 
-$isOwner = $voucher['submitted_by_email'] === $member['email'];
-if (!$isOwner && !prodIsExec($member['email'])) { header('Location: lp-dashboard.php'); exit; }
+$isOwner   = $voucher['submitted_by_email'] === $member['email'];
+$isReviewer = lpCanReview($member['email']);
+if (!$isOwner && !prodIsExec($member['email']) && !$isReviewer) {
+    header('Location: lp-dashboard.php');
+    exit;
+}
 
 $grants      = lpGetGrants();
 $budgetLines = lpGetBudgetLines();
 $mileageRate = (float)($voucher['mileage_rate'] ?: LP_MILEAGE_RATE);
 $errors      = [];
 $saved       = false;
+
+// Reviewers (treasurer/VP) see the voucher read-only — they approve via lp-review.php
+$readOnly = $isReviewer && !$isOwner;
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $readOnly) {
+    header('Location: lp-review.php');
+    exit;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $voucherName = trim($_POST['voucher_name'] ?? '');
@@ -273,6 +285,12 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
     </div>
   </div>
 
+  <?php if ($readOnly): ?>
+  <div class="saved-notice" style="background:#eff6ff;border-color:#bfdbfe;color:#1e40af;">
+    &#x1F441; Reviewing as <?= $isTreasurer ? 'Treasurer' : 'Vice-President' ?> — read only.
+    <a href="lp-review.php" style="color:#1e40af;font-weight:700;margin-left:.5rem;">&#x2190; Back to review queue</a>
+  </div>
+  <?php endif; ?>
   <?php if ($saved): ?>
   <div class="saved-notice">&#x2713; Voucher updated successfully.</div>
   <?php endif; ?>
@@ -376,7 +394,9 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
 
   <div class="save-bar">
     <div class="total-display"><span>Voucher Total</span><br><span id="grandTotal">$0.00</span></div>
-    <?php if ($voucher['status'] === 'draft'): ?>
+    <?php if ($readOnly): ?>
+    <a href="lp-review.php" class="btn btn-primary" style="padding:.65rem 1.5rem;font-size:.95rem;">&#x2190; Back to Review Queue</a>
+    <?php elseif ($voucher['status'] === 'draft'): ?>
     <button type="submit" class="btn btn-primary" style="padding:.65rem 1.5rem;font-size:.95rem;">💾 Save Changes</button>
     <?php if (count($expenses) > 0): ?>
     <button type="submit" name="_submit_for_approval" value="1"
@@ -385,7 +405,7 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
       ✅ Submit for Approval
     </button>
     <?php endif; ?>
-    <?php else: ?>
+    <?php elseif ($voucher['status'] !== 'draft'): ?>
     <span style="font-size:.88rem;color:var(--gray-500);font-style:italic;">
       <?php
         $statusLabels = [
