@@ -1,7 +1,9 @@
 name: Deploy to Hostinger
 
 on:
-  workflow_dispatch: # manual fallback only — Hostinger git handles auto-deploy on push
+  push:
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   deploy:
