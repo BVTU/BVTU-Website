@@ -166,6 +166,18 @@ if (execIsAdmin($myEmail) && empty($myExecRoleSlugs)) {
         </div>
       </div>
 
+      <?php if (expIsTreasurer($myEmail) || expIsVP($myEmail)): ?>
+      <div class="doc-section" style="margin-bottom:1.5rem;">
+        <h2>LP Voucher Review</h2>
+        <div class="doc-list">
+          <a href="lp-review.php" class="doc-item">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 12 18 15 15"/><line x1="12" y1="12" x2="12" y2="18"/></svg>
+            LP Voucher Review Queue
+          </a>
+        </div>
+      </div>
+      <?php endif; ?>
+
       <?php if (execIsAdmin($myEmail)): ?>
       <div class="doc-section" style="margin-bottom:1.5rem;">
         <h2>LP Expense Tracker</h2>

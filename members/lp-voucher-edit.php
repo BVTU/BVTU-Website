@@ -6,6 +6,7 @@ requireLogin();
 
 $member = getMember();
 lpEnsureTables();
+lpEnsureApprovalColumns();
 
 $id = (int)($_GET['id'] ?? 0);
 if (!$id) { header('Location: lp-dashboard.php'); exit; }
@@ -118,6 +119,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
         $saved = true;
+
+        // Submit for approval (saves first, then submits)
+        if (!empty($_POST['_submit_for_approval'])) {
+            lpEnsureApprovalColumns();
+            $freshExpenses = lpGetExpenses($id);
+            if (count($freshExpenses) > 0) {
+                $freshVoucher = lpGetVoucher($id);
+                $total = array_sum(array_map('lpRowTotal', $freshExpenses));
+                lpSubmitVoucher($id);
+                lpEmailSubmitted($freshVoucher, $total);
+                header('Location: lp-voucher-edit.php?id=' . $id . '&submitted=1');
+                exit;
+            }
+        }
     }
 }
 
@@ -259,7 +274,12 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
   </div>
 
   <?php if ($saved): ?>
-  <div class="saved-notice">✓ Voucher updated successfully.</div>
+  <div class="saved-notice">&#x2713; Voucher updated successfully.</div>
+  <?php endif; ?>
+  <?php if (isset($_GET['submitted'])): ?>
+  <div class="saved-notice" style="background:#fffbeb;border-color:#fde68a;color:#92400e;">
+    &#x2713; Voucher submitted for approval. The Treasurer has been notified.
+  </div>
   <?php endif; ?>
 
   <?php if ($errors): ?>
@@ -356,7 +376,29 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
 
   <div class="save-bar">
     <div class="total-display"><span>Voucher Total</span><br><span id="grandTotal">$0.00</span></div>
+    <?php if ($voucher['status'] === 'draft'): ?>
     <button type="submit" class="btn btn-primary" style="padding:.65rem 1.5rem;font-size:.95rem;">💾 Save Changes</button>
+    <?php if (count($expenses) > 0): ?>
+    <button type="submit" name="_submit_for_approval" value="1"
+            class="btn btn-primary" style="padding:.65rem 1.5rem;font-size:.95rem;background:#166534;"
+            onclick="return confirm('Save and submit this voucher for Treasurer approval? You will not be able to edit it after submission.')">
+      ✅ Submit for Approval
+    </button>
+    <?php endif; ?>
+    <?php else: ?>
+    <span style="font-size:.88rem;color:var(--gray-500);font-style:italic;">
+      <?php
+        $statusLabels = [
+          'submitted'          => '⏳ Awaiting Treasurer approval',
+          'treasurer_approved' => '⏳ Awaiting VP signature',
+          'vp_approved'        => '✅ Approved — awaiting payment',
+          'paid'               => '✅ Paid',
+          'rejected'           => '❌ Rejected',
+        ];
+        echo $statusLabels[$voucher['status']] ?? ucfirst($voucher['status']);
+      ?>
+    </span>
+    <?php endif; ?>
   </div>
 
   </form>
