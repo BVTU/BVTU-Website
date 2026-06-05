@@ -25,27 +25,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Add new member
     if ($action === 'add_member') {
-        $name     = trim($_POST['name']     ?? '');
-        $email    = strtolower(trim($_POST['email']    ?? ''));
+        $name    = trim($_POST['name']     ?? '');
+        $email   = strtolower(trim($_POST['email']    ?? ''));
+        $empNum  = trim($_POST['employee_number'] ?? '');
         $password = $_POST['password'] ?? '';
 
-        if (!$name || !$email || strlen($password) < 8) {
-            $error = 'Name and email are required; password must be at least 8 characters.';
+        if (!$name || !$email || !$empNum || strlen($password) < 8) {
+            $error = 'Please fill in all required fields. Password must be at least 8 characters.';
         } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $error = 'Please enter a valid email address.';
         } else {
-            $s = getDB()->prepare("SELECT id FROM members WHERE email=?");
-            $s->execute([$email]);
-            if ($s->fetch()) {
-                $error = 'An account with that email already exists.';
+            // Check employee number exists in approved list
+            $s = getDB()->prepare("SELECT employee_number FROM valid_employee_numbers WHERE employee_number=?");
+            $s->execute([$empNum]);
+            if (!$s->fetch()) {
+                $error = 'That employee number was not found. Please check it and try again.';
             } else {
-                $hash = password_hash($password, PASSWORD_DEFAULT);
-                getDB()->prepare(
-                    "INSERT INTO members (name, email, password_hash, must_change_password)
-                     VALUES (?,?,?,1)"
-                )->execute([$name, $email, $hash]);
-                $notice = htmlspecialchars($name) . ' (' . htmlspecialchars($email) . ') added.'
-                        . ' They will be prompted to set a new password on first login.';
+                // Check not already registered
+                $s = getDB()->prepare("SELECT id FROM members WHERE email=? OR employee_number=?");
+                $s->execute([$email, $empNum]);
+                if ($s->fetch()) {
+                    $error = 'An account with that email or employee number already exists.';
+                } else {
+                    $hash = password_hash($password, PASSWORD_DEFAULT);
+                    getDB()->prepare(
+                        "INSERT INTO members (name, email, password_hash, must_change_password, employee_number)
+                         VALUES (?,?,?,1,?)"
+                    )->execute([$name, $email, $hash, $empNum]);
+                    $notice = htmlspecialchars($name) . ' (' . htmlspecialchars($email) . ') added.'
+                            . ' They will be prompted to set a new password on first login.';
+                }
             }
         }
     }
@@ -171,6 +180,11 @@ $members = getDB()->query(
           <label>Email Address *</label>
           <input type="email" name="email" required placeholder="e.g. jane@bctf.ca" autocomplete="off">
         </div>
+      </div>
+      <div class="field" style="max-width:200px;">
+        <label>Employee Number *</label>
+        <input type="text" name="employee_number" required placeholder="e.g. 12345" autocomplete="off">
+        <div class="field-hint">Must be on the approved employee list.</div>
       </div>
       <div class="field" style="max-width:300px;">
         <label>Temporary Password *</label>
