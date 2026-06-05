@@ -17,16 +17,53 @@ $success = false;
 $errors  = [];
 $fields  = ['name' => '', 'email' => '', 'subject' => '', 'message' => ''];
 
+// ── Spam detection ────────────────────────────────────────────────────────────
+function isSpam(string $text): bool {
+    $text = strtolower($text);
+    $keywords = [
+        'seo', 'keyword ranking', 'organic traffic', 'organic growth', 'google ranking',
+        'search engine', 'backlink', 'link building', 'digital marketing', 'lead generation',
+        'high-intent traffic', 'serp', 'domain authority', 'content marketing',
+        'i can help you rank', 'pricing and expected', 'should i send', 'should i share',
+        'crypto', 'bitcoin', 'investment opportunity', 'make money online',
+        'buy followers', 'cheap traffic', 'i noticed your website',
+        'your website is missing', 'compete on google',
+    ];
+    foreach ($keywords as $kw) {
+        if (strpos($text, $kw) !== false) return true;
+    }
+    return false;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Honeypot — bots fill this hidden field
     if (!empty($_POST['website'])) {
-        exit;
+        // Silently pretend it worked
+        $success = true;
+        $fields  = ['name' => '', 'email' => '', 'subject' => '', 'message' => ''];
+        goto render;
+    }
+
+    // Timing check — legitimate users take at least 3 seconds to fill the form
+    $loadTime = (int)($_POST['_lt'] ?? 0);
+    if ($loadTime && (time() - $loadTime) < 3) {
+        $success = true; // silent drop
+        $fields  = ['name' => '', 'email' => '', 'subject' => '', 'message' => ''];
+        goto render;
     }
 
     $fields['name']    = trim($_POST['name']    ?? '');
     $fields['email']   = trim($_POST['email']   ?? '');
     $fields['subject'] = trim($_POST['subject'] ?? '');
     $fields['message'] = trim($_POST['message'] ?? '');
+
+    // Keyword spam filter — silently drop, don't tell the bot it failed
+    $combined = $fields['name'] . ' ' . $fields['subject'] . ' ' . $fields['message'];
+    if (isSpam($combined)) {
+        $success = true;
+        $fields  = ['name' => '', 'email' => '', 'subject' => '', 'message' => ''];
+        goto render;
+    }
 
     // Validate
     if (!$fields['name'])                          $errors[] = 'Please enter your name.';
@@ -54,6 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+render:
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -232,6 +270,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <label for="website">Leave this empty</label>
                 <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
               </div>
+              <!-- Timing token — set by JS when page loads -->
+              <input type="hidden" name="_lt" id="_lt" value="">
+              <script>document.getElementById('_lt').value = Math.floor(Date.now()/1000);</script>
 
               <div class="form-group">
                 <label for="name">Your Name</label>
