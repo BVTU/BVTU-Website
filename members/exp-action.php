@@ -115,6 +115,27 @@ try {
             $msg = 'Status overridden to "' . $newStatus . '".';
             break;
 
+        case 'resend_notification':
+            if (!expIsAdmin($member['email']) && !expIsTreasurer($member['email'])) {
+                throw new RuntimeException('You do not have permission to resend notifications.');
+            }
+            // Re-send the appropriate notification based on current status
+            switch ($exp['status']) {
+                case 'pending':
+                    expEmailSubmitted($exp);
+                    break;
+                case 'signer1_approved':
+                    expEmailSigner1Approved($exp);
+                    break;
+                case 'signer2_approved':
+                    expEmailSigner2Approved($exp);
+                    break;
+                default:
+                    throw new RuntimeException('No notification available for this expense status.');
+            }
+            $msg = 'Notification resent.';
+            break;
+
         default:
             throw new RuntimeException('Unknown action: ' . htmlspecialchars($action));
     }

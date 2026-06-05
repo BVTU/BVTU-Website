@@ -195,6 +195,17 @@ $catLabels = [
       </div>
 
       <a href="exp-view.php?id=<?= (int)$exp['id'] ?>" style="font-size:.82rem;color:var(--gray-500);align-self:flex-start;padding-top:.5rem;">Details &#x2192;</a>
+
+      <!-- Resend notification -->
+      <form method="POST" action="exp-action.php" style="align-self:flex-start;padding-top:.5rem;">
+        <input type="hidden" name="action"     value="resend_notification">
+        <input type="hidden" name="expense_id" value="<?= (int)$exp['id'] ?>">
+        <input type="hidden" name="redirect"   value="exp-treasurer.php">
+        <button type="submit" class="btn" style="padding:.3rem .7rem;font-size:.78rem;color:var(--gray-500);border-color:var(--gray-300);"
+                title="Resend email notification to treasurer">
+          &#x2709; Resend notification
+        </button>
+      </form>
     </div>
   </div>
   <?php endforeach; ?>
