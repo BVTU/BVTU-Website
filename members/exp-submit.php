@@ -156,6 +156,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             expEmailSubmitted($exp);
         }
 
+        // "Submit & add another" lets members file several expenses (e.g. multiple
+        // receipts from one trip) back-to-back without losing their place.
+        if (($_POST['submit_action'] ?? '') === 'add_another') {
+            $params = ['added' => 1, 'ref' => $exp['ref_code'] ?? ''];
+            if ($onBehalfOf !== '' && $onBehalfOf !== '__self__') {
+                $params['on_behalf_of'] = $onBehalfOf;
+            }
+            header('Location: exp-submit.php?' . http_build_query($params));
+            exit;
+        }
+
         header('Location: exp-view.php?id=' . $newId . '&submitted=1');
         exit;
     }
@@ -237,6 +248,10 @@ $catLabels = [
     .or-divider { text-align:center; font-size:.78rem; color:var(--gray-400); font-weight:600; margin:.75rem 0; letter-spacing:.04em; }
 
     .error-summary { background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:.8rem 1rem; margin-bottom:1.25rem; font-size:.88rem; color:#991b1b; }
+    .notice-banner { background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:.8rem 1rem; margin-bottom:1.25rem; font-size:.88rem; color:#166534; }
+    .notice-banner a { color:#166534; font-weight:700; text-decoration:underline; }
+    .submit-row { display:flex; gap:.75rem; flex-wrap:wrap; margin-top:.25rem; }
+    .submit-row .btn { flex:1; min-width:200px; }
   </style>
 </head>
 <body>
@@ -247,13 +262,20 @@ $catLabels = [
     <a class="back-link" href="exp-dashboard.php">&#x2190; My Expenses</a>
   </div>
 
+  <?php if (!empty($_GET['added'])): ?>
+  <div class="notice-banner">
+    &#x2713; Expense <?= !empty($_GET['ref']) ? '<strong>' . htmlspecialchars($_GET['ref']) . '</strong> ' : '' ?>submitted successfully.
+    Add another item below, or head back to <a href="exp-dashboard.php">My Expenses</a> when you're done.
+  </div>
+  <?php endif; ?>
+
   <?php if ($errors): ?>
   <div class="error-summary">
     &#x26A0; Please fix the errors below before submitting.
   </div>
   <?php endif; ?>
 
-  <?php $onBehalfSel = trim($_POST['on_behalf_of'] ?? '__self__'); ?>
+  <?php $onBehalfSel = trim($_POST['on_behalf_of'] ?? $_GET['on_behalf_of'] ?? '__self__'); ?>
   <?php if ($canActOnBehalf): ?>
   <div class="form-card" style="background:#f0fdf4;border-color:#bbf7d0;">
     <p class="section-label" style="margin-top:0;">Submitting For</p>
@@ -408,9 +430,19 @@ $catLabels = [
         <?php endif; ?>
       </div>
 
-      <button type="submit" class="btn btn-primary" style="width:100%;padding:.75rem;font-size:.95rem;margin-top:.25rem;">
-        Submit Expense for Review
-      </button>
+      <div class="submit-row">
+        <button type="submit" name="submit_action" value="finish" class="btn btn-primary" style="padding:.75rem;font-size:.95rem;">
+          Submit Expense for Review
+        </button>
+        <button type="submit" name="submit_action" value="add_another" class="btn btn-outline" style="padding:.75rem;font-size:.95rem;">
+          Submit &amp; Add Another Expense
+        </button>
+      </div>
+      <p class="field-hint" style="margin-top:.6rem;">
+        Filing several receipts (e.g. from one trip)? Use "Submit &amp; Add Another" to
+        send this one in and start the next without losing your place &mdash; each item
+        is reviewed and paid separately.
+      </p>
     </form>
   </div>
 
