@@ -74,7 +74,10 @@ $catLabels = [
 
   <div class="portal-header">
     <h1>Second Signature Queue</h1>
-    <a class="back-link" href="dashboard.php">&#x2190; Dashboard</a>
+    <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:center;">
+      <a href="exp-claim-review.php" class="btn btn-outline" style="padding:.45rem .9rem;font-size:.85rem;">Multi-item Claims &#x2192;</a>
+      <a class="back-link" href="dashboard.php">&#x2190; Dashboard</a>
+    </div>
   </div>
 
   <?php if ($notice): ?>

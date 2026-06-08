@@ -91,6 +91,7 @@ $catLabels = [
     <h1>Treasurer Review Queue</h1>
     <div style="display:flex;gap:.75rem;flex-wrap:wrap;">
       <a class="back-link" href="dashboard.php">&#x2190; Dashboard</a>
+      <a href="exp-claim-review.php" class="btn btn-outline" style="padding:.45rem .9rem;font-size:.85rem;">Multi-item Claims &#x2192;</a>
       <a href="exp-payments.php" class="btn btn-outline" style="padding:.45rem .9rem;font-size:.85rem;">Payment Records</a>
     </div>
   </div>

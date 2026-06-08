@@ -125,6 +125,358 @@ function expCanSubmitOnBehalf(string $email): bool {
     return expIsPresident($email) || expIsVP($email) || expIsTreasurer($email);
 }
 
+// ── Multi-item Expense Claims ("batches") ──────────────────────────────────────
+// A batch groups several individual expense items (each with its own date,
+// category, amount and receipt) into ONE submission. The whole batch goes
+// through a single Treasurer + second-signer approval and a single e-transfer,
+// rather than signing and paying out each receipt separately. This is the
+// preferred way for members to submit several receipts from the same trip
+// or activity (mirrors the LP voucher workflow).
+
+function expBatchEnsureTables(): void {
+    $db = getDB();
+
+    $db->exec("CREATE TABLE IF NOT EXISTS exp_batches (
+        id                  INT AUTO_INCREMENT PRIMARY KEY,
+        ref_code            VARCHAR(20)   NOT NULL UNIQUE,
+        title               VARCHAR(255),
+        user_email          VARCHAR(255)  NOT NULL,
+        user_name           VARCHAR(255)  NOT NULL,
+        submitted_by_email  VARCHAR(255),
+        submitted_by_name   VARCHAR(255),
+        status              VARCHAR(30)   DEFAULT 'draft',
+        signer1_email       VARCHAR(255),
+        signer1_name        VARCHAR(255),
+        signer1_at          DATETIME,
+        signer1_note        TEXT,
+        signer2_email       VARCHAR(255),
+        signer2_name        VARCHAR(255),
+        signer2_at          DATETIME,
+        signer2_note        TEXT,
+        rejected_by_email   VARCHAR(255),
+        rejected_by_name    VARCHAR(255),
+        rejected_at         DATETIME,
+        rejection_note      TEXT,
+        paid_at             DATETIME,
+        paid_by_email       VARCHAR(255),
+        paid_by_name        VARCHAR(255),
+        payment_note        TEXT,
+        submitted_at        DATETIME,
+        created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_user   (user_email),
+        INDEX idx_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $db->exec("CREATE TABLE IF NOT EXISTS exp_batch_items (
+        id                  INT AUTO_INCREMENT PRIMARY KEY,
+        batch_id            INT           NOT NULL,
+        expense_date        DATE,
+        category            VARCHAR(50)   DEFAULT 'other',
+        amount              DECIMAL(10,2) NOT NULL DEFAULT 0,
+        description         TEXT,
+        receipt_path        VARCHAR(500),
+        receipt_filename    VARCHAR(255),
+        extracted_vendor    VARCHAR(255),
+        extracted_date      DATE,
+        extracted_amount    DECIMAL(10,2),
+        extraction_flag     VARCHAR(50),
+        extraction_concerns TEXT,
+        sort_order          INT DEFAULT 0,
+        created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_batch (batch_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    expEnsureTables(); // shares EXP_RECEIPTS_DIR with single-item expenses
+}
+
+function expBatchGenerateRefCode(): string {
+    $year = date('Y');
+    $s = getDB()->prepare("SELECT COUNT(*) FROM exp_batches WHERE ref_code LIKE ?");
+    $s->execute(["BAT-{$year}-%"]);
+    $n = (int)$s->fetchColumn() + 1;
+    return 'BAT-' . $year . '-' . str_pad($n, 4, '0', STR_PAD_LEFT);
+}
+
+function expBatchGet(int $id): ?array {
+    $s = getDB()->prepare("SELECT * FROM exp_batches WHERE id=? LIMIT 1");
+    $s->execute([$id]);
+    $r = $s->fetch();
+    return $r ?: null;
+}
+
+function expBatchGetItems(int $batchId): array {
+    $s = getDB()->prepare("SELECT * FROM exp_batch_items WHERE batch_id=? ORDER BY sort_order, id");
+    $s->execute([$batchId]);
+    return $s->fetchAll();
+}
+
+function expBatchTotal(int $batchId): float {
+    $s = getDB()->prepare("SELECT COALESCE(SUM(amount),0) FROM exp_batch_items WHERE batch_id=?");
+    $s->execute([$batchId]);
+    return (float)$s->fetchColumn();
+}
+
+/**
+ * Get the member's existing draft batch, or create a new one.
+ * $targetEmail/$targetName: who the batch is FOR (may differ from the
+ * logged-in member when an exec submits on someone else's behalf).
+ */
+function expBatchGetOrCreateDraft(string $targetEmail, string $targetName, string $submittedByEmail = '', string $submittedByName = ''): array {
+    $targetEmail = strtolower(trim($targetEmail));
+    $db = getDB();
+
+    $where  = "user_email = ? AND status = 'draft'";
+    $params = [$targetEmail];
+    if ($submittedByEmail) {
+        $where   .= " AND submitted_by_email = ?";
+        $params[] = strtolower(trim($submittedByEmail));
+    } else {
+        $where .= " AND (submitted_by_email IS NULL OR submitted_by_email = '')";
+    }
+
+    $s = $db->prepare("SELECT * FROM exp_batches WHERE {$where} ORDER BY id DESC LIMIT 1");
+    $s->execute($params);
+    $batch = $s->fetch();
+    if ($batch) return $batch;
+
+    $refCode = expBatchGenerateRefCode();
+    $db->prepare(
+        "INSERT INTO exp_batches (ref_code, user_email, user_name, submitted_by_email, submitted_by_name, status)
+         VALUES (?,?,?,?,?,'draft')"
+    )->execute([
+        $refCode,
+        $targetEmail,
+        $targetName,
+        $submittedByEmail ? strtolower(trim($submittedByEmail)) : null,
+        $submittedByName  ?: null,
+    ]);
+
+    return expBatchGet((int)$db->lastInsertId());
+}
+
+function expBatchGetByMember(string $email): array {
+    $s = getDB()->prepare("SELECT * FROM exp_batches WHERE user_email=? ORDER BY created_at DESC");
+    $s->execute([strtolower(trim($email))]);
+    return $s->fetchAll();
+}
+
+function expBatchGetAll(string $status = ''): array {
+    if ($status) {
+        $s = getDB()->prepare("SELECT * FROM exp_batches WHERE status=? ORDER BY submitted_at ASC, created_at ASC");
+        $s->execute([$status]);
+    } else {
+        $s = getDB()->query("SELECT * FROM exp_batches ORDER BY created_at DESC");
+    }
+    return $s->fetchAll();
+}
+
+// ── Batch workflow transitions (mirrors single-item exp workflow) ─────────────
+
+function expBatchSubmit(int $id): void {
+    $b = expBatchGet($id);
+    if (!$b) throw new RuntimeException("Claim #{$id} not found.");
+    if ($b['status'] !== 'draft') throw new RuntimeException("Only draft claims can be submitted.");
+    if (!expBatchGetItems($id)) throw new RuntimeException("Add at least one expense item before submitting.");
+
+    getDB()->prepare(
+        "UPDATE exp_batches SET status='pending', submitted_at=NOW() WHERE id=?"
+    )->execute([$id]);
+}
+
+function expBatchApproveAsSigner1(int $id, string $email, string $name, string $note = ''): void {
+    $b = expBatchGet($id);
+    if (!$b) throw new RuntimeException("Claim #{$id} not found.");
+    if ($b['status'] !== 'pending') {
+        throw new RuntimeException("Cannot approve as Signer 1: claim is not awaiting Treasurer approval (current: {$b['status']}).");
+    }
+    if (!expIsTreasurer($email)) {
+        throw new RuntimeException("Only a Treasurer can approve as Signer 1.");
+    }
+    getDB()->prepare(
+        "UPDATE exp_batches SET status='signer1_approved',
+            signer1_email=?, signer1_name=?, signer1_at=NOW(), signer1_note=?
+         WHERE id=?"
+    )->execute([$email, $name, $note ?: null, $id]);
+}
+
+function expBatchReject(int $id, string $email, string $name, string $note): void {
+    $b = expBatchGet($id);
+    if (!$b) throw new RuntimeException("Claim #{$id} not found.");
+    if (!in_array($b['status'], ['pending', 'signer1_approved'])) {
+        throw new RuntimeException("Cannot reject: claim is not in a rejectable state (current: {$b['status']}).");
+    }
+    if (!expIsTreasurer($email) && !expIsEligibleSigner2($email)) {
+        throw new RuntimeException("You do not have permission to reject this claim.");
+    }
+    if (!$note) throw new RuntimeException("A rejection note is required.");
+
+    getDB()->prepare(
+        "UPDATE exp_batches SET status='rejected',
+            rejected_by_email=?, rejected_by_name=?, rejected_at=NOW(), rejection_note=?
+         WHERE id=?"
+    )->execute([$email, $name, $note, $id]);
+}
+
+function expBatchApproveAsSigner2(int $id, string $email, string $name, string $note = ''): void {
+    $b = expBatchGet($id);
+    if (!$b) throw new RuntimeException("Claim #{$id} not found.");
+    if ($b['status'] !== 'signer1_approved') {
+        throw new RuntimeException("Cannot approve as Signer 2: claim must have Treasurer approval first (current: {$b['status']}).");
+    }
+    if (!expIsEligibleSigner2($email)) {
+        throw new RuntimeException("Only a VP, President, or Admin can approve as Signer 2.");
+    }
+    if ($email === $b['signer1_email']) {
+        throw new RuntimeException("Signer 2 cannot be the same person as Signer 1.");
+    }
+    getDB()->prepare(
+        "UPDATE exp_batches SET status='signer2_approved',
+            signer2_email=?, signer2_name=?, signer2_at=NOW(), signer2_note=?
+         WHERE id=?"
+    )->execute([$email, $name, $note ?: null, $id]);
+}
+
+function expBatchMarkPaid(int $id, string $email, string $name, string $paymentNote): void {
+    $b = expBatchGet($id);
+    if (!$b) throw new RuntimeException("Claim #{$id} not found.");
+    if ($b['status'] !== 'signer2_approved') {
+        throw new RuntimeException("Cannot mark as paid: claim must have both signatures first (current: {$b['status']}).");
+    }
+    if (!expIsTreasurer($email)) {
+        throw new RuntimeException("Only a Treasurer can mark a claim as paid.");
+    }
+    getDB()->prepare(
+        "UPDATE exp_batches SET status='paid',
+            paid_at=NOW(), paid_by_email=?, paid_by_name=?, payment_note=?
+         WHERE id=?"
+    )->execute([$email, $name, $paymentNote ?: null, $id]);
+}
+
+// ── Batch email notifications ──────────────────────────────────────────────────
+
+function _expBatchDetailBox(array $b, float $total, int $itemCount): string {
+    $html  = '<div class="detail-box">';
+    $html .= '<div class="row"><span class="lbl">Reference</span><span class="val">' . htmlspecialchars($b['ref_code']) . '</span></div>';
+    $html .= '<div class="row"><span class="lbl">Member</span><span class="val">' . htmlspecialchars($b['user_name']) . '</span></div>';
+    $html .= '<div class="row"><span class="lbl">Email</span><span class="val">' . htmlspecialchars($b['user_email']) . '</span></div>';
+    if (!empty($b['submitted_by_email']) && strtolower($b['submitted_by_email']) !== strtolower($b['user_email'])) {
+        $html .= '<div class="row"><span class="lbl">Submitted by</span><span class="val">' . htmlspecialchars($b['submitted_by_name'] ?: $b['submitted_by_email']) . ' (on behalf of member)</span></div>';
+    }
+    if (!empty($b['title'])) {
+        $html .= '<div class="row"><span class="lbl">Description</span><span class="val">' . htmlspecialchars($b['title']) . '</span></div>';
+    }
+    $html .= '<div class="row"><span class="lbl">Items</span><span class="val">' . $itemCount . ' receipt' . ($itemCount === 1 ? '' : 's') . '</span></div>';
+    $html .= '<div class="row"><span class="lbl">Total</span><span class="val">$' . number_format($total, 2) . '</span></div>';
+    $html .= '</div>';
+    return $html;
+}
+
+function expBatchEmailSubmitted(array $b, float $total, int $itemCount): void {
+    $onBehalf = !empty($b['submitted_by_email'])
+             && strtolower($b['submitted_by_email']) !== strtolower($b['user_email']);
+
+    $intro = $onBehalf
+        ? '<p>An expense claim was submitted on your behalf by <strong>' . htmlspecialchars($b['submitted_by_name'] ?: $b['submitted_by_email']) . '</strong> and is awaiting review by the BVTU Treasurer.</p>'
+        : '<p>Your expense claim has been submitted and is awaiting review by the BVTU Treasurer.</p>';
+    $body = $intro
+          . _expBatchDetailBox($b, $total, $itemCount)
+          . '<p>You will receive an email when it has been reviewed.</p>'
+          . '<p><a class="btn" href="' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/members/exp-claim-view.php?id=' . (int)$b['id'] . '">View Your Claim</a></p>';
+    expNotify(
+        $b['user_email'],
+        'Expense Claim Submitted — ' . $b['ref_code'],
+        _expHtmlWrap('Expense Claim Submitted', $body)
+    );
+
+    $submitterLine = $onBehalf
+        ? '<p><strong>' . htmlspecialchars($b['submitted_by_name'] ?: $b['submitted_by_email']) . '</strong> has submitted a new expense claim on behalf of <strong>' . htmlspecialchars($b['user_name']) . '</strong> (' . $itemCount . ' item' . ($itemCount === 1 ? '' : 's') . ', $' . number_format($total, 2) . ') for your review.</p>'
+        : '<p><strong>' . htmlspecialchars($b['user_name']) . '</strong> has submitted a new expense claim (' . $itemCount . ' item' . ($itemCount === 1 ? '' : 's') . ', $' . number_format($total, 2) . ') for your review.</p>';
+    $treasurerBody = $submitterLine
+                   . _expBatchDetailBox($b, $total, $itemCount)
+                   . '<p><a class="btn" href="' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/members/exp-claim-review.php">Review in Expense Portal</a></p>';
+    foreach (expGetTreasurerEmails() as $email) {
+        expNotify(
+            $email,
+            'New Expense Claim for Review — ' . $b['ref_code'],
+            _expHtmlWrap('New Expense Claim Submitted', $treasurerBody)
+        );
+    }
+}
+
+function expBatchEmailSigner1Approved(array $b, float $total, int $itemCount): void {
+    $body = '<p>The following expense claim has been approved by the BVTU Treasurer (<strong>' . htmlspecialchars($b['signer1_name']) . '</strong>) and now requires a second signature.</p>'
+          . _expBatchDetailBox($b, $total, $itemCount)
+          . '<p><a class="btn" href="' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/members/exp-claim-review.php">Review &amp; Sign in Expense Portal</a></p>';
+    foreach (expGetSigner2Emails() as $email) {
+        expNotify(
+            $email,
+            'Second Signature Required — ' . $b['ref_code'],
+            _expHtmlWrap('Second Signature Required', $body)
+        );
+    }
+}
+
+function expBatchEmailSigner2Approved(array $b, float $total, int $itemCount): void {
+    $memberBody = '<p>Great news! Your expense claim has been authorized by two signing officers.</p>'
+                . _expBatchDetailBox($b, $total, $itemCount)
+                . '<p>The Treasurer will send a single <strong>e-transfer</strong> for the full amount to <strong>' . htmlspecialchars($b['user_email']) . '</strong> shortly. Use <code>' . htmlspecialchars($b['ref_code']) . '</code> as the reference if prompted.</p>'
+                . '<p><a class="btn" href="' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/members/exp-claim-view.php?id=' . (int)$b['id'] . '">View Your Claim</a></p>';
+    expNotify(
+        $b['user_email'],
+        'Expense Claim Authorized — ' . $b['ref_code'] . ' — E-transfer coming',
+        _expHtmlWrap('Expense Claim Authorized — Payment Coming', $memberBody)
+    );
+
+    $treasurerBody = '<p>This expense claim has received both required signatures and is <strong>ready for payment</strong>.</p>'
+                   . _expBatchDetailBox($b, $total, $itemCount)
+                   . '<div class="detail-box" style="background:#f0fdf4;border-color:#bbf7d0;">'
+                   . '<div class="row"><span class="lbl">Send e-transfer to</span><span class="val">' . htmlspecialchars($b['user_email']) . '</span></div>'
+                   . '<div class="row"><span class="lbl">Amount</span><span class="val">$' . number_format($total, 2) . '</span></div>'
+                   . '<div class="row"><span class="lbl">Message / Ref</span><span class="val">' . htmlspecialchars($b['ref_code']) . '</span></div>'
+                   . '</div>'
+                   . '<p><a class="btn" href="' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/members/exp-claim-review.php">Open Treasurer Dashboard</a></p>';
+    foreach (expGetTreasurerEmails() as $email) {
+        expNotify(
+            $email,
+            'Ready to Pay — ' . $b['ref_code'],
+            _expHtmlWrap('Expense Claim Ready for Payment', $treasurerBody)
+        );
+    }
+}
+
+function expBatchEmailRejected(array $b): void {
+    $body = '<p>Your expense claim has been rejected.</p>'
+          . '<div class="detail-box">'
+          . '<div class="row"><span class="lbl">Reference</span><span class="val">' . htmlspecialchars($b['ref_code']) . '</span></div>'
+          . '<div class="row"><span class="lbl">Rejected by</span><span class="val">' . htmlspecialchars($b['rejected_by_name'] ?? '—') . '</span></div>'
+          . '<div class="row"><span class="lbl">Reason</span><span class="val">' . htmlspecialchars($b['rejection_note'] ?? '—') . '</span></div>'
+          . '</div>'
+          . '<p>If you have questions, please contact the BVTU Treasurer.</p>'
+          . '<p><a class="btn" href="' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/members/exp-claim-view.php?id=' . (int)$b['id'] . '">View Your Claim</a></p>';
+    expNotify(
+        $b['user_email'],
+        'Expense Claim Rejected — ' . $b['ref_code'],
+        _expHtmlWrap('Expense Claim Rejected', $body)
+    );
+}
+
+function expBatchEmailPaid(array $b, float $total): void {
+    $body = '<p>Your expense claim payment has been sent!</p>'
+          . '<div class="detail-box">'
+          . '<div class="row"><span class="lbl">Reference</span><span class="val">' . htmlspecialchars($b['ref_code']) . '</span></div>'
+          . '<div class="row"><span class="lbl">Amount</span><span class="val">$' . number_format($total, 2) . '</span></div>'
+          . '<div class="row"><span class="lbl">Paid by</span><span class="val">' . htmlspecialchars($b['paid_by_name'] ?? '—') . '</span></div>'
+          . '<div class="row"><span class="lbl">Date</span><span class="val">' . ($b['paid_at'] ? date('F j, Y', strtotime($b['paid_at'])) : '—') . '</span></div>'
+          . '</div>'
+          . '<p>Watch for an Interac e-transfer for the full amount. Use <code>' . htmlspecialchars($b['ref_code']) . '</code> as the reference if asked.</p>'
+          . '<p><a class="btn" href="' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/members/exp-claim-view.php?id=' . (int)$b['id'] . '">View Your Claim</a></p>';
+    expNotify(
+        $b['user_email'],
+        'Expense Claim Paid — ' . $b['ref_code'],
+        _expHtmlWrap('Payment Sent', $body)
+    );
+}
+
 // ── Ref code generation ────────────────────────────────────────────────────────
 function expGenerateRefCode(): string {
     $year = date('Y');

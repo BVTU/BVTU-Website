@@ -8,8 +8,19 @@ require_once __DIR__ . '/exp-db.php';
 requireLogin();
 $member = getMember();
 expEnsureTables();
+expBatchEnsureTables();
 
 $expenses = expGetByMember($member['email']);
+$claims   = expBatchGetByMember($member['email']);
+
+$claimStatusLabels = [
+    'draft'             => ['label' => 'Draft — not yet submitted', 'color' => '#6b7280', 'bg' => '#f3f4f6'],
+    'pending'           => ['label' => 'Awaiting Treasurer',        'color' => '#92400e', 'bg' => '#fffbeb'],
+    'signer1_approved'  => ['label' => 'Awaiting 2nd Signature',    'color' => '#1e40af', 'bg' => '#eff6ff'],
+    'signer2_approved'  => ['label' => 'Payment Authorized',        'color' => '#166534', 'bg' => '#f0fdf4'],
+    'paid'              => ['label' => 'Paid',                      'color' => '#166534', 'bg' => '#f0fdf4'],
+    'rejected'          => ['label' => 'Rejected',                  'color' => '#991b1b', 'bg' => '#fef2f2'],
+];
 
 // Summary counts
 $counts = ['pending' => 0, 'review' => 0, 'paid' => 0, 'rejected' => 0];
@@ -26,6 +37,21 @@ foreach ($expenses as $exp) {
         $counts['paid']++;
         $totalPaid += (float)$exp['amount'];
     } elseif ($exp['status'] === 'rejected') {
+        $counts['rejected']++;
+    }
+}
+foreach ($claims as $claim) {
+    if ($claim['status'] === 'draft') continue;
+    if (in_array($claim['status'], ['pending', 'signer1_approved', 'signer2_approved'], true)) {
+        if ($claim['status'] === 'pending') {
+            $counts['pending']++;
+        } else {
+            $counts['review']++;
+        }
+    } elseif ($claim['status'] === 'paid') {
+        $counts['paid']++;
+        $totalPaid += expBatchTotal((int)$claim['id']);
+    } elseif ($claim['status'] === 'rejected') {
         $counts['rejected']++;
     }
 }
@@ -102,7 +128,7 @@ $statusLabels = [
     <h1>My Expenses</h1>
     <div style="display:flex;gap:.75rem;flex-wrap:wrap;">
       <a href="dashboard.php" class="back-link" style="display:flex;align-items:center;">&#x2190; Dashboard</a>
-      <a href="exp-submit.php" class="btn btn-primary" style="padding:.5rem 1rem;font-size:.9rem;">+ Submit New Expense</a>
+      <a href="exp-submit.php" class="btn btn-primary" style="padding:.5rem 1rem;font-size:.9rem;">+ Submit Expense Claim</a>
     </div>
   </div>
 
@@ -129,6 +155,62 @@ $statusLabels = [
       <div class="lbl">Total Received</div>
     </div>
   </div>
+
+  <!-- Expense Claims (multi-item — preferred way to submit) -->
+  <?php if ($claims): ?>
+  <div class="table-wrap" style="margin-bottom:1.5rem;">
+    <div class="table-toolbar">
+      <h2>Expense Claims</h2>
+      <span style="font-size:.8rem;color:var(--gray-400);">Each claim can bundle several receipts — one approval, one e-transfer.</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Ref</th>
+          <th>Claim</th>
+          <th>Items</th>
+          <th>Total</th>
+          <th class="col-status">Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php foreach ($claims as $claim):
+          $cl    = $claimStatusLabels[$claim['status']] ?? ['label' => $claim['status'], 'color' => '#555', 'bg' => '#eee'];
+          $cTotal = expBatchTotal((int)$claim['id']);
+          $cItems = expBatchGetItems((int)$claim['id']);
+          $cAuth  = $claim['status'] === 'signer2_approved';
+        ?>
+        <tr<?= $cAuth ? ' class="row-authorized"' : '' ?>>
+          <td><span class="ref-code"><?= htmlspecialchars($claim['ref_code']) ?></span></td>
+          <td class="desc-cell">
+            <span class="desc-trunc" title="<?= htmlspecialchars($claim['title'] ?: 'Untitled claim') ?>">
+              <?= htmlspecialchars($claim['title'] ?: 'Untitled claim') ?>
+            </span>
+          </td>
+          <td><?= count($cItems) ?></td>
+          <td><strong>$<?= number_format($cTotal, 2) ?></strong></td>
+          <td class="col-status">
+            <span class="status-badge" style="background:<?= $cl['bg'] ?>;color:<?= $cl['color'] ?>;">
+              <?= htmlspecialchars($cl['label']) ?>
+            </span>
+            <?php if ($cAuth): ?>
+            <div class="payment-info">&#x1F4B8; E-transfer coming</div>
+            <?php endif; ?>
+          </td>
+          <td class="action-links">
+            <?php if ($claim['status'] === 'draft'): ?>
+            <a href="exp-submit.php?id=<?= (int)$claim['id'] ?>">Continue editing</a>
+            <?php else: ?>
+            <a href="exp-claim-view.php?id=<?= (int)$claim['id'] ?>">View</a>
+            <?php endif; ?>
+          </td>
+        </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
+  <?php endif; ?>
 
   <!-- Expenses table -->
   <?php
