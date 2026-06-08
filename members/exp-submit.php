@@ -8,10 +8,22 @@ require_once __DIR__ . '/exp-db.php';
 requireLogin();
 $member = getMember();
 expEnsureTables();
+expEnsureOnBehalfColumns();
 
 $errors    = [];
 $submitted = false;
 $newId     = 0;
+
+// ── "Submit on behalf of" — President, VP, Treasurer only (signing authority) ──
+$canActOnBehalf = expCanSubmitOnBehalf($member['email']);
+$onBehalfMembers = [];
+if ($canActOnBehalf) {
+    $onBehalfMembers = getDB()->prepare(
+        "SELECT name, email FROM members WHERE email <> ? ORDER BY name"
+    );
+    $onBehalfMembers->execute([strtolower(trim($member['email']))]);
+    $onBehalfMembers = $onBehalfMembers->fetchAll();
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $expenseDate  = trim($_POST['expense_date']      ?? '');
@@ -27,6 +39,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $exConcerns   = trim($_POST['ext_concerns']      ?? '');
     $noReceipt    = isset($_POST['no_receipt']);
     $draftId      = (int)($_POST['draft_expense_id'] ?? 0);
+    $onBehalfOf   = trim($_POST['on_behalf_of'] ?? '');
+
+    // Resolve who this expense is actually for (default: the logged-in member)
+    $targetEmail      = $member['email'];
+    $targetName       = $member['name'];
+    $submittedByEmail = '';
+    $submittedByName  = '';
+
+    if ($canActOnBehalf && $onBehalfOf !== '' && $onBehalfOf !== '__self__') {
+        $obStmt = getDB()->prepare("SELECT name, email FROM members WHERE email=?");
+        $obStmt->execute([strtolower(trim($onBehalfOf))]);
+        $onBehalfMember = $obStmt->fetch();
+        if (!$onBehalfMember) {
+            $errors['on_behalf_of'] = 'Please choose a valid member to submit on behalf of.';
+        } else {
+            $targetEmail      = $onBehalfMember['email'];
+            $targetName       = $onBehalfMember['name'];
+            $submittedByEmail = $member['email'];
+            $submittedByName  = $member['name'];
+        }
+    }
 
     // Validate
     if (!$expenseDate || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $expenseDate)) {
@@ -54,8 +87,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'concerns' => $exConcerns ?: null,
         ];
 
-        // If draft exists and belongs to this user, UPDATE it; otherwise INSERT new row
-        if ($draftId > 0) {
+        // If draft exists and belongs to this user, UPDATE it; otherwise INSERT new row.
+        // (Drafts are created via the phone QR flow under the logged-in user's own
+        // account, so the draft-reuse path only applies to self-submissions.)
+        if ($draftId > 0 && !$submittedByEmail) {
             $checkStmt = getDB()->prepare(
                 "SELECT id FROM exp_expenses WHERE id=? AND user_email=? AND status='draft'"
             );
@@ -102,15 +137,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $newId = $draftId;
         } else {
             $newId = expCreate(
-                $member['email'],
-                $member['name'],
+                $targetEmail,
+                $targetName,
                 $expenseDate,
                 $category,
                 (float)$amount,
                 $description,
                 $savedPath,
                 $savedPath ? ($origName ?: '') : '',
-                $scanData
+                $scanData,
+                $submittedByEmail,
+                $submittedByName
             );
         }
 
@@ -213,6 +250,36 @@ $catLabels = [
   <?php if ($errors): ?>
   <div class="error-summary">
     &#x26A0; Please fix the errors below before submitting.
+  </div>
+  <?php endif; ?>
+
+  <?php $onBehalfSel = trim($_POST['on_behalf_of'] ?? '__self__'); ?>
+  <?php if ($canActOnBehalf): ?>
+  <div class="form-card" style="background:#f0fdf4;border-color:#bbf7d0;">
+    <p class="section-label" style="margin-top:0;">Submitting For</p>
+    <div class="field" style="margin-bottom:0;">
+      <label for="on_behalf_of">Who is this expense for?</label>
+      <select name="on_behalf_of" id="on_behalf_of" form="expForm"
+        class="<?= isset($errors['on_behalf_of']) ? 'err' : '' ?>">
+        <option value="__self__" <?= ($onBehalfSel === '' || $onBehalfSel === '__self__') ? 'selected' : '' ?>>
+          Myself (<?= htmlspecialchars($member['name']) ?>)
+        </option>
+        <?php foreach ($onBehalfMembers as $m): ?>
+        <option value="<?= htmlspecialchars($m['email']) ?>"
+          <?= (strtolower($onBehalfSel) === strtolower($m['email'])) ? 'selected' : '' ?>>
+          <?= htmlspecialchars($m['name']) ?> &mdash; <?= htmlspecialchars($m['email']) ?>
+        </option>
+        <?php endforeach; ?>
+      </select>
+      <?php if (isset($errors['on_behalf_of'])): ?>
+      <div class="field-err"><?= htmlspecialchars($errors['on_behalf_of']) ?></div>
+      <?php endif; ?>
+      <div class="field-hint">
+        As an executive with signing authority (President, VP, or Treasurer) you can submit
+        a reimbursement claim for another member &mdash; for example, if they asked you to
+        file it for them. The member will be notified and the claim will show who submitted it.
+      </div>
+    </div>
   </div>
   <?php endif; ?>
 

@@ -93,6 +93,36 @@ function expEnsureTables(): void {
     if (!file_exists($htaccess)) {
         file_put_contents($htaccess, "Require all denied\n");
     }
+
+    expEnsureOnBehalfColumns();
+}
+
+// ── "Submitted on behalf of" columns ───────────────────────────────────────────
+function expEnsureOnBehalfColumns(): void {
+    static $done = false;
+    if ($done) return;
+    $done = true;
+    $cols = [
+        'submitted_by_email' => "VARCHAR(255)",
+        'submitted_by_name'  => "VARCHAR(255)",
+    ];
+    foreach ($cols as $col => $type) {
+        try {
+            $exists = getDB()->query(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='exp_expenses' AND COLUMN_NAME='{$col}'"
+            )->fetchColumn();
+            if (!$exists) {
+                getDB()->exec("ALTER TABLE exp_expenses ADD COLUMN {$col} {$type}");
+            }
+        } catch (Exception $e) { /* already exists */ }
+    }
+}
+
+// Can this person submit an expense on behalf of another member?
+// Limited to those with signing authority: President, VP, Treasurer.
+function expCanSubmitOnBehalf(string $email): bool {
+    return expIsPresident($email) || expIsVP($email) || expIsTreasurer($email);
 }
 
 // ── Ref code generation ────────────────────────────────────────────────────────
@@ -169,17 +199,20 @@ function expCreate(
     string $description,
     string $receiptPath = '',
     string $receiptFilename = '',
-    array $scanData = []
+    array $scanData = [],
+    string $submittedByEmail = '',
+    string $submittedByName = ''
 ): int {
     $db      = getDB();
     $refCode = expGenerateRefCode();
+    expEnsureOnBehalfColumns();
 
     $db->prepare(
         "INSERT INTO exp_expenses
          (ref_code, user_email, user_name, expense_date, category, amount, description,
           receipt_path, receipt_filename, extracted_vendor, extracted_date, extracted_amount,
-          extraction_flag, extraction_concerns, status)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'pending')"
+          extraction_flag, extraction_concerns, submitted_by_email, submitted_by_name, status)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'pending')"
     )->execute([
         $refCode,
         strtolower(trim($userEmail)),
@@ -197,6 +230,8 @@ function expCreate(
             : null,
         $scanData['flag']     ?? null,
         $scanData['concerns'] ?? null,
+        $submittedByEmail ? strtolower(trim($submittedByEmail)) : null,
+        $submittedByName  ?: null,
     ]);
 
     return (int)$db->lastInsertId();
@@ -528,6 +563,9 @@ function _expDetailBox(array $exp): string {
     $html .= '<div class="row"><span class="lbl">Reference</span><span class="val">' . htmlspecialchars($exp['ref_code']) . '</span></div>';
     $html .= '<div class="row"><span class="lbl">Member</span><span class="val">' . htmlspecialchars($exp['user_name']) . '</span></div>';
     $html .= '<div class="row"><span class="lbl">Email</span><span class="val">' . htmlspecialchars($exp['user_email']) . '</span></div>';
+    if (!empty($exp['submitted_by_email']) && strtolower(trim($exp['submitted_by_email'])) !== strtolower(trim($exp['user_email']))) {
+        $html .= '<div class="row"><span class="lbl">Submitted by</span><span class="val">' . htmlspecialchars($exp['submitted_by_name'] ?: $exp['submitted_by_email']) . ' (on behalf of member)</span></div>';
+    }
     $html .= '<div class="row"><span class="lbl">Date</span><span class="val">' . htmlspecialchars($exp['expense_date']) . '</span></div>';
     $html .= '<div class="row"><span class="lbl">Category</span><span class="val">' . htmlspecialchars($catLabel) . '</span></div>';
     $html .= '<div class="row"><span class="lbl">Amount</span><span class="val">$' . number_format((float)$exp['amount'], 2) . '</span></div>';
@@ -537,8 +575,14 @@ function _expDetailBox(array $exp): string {
 }
 
 function expEmailSubmitted(array $exp): void {
+    $onBehalf = !empty($exp['submitted_by_email'])
+             && strtolower(trim($exp['submitted_by_email'])) !== strtolower(trim($exp['user_email']));
+
     // To member
-    $body = '<p>Your expense reimbursement has been submitted and is awaiting review by the BVTU Treasurer.</p>'
+    $intro = $onBehalf
+        ? '<p>An expense reimbursement was submitted on your behalf by <strong>' . htmlspecialchars($exp['submitted_by_name'] ?: $exp['submitted_by_email']) . '</strong> and is awaiting review by the BVTU Treasurer.</p>'
+        : '<p>Your expense reimbursement has been submitted and is awaiting review by the BVTU Treasurer.</p>';
+    $body = $intro
           . _expDetailBox($exp)
           . '<p>You will receive an email when it has been reviewed.</p>';
     expNotify(
@@ -548,7 +592,10 @@ function expEmailSubmitted(array $exp): void {
     );
 
     // To treasurers
-    $treasurerBody = '<p><strong>' . htmlspecialchars($exp['user_name']) . '</strong> has submitted a new expense reimbursement for your review.</p>'
+    $submitterLine = $onBehalf
+        ? '<p><strong>' . htmlspecialchars($exp['submitted_by_name'] ?: $exp['submitted_by_email']) . '</strong> has submitted a new expense reimbursement on behalf of <strong>' . htmlspecialchars($exp['user_name']) . '</strong> for your review.</p>'
+        : '<p><strong>' . htmlspecialchars($exp['user_name']) . '</strong> has submitted a new expense reimbursement for your review.</p>';
+    $treasurerBody = $submitterLine
                    . _expDetailBox($exp)
                    . '<p><a class="btn" href="' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/members/exp-treasurer.php">Review in Expense Portal</a></p>';
     foreach (expGetTreasurerEmails() as $email) {

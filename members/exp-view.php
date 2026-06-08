@@ -239,6 +239,12 @@ $rejected  = $exp['status'] === 'rejected';
       <span class="detail-lbl">Member</span>
       <span class="detail-val"><?= htmlspecialchars($exp['user_name']) ?> &lt;<?= htmlspecialchars($exp['user_email']) ?>&gt;</span>
     </div>
+    <?php if (!empty($exp['submitted_by_email']) && strtolower($exp['submitted_by_email']) !== strtolower($exp['user_email'])): ?>
+    <div class="detail-row">
+      <span class="detail-lbl">Submitted by</span>
+      <span class="detail-val"><?= htmlspecialchars($exp['submitted_by_name'] ?: $exp['submitted_by_email']) ?> <em style="color:var(--gray-400);font-style:italic;">(on behalf of member)</em></span>
+    </div>
+    <?php endif; ?>
     <div class="detail-row">
       <span class="detail-lbl">Date</span>
       <span class="detail-val"><?= htmlspecialchars($exp['expense_date']) ?></span>

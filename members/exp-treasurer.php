@@ -123,6 +123,9 @@ $catLabels = [
           <?= htmlspecialchars($exp['user_email']) ?> &middot;
           <?= htmlspecialchars($exp['expense_date']) ?> &middot;
           <?= htmlspecialchars($catLabels[$exp['category']] ?? ucfirst($exp['category'])) ?>
+          <?php if (!empty($exp['submitted_by_email']) && strtolower($exp['submitted_by_email']) !== strtolower($exp['user_email'])): ?>
+          &middot; <span style="color:var(--gray-400);">submitted by <?= htmlspecialchars($exp['submitted_by_name'] ?: $exp['submitted_by_email']) ?></span>
+          <?php endif; ?>
         </div>
       </div>
       <div class="exp-amount">
