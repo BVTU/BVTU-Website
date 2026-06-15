@@ -533,8 +533,9 @@ function lpEmailPaid(array $v, float $total): void {
 
 function lpGetExpensesByGrant(int $grantId): array {
     $s = getDB()->prepare(
-        "SELECT e.expense_date, e.description, e.travel_km, e.travel_amt,
+        "SELECT e.id, e.expense_date, e.description, e.travel_km, e.travel_amt,
                 e.meals, e.gifts, e.misc, e.office, e.phone,
+                e.receipt_path, e.receipt_filename,
                 v.name AS voucher_name, v.voucher_number, v.id AS voucher_id, v.status AS voucher_status
          FROM lp_expenses e
          JOIN lp_vouchers v ON v.id = e.voucher_id

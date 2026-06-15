@@ -314,7 +314,10 @@ $grantSumJson      = json_encode(array_values($grantSum));
     </div>
     <div class="gmodal-foot">
       <span class="total-line" id="gmodal-count"></span>
-      <span class="total-amt" id="gmodal-total"></span>
+      <div style="display:flex;align-items:center;gap:1rem;">
+        <a id="gmodal-export" class="btn btn-outline" style="padding:.4rem .9rem;font-size:.82rem;" href="#" target="_blank">⬇ Export Receipts (ZIP)</a>
+        <span class="total-amt" id="gmodal-total"></span>
+      </div>
     </div>
   </div>
 </div>
@@ -339,6 +342,11 @@ function openGrantModal(grantId) {
     document.getElementById('gmodal-sub').textContent   = meta
         ? '$' + parseFloat(meta.spent).toFixed(2) + ' spent of $' + parseFloat(meta.budget).toFixed(2) + ' budget'
         : '';
+
+    const hasReceipts = rows.some(e => e.receipt_path);
+    const exportLink  = document.getElementById('gmodal-export');
+    exportLink.href = 'lp-export-receipts.php?grant_id=' + grantId;
+    exportLink.style.display = hasReceipts ? 'inline-flex' : 'none';
 
     const tbody  = document.getElementById('gmodal-rows');
     const empty  = document.getElementById('gmodal-empty');
