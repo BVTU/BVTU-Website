@@ -17,7 +17,8 @@ $docsDir   = __DIR__ . '/documents/';
 if (is_dir($docsDir)) {
     foreach (scandir($docsDir) as $f) {
         if (strtolower(substr($f, -4)) === '.pdf' &&
-            preg_match('/collective|agreement|\bCA\b/i', $f)) {
+            preg_match('/collective|agreement|\bCA\b/i', $f) &&
+            !preg_match('/provincial/i', $f)) {
             $pdfFile   = $f;
             $pdfUrl    = 'documents/' . $f;
             $pdfExists = true;
@@ -182,6 +183,24 @@ if (is_dir($docsDir)) {
               PDF upload coming soon. Use Ask AI below to find specific article information in the meantime.
             </p>
           <?php endif; ?>
+        </div>
+      </div>
+
+      <div class="ca-download-card" style="margin-top:1.5rem;">
+        <div class="ca-download-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="32" height="32">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="12" y1="12" x2="12" y2="18"/>
+            <polyline points="9 15 12 18 15 15"/>
+          </svg>
+        </div>
+        <div class="ca-download-body">
+          <h2>Provincial Collective Agreement 2025–2029</h2>
+          <p>The provincial collective agreement between the BC Teachers' Federation and the BC Public School Employers' Association, setting common terms and conditions for all BC public school teachers.</p>
+          <a href="documents/provincial-collective-agreement-2025-2029.pdf" class="btn btn-primary" download>
+            Download PDF
+          </a>
         </div>
       </div>
 
