@@ -145,6 +145,17 @@ function lpEnsureTables(): void {
         foreach (LP_BUDGET_LINES_SEED as $b) $ins->execute([$b['name'], $b['budget'], $yr]);
     }
 
+    $db->exec("CREATE TABLE IF NOT EXISTS lp_grant_submissions (
+        id                 INT AUTO_INCREMENT PRIMARY KEY,
+        grant_id           INT NOT NULL,
+        submitted_at       DATETIME NOT NULL,
+        submitted_by_email VARCHAR(255) NOT NULL,
+        submitted_by_name  VARCHAR(255) NOT NULL,
+        note               VARCHAR(500),
+        created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_grant (grant_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
     // Mobile upload tokens (no time-based expiry — token is valid until voucher is finalized)
     $db->exec("CREATE TABLE IF NOT EXISTS lp_upload_tokens (
         id          INT AUTO_INCREMENT PRIMARY KEY,
@@ -535,7 +546,7 @@ function lpGetExpensesByGrant(int $grantId): array {
     $s = getDB()->prepare(
         "SELECT e.id, e.expense_date, e.description, e.travel_km, e.travel_amt,
                 e.meals, e.gifts, e.misc, e.office, e.phone,
-                e.receipt_path, e.receipt_filename,
+                e.receipt_path, e.receipt_filename, e.created_at,
                 v.name AS voucher_name, v.voucher_number, v.id AS voucher_id, v.status AS voucher_status
          FROM lp_expenses e
          JOIN lp_vouchers v ON v.id = e.voucher_id
@@ -544,6 +555,36 @@ function lpGetExpensesByGrant(int $grantId): array {
     );
     $s->execute([$grantId]);
     return $s->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/** Most recent "submitted to BCTF" record for a grant, or null if never submitted */
+function lpGetGrantSubmission(int $grantId): ?array {
+    $s = getDB()->prepare(
+        "SELECT * FROM lp_grant_submissions WHERE grant_id=? ORDER BY submitted_at DESC LIMIT 1"
+    );
+    $s->execute([$grantId]);
+    $row = $s->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+
+/** Record that a grant's receipts have been submitted to BCTF */
+function lpMarkGrantSubmitted(int $grantId, string $email, string $name, string $note = ''): void {
+    getDB()->prepare(
+        "INSERT INTO lp_grant_submissions (grant_id, submitted_at, submitted_by_email, submitted_by_name, note)
+         VALUES (?, NOW(), ?, ?, ?)"
+    )->execute([$grantId, $email, $name, $note]);
+}
+
+/** Remove the most recent "submitted" record for a grant (undo) */
+function lpUnmarkGrantSubmitted(int $grantId): void {
+    $s = getDB()->prepare(
+        "SELECT id FROM lp_grant_submissions WHERE grant_id=? ORDER BY submitted_at DESC LIMIT 1"
+    );
+    $s->execute([$grantId]);
+    $id = $s->fetchColumn();
+    if ($id) {
+        getDB()->prepare("DELETE FROM lp_grant_submissions WHERE id=?")->execute([(int)$id]);
+    }
 }
 
 function lpDeleteVoucher(int $id): void {

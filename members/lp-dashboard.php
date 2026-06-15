@@ -22,13 +22,31 @@ $totalBudget = array_sum(array_column($grantSum, 'budget'));
 // Filter budget lines to only those with activity or budget > 0
 $activeBl = array_filter($budgetSum, fn($b) => $b['budget'] > 0 || $b['spent'] > 0);
 
-// Pre-load transactions for each grant that has spending (for the drill-down modal)
+// Pre-load transactions for each grant that has spending (for the drill-down modal),
+// and work out whether anything has changed since the grant was last sent to BCTF.
 $grantExpenses = [];
-foreach ($grantSum as $g) {
+foreach ($grantSum as &$g) {
+    $g['submission']         = lpGetGrantSubmission($g['id']);
+    $g['outstanding_count']  = 0;
+    $g['outstanding_total']  = 0;
+
     if ($g['spent'] > 0) {
-        $grantExpenses[$g['id']] = lpGetExpensesByGrant($g['id']);
+        $expenses = lpGetExpensesByGrant($g['id']);
+        $grantExpenses[$g['id']] = $expenses;
+
+        $cutoff = $g['submission'] ? strtotime($g['submission']['submitted_at']) : null;
+        foreach ($expenses as $e) {
+            if ($cutoff === null || strtotime($e['created_at']) > $cutoff) {
+                $g['outstanding_count']++;
+                $g['outstanding_total'] += lpRowTotal($e);
+            }
+        }
     }
 }
+unset($g);
+
+$needsSubmission = array_filter($grantSum, fn($g) => $g['spent'] > 0 && $g['outstanding_count'] > 0);
+
 $grantExpensesJson = json_encode($grantExpenses);
 $grantSumJson      = json_encode(array_values($grantSum));
 ?>
@@ -58,8 +76,17 @@ $grantSumJson      = json_encode(array_values($grantSum));
     .hero-stat .lbl { font-size: .73rem; opacity: .7; margin-bottom: .1rem; }
     .hero-stat .val { font-size: 1.2rem; font-weight: 800; }
 
+    /* BCTF submission banner */
+    .bctf-banner { background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; font-size: .88rem; color: #92400e; }
+    .bctf-banner ul { margin: .5rem 0 0; padding-left: 1.25rem; }
+    .bctf-banner li { margin-bottom: .15rem; }
+    .bctf-banner a { color: #92400e; font-weight: 700; text-decoration: underline; }
+
     /* Grant cards */
     .grant-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: .85rem; margin-bottom: 2rem; }
+    .bctf-status { font-size: .7rem; font-weight: 700; border-radius: 6px; padding: .2rem .5rem; margin-bottom: .6rem; display: inline-block; }
+    .bctf-status-ok  { background: #f0fdf4; color: #166534; }
+    .bctf-status-due { background: #fef2f2; color: #991b1b; }
     .grant-card { background: #fff; border: 1px solid var(--gray-200); border-radius: 10px; padding: 1rem 1.15rem; transition: border-color .15s, box-shadow .15s; }
     .grant-card.has-spend { cursor: pointer; }
     .grant-card.has-spend:hover { border-color: var(--primary); box-shadow: 0 2px 12px rgba(26,107,53,.1); }
@@ -88,6 +115,13 @@ $grantSumJson      = json_encode(array_values($grantSum));
     .gmodal-close { background: none; border: none; font-size: 1.5rem; line-height: 1; cursor: pointer; color: var(--gray-400); padding: .1rem .3rem; flex-shrink: 0; }
     .gmodal-close:hover { color: var(--gray-700); }
     .gmodal-body { overflow-y: auto; flex: 1; padding: 0; }
+    .gmodal-submission { padding: .85rem 1.4rem; border-top: 1px solid var(--gray-100); display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; flex-shrink: 0; }
+    .gsub-status { font-size: .82rem; font-weight: 700; }
+    .gsub-status.ok  { color: #166534; }
+    .gsub-status.due { color: #991b1b; }
+    .gsub-note { border: 1px solid var(--gray-300); border-radius: 7px; padding: .4rem .6rem; font-size: .82rem; font-family: inherit; min-width: 180px; }
+    .gsub-note:focus { outline: none; border-color: var(--primary); }
+    .gsub-undo { font-size: .78rem; color: var(--gray-500); text-decoration: underline; background: none; border: none; cursor: pointer; padding: 0; }
     .gmodal-foot { padding: .85rem 1.4rem; border-top: 1px solid var(--gray-100); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; background: #f8fafc; border-radius: 0 0 16px 16px; }
     .gmodal-foot .total-line { font-size: .85rem; color: var(--gray-500); }
     .gmodal-foot .total-amt  { font-size: 1.2rem; font-weight: 900; color: var(--primary); }
@@ -144,6 +178,17 @@ $grantSumJson      = json_encode(array_values($grantSum));
   </div>
   <?php endif; ?>
 
+  <?php if ($notice = $_GET['notice'] ?? ''): ?>
+  <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;font-size:.88rem;color:#166534;font-weight:600;">
+    ✓ <?= htmlspecialchars($notice) ?>
+  </div>
+  <?php endif; ?>
+  <?php if ($error = $_GET['error'] ?? ''): ?>
+  <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;font-size:.88rem;color:#991b1b;font-weight:600;">
+    ⚠ <?= htmlspecialchars($error) ?>
+  </div>
+  <?php endif; ?>
+
   <div class="portal-header">
     <div>
       <h1>LP Expense Tracker</h1>
@@ -178,6 +223,18 @@ $grantSumJson      = json_encode(array_values($grantSum));
     </div>
   </div>
 
+  <?php if ($needsSubmission): ?>
+  <div class="bctf-banner">
+    <strong>⚠ BCTF submission outstanding</strong> — the following grant<?= count($needsSubmission) !== 1 ? 's have' : ' has' ?> receipts not yet sent to the BCTF:
+    <ul>
+      <?php foreach ($needsSubmission as $g): ?>
+      <li><a href="javascript:void(0)" onclick="openGrantModal(<?= $g['id'] ?>)"><?= htmlspecialchars($g['name']) ?></a>
+        — <?= $g['outstanding_count'] ?> receipt<?= $g['outstanding_count'] != 1 ? 's' : '' ?> ($<?= number_format($g['outstanding_total'], 2) ?>)<?= $g['submission'] ? ' since last submission' : '' ?></li>
+      <?php endforeach; ?>
+    </ul>
+  </div>
+  <?php endif; ?>
+
   <!-- Grant summary -->
   <p class="section-title">BCTF Grants</p>
   <div class="grant-grid">
@@ -185,10 +242,17 @@ $grantSumJson      = json_encode(array_values($grantSum));
       $pct      = $g['pct'];
       $class    = $pct >= 100 ? 'over' : ($pct >= 80 ? 'warn' : '');
       $hasSpend = $g['spent'] > 0;
+      $sentOk   = $hasSpend && $g['outstanding_count'] === 0 && $g['submission'];
+      $needsSub = $hasSpend && $g['outstanding_count'] > 0;
     ?>
     <div class="grant-card <?= $hasSpend ? 'has-spend' : '' ?>"
          <?= $hasSpend ? 'onclick="openGrantModal('.$g['id'].')" title="Click to view transactions"' : '' ?>>
       <div class="name"><?= htmlspecialchars($g['name']) ?></div>
+      <?php if ($sentOk): ?>
+      <div class="bctf-status bctf-status-ok">✓ Sent to BCTF — <?= date('M j, Y', strtotime($g['submission']['submitted_at'])) ?></div>
+      <?php elseif ($needsSub): ?>
+      <div class="bctf-status bctf-status-due">⚠ Not yet sent to BCTF</div>
+      <?php endif; ?>
       <div class="bar-wrap">
         <div class="bar <?= $class ?>" style="width:<?= min(100, $pct) ?>%;"></div>
       </div>
@@ -312,6 +376,16 @@ $grantSumJson      = json_encode(array_values($grantSum));
         <div id="gmodal-empty" class="gmodal-empty" style="display:none;">No expenses for this grant yet.</div>
       </div>
     </div>
+    <div class="gmodal-submission" id="gmodal-submission">
+      <div class="gsub-status" id="gsub-status"></div>
+      <form method="POST" action="lp-grant-action.php" id="gsub-form" style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;">
+        <input type="hidden" name="grant_id" id="gsub-grant-id" value="">
+        <input type="hidden" name="action" id="gsub-action" value="mark_submitted">
+        <input type="hidden" name="redirect" value="lp-dashboard.php">
+        <input type="text" name="note" id="gsub-note" class="gsub-note" placeholder="Optional note (e.g. confirmation #)">
+        <button type="submit" class="btn btn-primary" id="gsub-btn" style="padding:.4rem .9rem;font-size:.82rem;">Mark as Submitted to BCTF</button>
+      </form>
+    </div>
     <div class="gmodal-foot">
       <span class="total-line" id="gmodal-count"></span>
       <div style="display:flex;align-items:center;gap:1rem;">
@@ -347,6 +421,44 @@ function openGrantModal(grantId) {
     const exportLink  = document.getElementById('gmodal-export');
     exportLink.href = 'lp-export-receipts.php?grant_id=' + grantId;
     exportLink.style.display = hasReceipts ? 'inline-flex' : 'none';
+
+    // BCTF submission status
+    const statusEl = document.getElementById('gsub-status');
+    const noteEl   = document.getElementById('gsub-note');
+    const actionEl = document.getElementById('gsub-action');
+    const btnEl    = document.getElementById('gsub-btn');
+    document.getElementById('gsub-grant-id').value = grantId;
+    noteEl.value = '';
+
+    if (!meta || meta.spent <= 0) {
+        statusEl.className = 'gsub-status';
+        statusEl.textContent = '';
+        noteEl.style.display = 'none';
+        btnEl.style.display = 'none';
+    } else {
+        actionEl.value = 'mark_submitted';
+        noteEl.style.display = '';
+        btnEl.style.display = '';
+
+        if (meta.outstanding_count === 0 && meta.submission) {
+            const d = new Date(meta.submission.submitted_at.replace(' ', 'T'));
+            statusEl.className = 'gsub-status ok';
+            statusEl.innerHTML = '✓ Sent to BCTF on ' + d.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})
+                + ' by ' + escH(meta.submission.submitted_by_name)
+                + (meta.submission.note ? ' — "' + escH(meta.submission.note) + '"' : '')
+                + ' &nbsp;<button type="button" class="gsub-undo" onclick="undoGrantSubmission()">Undo</button>';
+            btnEl.textContent = 'Re-mark as Submitted';
+        } else if (meta.submission) {
+            statusEl.className = 'gsub-status due';
+            statusEl.textContent = '⚠ ' + meta.outstanding_count + ' new receipt' + (meta.outstanding_count != 1 ? 's' : '')
+                + ' ($' + parseFloat(meta.outstanding_total).toFixed(2) + ') since last submission';
+            btnEl.textContent = 'Mark as Submitted to BCTF';
+        } else {
+            statusEl.className = 'gsub-status due';
+            statusEl.textContent = '⚠ Not yet sent to BCTF';
+            btnEl.textContent = 'Mark as Submitted to BCTF';
+        }
+    }
 
     const tbody  = document.getElementById('gmodal-rows');
     const empty  = document.getElementById('gmodal-empty');
@@ -405,6 +517,12 @@ function closeGrantModal(e) {
 
 function escH(s) {
     return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function undoGrantSubmission() {
+    if (!confirm('Undo the most recent "Submitted to BCTF" record for this grant?')) return;
+    document.getElementById('gsub-action').value = 'unmark_submitted';
+    document.getElementById('gsub-form').submit();
 }
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { document.getElementById('gmodal-backdrop').classList.remove('open'); document.body.style.overflow = ''; } });
