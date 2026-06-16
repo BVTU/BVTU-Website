@@ -25,15 +25,6 @@ if (is_dir($docsDir)) {
             break;
         }
     }
-    // Fallback: just grab the first PDF in the folder
-    if (!$pdfExists) {
-        foreach (scandir($docsDir) as $f) {
-            if (strtolower(substr($f, -4)) === '.pdf') {
-                $pdfFile = $f; $pdfUrl = 'documents/' . $f; $pdfExists = true;
-                break;
-            }
-        }
-    }
 }
 ?>
 <!DOCTYPE html>
