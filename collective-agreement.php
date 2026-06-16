@@ -166,8 +166,8 @@ if (is_dir($docsDir)) {
           <h2>SD54 Collective Agreement 2022–2025</h2>
           <p>The full collective agreement between the BC Teachers' Federation / Bulkley Valley Teachers' Union and the Board of Education, School District No. 54.</p>
           <?php if ($pdfExists): ?>
-            <a href="<?= htmlspecialchars($pdfUrl) ?>" class="btn btn-primary" download>
-              Download PDF
+            <a href="<?= htmlspecialchars($pdfUrl) ?>" class="btn btn-primary" target="_blank" rel="noopener">
+              View PDF
             </a>
           <?php else: ?>
             <p style="color:var(--gray-500);font-size:.88rem;font-style:italic;">
@@ -189,8 +189,8 @@ if (is_dir($docsDir)) {
         <div class="ca-download-body">
           <h2>Provincial Collective Agreement 2025–2029</h2>
           <p>The provincial collective agreement between the BC Teachers' Federation and the BC Public School Employers' Association, setting common terms and conditions for all BC public school teachers.</p>
-          <a href="documents/provincial-collective-agreement-2025-2029.pdf" class="btn btn-primary" download>
-            Download PDF
+          <a href="documents/provincial-collective-agreement-2025-2029.pdf" class="btn btn-primary" target="_blank" rel="noopener">
+            View PDF
           </a>
         </div>
       </div>
