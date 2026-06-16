@@ -18,10 +18,12 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-$action   = $_POST['action']   ?? '';
-$batchId  = (int)($_POST['batch_id'] ?? 0);
-$note     = trim($_POST['note'] ?? '');
-$redirect = $_POST['redirect'] ?? 'exp-claim-review.php';
+$action      = $_POST['action']        ?? '';
+$batchId     = (int)($_POST['batch_id'] ?? 0);
+$note        = trim($_POST['note']         ?? '');
+$paymentRef  = trim($_POST['payment_ref']  ?? '');
+$paymentDate = trim($_POST['payment_date'] ?? '');
+$redirect    = $_POST['redirect'] ?? 'exp-claim-review.php';
 
 // Whitelist redirect targets
 if (!preg_match('#^exp-claim-(review|view)\.php(\?.*)?$#', $redirect)) {
@@ -88,7 +90,8 @@ try {
             if (!expIsTreasurer($member['email'])) {
                 throw new RuntimeException('Only the Treasurer can mark a claim as paid.');
             }
-            expBatchMarkPaid($batchId, $member['email'], $member['name'], $note);
+            expEnsurePaymentColumns();
+            expBatchMarkPaid($batchId, $member['email'], $member['name'], $note, $paymentRef, $paymentDate);
             $b = expBatchGet($batchId);
             expBatchEmailPaid($b, $total);
             $msg = 'Claim marked as paid. The member has been notified.';

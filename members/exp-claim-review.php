@@ -218,7 +218,17 @@ function _expClaimBadge(string $status): string {
         <input type="hidden" name="batch_id" value="<?= (int)$b['id'] ?>">
         <input type="hidden" name="redirect" value="exp-claim-review.php">
         <div>
-          <textarea class="note-input" name="note" placeholder="e-Transfer confirmation # or note (optional)&hellip;" style="width:280px;min-height:50px;"></textarea><br>
+          <div style="display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:.4rem;">
+            <div>
+              <label style="font-size:.75rem;color:#6b7280;display:block;margin-bottom:.2rem;">Payment date</label>
+              <input type="date" name="payment_date" value="<?= date('Y-m-d') ?>" style="border:1px solid #d1d5db;border-radius:6px;padding:.35rem .5rem;font-size:.83rem;">
+            </div>
+            <div style="flex:1;min-width:160px;">
+              <label style="font-size:.75rem;color:#6b7280;display:block;margin-bottom:.2rem;">Cheque # or e-transfer ref</label>
+              <input type="text" name="payment_ref" placeholder="e.g. Cheque #1042 or ET-abc123" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:.35rem .5rem;font-size:.83rem;box-sizing:border-box;">
+            </div>
+          </div>
+          <textarea class="note-input" name="note" placeholder="Optional note&hellip;" style="width:280px;min-height:40px;"></textarea><br>
           <button type="submit" class="btn-paid" style="margin-top:.35rem;">&#x2713; Mark as Paid &mdash; Single E-Transfer Sent</button>
         </div>
       </form>

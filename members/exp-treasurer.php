@@ -93,6 +93,7 @@ $catLabels = [
       <a class="back-link" href="dashboard.php">&#x2190; Dashboard</a>
       <a href="exp-claim-review.php" class="btn btn-outline" style="padding:.45rem .9rem;font-size:.85rem;">Multi-item Claims &#x2192;</a>
       <a href="exp-payments.php" class="btn btn-outline" style="padding:.45rem .9rem;font-size:.85rem;">Payment Records</a>
+      <a href="treasurer-ledger.php" class="btn btn-outline" style="padding:.45rem .9rem;font-size:.85rem;background:#1a2e1a;color:#fff;border-color:#1a2e1a;">📒 Unified Ledger</a>
     </div>
   </div>
 
@@ -256,7 +257,17 @@ $catLabels = [
         Mark as Paid
       </button>
       <div id="paid-form-<?= $exp['id'] ?>" class="mark-paid-form">
-        <textarea class="note-input" name="note" placeholder="e-Transfer confirmation # or note&hellip;"></textarea>
+        <div style="display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:.4rem;">
+          <div>
+            <label style="font-size:.75rem;color:var(--gray-500);display:block;margin-bottom:.2rem;">Payment date</label>
+            <input type="date" name="payment_date" value="<?= date('Y-m-d') ?>" style="border:1px solid var(--gray-300);border-radius:6px;padding:.35rem .5rem;font-size:.83rem;">
+          </div>
+          <div style="flex:1;min-width:160px;">
+            <label style="font-size:.75rem;color:var(--gray-500);display:block;margin-bottom:.2rem;">Cheque # or e-transfer ref</label>
+            <input type="text" name="payment_ref" placeholder="e.g. Cheque #1042 or ET-abc123" style="width:100%;border:1px solid var(--gray-300);border-radius:6px;padding:.35rem .5rem;font-size:.83rem;box-sizing:border-box;">
+          </div>
+        </div>
+        <textarea class="note-input" name="note" placeholder="Optional note&hellip;" style="min-height:48px;"></textarea>
         <button type="submit" class="btn btn-primary" style="margin-top:.4rem;padding:.45rem .9rem;font-size:.85rem;">
           &#x2713; Confirm Payment Sent
         </button>

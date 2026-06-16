@@ -275,6 +275,8 @@ function lpEnsureApprovalColumns(): void {
         'paid_by_email'      => "VARCHAR(255)",
         'paid_by_name'       => "VARCHAR(255)",
         'payment_note'       => "TEXT",
+        'payment_ref'        => "VARCHAR(255)",
+        'payment_date'       => "DATE",
     ];
     foreach ($cols as $col => $type) {
         try {
@@ -435,15 +437,16 @@ function lpRejectVoucher(int $id, string $email, string $name, string $note): vo
     )->execute([$email, $name, $note, $id]);
 }
 
-function lpMarkPaid(int $id, string $email, string $name, string $note): void {
+function lpMarkPaid(int $id, string $email, string $name, string $note, string $paymentRef = '', string $paymentDate = ''): void {
     $v = lpGetVoucher($id);
     if (!$v) throw new RuntimeException("Voucher not found.");
     if ($v['status'] !== 'vp_approved') throw new RuntimeException("Voucher must have both signatures before marking paid.");
     if (!lpCanSign1($email)) throw new RuntimeException("Only the Treasurer can mark a voucher as paid.");
+    $pd = ($paymentDate && preg_match('/^\d{4}-\d{2}-\d{2}$/', $paymentDate)) ? $paymentDate : date('Y-m-d');
     getDB()->prepare(
         "UPDATE lp_vouchers SET status='paid',
-         paid_at=NOW(), paid_by_email=?, paid_by_name=?, payment_note=? WHERE id=?"
-    )->execute([$email, $name, $note ?: null, $id]);
+         paid_at=NOW(), paid_by_email=?, paid_by_name=?, payment_note=?, payment_ref=?, payment_date=? WHERE id=?"
+    )->execute([$email, $name, $note ?: null, $paymentRef ?: null, $pd, $id]);
 }
 
 // ── Email notifications ───────────────────────────────────────────────────────

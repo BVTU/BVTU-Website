@@ -105,6 +105,7 @@ function _lpExpenseTotal(int $voucherId): float {
       <a class="back-link" href="lp-dashboard.php">&#x2190; LP Dashboard</a>
       <h1 style="margin-top:.3rem;">LP Voucher Review</h1>
     </div>
+    <a href="treasurer-ledger.php" style="background:#1a2e1a;color:#fff;border:none;border-radius:8px;padding:.5rem 1rem;font-size:.85rem;font-weight:700;text-decoration:none;">📒 Unified Ledger</a>
   </div>
 
   <?php if ($notice): ?><div class="notice">&#x2713; <?= $notice ?></div><?php endif; ?>
@@ -206,8 +207,17 @@ function _lpExpenseTotal(int $voucherId): float {
         <input type="hidden" name="voucher_id" value="<?= (int)$v['id'] ?>">
         <input type="hidden" name="redirect"   value="lp-review.php">
         <div>
-          <textarea class="note-input" name="note" placeholder="Payment note (optional) — e.g. e-transfer reference&hellip;"
-                    style="width:280px;min-height:50px;"></textarea>
+          <div style="display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:.4rem;">
+            <div>
+              <label style="font-size:.75rem;color:#6b7280;display:block;margin-bottom:.2rem;">Payment date</label>
+              <input type="date" name="payment_date" value="<?= date('Y-m-d') ?>" style="border:1px solid #d1d5db;border-radius:6px;padding:.35rem .5rem;font-size:.83rem;">
+            </div>
+            <div style="flex:1;min-width:160px;">
+              <label style="font-size:.75rem;color:#6b7280;display:block;margin-bottom:.2rem;">Cheque # or e-transfer ref</label>
+              <input type="text" name="payment_ref" placeholder="e.g. Cheque #1042 or ET-abc123" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:.35rem .5rem;font-size:.83rem;box-sizing:border-box;">
+            </div>
+          </div>
+          <textarea class="note-input" name="note" placeholder="Optional note&hellip;" style="width:280px;min-height:40px;"></textarea>
           <br>
           <button type="submit" class="btn-paid" style="margin-top:.35rem;">
             &#x2713; Mark as Paid

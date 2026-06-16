@@ -14,10 +14,12 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-$action   = $_POST['action']   ?? '';
-$expId    = (int)($_POST['expense_id'] ?? 0);
-$note     = trim($_POST['note'] ?? '');
-$redirect = $_POST['redirect'] ?? 'exp-treasurer.php';
+$action      = $_POST['action']        ?? '';
+$expId       = (int)($_POST['expense_id'] ?? 0);
+$note        = trim($_POST['note']         ?? '');
+$paymentRef  = trim($_POST['payment_ref']  ?? '');
+$paymentDate = trim($_POST['payment_date'] ?? '');
+$redirect    = $_POST['redirect'] ?? 'exp-treasurer.php';
 
 // Sanitise redirect — only allow relative paths in the members dir
 if (!preg_match('/^[a-zA-Z0-9_\-]+\.php(\?[^<>"]*)?$/', $redirect)) {
@@ -90,7 +92,8 @@ try {
             if (!expIsTreasurer($member['email'])) {
                 throw new RuntimeException('Only a Treasurer can mark an expense as paid.');
             }
-            expMarkPaid($expId, $member['email'], $member['name'], $note);
+            expEnsurePaymentColumns();
+            expMarkPaid($expId, $member['email'], $member['name'], $note, $paymentRef, $paymentDate);
             $exp = expGet($expId);
             expEmailPaid($exp);
             $msg = 'Expense marked as paid. Member has been notified.';

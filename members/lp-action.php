@@ -17,9 +17,11 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $action    = $_POST['action']     ?? '';
-$voucherId = (int)($_POST['voucher_id'] ?? 0);
-$note      = trim($_POST['note'] ?? '');
-$redirect  = $_POST['redirect'] ?? 'lp-dashboard.php';
+$voucherId   = (int)($_POST['voucher_id'] ?? 0);
+$note        = trim($_POST['note']         ?? '');
+$paymentRef  = trim($_POST['payment_ref']  ?? '');
+$paymentDate = trim($_POST['payment_date'] ?? '');
+$redirect    = $_POST['redirect'] ?? 'lp-dashboard.php';
 
 // Whitelist redirect
 if (!preg_match('#^lp-[a-z\-]+\.php(\?.*)?$#', $redirect)) {
@@ -84,7 +86,8 @@ try {
             if (!lpCanSign1($member['email'])) {
                 throw new RuntimeException('Only the Treasurer can mark a voucher as paid.');
             }
-            lpMarkPaid($voucherId, $member['email'], $member['name'], $note);
+            lpEnsureApprovalColumns();
+            lpMarkPaid($voucherId, $member['email'], $member['name'], $note, $paymentRef, $paymentDate);
             $v = lpGetVoucher($voucherId);
             lpEmailPaid($v, $total);
             $msg = 'Voucher marked as paid. The Local President has been notified.';

@@ -97,6 +97,31 @@ function expEnsureTables(): void {
     expEnsureOnBehalfColumns();
 }
 
+// ── Payment tracking columns (payment_ref, payment_date) ───────────────────────
+function expEnsurePaymentColumns(): void {
+    static $done = false;
+    if ($done) return;
+    $done = true;
+    $tables = ['exp_expenses', 'exp_batches'];
+    $cols   = [
+        'payment_ref'  => "VARCHAR(255)",
+        'payment_date' => "DATE",
+    ];
+    foreach ($tables as $table) {
+        foreach ($cols as $col => $type) {
+            try {
+                $exists = getDB()->query(
+                    "SELECT COUNT(*) FROM information_schema.COLUMNS
+                     WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='{$table}' AND COLUMN_NAME='{$col}'"
+                )->fetchColumn();
+                if (!$exists) {
+                    getDB()->exec("ALTER TABLE {$table} ADD COLUMN {$col} {$type}");
+                }
+            } catch (Exception $e) { /* already exists */ }
+        }
+    }
+}
+
 // ── "Submitted on behalf of" columns ───────────────────────────────────────────
 function expEnsureOnBehalfColumns(): void {
     static $done = false;
@@ -336,7 +361,7 @@ function expBatchApproveAsSigner2(int $id, string $email, string $name, string $
     )->execute([$email, $name, $note ?: null, $id]);
 }
 
-function expBatchMarkPaid(int $id, string $email, string $name, string $paymentNote): void {
+function expBatchMarkPaid(int $id, string $email, string $name, string $paymentNote, string $paymentRef = '', string $paymentDate = ''): void {
     $b = expBatchGet($id);
     if (!$b) throw new RuntimeException("Claim #{$id} not found.");
     if ($b['status'] !== 'signer2_approved') {
@@ -345,11 +370,12 @@ function expBatchMarkPaid(int $id, string $email, string $name, string $paymentN
     if (!expIsTreasurer($email)) {
         throw new RuntimeException("Only a Treasurer can mark a claim as paid.");
     }
+    $pd = ($paymentDate && preg_match('/^\d{4}-\d{2}-\d{2}$/', $paymentDate)) ? $paymentDate : date('Y-m-d');
     getDB()->prepare(
         "UPDATE exp_batches SET status='paid',
-            paid_at=NOW(), paid_by_email=?, paid_by_name=?, payment_note=?
+            paid_at=NOW(), paid_by_email=?, paid_by_name=?, payment_note=?, payment_ref=?, payment_date=?
          WHERE id=?"
-    )->execute([$email, $name, $paymentNote ?: null, $id]);
+    )->execute([$email, $name, $paymentNote ?: null, $paymentRef ?: null, $pd, $id]);
 }
 
 // ── Batch email notifications ──────────────────────────────────────────────────
@@ -754,7 +780,7 @@ function expApproveAsSigner2(int $id, string $email, string $name, string $note 
     )->execute([$email, $name, $note ?: null, $id]);
 }
 
-function expMarkPaid(int $id, string $email, string $name, string $paymentNote): void {
+function expMarkPaid(int $id, string $email, string $name, string $paymentNote, string $paymentRef = '', string $paymentDate = ''): void {
     $exp = expGet($id);
     if (!$exp) {
         throw new RuntimeException("Expense #{$id} not found.");
@@ -765,16 +791,18 @@ function expMarkPaid(int $id, string $email, string $name, string $paymentNote):
     if (!expIsTreasurer($email)) {
         throw new RuntimeException("Only a Treasurer can mark an expense as paid.");
     }
-
+    $pd = ($paymentDate && preg_match('/^\d{4}-\d{2}-\d{2}$/', $paymentDate)) ? $paymentDate : date('Y-m-d');
     getDB()->prepare(
         "UPDATE exp_expenses SET
-            status       = 'paid',
-            paid_at      = NOW(),
+            status        = 'paid',
+            paid_at       = NOW(),
             paid_by_email = ?,
             paid_by_name  = ?,
-            payment_note  = ?
+            payment_note  = ?,
+            payment_ref   = ?,
+            payment_date  = ?
          WHERE id = ?"
-    )->execute([$email, $name, $paymentNote ?: null, $id]);
+    )->execute([$email, $name, $paymentNote ?: null, $paymentRef ?: null, $pd, $id]);
 }
 
 // ── Upload token helpers ───────────────────────────────────────────────────────
