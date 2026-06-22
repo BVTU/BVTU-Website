@@ -171,6 +171,11 @@ $member   = $loggedIn ? getMember() : null;
       border-color: #fecaca;
       color: #b91c1c;
     }
+    .pill.yes {
+      background: #dcfce7;
+      border-color: #bbf7d0;
+      color: #166534;
+    }
 
     /* ── How to claim ────────────────────────────────────────────── */
     .claim-steps {
@@ -232,6 +237,37 @@ $member   = $loggedIn ? getMember() : null;
       margin-bottom: 1.75rem;
     }
     .disclaimer strong { color: #92400e; }
+
+    /* ── Upcoming improvements ───────────────────────────────────── */
+    .improvements-box {
+      background: #f0fdf4;
+      border: 1.5px solid #86efac;
+      border-radius: var(--radius-s);
+      padding: 1.1rem 1.3rem;
+      margin-bottom: 1.75rem;
+    }
+    .improvements-head {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      font-size: 1.02rem;
+      font-weight: 800;
+      color: #166534;
+      margin-bottom: .6rem;
+    }
+    .improvements-head svg { width: 20px; height: 20px; stroke: #166534; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+    .improvements-box p { font-size: .9rem; color: #14532d; line-height: 1.6; margin: 0 0 .85rem; }
+    .improvements-box .coverage-table { margin-bottom: .85rem; }
+    .effective-badge {
+      display: inline-block;
+      font-size: .72rem;
+      font-weight: 700;
+      padding: .15rem .55rem;
+      border-radius: 100px;
+      white-space: nowrap;
+    }
+    .effective-2026 { background: #dbeafe; color: #1e40af; }
+    .effective-2028 { background: #fef3c7; color: #92400e; }
 
     @media (max-width: 600px) {
       .coverage-table { font-size: .82rem; }
@@ -296,6 +332,48 @@ $member   = $loggedIn ? getMember() : null;
 
       <div class="disclaimer">
         <strong>Please note:</strong> This page is a plain-language summary of the provincial BC teacher benefit plan through Pacific Blue Cross. Your exact coverage limits may vary slightly. Always verify your specific entitlements by logging in to your <a href="https://service.pac.bluecross.ca/member/login/" target="_blank" rel="noopener">Pacific Blue Cross member account</a> or calling PBC at <strong>1-888-275-4672</strong>.
+      </div>
+
+      <!-- ── Upcoming Plan Improvements ──────────────────────────── -->
+      <div class="improvements-box">
+        <div class="improvements-head">
+          <svg viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="4"/></svg>
+          Upcoming Provincial Extended Health Plan Improvements
+        </div>
+        <p>The BCTF has negotiated the following improvements to the Provincial Extended Health Benefit Plan with Pacific Blue Cross. The tables and limits elsewhere on this page reflect <strong>current</strong> coverage — the changes below take effect on the dates noted.</p>
+        <table class="coverage-table">
+          <thead>
+            <tr><th>Improvement</th><th>Effective</th><th>Details</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Gender Affirming Care</strong> <span style="display:block;"><span class="effective-badge effective-2026">New benefit</span></span></td>
+              <td><span class="effective-badge effective-2026">Jul 1, 2026</span></td>
+              <td>New coverage under the Pacific Blue Cross Core + Enhanced plan, up to a <strong>$30,000 lifetime maximum</strong>. Contact Pacific Blue Cross directly or log in to your member account for full benefit details and any required pre-authorization before accessing care.</td>
+            </tr>
+            <tr>
+              <td><strong>Gender Affirming Care — lifetime max increase</strong></td>
+              <td><span class="effective-badge effective-2028">Jul 1, 2028</span></td>
+              <td>Lifetime maximum increases to a total of <strong>$50,000</strong> — the remaining $20,000 becomes available on this date.</td>
+            </tr>
+            <tr>
+              <td><strong>Hearing aids</strong></td>
+              <td><span class="effective-badge effective-2026">Jul 1, 2026</span></td>
+              <td>Maximum increases from $3,500 to <strong>$4,000 per 48 months</strong>.</td>
+            </tr>
+            <tr>
+              <td><strong>Audiologist services</strong></td>
+              <td><span class="effective-badge effective-2026">Jul 1, 2026</span></td>
+              <td>Audiologist services become included under the speech therapy benefit.</td>
+            </tr>
+            <tr>
+              <td><strong>Counselling services</strong></td>
+              <td><span class="effective-badge effective-2028">Jul 1, 2028</span></td>
+              <td>Combined annual maximum increases from $1,500 to <strong>$1,750 per year</strong>.</td>
+            </tr>
+          </tbody>
+        </table>
+        <p style="margin-bottom:0;font-size:.85rem;"><strong>Already in effect:</strong> counselling now includes psychologist, registered clinical counsellor, and registered social worker services up to $1,500/year; Shingles and HPV vaccines are now covered; the vision care maximum is $650 per 24 months; and naturopath coverage is $1,000/year. These are reflected in the tables below.</p>
       </div>
 
       <!-- ── At-a-Glance Highlights ──────────────────────────────── -->
@@ -493,7 +571,7 @@ $member   = $loggedIn ? getMember() : null;
               <tr>
                 <td><strong>Speech Therapist</strong></td>
                 <td><span class="coverage-pct">$800</span>/person/year</td>
-                <td>In-person and online · $200 initial / $175 subsequent · 80/100%</td>
+                <td>In-person and online · $200 initial / $175 subsequent · 80/100%<span class="coverage-note">Audiologist services will be included under this benefit effective <strong>July 1, 2026</strong></span></td>
               </tr>
             </tbody>
           </table>
@@ -506,7 +584,7 @@ $member   = $loggedIn ? getMember() : null;
             Mental Health &amp; Counselling Services
             <span class="tier-badge tier-80">$1,500/year combined</span>
           </div>
-          <p style="font-size:.88rem;color:var(--gray-600);margin-bottom:.9rem;">All counselling providers below share a <strong>combined $1,500 per person per calendar year</strong> limit. Subject to the 80/100% reimbursement structure and $50 family deductible. Eligible amounts are based on a 60-minute visit — your actual reimbursement depends on visit length.</p>
+          <p style="font-size:.88rem;color:var(--gray-600);margin-bottom:.9rem;">All counselling providers below share a <strong>combined $1,500 per person per calendar year</strong> limit, including psychologist, registered clinical counsellor, and registered social worker services. Subject to the 80/100% reimbursement structure and $50 family deductible. Eligible amounts are based on a 60-minute visit — your actual reimbursement depends on visit length. <strong>This combined maximum increases to $1,750/year effective July 1, 2028.</strong></p>
           <table class="coverage-table">
             <thead>
               <tr><th>Provider Type</th><th>Eligible Amount</th><th>Notes</th></tr>
@@ -539,6 +617,19 @@ $member   = $loggedIn ? getMember() : null;
             <span class="pill no">Marriage &amp; Family Therapy — not a benefit</span>
             <span class="pill no">Parenting training — not a benefit</span>
             <span class="pill no">Group counselling — not eligible</span>
+          </div>
+        </div>
+
+        <!-- Gender Affirming Care -->
+        <div class="ben-section">
+          <div class="ben-section-head">
+            <div class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+            Gender Affirming Care
+            <span class="effective-badge effective-2026">New — Jul 1, 2026</span>
+          </div>
+          <p style="font-size:.88rem;color:var(--gray-600);margin-bottom:.9rem;">Effective <strong>July 1, 2026</strong>, Gender Affirming Care is covered under the Pacific Blue Cross Core + Enhanced plan up to a <strong>$30,000 lifetime maximum</strong>. The lifetime maximum increases to a total of <strong>$50,000</strong> effective <strong>July 1, 2028</strong>, when the remaining $20,000 becomes available.</p>
+          <div class="info-box" style="font-size:.88rem;">
+            <strong>Before accessing care:</strong> contact Pacific Blue Cross directly at <strong>1-888-275-4672</strong> or log in to your <a href="https://service.pac.bluecross.ca/member/login/" target="_blank" rel="noopener">PBC member account</a> for full details on what's covered under this benefit and to arrange any necessary pre-authorization.
           </div>
         </div>
 
@@ -598,7 +689,7 @@ $member   = $loggedIn ? getMember() : null;
               <tr>
                 <td><strong>Hearing aids</strong></td>
                 <td><span class="coverage-pct">$3,500</span>/person per 48 months</td>
-                <td>Combined limit for aids + repairs · $50 family deductible · 80/100%</td>
+                <td>Combined limit for aids + repairs · $50 family deductible · 80/100%<span class="coverage-note">Increasing to <strong>$4,000</strong> per 48 months effective <strong>July 1, 2026</strong></span></td>
               </tr>
               <tr>
                 <td><strong>Custom orthotics (one pair)</strong></td>
@@ -624,6 +715,11 @@ $member   = $loggedIn ? getMember() : null;
                 <td><strong>Cochlear implant (speech processor &amp; headset)</strong></td>
                 <td>$8,000/unit eligible</td>
                 <td>80/100% structure</td>
+              </tr>
+              <tr>
+                <td><strong>Vaccines — Shingles &amp; HPV</strong></td>
+                <td>Covered</td>
+                <td>80/100% structure · $50 family deductible<span class="coverage-note">Other preventive vaccines remain excluded</span></td>
               </tr>
               <tr>
                 <td><strong>Prostheses &amp; braces</strong></td>
@@ -680,7 +776,7 @@ $member   = $loggedIn ? getMember() : null;
             <span class="pill no">Erectile dysfunction drugs</span>
             <span class="pill no">Over-the-counter medications</span>
             <span class="pill no">Cosmetic procedures</span>
-            <span class="pill no">Preventive vaccines</span>
+            <span class="pill no">Preventive vaccines (other than Shingles &amp; HPV)</span>
             <span class="pill no">Athletic therapy</span>
             <span class="pill no">Osteopath treatments</span>
             <span class="pill no">Drug &amp; alcohol rehabilitation</span>
