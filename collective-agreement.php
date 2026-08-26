@@ -118,7 +118,7 @@ if (is_dir($docsDir)) {
               <li><a href="lous.php">Letters of Understanding</a></li>
               <li><a href="ca-assistant.php">Contract Assistant</a></li>
               <li><a href="documents/BVTU-Constitution-and-Bylaws-2026.pdf" target="_blank">Constitution &amp; Bylaws</a></li>
-              <li><a href="calendars.php">School Calendars</a></li>
+              <li><a href="calendars.php">School Calendars</a></li><li><a href="trustee-zones.html">Trustee Zone Map</a></li>
             </ul>
           </li>
           <li class="has-dropdown">

@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SD54 Trustee Zones</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;1,9..144,300&family=Source+Sans+3:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+:root{
+  --ground:#E9EFF5; --surface:#FFF; --surface2:#F3F7FA;
+  --ink:#15283A; --ink2:#48627A; --ink3:#8098AF;
+  --accent:#1B5FA0; --accent-soft:#E8F0F9;
+  --line:#C6D7E5; --line-soft:#DEE9F1;
+  --z1:#0E7C86; --z2:#1B5FA0; --z3:#6B4C9A; --z4:#C07408;
+  --r:6px; --sbw:360px;
+  --fd:'Fraunces',Georgia,serif; --fb:'Source Sans 3',system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --ground:#0D1926; --surface:#152232; --surface2:#0F1D2B;
+  --ink:#DFE9F2; --ink2:#89A4BB; --ink3:#4C687F;
+  --accent:#4F98D9; --accent-soft:#14243A;
+  --line:#22344A; --line-soft:#1A2A3C;
+  --z1:#2FB3BE; --z2:#4F98D9; --z3:#9B7BD4; --z4:#DE9422;
+}}
+:root[data-theme="dark"]{
+  --ground:#0D1926; --surface:#152232; --surface2:#0F1D2B;
+  --ink:#DFE9F2; --ink2:#89A4BB; --ink3:#4C687F;
+  --accent:#4F98D9; --accent-soft:#14243A;
+  --line:#22344A; --line-soft:#1A2A3C;
+  --z1:#2FB3BE; --z2:#4F98D9; --z3:#9B7BD4; --z4:#DE9422;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{background:var(--ground);color:var(--ink);font-family:var(--fb);font-size:15px;line-height:1.5}
+.shell{display:flex;height:100vh;overflow:hidden}
+.side{width:var(--sbw);flex-shrink:0;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden}
+.side-head{padding:18px 20px 15px;border-bottom:1px solid var(--line)}
+.eyebrow{font-size:10px;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:var(--ink3);margin-bottom:5px}
+h1{font-family:var(--fd);font-size:24px;font-weight:400;line-height:1.12;text-wrap:balance;margin-bottom:8px}
+.vote{display:flex;align-items:baseline;gap:7px;font-size:12.5px;color:var(--ink2)}
+.vote b{font-weight:700;color:var(--accent)}
+.side-body{flex:1;overflow-y:auto;scrollbar-width:thin}
+.sec{padding:15px 20px;border-bottom:1px solid var(--line-soft)}
+.sec-l{display:flex;justify-content:space-between;align-items:baseline;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-bottom:10px}
+.mini{background:none;border:none;font-family:var(--fb);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);cursor:pointer;padding:0}
+.mini:hover{text-decoration:underline}
+
+/* answer panel */
+.ans{border:1px solid var(--line);border-left:4px solid var(--ac,var(--ink3));border-radius:var(--r);
+ background:var(--surface2);padding:13px 15px;min-height:88px;display:flex;flex-direction:column;justify-content:center}
+.ans.empty{border-left-color:var(--line);color:var(--ink3)}
+.ans-p{font-size:13px;color:var(--ink3);line-height:1.45}
+.ans-z{font-family:var(--fd);font-size:21px;font-weight:400;color:var(--ac);line-height:1.1;margin-bottom:2px}
+.ans-s{font-size:13px;color:var(--ink);font-weight:600}
+.ans-t{margin-top:7px;padding-top:7px;border-top:1px solid var(--line-soft);font-size:12.5px;color:var(--ink2)}
+.ans-t b{color:var(--ac);font-size:15px;font-weight:700}
+
+/* zone cards */
+.zones{display:flex;flex-direction:column;gap:6px}
+.zone{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;
+ background:var(--surface2);border:1px solid var(--line-soft);border-left:3px solid var(--zc);
+ border-radius:var(--r);padding:8px 11px;cursor:pointer}
+.zone:hover{background:var(--accent-soft)}
+.zone.off{opacity:.4}
+.zone input{width:15px;height:15px;accent-color:var(--zc);cursor:pointer;margin:0}
+.zone-n{font-size:12.5px;font-weight:600;color:var(--ink);line-height:1.25}
+.zone-n span{display:block;font-size:11px;font-weight:400;color:var(--ink2);margin-top:1px}
+.zone-t{text-align:right}
+.zone-t b{display:block;font-size:16px;font-weight:700;color:var(--zc);line-height:1;font-variant-numeric:tabular-nums}
+.zone-t span{font-size:9px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--ink3)}
+
+.board{display:flex;justify-content:space-between;align-items:center;background:var(--accent-soft);
+ border:1px solid var(--line-soft);border-radius:var(--r);padding:9px 12px;font-size:12.5px;color:var(--ink2)}
+.board b{font-size:17px;color:var(--accent);font-weight:700}
+
+/* community chips */
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{background:var(--surface2);border:1px solid var(--line);border-left:3px solid var(--cc);
+ border-radius:20px;padding:4px 11px;font-family:var(--fb);font-size:12px;font-weight:500;
+ color:var(--ink2);cursor:pointer}
+.chip:hover{background:var(--accent-soft);color:var(--accent)}
+.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.toggles{display:flex;flex-direction:column;gap:6px}
+.tg{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--ink2);cursor:pointer}
+.tg input{width:14px;height:14px;accent-color:var(--accent);cursor:pointer;margin:0}
+.tg:hover{color:var(--accent)}
+.src{font-size:11px;color:var(--ink3);line-height:1.6}
+.side-foot{padding:10px 20px;border-top:1px solid var(--line);display:flex;gap:8px}
+.btn{background:var(--surface2);border:1px solid var(--line);border-radius:var(--r);padding:6px 11px;
+ font-family:var(--fb);font-size:12px;font-weight:600;color:var(--ink2);cursor:pointer}
+.btn:hover{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.mapwrap{flex:1;position:relative}
+#map{width:100%;height:100%;background:var(--surface2);cursor:crosshair}
+.hint{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);z-index:1000;
+ background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:7px 16px;
+ font-size:12.5px;font-weight:600;color:var(--ink2);box-shadow:0 2px 12px rgba(0,0,0,.16);pointer-events:none}
+.leaflet-container{font-family:var(--fb)!important;background:var(--surface2)!important}
+.leaflet-control-layers{border:1px solid var(--line)!important;border-radius:var(--r)!important;
+ background:var(--surface)!important;box-shadow:0 2px 10px rgba(0,0,0,.14)!important;padding:7px 10px!important}
+.leaflet-control-layers label{display:flex!important;align-items:center;gap:7px;font-size:12px;font-weight:500;color:var(--ink2);margin:2px 0;cursor:pointer}
+.leaflet-control-layers label:hover{color:var(--accent)}
+.leaflet-control-layers input{accent-color:var(--accent);margin:0}
+.lbl{background:none!important;border:none!important;box-shadow:none!important}
+.lbl-c{font-size:11.5px;font-weight:700;color:#132436;text-shadow:0 0 4px #fff,0 0 8px #fff,0 1px 2px #fff;white-space:nowrap}
+.lbl-z{font-family:var(--fd);font-size:13px;font-style:italic;font-weight:400;white-space:nowrap;
+ text-shadow:0 0 5px #fff,0 0 9px #fff,0 0 3px #fff}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="shell">
+<aside class="side">
+  <div class="side-head">
+    <div class="eyebrow">School District 54 · Bulkley Valley</div>
+    <h1>Trustee Zones</h1>
+    <div class="vote">General voting day <b>Saturday 17 October 2026</b></div>
+  </div>
+  <div class="side-body">
+
+    <div class="sec">
+      <div class="sec-l"><span>Your zone</span></div>
+      <div class="ans empty" id="ans"><div class="ans-p">Click anywhere on the map to see which zone it falls in and how many trustees are elected there.</div></div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-l"><span>Jump to a community</span></div>
+      <div class="chips" id="chips"></div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-l"><span>The four zones</span><button class="mini" onclick="allZones(true)">Show all</button></div>
+      <div class="zones" id="zones"></div>
+    </div>
+
+    <div class="sec">
+      <div class="board"><span>Trustees on the Board of Education</span><b>7</b></div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-l"><span>Map layers</span></div>
+      <div class="toggles">
+        <label class="tg"><input type="checkbox" id="tSchools" checked><span>Schools</span></label>
+        <label class="tg"><input type="checkbox" id="tSD" checked><span>District boundary</span></label>
+      </div>
+    </div>
+
+    <div class="sec">
+      <p class="src">Zone boundaries follow Policy 1.100 (Trustee Representation), amended 23 February 2022, drawn against surveyed parcel and river data from the BC Data Catalogue. Boundaries are accurate to within a few hundred metres and are shown for orientation. If you live close to a line, confirm your zone with the district office before voting.</p>
+    </div>
+  </div>
+  <div class="side-foot">
+    <button class="btn" onclick="tt()">Toggle theme</button>
+    <button class="btn" onclick="fitAll()">Reset view</button>
+  </div>
+</aside>
+<div class="mapwrap">
+  <div id="map"></div>
+  <div class="hint" id="hint">Click the map to find a zone</div>
+</div>
+</div>
+
+<script>
+function tt(){const r=document.documentElement,c=r.getAttribute('data-theme');
+ if(c==='dark')r.setAttribute('data-theme','light');
+ else if(c==='light')r.setAttribute('data-theme','dark');
+ else r.setAttribute('data-theme',window.matchMedia('(prefers-color-scheme: dark)').matches?'light':'dark');}
+
+function dec(s){let i=0,la=0,lo=0,o=[];while(i<s.length){let b,sh=0,r=0;
+ do{b=s.charCodeAt(i++)-63;r|=(b&31)<<sh;sh+=5}while(b>=32);la+=(r&1)?~(r>>1):(r>>1);
+ sh=0;r=0;do{b=s.charCodeAt(i++)-63;r|=(b&31)<<sh;sh+=5}while(b>=32);lo+=(r&1)?~(r>>1):(r>>1);
+ o.push([la/1e4,lo/1e4]);}return o;}
+
+const SD=dec('aar`@t`vlAN|Fj]wByBr|GzpFAdDrEhGk}@~S{RxPdu@fS`DvE_ExLnGlNyNgNgc@`Kik@}DgVpD}WrE}DrSrMbKgSbNhX`GgC`VvSvGnj@lUbE~E_JrHbAd`@~s@z_@yPlLraA|b@vU~OpXSxVrOfXsBbg@pd@d@vDvHvPz@pFkd@tOjF|o@agAzHnF|LiHvLo`@{AeOhLoCdClO~IiQrLdHgLsrBeQbDyN{o@n@gTwTe^pFwWeHkNdVur@aL{DHeTg\\sJaPnSeQmXmLCeFhIcHTqEiLeEdKqOkCwN_V{EbAyNil@zN{[_JI{I_PuP~GwEgReIxAnIwQcB_j@bFoJ{AsKoMZcMeSrGof@fT{Xh@mmBmuA??}RbQiQj@mvAxJ{RyDaNl^q~@mGea@lGu^wSmEmBb_@wUnMqBzXoFaDdA|TsL~e@oM{Ev@gn@kJ}Iai@ly@{@gFkc@jW_FyHoCbJkIy@i]r_AuG~l@iMjSoCaDpBpY}|AAvDlUsT~N~DrWcIx@sElR}KyFyFjMcMcDcCuc@aT{B{D`NdDva@c`@`q@sJ}PaDfToIoFqJnIgJwBgB`MgUdEb@zL_M[wEjIS~hFsSIyDvR');
+const Z1=dec('itq`@~qulA}EaD_B|FiA?OxJL|FlH?MwChC[Tt@lODAxNwBA?zlGnvA??m^jCu}@?c`F|s@gEmP}K?s{@');
+const Z2=dec('}`l`@n}jlAaBk@}AvA}CcD`BgMsCwCqAuP_EnAkAcCqBj@_CmEcDxA{D`Nz@jJ|DlDsA|PqFdJ_CtMcF`FgAcD{AjH}ElDkAnFeBkBy@aJyA^yBqCUxLkClFoIoFqJnIgJwBgB`MqHaB]rDwFjG_CwCb@zLgCCaAzCwAkE}CV]hIyD@?ncEoBAzApd@sLKAhD}EgD_B|FiA?gAxJdA|FlH?MwChC[bPz@AxNwBA?zlGzpFAdDrEtBsByAkQ|CoGnA{^vCoJfE{@dCbBxDsHjFdGc@rTlCdNrD~Bn@dDnDzC`GwBrE|BxE_EfA`CXqz@qEErE?{EAzEA}FC|FOkG?pGEuH?`IGiI?tIE}I?bJEgK?jKC_MAvMSqN?rN?kOIlQKwQAxQCiS?hSCsS?tSCwSAtTK{TC`UEkU?jUCqUAvUQ_VApVSwVA|VIaW?fWEkWAlWAka@Gla@A_c@G`c@?ec@Adc@Akc@Ijc@Moc@Arc@Iuc@Axc@K{c@C~c@Mid@Itd@Swd@Cxd@Ake@Kne@Aqe@Cpe@Kqe@Ape@Amf@Ejf@Iyf@Afg@Kog@Ang@?ok@Ank@Aql@Epl@?ul@Atl@Awl@Avl@E_m@C~l@Amm@Elm@?sm@Epm@Csm@Azm@E}m@?`n@Ecn@Abn@Acn@Cbn@Acn@Ebn@Aen@Cdn@?_p@C~o@Ayp@Cxp@I_q@A`q@Qkq@Afq@Wkq@?|q@Ygr@?vr@M}r@?|r@Aas@Cds@Eis@Ahs@?gs@Cns@]ss@?~s@I_t@Apu@s@st@Ixt@Gyt@A|t@Gau@A`u@?cv@?bv@Agv@?nv@Cqv@?~v@G_w@A~w@G_x@Ajy@K{}@QpC?sCErC?{C]rBCuBElBEmB?jBAkBCwAyN{EmBz@?sBeD`@{DoBqBI{DwMuYmAiTfBaMgByJhC{FwAwE|B{PqCgHBeVmFqS|@AkJgW{@gXgHuM~BkEmCuFf@wDqG{]N{FsNk\\{\\W');
+const Z3=dec('q}h`@~chlAyo@?E|DhAf@i@jDlDjCOnDmDLmClKkBoAo@`Cq@yAoBNy@zB`DxL\\xIq@jAiCHs@gBsAjAsElRoBqDgElBeBuDyFjMeBk@?r{Dz\\VrNj\\OzFrBhEh@lNrBbHg@vDlCtF_CjEdCtH`D~Cz@fXtExJrAzJ`AP}@@|@@y@Dx@DnDbSw@jCr@xQ|BxBRlD}BzPvAvEqAj@w@nEfBxJgB`MlAhTzE`IzDhO~@HbAnDy@JnBpBw@Dx@DPpI|EpBvAxNjBBkB@lB?mBDtBDsBBzC\\sC?bFHaRkdO');
+const Z4=dec('ghh`@|y}lA|L|VnTyDxLnGjNyNeNgc@dCs`@zFwI_EeVrD}WrE}DpAnFdHq@|GtG`KgSbNhX`GgC`VvSU~UlHnStGqAvLtG~E_JrHbArEvSpYf_@tPgC`CeIbJkBlLraAdGTvNfS~Jx@tCxOhKvGSxVpIhF`E|PmGd_@xC|Fd]rDjFmCtDvHxPz@pFkd@bGhHpG}@nKe[hS}MbO}[|Es@|AbH|LiHvLo`@{AeOhLoCfClO|IiQrLdHtAmGcDon@uIoTCee@eQbDwGel@aFuBl@gTuCtAiDoWoDpAeE}JpFwWeHkN~FgEdNml@aL{DHeTg\\sJaPnSeQmXmLCeFhIcHTqEiLeEdKqOkCeCoJoGTaBeK{EbAyNil@zN}[_JGq@aKiH}C{E|GyI@wEgReIxAnIwQkC{IzEqUsDqHbFoJ{AsKoMZcMeSrGof@rNmZhCzDh@iCh@mmBmuA??}RbQiQeCqQpD{cAxJ{RyDaNtDgUbM}FrJk`@mGea@lGu^wSmEmBb_@wFG_NvMqBzXoFaDdA|TsL~e@oM{Ev@gn@kJ}I_CjM}QzMcRd\\{@gFkc@jW_FyHoCbJkIy@i]r_AAdXmGEE~SiMjSoCaDpBpYcl@A?vqB');
+
+const CSS=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+/* Zone 1 is tested before Zone 2 because Zone 2's polygon encloses it. */
+const ZONES=[
+ {id:'z1',n:'Zone 1',sub:'Lake Kathlyn / Evelyn / Witset',t:1,ring:Z1,v:'--z1',at:[54.95,-127.50]},
+ {id:'z3',n:'Zone 3',sub:'Telkwa / Quick',t:1,ring:Z3,v:'--z3',at:[54.63,-126.72]},
+ {id:'z4',n:'Zone 4',sub:'Houston',t:2,ring:Z4,v:'--z4',at:[54.05,-127.30]},
+ /* Zone 2 wraps Zone 1 on the west, south and east. Zone 1 is punched out of it
+    as a hole so the two never paint over each other. */
+ {id:'z2',n:'Zone 2',sub:'Smithers / Glentanna / Driftwood',t:3,ring:Z2,hole:Z1,v:'--z2',at:[54.86,-126.95]}
+];
+const ORDER=['z1','z2','z3','z4'];
+
+const map=L.map('map',{center:[54.35,-127.1],zoom:8,zoomControl:true});
+const ESRI='Tiles &copy; Esri · boundaries: BC Data Catalogue';
+const bases={
+ 'Topographic':L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',{attribution:ESRI,maxZoom:19}),
+ 'Terrain':L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}',{attribution:ESRI,maxZoom:13}),
+ 'Satellite':L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:ESRI,maxZoom:19}),
+ 'OpenStreetMap':L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap contributors · boundaries: BC Data Catalogue',maxZoom:19})
+};
+bases['Topographic'].addTo(map);
+L.control.layers(bases,null,{position:'topright',collapsed:false}).addTo(map);
+
+const sdLayer=L.polygon(SD,{color:CSS('--accent'),weight:2,dashArray:'7 5',fill:false,opacity:.7}).addTo(map);
+
+const layers={},labels={};
+['z4','z2','z3','z1'].forEach(id=>{
+  const z=ZONES.find(x=>x.id===id), c=CSS(z.v);
+  layers[id]=L.polygon(z.hole?[z.ring,z.hole]:z.ring,{color:c,weight:2,fillColor:c,fillOpacity:.28,opacity:.95})
+   .on('click',e=>{L.DomEvent.stop(e);identify(e.latlng);}).addTo(map);
+  labels[id]=L.marker(z.at,{icon:L.divIcon({className:'lbl',
+    html:`<div class="lbl-z" style="color:${c}">${z.n}</div>`,iconAnchor:[18,8]}),interactive:false}).addTo(map);
+});
+
+const schools=[
+ ['Silverthorne Elementary','Houston',54.3977,-126.6451],
+ ['Houston Secondary','Houston',54.3890,-126.6508],
+ ['Twain Sullivan Elementary','Houston',54.3890,-126.6508],
+ ['Telkwa Elementary','Telkwa',54.6969,-127.0470],
+ ['Muheim Memorial Elementary','Smithers',54.7781,-127.1674],
+ ['Walnut Park Elementary','Smithers',54.7877,-127.1711],
+ ['Smithers Secondary','Smithers',54.7891,-127.1805],
+ ['Bulkley Valley Learning Centre','Smithers',54.7830,-127.1739]
+];
+const schoolGrp=L.layerGroup(schools.map(s=>
+  L.circleMarker([s[2],s[3]],{radius:5,fillColor:'#fff',color:'#15283A',weight:2,fillOpacity:1})
+   .bindTooltip(`${s[0]} — ${s[1]}`,{sticky:true}))).addTo(map);
+
+const COMMUNITIES=[
+ ['Smithers',54.7824,-127.1686],['Telkwa',54.6969,-127.0470],['Houston',54.3992,-126.6706],
+ ['Witset',55.0060,-127.3340],['Quick',54.6150,-126.8780],['Lake Kathlyn',54.8260,-127.2160],
+ ['Evelyn',54.8922,-127.2694],['Driftwood',54.9000,-126.9500]
+];
+COMMUNITIES.slice(0,4).forEach(([n,la,lo])=>L.marker([la,lo],{icon:L.divIcon({className:'lbl',
+ html:`<div class="lbl-c">${n}</div>`,iconAnchor:[-9,8]}),interactive:false}).addTo(map));
+
+function pip(pt,poly){let c=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+ const [yi,xi]=poly[i],[yj,xj]=poly[j];
+ if(((yi>pt[0])!=(yj>pt[0]))&&(pt[1]<(xj-xi)*(pt[0]-yi)/(yj-yi)+xi))c=!c;}return c;}
+function zoneAt(lat,lng){for(const id of ORDER){const z=ZONES.find(x=>x.id===id);
+ if(pip([lat,lng],z.ring)&&!(z.hole&&pip([lat,lng],z.hole)))return z;} return null;}
+
+let pin=null;
+const ansEl=document.getElementById('ans'), hintEl=document.getElementById('hint');
+function identify(ll,name){
+  const z=zoneAt(ll.lat,ll.lng);
+  if(pin)map.removeLayer(pin);
+  if(!z){
+    ansEl.className='ans empty';
+    ansEl.innerHTML='<div class="ans-p">That point is outside School District 54.</div>';
+    hintEl.textContent='Outside the district';
+    return;
+  }
+  const c=CSS(z.v);
+  pin=L.circleMarker(ll,{radius:8,fillColor:c,color:'#fff',weight:3,fillOpacity:1}).addTo(map);
+  ansEl.className='ans'; ansEl.style.setProperty('--ac',c);
+  ansEl.innerHTML=`<div class="ans-z">${z.n}</div><div class="ans-s">${z.sub}</div>
+   <div class="ans-t">${name?name+' elects ':'Voters here elect '}<b>${z.t}</b> of the 7 trustees</div>`;
+  hintEl.textContent=(name||'Selected point')+' — '+z.n;
+}
+map.on('click',e=>identify(e.latlng));
+
+const chipHost=document.getElementById('chips');
+COMMUNITIES.forEach(([n,la,lo])=>{
+  const z=zoneAt(la,lo);
+  const b=document.createElement('button');
+  b.className='chip'; b.textContent=n;
+  b.style.setProperty('--cc',z?CSS(z.v):CSS('--line'));
+  b.onclick=()=>{map.flyTo([la,lo],11,{duration:.7});identify({lat:la,lng:lo},n);};
+  chipHost.appendChild(b);
+});
+
+const zoneHost=document.getElementById('zones');
+ORDER.forEach(id=>{
+  const z=ZONES.find(x=>x.id===id);
+  const el=document.createElement('label');
+  el.className='zone'; el.style.setProperty('--zc',CSS(z.v));
+  el.innerHTML=`<input type="checkbox" checked>
+    <div class="zone-n">${z.n}<span>${z.sub}</span></div>
+    <div class="zone-t"><b>${z.t}</b><span>trustee${z.t>1?'s':''}</span></div>`;
+  el.querySelector('input').addEventListener('change',e=>{
+    el.classList.toggle('off',!e.target.checked);
+    if(e.target.checked){layers[id].addTo(map);labels[id].addTo(map);}
+    else{map.removeLayer(layers[id]);map.removeLayer(labels[id]);}
+  });
+  zoneHost.appendChild(el);
+});
+function allZones(on){zoneHost.querySelectorAll('input').forEach(i=>{if(i.checked!==on){i.checked=on;i.dispatchEvent(new Event('change'));}});}
+
+const bind=(id,layer)=>document.getElementById(id).addEventListener('change',e=>{
+ if(e.target.checked)layer.addTo(map);else map.removeLayer(layer);});
+bind('tSchools',schoolGrp); bind('tSD',sdLayer);
+
+function fitAll(){map.fitBounds(L.polygon(SD).getBounds(),{padding:[24,24]});
+ if(pin){map.removeLayer(pin);pin=null;}
+ ansEl.className='ans empty';
+ ansEl.innerHTML='<div class="ans-p">Click anywhere on the map to see which zone it falls in and how many trustees are elected there.</div>';
+ hintEl.textContent='Click the map to find a zone';}
+fitAll();
+</script>
+</body>
+</html>
