@@ -145,12 +145,13 @@ h1{font-family:var(--fd);font-size:24px;font-weight:400;line-height:1.12;text-wr
       <div class="sec-l"><span>Map layers</span></div>
       <div class="toggles">
         <label class="tg"><input type="checkbox" id="tSchools" checked><span>Schools</span></label>
+        <label class="tg"><input type="checkbox" id="tRoads" checked><span>Babine Lake Rd boundary section</span></label>
         <label class="tg"><input type="checkbox" id="tSD" checked><span>District boundary</span></label>
       </div>
     </div>
 
     <div class="sec">
-      <p class="src">Zone boundaries follow Policy 1.100 (Trustee Representation), amended 23 February 2022, drawn against surveyed parcel and river data from the BC Data Catalogue. Boundaries are accurate to within a few hundred metres and are shown for orientation. If you live close to a line, confirm your zone with the district office before voting.</p>
+      <p class="src">Zone boundaries follow Policy 1.100 (Trustee Representation), amended 23 February 2022, drawn against surveyed parcel, road and river data from the BC Data Catalogue. The policy's "Eckman Road" is locally the same road as Babine Lake Road. Boundaries are accurate to within a few hundred metres and are shown for orientation. If you live close to a line, confirm your zone with the district office before voting.</p>
     </div>
   </div>
   <div class="side-foot">
@@ -177,8 +178,12 @@ function dec(s){let i=0,la=0,lo=0,o=[];while(i<s.length){let b,sh=0,r=0;
 
 const SD=dec('aar`@t`vlAN|Fj]wByBr|GzpFAdDrEhGk}@~S{RxPdu@fS`DvE_ExLnGlNyNgNgc@`Kik@}DgVpD}WrE}DrSrMbKgSbNhX`GgC`VvSvGnj@lUbE~E_JrHbAd`@~s@z_@yPlLraA|b@vU~OpXSxVrOfXsBbg@pd@d@vDvHvPz@pFkd@tOjF|o@agAzHnF|LiHvLo`@{AeOhLoCdClO~IiQrLdHgLsrBeQbDyN{o@n@gTwTe^pFwWeHkNdVur@aL{DHeTg\\sJaPnSeQmXmLCeFhIcHTqEiLeEdKqOkCwN_V{EbAyNil@zN{[_JI{I_PuP~GwEgReIxAnIwQcB_j@bFoJ{AsKoMZcMeSrGof@fT{Xh@mmBmuA??}RbQiQj@mvAxJ{RyDaNl^q~@mGea@lGu^wSmEmBb_@wUnMqBzXoFaDdA|TsL~e@oM{Ev@gn@kJ}Iai@ly@{@gFkc@jW_FyHoCbJkIy@i]r_AuG~l@iMjSoCaDpBpY}|AAvDlUsT~N~DrWcIx@sElR}KyFyFjMcMcDcCuc@aT{B{D`NdDva@c`@`q@sJ}PaDfToIoFqJnIgJwBgB`MgUdEb@zL_M[wEjIS~hFsSIyDvR');
 const Z1=dec('itq`@~qulA}EaD_B|FiA?OxJL|FlH?MwChC[Tt@lODAxNwBA?zlGnvA??m^jCu}@?c`F|s@gEmP}K?s{@');
-const Z2=dec('}`l`@n}jlAaBk@}AvA}CcD`BgMsCwCqAuP_EnAkAcCqBj@_CmEcDxA{D`Nz@jJ|DlDsA|PqFdJ_CtMcF`FgAcD{AjH}ElDkAnFeBkBy@aJyA^yBqCUxLkClFoIoFqJnIgJwBgB`MqHaB]rDwFjG_CwCb@zLgCCaAzCwAkE}CV]hIyD@?ncEoBAzApd@sLKAhD}EgD_B|FiA?gAxJdA|FlH?MwChC[bPz@AxNwBA?zlGzpFAdDrEtBsByAkQ|CoGnA{^vCoJfE{@dCbBxDsHjFdGc@rTlCdNrD~Bn@dDnDzC`GwBrE|BxE_EfA`CXqz@qEErE?{EAzEA}FC|FOkG?pGEuH?`IGiI?tIE}I?bJEgK?jKC_MAvMSqN?rN?kOIlQKwQAxQCiS?hSCsS?tSCwSAtTK{TC`UEkU?jUCqUAvUQ_VApVSwVA|VIaW?fWEkWAlWAka@Gla@A_c@G`c@?ec@Adc@Akc@Ijc@Moc@Arc@Iuc@Axc@K{c@C~c@Mid@Itd@Swd@Cxd@Ake@Kne@Aqe@Cpe@Kqe@Ape@Amf@Ejf@Iyf@Afg@Kog@Ang@?ok@Ank@Aql@Epl@?ul@Atl@Awl@Avl@E_m@C~l@Amm@Elm@?sm@Epm@Csm@Azm@E}m@?`n@Ecn@Abn@Acn@Cbn@Acn@Ebn@Aen@Cdn@?_p@C~o@Ayp@Cxp@I_q@A`q@Qkq@Afq@Wkq@?|q@Ygr@?vr@M}r@?|r@Aas@Cds@Eis@Ahs@?gs@Cns@]ss@?~s@I_t@Apu@s@st@Ixt@Gyt@A|t@Gau@A`u@?cv@?bv@Agv@?nv@Cqv@?~v@G_w@A~w@G_x@Ajy@K{}@QpC?sCErC?{C]rBCuBElBEmB?jBAkBCwAyN{EmBz@?sBeD`@{DoBqBI{DwMuYmAiTfBaMgByJhC{FwAwE|B{PqCgHBeVmFqS|@AkJgW{@gXgHuM~BkEmCuFf@wDqG{]N{FsNk\\{\\W');
-const Z3=dec('q}h`@~chlAyo@?E|DhAf@i@jDlDjCOnDmDLmClKkBoAo@`Cq@yAoBNy@zB`DxL\\xIq@jAiCHs@gBsAjAsElRoBqDgElBeBuDyFjMeBk@?r{Dz\\VrNj\\OzFrBhEh@lNrBbHg@vDlCtF_CjEdCtH`D~Cz@fXtExJrAzJ`AP}@@|@@y@Dx@DnDbSw@jCr@xQ|BxBRlD}BzPvAvEqAj@w@nEfBxJgB`MlAhTzE`IzDhO~@HbAnDy@JnBpBw@Dx@DPpI|EpBvAxNjBBkB@lB?mBDtBDsBBzC\\sC?bFHaRkdO');
+const Z2=dec('kdl`@n|jlAqAjA}CcD`BgMsCwCqAuP_EnAkAcCqBj@_CmEcDxA{D`Nz@jJ|DlDsA|PqFdJ_CtMcF`FgAcD{AjH}ElDkAnFeBkBy@aJyA^yBqCUxLkClFoIoFqJnIgJwBgB`MqHaB]rDwFjG_CwCb@zLgCCaAzCwAkE}CV]hIyD@?ncEoBAzApd@sLKAhD}EgD_B|FiA?gAxJdA|FlH?MwChC[bPz@AxNwBA?zlGzpFAdDrEtBsByAkQ|CoGnA{^vCoJfE{@dCbBxDsHjFdGc@rTlCdNrD~Bn@dDnDzC`GwBrE|BxE_EfA`CXqz@qEErE?{EAzEA}FC|FOkG?pGEuH?`IGiI?tIE}I?bJEgK?jKC_MAvMSqN?rN?kOIlQKwQAxQCiS?hSCsS?tSCwSAtTK{TC`UEkU?jUCqUAvUQ_VApVSwVA|VIaW?fWEkWAlWAka@Gla@A_c@G`c@?ec@Adc@Akc@Ijc@Moc@Arc@Iuc@Axc@K{c@C~c@Mid@Itd@Swd@Cxd@Ake@Kne@Aqe@Cpe@Kqe@Ape@Amf@Ejf@Iyf@Afg@Kog@Ang@?ok@Ank@Aql@Epl@?ul@Atl@Awl@Avl@E_m@C~l@Amm@Elm@?sm@Epm@Csm@Azm@E}m@?`n@Ecn@Abn@Acn@Cbn@Acn@Ebn@Aen@Cdn@?_p@C~o@Ayp@Cxp@I_q@A`q@Qkq@Afq@Wkq@?|q@Ygr@?vr@M}r@?|r@Aas@Cds@Eis@Ahs@?gs@Cns@]ss@?~s@I_t@Apu@s@st@Ixt@Gyt@A|t@Gau@A`u@?cv@?bv@Agv@?nv@Cqv@?~v@G_w@A~w@G_x@Ajy@K{}@QpC?sCErC?{C]rBCuBElBEmB?jBAkBCwAyN{EmBz@?sBeD`@{DoBqBI{DwMuYmAiTfBaMgByJhC{FwAwE|B{PqCgHBeVmFqS|@AkJgW{@gXgHuM~BkEmCuFf@wDaGkd@cq@C?ac@');
+const Z3=dec('q}h`@~chlAyo@?E|DhAf@i@jDlDjCOnDmDLmClKkBoAo@`Cq@yAoBNy@zB`DxL\\xIq@jAiCHs@gBsAjAsElRoBqDgElBeBuDyFjMsEkAe@~{Ebq@BOnErBhEh@lNrBbHg@vDlCtF_CjEdCtH`D~Cz@fXtExJrAzJ`AP}@@|@@y@Dx@DnDbSw@jCr@xQ|BxBRlD}BzPvAvEqAj@w@nEfBxJgB`MnAnTxEzHzDhO~@HbAnDy@JnBpBw@Dx@Dc@nDrBdD{@?zElBvAxNjBBkB@lB?mBDtBDsBBzC\\sC?bFHaRkdO');
+/* The two road segments that define the Zone 2 / Zone 3 line east of the Bulkley.
+   "Eckman Road" in Policy 1.100 is locally the same road as Babine Lake Road. */
+const BAB=dec('qel`@`rqlA?I???}@???g@?g@?oD?iA?aB???w@???q@???G?e@?gG???I???C??');
+const THR=dec('{el`@|uplABGDG?ILOPOBCBATA??B?XAF???H?X@D?@A@?RK');
 const Z4=dec('ghh`@|y}lA|L|VnTyDxLnGjNyNeNgc@dCs`@zFwI_EeVrD}WrE}DpAnFdHq@|GtG`KgSbNhX`GgC`VvSU~UlHnStGqAvLtG~E_JrHbArEvSpYf_@tPgC`CeIbJkBlLraAdGTvNfS~Jx@tCxOhKvGSxVpIhF`E|PmGd_@xC|Fd]rDjFmCtDvHxPz@pFkd@bGhHpG}@nKe[hS}MbO}[|Es@|AbH|LiHvLo`@{AeOhLoCfClO|IiQrLdHtAmGcDon@uIoTCee@eQbDwGel@aFuBl@gTuCtAiDoWoDpAeE}JpFwWeHkN~FgEdNml@aL{DHeTg\\sJaPnSeQmXmLCeFhIcHTqEiLeEdKqOkCeCoJoGTaBeK{EbAyNil@zN}[_JGq@aKiH}C{E|GyI@wEgReIxAnIwQkC{IzEqUsDqHbFoJ{AsKoMZcMeSrGof@rNmZhCzDh@iCh@mmBmuA??}RbQiQeCqQpD{cAxJ{RyDaNtDgUbM}FrJk`@mGea@lGu^wSmEmBb_@wFG_NvMqBzXoFaDdA|TsL~e@oM{Ev@gn@kJ}I_CjM}QzMcRd\\{@gFkc@jW_FyHoCbJkIy@i]r_AAdXmGEE~SiMjSoCaDpBpYcl@A?vqB');
 
 const CSS=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -214,6 +219,16 @@ const layers={},labels={};
   labels[id]=L.marker(z.at,{icon:L.divIcon({className:'lbl',
     html:`<div class="lbl-z" style="color:${c}">${z.n}</div>`,iconAnchor:[18,8]}),interactive:false}).addTo(map);
 });
+
+/* Babine Lake Rd + Telkwa High Rd where they carry the Zone 2 / Zone 3 boundary */
+const roadGrp=L.layerGroup([
+ L.polyline(BAB,{color:'#15283A',weight:4,opacity:.9})
+  .bindTooltip('Babine Lake Road — called Eckman Road in Policy 1.100. Zone 2 north, Zone 3 south.',{sticky:true}),
+ L.polyline(BAB,{color:'#fff',weight:1.5,opacity:.85,dashArray:'6 6',interactive:false}),
+ L.polyline(THR,{color:'#15283A',weight:4,opacity:.9})
+  .bindTooltip('Telkwa High Road — boundary runs south to the Lot 799 line',{sticky:true}),
+ L.polyline(THR,{color:'#fff',weight:1.5,opacity:.85,dashArray:'6 6',interactive:false})
+]).addTo(map);
 
 const schools=[
  ['Silverthorne Elementary','Houston',54.3977,-126.6451],
@@ -292,7 +307,7 @@ function allZones(on){zoneHost.querySelectorAll('input').forEach(i=>{if(i.checke
 
 const bind=(id,layer)=>document.getElementById(id).addEventListener('change',e=>{
  if(e.target.checked)layer.addTo(map);else map.removeLayer(layer);});
-bind('tSchools',schoolGrp); bind('tSD',sdLayer);
+bind('tSchools',schoolGrp); bind('tRoads',roadGrp); bind('tSD',sdLayer);
 
 function fitAll(){map.fitBounds(L.polygon(SD).getBounds(),{padding:[24,24]});
  if(pin){map.removeLayer(pin);pin=null;}
