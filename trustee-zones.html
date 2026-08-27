@@ -110,11 +110,88 @@ h1{font-family:var(--fd);font-size:24px;font-weight:400;line-height:1.12;text-wr
 .lbl-z{font-family:var(--fd);font-size:13px;font-style:italic;font-weight:400;white-space:nowrap;
  text-shadow:0 0 5px #fff,0 0 9px #fff,0 0 3px #fff}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* ── Mobile layout ───────────────────────────────────────────────── */
+@media (max-width:640px){
+  .shell{flex-direction:column}
+
+  /* Sidebar becomes a slide-up bottom sheet */
+  .side{
+    position:fixed;bottom:0;left:0;right:0;
+    width:100%;height:72vh;
+    border-right:none;border-top:1px solid var(--line);
+    border-radius:16px 16px 0 0;
+    transform:translateY(100%);
+    transition:transform .28s cubic-bezier(.4,0,.2,1);
+    z-index:2000;
+    box-shadow:0 -4px 24px rgba(0,0,0,.18);
+  }
+  .side.open{transform:translateY(0)}
+
+  /* Drag handle at top of sheet */
+  .side-head::before{
+    content:'';display:block;
+    width:36px;height:4px;border-radius:2px;
+    background:var(--line);margin:0 auto 12px;
+  }
+
+  /* Map fills full screen */
+  .mapwrap{flex:1;height:100vh}
+
+  /* Backdrop */
+  .backdrop{
+    display:block;
+    position:fixed;inset:0;z-index:1999;
+    background:rgba(0,0,0,.35);
+    opacity:0;pointer-events:none;
+    transition:opacity .28s;
+  }
+  .backdrop.show{opacity:1;pointer-events:auto}
+
+  /* Floating toggle button */
+  .mob-toggle{
+    display:flex;
+    position:fixed;bottom:20px;right:16px;z-index:1998;
+    background:var(--accent);color:#fff;border:none;border-radius:24px;
+    padding:10px 16px;gap:7px;align-items:center;
+    font-family:var(--fb);font-size:13px;font-weight:700;
+    box-shadow:0 3px 14px rgba(0,0,0,.28);cursor:pointer;
+  }
+  .mob-toggle svg{width:16px;height:16px;stroke:#fff;fill:none;stroke-width:2.5;stroke-linecap:round}
+
+  /* Floating result card over map */
+  .mob-result{
+    display:flex;
+    position:fixed;top:12px;left:12px;right:12px;z-index:1997;
+    background:var(--surface);border:1px solid var(--line);
+    border-left:4px solid var(--ac,var(--line));
+    border-radius:var(--r);padding:11px 14px;
+    box-shadow:0 2px 12px rgba(0,0,0,.18);
+    flex-direction:column;
+    opacity:0;pointer-events:none;
+    transition:opacity .2s;
+  }
+  .mob-result.show{opacity:1;pointer-events:auto}
+  .mob-result .ans-z{font-family:var(--fd);font-size:18px;font-weight:400;color:var(--ac);line-height:1.1;margin-bottom:2px}
+  .mob-result .ans-s{font-size:13px;color:var(--ink);font-weight:600}
+  .mob-result .ans-t{margin-top:5px;padding-top:5px;border-top:1px solid var(--line-soft);font-size:12px;color:var(--ink2)}
+  .mob-result .ans-t b{color:var(--ac);font-size:14px;font-weight:700}
+
+  /* Hide hint on mobile — result card replaces it */
+  .hint{display:none}
+}
+
+/* Desktop: hide mobile-only elements */
+@media (min-width:641px){
+  .mob-toggle{display:none}
+  .mob-result{display:none}
+  .backdrop{display:none}
+}
 </style>
 </head>
 <body>
 <div class="shell">
-<aside class="side">
+<aside class="side" id="side">
   <div class="side-head">
     <div class="eyebrow">School District 54 · Bulkley Valley</div>
     <h1>Trustee Zones</h1>
@@ -162,10 +239,27 @@ h1{font-family:var(--fd);font-size:24px;font-weight:400;line-height:1.12;text-wr
 <div class="mapwrap">
   <div id="map"></div>
   <div class="hint" id="hint">Click the map to find a zone</div>
+  <!-- Mobile floating result card -->
+  <div class="mob-result" id="mobResult">
+    <div class="ans-z" id="mobZ"></div>
+    <div class="ans-s" id="mobS"></div>
+    <div class="ans-t" id="mobT"></div>
+  </div>
 </div>
 </div>
+<!-- Mobile backdrop + toggle -->
+<div class="backdrop" id="backdrop" onclick="closeSide()"></div>
+<button class="mob-toggle" id="mobToggle" onclick="toggleSide()">
+  <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  Zones &amp; Info
+</button>
 
 <script>
+function toggleSide(){const s=document.getElementById('side'),b=document.getElementById('backdrop');
+ const open=s.classList.toggle('open');b.classList.toggle('show',open);}
+function closeSide(){document.getElementById('side').classList.remove('open');
+ document.getElementById('backdrop').classList.remove('show');}
+
 function tt(){const r=document.documentElement,c=r.getAttribute('data-theme');
  if(c==='dark')r.setAttribute('data-theme','light');
  else if(c==='light')r.setAttribute('data-theme','dark');
@@ -272,9 +366,18 @@ function identify(ll,name){
   const c=CSS(z.v);
   pin=L.circleMarker(ll,{radius:8,fillColor:c,color:'#fff',weight:3,fillOpacity:1}).addTo(map);
   ansEl.className='ans'; ansEl.style.setProperty('--ac',c);
+  const trustees=`${name?name+' elects ':'Voters here elect '}<b>${z.t}</b> of the 7 trustees`;
   ansEl.innerHTML=`<div class="ans-z">${z.n}</div><div class="ans-s">${z.sub}</div>
-   <div class="ans-t">${name?name+' elects ':'Voters here elect '}<b>${z.t}</b> of the 7 trustees</div>`;
+   <div class="ans-t">${trustees}</div>`;
   hintEl.textContent=(name||'Selected point')+' — '+z.n;
+  // Mobile result card
+  const mr=document.getElementById('mobResult');
+  if(mr){mr.style.setProperty('--ac',c);mr.classList.add('show');
+   document.getElementById('mobZ').textContent=z.n;
+   document.getElementById('mobS').textContent=z.sub;
+   document.getElementById('mobT').innerHTML=trustees;}
+  // Auto-close panel on mobile after community chip tap
+  if(name&&window.innerWidth<=640)closeSide();
 }
 map.on('click',e=>identify(e.latlng));
 
