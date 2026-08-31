@@ -166,7 +166,7 @@ if (execIsAdmin($myEmail) && empty($myExecRoleSlugs)) {
         </div>
       </div>
 
-      <?php if (expIsTreasurer($myEmail) || expIsVP($myEmail)): ?>
+      <?php if ((expIsTreasurer($myEmail) || expIsVP($myEmail)) && !execIsAdmin($myEmail)): ?>
       <div class="doc-section" style="margin-bottom:1.5rem;">
         <h2>LP Voucher Review</h2>
         <div class="doc-list">
