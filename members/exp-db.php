@@ -427,6 +427,23 @@ function expBatchEmailSubmitted(array $b, float $total, int $itemCount): void {
             _expHtmlWrap('New Expense Claim Submitted', $treasurerBody)
         );
     }
+
+    // FYI to VP — they'll be asked to sign after Treasurer approves
+    $vpLine = $onBehalf
+        ? '<p><strong>' . htmlspecialchars($b['submitted_by_name'] ?: $b['submitted_by_email']) . '</strong> has submitted an expense claim on behalf of <strong>' . htmlspecialchars($b['user_name']) . '</strong> (' . $itemCount . ' item' . ($itemCount === 1 ? '' : 's') . ', $' . number_format($total, 2) . ').</p>'
+        : '<p><strong>' . htmlspecialchars($b['user_name']) . '</strong> has submitted a new expense claim (' . $itemCount . ' item' . ($itemCount === 1 ? '' : 's') . ', $' . number_format($total, 2) . ').</p>';
+    $vpBody = $vpLine
+            . _expBatchDetailBox($b, $total, $itemCount)
+            . '<p>The BVTU Treasurer will review it first. You\'ll receive a separate email when your signature is needed.</p>';
+    foreach (expGetSigner2Emails() as $vpEmail) {
+        if (!in_array($vpEmail, expGetTreasurerEmails())) {
+            expNotify(
+                $vpEmail,
+                'New Expense Claim Submitted (FYI) — ' . $b['ref_code'],
+                _expHtmlWrap('New Expense Claim Submitted', $vpBody)
+            );
+        }
+    }
 }
 
 function expBatchEmailSigner1Approved(array $b, float $total, int $itemCount): void {
@@ -882,39 +899,55 @@ function expNotify(string $to, string $subject, string $body): void {
 
 function expGetTreasurerEmails(): array {
     $emails = [];
+    $db     = getDB();
 
-    if (defined('EXPENSE_ADMIN_EMAIL') && EXPENSE_ADMIN_EMAIL) {
-        $emails[] = EXPENSE_ADMIN_EMAIL;
-    }
-    if (defined('PROD_ADMIN_EMAIL') && PROD_ADMIN_EMAIL && !in_array(PROD_ADMIN_EMAIL, $emails)) {
-        $emails[] = PROD_ADMIN_EMAIL;
-    }
-
-    $s = getDB()->query("SELECT DISTINCT user_email FROM exp_roles WHERE role='treasurer'");
+    // Primary: EC directory (exec_roles)
+    $s = $db->query("SELECT DISTINCT user_email FROM exec_roles WHERE role='treasurer'");
     foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $email) {
-        if (!in_array($email, $emails)) {
-            $emails[] = $email;
-        }
+        $email = strtolower(trim($email));
+        if ($email && !in_array($email, $emails)) $emails[] = $email;
     }
+
+    // Legacy: exp_roles (manual assignments, kept for backward compat)
+    $s = $db->query("SELECT DISTINCT user_email FROM exp_roles WHERE role='treasurer'");
+    foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $email) {
+        $email = strtolower(trim($email));
+        if ($email && !in_array($email, $emails)) $emails[] = $email;
+    }
+
+    // Fallback: admin constants (LP) when no treasurer is assigned
+    if (empty($emails)) {
+        if (defined('EXPENSE_ADMIN_EMAIL') && EXPENSE_ADMIN_EMAIL) $emails[] = EXPENSE_ADMIN_EMAIL;
+        elseif (defined('PROD_ADMIN_EMAIL') && PROD_ADMIN_EMAIL)   $emails[] = PROD_ADMIN_EMAIL;
+    }
+
     return $emails;
 }
 
 function expGetSigner2Emails(): array {
     $emails = [];
+    $db     = getDB();
 
-    if (defined('EXPENSE_ADMIN_EMAIL') && EXPENSE_ADMIN_EMAIL) {
-        $emails[] = EXPENSE_ADMIN_EMAIL;
-    }
-    if (defined('PROD_ADMIN_EMAIL') && PROD_ADMIN_EMAIL && !in_array(PROD_ADMIN_EMAIL, $emails)) {
-        $emails[] = PROD_ADMIN_EMAIL;
-    }
-
-    $s = getDB()->query("SELECT DISTINCT user_email FROM exp_roles WHERE role IN ('vp','president')");
+    // Primary: EC directory (exec_roles) — vice_president or president
+    $s = $db->query("SELECT DISTINCT user_email FROM exec_roles WHERE role IN ('vice_president','president')");
     foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $email) {
-        if (!in_array($email, $emails)) {
-            $emails[] = $email;
-        }
+        $email = strtolower(trim($email));
+        if ($email && !in_array($email, $emails)) $emails[] = $email;
     }
+
+    // Legacy: exp_roles
+    $s = $db->query("SELECT DISTINCT user_email FROM exp_roles WHERE role IN ('vp','president')");
+    foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $email) {
+        $email = strtolower(trim($email));
+        if ($email && !in_array($email, $emails)) $emails[] = $email;
+    }
+
+    // Fallback: admin constants when no signer2 is assigned
+    if (empty($emails)) {
+        if (defined('EXPENSE_ADMIN_EMAIL') && EXPENSE_ADMIN_EMAIL) $emails[] = EXPENSE_ADMIN_EMAIL;
+        elseif (defined('PROD_ADMIN_EMAIL') && PROD_ADMIN_EMAIL)   $emails[] = PROD_ADMIN_EMAIL;
+    }
+
     return $emails;
 }
 
@@ -989,6 +1022,23 @@ function expEmailSubmitted(array $exp): void {
             'New Expense for Review — ' . $exp['ref_code'],
             _expHtmlWrap('New Expense Submitted', $treasurerBody)
         );
+    }
+
+    // FYI to VP — they'll be asked to sign after Treasurer approves
+    $vpLine = $onBehalf
+        ? '<p><strong>' . htmlspecialchars($exp['submitted_by_name'] ?: $exp['submitted_by_email']) . '</strong> has submitted an expense on behalf of <strong>' . htmlspecialchars($exp['user_name']) . '</strong> for $' . number_format((float)$exp['amount'], 2) . '.</p>'
+        : '<p><strong>' . htmlspecialchars($exp['user_name']) . '</strong> has submitted a new expense for $' . number_format((float)$exp['amount'], 2) . '.</p>';
+    $vpBody = $vpLine
+            . _expDetailBox($exp)
+            . '<p>The BVTU Treasurer will review it first. You\'ll receive a separate email when your signature is needed.</p>';
+    foreach (expGetSigner2Emails() as $vpEmail) {
+        if (!in_array($vpEmail, expGetTreasurerEmails())) {
+            expNotify(
+                $vpEmail,
+                'New Expense Submitted (FYI) — ' . $exp['ref_code'],
+                _expHtmlWrap('New Expense Submitted', $vpBody)
+            );
+        }
     }
 }
 
