@@ -95,10 +95,12 @@ $allSchools   = prodGetSchools(false);
 $totalSiteReps = count(array_filter($prodRoles, function($r) { return $r['role'] === 'site_rep'; }));
 $adminEmail   = defined('PROD_ADMIN_EMAIL') ? strtolower(trim(PROD_ADMIN_EMAIL)) : null;
 
-// Vacancy checks for system roles
+// Vacancy checks for system roles — expense roles come from exec_roles (EC directory)
 $expRoleCols      = array_column($expRoles, 'role');
-$hasExpTreasurer  = in_array('treasurer', $expRoleCols);
-$hasSigner2       = in_array('vp', $expRoleCols) || in_array('president', $expRoleCols) || (bool)$adminEmail;
+$execRoleSlugs    = getDB()->query("SELECT role FROM exec_roles")->fetchAll(PDO::FETCH_COLUMN);
+$hasExpTreasurer  = in_array('treasurer', $execRoleSlugs) || in_array('treasurer', $expRoleCols);
+$hasSigner2       = in_array('vice_president', $execRoleSlugs) || in_array('president', $execRoleSlugs)
+                 || in_array('vp', $expRoleCols) || in_array('president', $expRoleCols) || (bool)$adminEmail;
 $prodRoleCols     = array_column($prodRoles, 'role');
 $hasProdTreasurer = in_array('treasurer', $prodRoleCols);
 
@@ -265,7 +267,6 @@ ksort($siteReps);
     </div>
     <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
       <a href="prod-manage.php" class="btn-sm">Pro-D Roles</a>
-      <a href="exp-manage.php"  class="btn-sm">Expense Roles</a>
     </div>
   </div>
 
@@ -296,10 +297,10 @@ ksort($siteReps);
   <?php if (!$hasExpTreasurer || !$hasSigner2 || !$hasProdTreasurer): ?>
   <div class="vacancy-strip">
     <?php if (!$hasExpTreasurer): ?>
-    <div class="vacancy-chip">&#x26A0; No BVTU Treasurer assigned for expense approvals &mdash; <a href="exp-manage.php">assign one</a></div>
+    <div class="vacancy-chip">&#x26A0; No BVTU Treasurer assigned for expense approvals &mdash; assign one in the EC table below</div>
     <?php endif; ?>
     <?php if (!$hasSigner2): ?>
-    <div class="vacancy-chip">&#x26A0; No VP or President assigned for expense second signature &mdash; <a href="exp-manage.php">assign one</a></div>
+    <div class="vacancy-chip">&#x26A0; No VP or President assigned for expense second signature &mdash; assign one in the EC table below</div>
     <?php endif; ?>
     <?php if (!$hasProdTreasurer): ?>
     <div class="vacancy-chip">&#x26A0; No Pro-D Treasurer assigned &mdash; <a href="prod-manage.php">assign one</a></div>
@@ -443,12 +444,7 @@ ksort($siteReps);
       $s->execute([$adminEmail]);
       $sysPeople[$adminEmail] = ['name' => $s->fetchColumn() ?: 'Admin', 'email' => $adminEmail, 'roles' => [], 'is_const' => true];
   }
-  foreach ($expRoles as $r) {
-      $e = strtolower(trim($r['user_email']));
-      if (!isset($sysPeople[$e])) $sysPeople[$e] = ['name' => $r['user_name'] ?: $e, 'email' => $e, 'roles' => [], 'is_const' => ($e === $adminEmail)];
-      $m = $expMeta[$r['role']] ?? ['label' => $r['role'], 'color' => '#555', 'bg' => '#f8f9fa'];
-      $sysPeople[$e]['roles'][] = ['label' => $m['label'], 'color' => $m['color'], 'bg' => $m['bg']];
-  }
+  // Expense roles are now derived from the EC directory (exec_roles) — no separate listing needed here
   foreach ($prodRoles as $r) {
       if ($r['role'] === 'site_rep') continue; // site reps get their own section
       $e = strtolower(trim($r['user_email']));
@@ -459,11 +455,9 @@ ksort($siteReps);
   ?>
 
   <?php if (!empty($sysPeople)): ?>
-  <div class="sec-head" style="margin-top:2.5rem;">Portal System Roles
+  <div class="sec-head" style="margin-top:2.5rem;">Pro-D Portal Roles
     <span style="font-weight:400;font-size:.7rem;color:var(--gray-400);text-transform:none;letter-spacing:0;">
-      (expense approvals &amp; Pro-D) &mdash; manage via
-      <a href="exp-manage.php" style="color:var(--primary);">Expense Roles</a> /
-      <a href="prod-manage.php" style="color:var(--primary);">Pro-D Roles</a>
+      &mdash; manage via <a href="prod-manage.php" style="color:var(--primary);">Pro-D Roles</a>
     </span>
   </div>
   <div class="people-grid">
