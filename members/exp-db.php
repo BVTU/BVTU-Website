@@ -428,22 +428,6 @@ function expBatchEmailSubmitted(array $b, float $total, int $itemCount): void {
         );
     }
 
-    // FYI to VP — they'll be asked to sign after Treasurer approves
-    $vpLine = $onBehalf
-        ? '<p><strong>' . htmlspecialchars($b['submitted_by_name'] ?: $b['submitted_by_email']) . '</strong> has submitted an expense claim on behalf of <strong>' . htmlspecialchars($b['user_name']) . '</strong> (' . $itemCount . ' item' . ($itemCount === 1 ? '' : 's') . ', $' . number_format($total, 2) . ').</p>'
-        : '<p><strong>' . htmlspecialchars($b['user_name']) . '</strong> has submitted a new expense claim (' . $itemCount . ' item' . ($itemCount === 1 ? '' : 's') . ', $' . number_format($total, 2) . ').</p>';
-    $vpBody = $vpLine
-            . _expBatchDetailBox($b, $total, $itemCount)
-            . '<p>The BVTU Treasurer will review it first. You\'ll receive a separate email when your signature is needed.</p>';
-    foreach (expGetSigner2Emails() as $vpEmail) {
-        if (!in_array($vpEmail, expGetTreasurerEmails())) {
-            expNotify(
-                $vpEmail,
-                'New Expense Claim Submitted (FYI) — ' . $b['ref_code'],
-                _expHtmlWrap('New Expense Claim Submitted', $vpBody)
-            );
-        }
-    }
 }
 
 function expBatchEmailSigner1Approved(array $b, float $total, int $itemCount): void {
@@ -915,11 +899,11 @@ function expGetTreasurerEmails(): array {
         if ($email && !in_array($email, $emails)) $emails[] = $email;
     }
 
-    // Fallback: admin constants (LP) when no treasurer is assigned
-    if (empty($emails)) {
-        if (defined('EXPENSE_ADMIN_EMAIL') && EXPENSE_ADMIN_EMAIL) $emails[] = EXPENSE_ADMIN_EMAIL;
-        elseif (defined('PROD_ADMIN_EMAIL') && PROD_ADMIN_EMAIL)   $emails[] = PROD_ADMIN_EMAIL;
-    }
+    // Always include the Local President so they stay in the loop
+    $lpEmail = defined('EXPENSE_ADMIN_EMAIL') && EXPENSE_ADMIN_EMAIL
+        ? strtolower(trim(EXPENSE_ADMIN_EMAIL))
+        : (defined('PROD_ADMIN_EMAIL') && PROD_ADMIN_EMAIL ? strtolower(trim(PROD_ADMIN_EMAIL)) : null);
+    if ($lpEmail && !in_array($lpEmail, $emails)) $emails[] = $lpEmail;
 
     return $emails;
 }
@@ -1024,22 +1008,6 @@ function expEmailSubmitted(array $exp): void {
         );
     }
 
-    // FYI to VP — they'll be asked to sign after Treasurer approves
-    $vpLine = $onBehalf
-        ? '<p><strong>' . htmlspecialchars($exp['submitted_by_name'] ?: $exp['submitted_by_email']) . '</strong> has submitted an expense on behalf of <strong>' . htmlspecialchars($exp['user_name']) . '</strong> for $' . number_format((float)$exp['amount'], 2) . '.</p>'
-        : '<p><strong>' . htmlspecialchars($exp['user_name']) . '</strong> has submitted a new expense for $' . number_format((float)$exp['amount'], 2) . '.</p>';
-    $vpBody = $vpLine
-            . _expDetailBox($exp)
-            . '<p>The BVTU Treasurer will review it first. You\'ll receive a separate email when your signature is needed.</p>';
-    foreach (expGetSigner2Emails() as $vpEmail) {
-        if (!in_array($vpEmail, expGetTreasurerEmails())) {
-            expNotify(
-                $vpEmail,
-                'New Expense Submitted (FYI) — ' . $exp['ref_code'],
-                _expHtmlWrap('New Expense Submitted', $vpBody)
-            );
-        }
-    }
 }
 
 function expEmailSigner1Approved(array $exp): void {
