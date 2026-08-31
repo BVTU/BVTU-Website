@@ -535,6 +535,12 @@ function expHasRole(string $email, string $role): bool {
     return (int)$s->fetchColumn() > 0;
 }
 
+function expHasExecRole(string $email, string $role): bool {
+    $s = getDB()->prepare("SELECT COUNT(*) FROM exec_roles WHERE user_email=? AND role=?");
+    $s->execute([strtolower(trim($email)), $role]);
+    return (int)$s->fetchColumn() > 0;
+}
+
 function expIsAdmin(string $email): bool {
     if (defined('EXPENSE_ADMIN_EMAIL') && strtolower(trim($email)) === strtolower(trim(EXPENSE_ADMIN_EMAIL))) {
         return true;
@@ -546,15 +552,18 @@ function expIsAdmin(string $email): bool {
 }
 
 function expIsTreasurer(string $email): bool {
-    return expHasRole($email, 'treasurer') || expIsAdmin($email);
+    // Checks exp_roles OR exec_roles (treasurer slug matches in both)
+    return expHasRole($email, 'treasurer') || expHasExecRole($email, 'treasurer') || expIsAdmin($email);
 }
 
 function expIsVP(string $email): bool {
-    return expHasRole($email, 'vp');
+    // exp_roles uses 'vp'; exec_roles uses 'vice_president'
+    return expHasRole($email, 'vp') || expHasExecRole($email, 'vice_president');
 }
 
 function expIsPresident(string $email): bool {
-    return expHasRole($email, 'president') || expIsAdmin($email);
+    // exp_roles uses 'president'; exec_roles uses 'president'
+    return expHasRole($email, 'president') || expHasExecRole($email, 'president') || expIsAdmin($email);
 }
 
 function expIsEligibleSigner2(string $email): bool {
