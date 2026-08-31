@@ -44,3 +44,11 @@ define('SESSION_SECRET', 'change-this-to-a-long-random-string-xyz');
 // Email that always has admin + Local President access to the expense portal.
 // Falls back to PROD_ADMIN_EMAIL if this is not set.
 // define('EXPENSE_ADMIN_EMAIL', 'your-email@bctf.ca');
+
+// ── SMTP Email (required for all site emails) ─────────────────────────────────
+// Create a mailbox in Hostinger hPanel → Emails → Email Accounts, then fill in:
+// define('SMTP_HOST',      'smtp.hostinger.com');
+// define('SMTP_PORT',      587);                   // 587 = STARTTLS, 465 = SSL
+// define('SMTP_USER',      'noreply@bvtu.ca');      // the mailbox you created
+// define('SMTP_PASS',      'your-mailbox-password');
+// define('SMTP_FROM_NAME', 'BVTU Member Portal');

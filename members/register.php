@@ -68,10 +68,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         . "If you have any questions or need help, reply to this email or reach out to the union office.\n\n"
                         . "— Bulkley Valley Teachers' Union\n"
                         . "3772 1st Avenue, Smithers, BC";
-                    $welcomeHeaders  = "From: BVTU Member Portal <lp54@bctf.ca>\r\n";
-                    $welcomeHeaders .= "Reply-To: lp54@bctf.ca\r\n";
-                    $welcomeHeaders .= "Content-Type: text/plain; charset=UTF-8\r\n";
-                    @mail($email, $welcomeSubject, $welcomeBody, $welcomeHeaders);
+                    require_once __DIR__ . '/smtp.php';
+                    siteMail($email, $welcomeSubject, $welcomeBody);
 
                     // Log them in immediately
                     $member = [

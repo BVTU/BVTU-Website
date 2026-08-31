@@ -44,9 +44,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'submi
         $body .= "\nView and approve online:\n{$viewUrl}\n\n";
         $body .= "— BVTU Members Portal";
 
-        $headers = "From: lp54@bctf.ca\r\nReply-To: {$voucher['submitted_by_email']}\r\nContent-Type: text/plain; charset=UTF-8";
+        require_once __DIR__ . '/smtp.php';
         foreach ($treasurerEmails as $to) {
-            @mail($to, $subject, $body, $headers);
+            siteMail($to, $subject, $body);
         }
 
         $notice = 'Voucher submitted — the treasurer has been notified by email.';

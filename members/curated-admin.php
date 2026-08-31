@@ -82,11 +82,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                      . "{$publicUrl}\n\n"
                      . "— Bulkley Valley Teachers' Union";
 
-            $headers  = "From: BVTU Member Portal <{$fromEmail}>\r\n";
-            $headers .= "Reply-To: {$fromEmail}\r\n";
-            $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
-
-            mail($ce, $subject, $body, $headers);
+            require_once __DIR__ . '/smtp.php';
+            siteMail($ce, $subject, $body);
 
             header('Location: curated-admin.php?tab=curators&success=Curator+added+and+notified+by+email.');
             exit;

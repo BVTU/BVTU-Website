@@ -50,11 +50,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                      . "If you did not request a password reset, you can safely ignore this email — your password has not changed.\n\n"
                      . "— Bulkley Valley Teachers' Union";
 
-            $headers  = "From: BVTU Member Portal <{$fromEmail}>\r\n";
-            $headers .= "Reply-To: {$fromEmail}\r\n";
-            $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
-
-            mail($email, $subject, $body, $headers);
+            require_once __DIR__ . '/smtp.php';
+            siteMail($email, $subject, $body);
         }
 
         // Always show the same message — never reveal whether email exists
