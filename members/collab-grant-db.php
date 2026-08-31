@@ -127,7 +127,7 @@ President, Bulkley Valley Teachers' Union
 lp54@bctf.ca
 TEXT;
 
-    $headers = "From: BVTU <noreply@bvtu.ca>\r\nReply-To: lp54@bctf.ca\r\nContent-Type: text/plain; charset=UTF-8";
+    $headers = "From: BVTU <lp54@bctf.ca>\r\nReply-To: lp54@bctf.ca\r\nContent-Type: text/plain; charset=UTF-8";
     @mail($email, $subject, $body, $headers);
 }
 
@@ -171,7 +171,7 @@ Review applications at:
 https://bvtu.ca/members/collab-grant-admin.php
 TEXT;
 
-    $headers = "From: BVTU Website <noreply@bvtu.ca>\r\nContent-Type: text/plain; charset=UTF-8";
+    $headers = "From: BVTU Website <lp54@bctf.ca>\r\nContent-Type: text/plain; charset=UTF-8";
     @mail('lp54@bctf.ca', $subject, $body, $headers);
 }
 
@@ -190,6 +190,6 @@ If you have any questions in the meantime, feel free to reach out at lp54@bctf.c
 Bulkley Valley Teachers' Union
 TEXT;
 
-    $headers = "From: BVTU <noreply@bvtu.ca>\r\nReply-To: lp54@bctf.ca\r\nContent-Type: text/plain; charset=UTF-8";
+    $headers = "From: BVTU <lp54@bctf.ca>\r\nReply-To: lp54@bctf.ca\r\nContent-Type: text/plain; charset=UTF-8";
     @mail($email, $subject, $body, $headers);
 }

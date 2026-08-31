@@ -454,7 +454,7 @@ function lpMarkPaid(int $id, string $email, string $name, string $note, string $
 function lpNotify(string $to, string $subject, string $body): void {
     $headers  = "MIME-Version: 1.0\r\n";
     $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
-    $headers .= "From: BVTU LP Expenses <noreply@bvtu.ca>\r\n";
+    $headers .= "From: BVTU LP Expenses <lp54@bctf.ca>\r\n";
     @mail($to, $subject, $body, $headers);
 }
 

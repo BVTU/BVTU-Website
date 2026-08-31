@@ -7,7 +7,7 @@ if (isLoggedIn()) { header('Location: dashboard.php'); exit; }
 
 $configPath = __DIR__ . '/config.php';
 if (file_exists($configPath)) require_once $configPath;
-$fromEmail = defined('CONTACT_EMAIL') ? CONTACT_EMAIL : 'noreply@bvtu.ca';
+$fromEmail = defined('CONTACT_EMAIL') ? CONTACT_EMAIL : 'lp54@bctf.ca';
 
 $error   = '';
 $success = false;

@@ -44,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'submi
         $body .= "\nView and approve online:\n{$viewUrl}\n\n";
         $body .= "— BVTU Members Portal";
 
-        $headers = "From: noreply@bvtu.ca\r\nReply-To: {$voucher['submitted_by_email']}\r\nContent-Type: text/plain; charset=UTF-8";
+        $headers = "From: lp54@bctf.ca\r\nReply-To: {$voucher['submitted_by_email']}\r\nContent-Type: text/plain; charset=UTF-8";
         foreach ($treasurerEmails as $to) {
             @mail($to, $subject, $body, $headers);
         }

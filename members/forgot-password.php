@@ -11,7 +11,7 @@ if (isLoggedIn()) { header('Location: dashboard.php'); exit; }
 // Load config for CONTACT_EMAIL (used as the from address)
 $configPath = __DIR__ . '/config.php';
 if (file_exists($configPath)) require_once $configPath;
-$fromEmail = defined('CONTACT_EMAIL') ? CONTACT_EMAIL : 'noreply@bvtu.ca';
+$fromEmail = defined('CONTACT_EMAIL') ? CONTACT_EMAIL : 'lp54@bctf.ca';
 
 $submitted = false;
 $error     = '';

@@ -63,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             curatedAddCurator($ce, $cn, $member['email']);
 
             // Email the new curator
-            $fromEmail   = defined('CONTACT_EMAIL') ? CONTACT_EMAIL : 'noreply@bvtu.ca';
+            $fromEmail   = defined('CONTACT_EMAIL') ? CONTACT_EMAIL : 'lp54@bctf.ca';
             $adminName   = $member['name'] ?? $member['email'];
             $curatorName = $cn ?: 'there';
             $host        = $_SERVER['HTTP_HOST'] ?? 'bvtu.ca';

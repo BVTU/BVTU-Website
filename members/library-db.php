@@ -602,7 +602,7 @@ https://bvtu.ca/library-resource.php?id={$resource['id']}
 
 Bulkley Valley Teachers' Union
 TEXT;
-    $headers = "From: BVTU <noreply@bvtu.ca>\r\nReply-To: lp54@bctf.ca\r\nContent-Type: text/plain; charset=UTF-8";
+    $headers = "From: BVTU <lp54@bctf.ca>\r\nReply-To: lp54@bctf.ca\r\nContent-Type: text/plain; charset=UTF-8";
     @mail($resource['uploader_email'], "New rating on \"{$title}\" — BVTU Library", $body, $headers);
 }
 

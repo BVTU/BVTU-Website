@@ -869,7 +869,7 @@ function expPendingForSigner2(): int {
 function expNotify(string $to, string $subject, string $body): void {
     $headers  = "MIME-Version: 1.0\r\n";
     $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
-    $headers .= "From: BVTU Expense Portal <noreply@bvtu.ca>\r\n";
+    $headers .= "From: BVTU Expense Portal <lp54@bctf.ca>\r\n";
     $headers .= "X-Mailer: PHP/" . phpversion() . "\r\n";
 
     @mail($to, $subject, $body, $headers);
