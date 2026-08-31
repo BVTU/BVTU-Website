@@ -5,6 +5,10 @@ require_once 'db.php';
 startSession();
 if (isLoggedIn()) { header('Location: dashboard.php'); exit; }
 
+$configPath = __DIR__ . '/config.php';
+if (file_exists($configPath)) require_once $configPath;
+$fromEmail = defined('CONTACT_EMAIL') ? CONTACT_EMAIL : 'noreply@bvtu.ca';
+
 $error   = '';
 $success = false;
 
@@ -51,6 +55,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         "INSERT INTO members (name, email, password_hash, employee_number) VALUES (?, ?, ?, ?)"
                     );
                     $stmt->execute([$name, $email, $hash, $emp_num]);
+
+                    // Send welcome email
+                    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+                    $host     = $_SERVER['HTTP_HOST'] ?? 'bvtu.ca';
+                    $portalUrl = "{$protocol}://{$host}/members/dashboard.php";
+
+                    $welcomeSubject = 'Welcome to the BVTU Member Portal';
+                    $welcomeBody    = "Hi {$name},\n\n"
+                        . "Your BVTU member portal account has been created successfully. You can now log in at any time to access member resources, submit expense claims, view documents, and more.\n\n"
+                        . "Member portal: {$portalUrl}\n\n"
+                        . "If you have any questions or need help, reply to this email or reach out to the union office.\n\n"
+                        . "— Bulkley Valley Teachers' Union\n"
+                        . "3772 1st Avenue, Smithers, BC";
+                    $welcomeHeaders  = "From: BVTU Member Portal <{$fromEmail}>\r\n";
+                    $welcomeHeaders .= "Reply-To: {$fromEmail}\r\n";
+                    $welcomeHeaders .= "Content-Type: text/plain; charset=UTF-8\r\n";
+                    @mail($email, $welcomeSubject, $welcomeBody, $welcomeHeaders);
 
                     // Log them in immediately
                     $member = [
