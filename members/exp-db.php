@@ -444,13 +444,13 @@ function expBatchEmailSigner1Approved(array $b, float $total, int $itemCount): v
 }
 
 function expBatchEmailSigner2Approved(array $b, float $total, int $itemCount): void {
-    $memberBody = '<p>Great news! Your expense claim has been authorized by two signing officers.</p>'
+    $memberBody = '<p>Your expense claim has been approved by both the Treasurer and Local President.</p>'
                 . _expBatchDetailBox($b, $total, $itemCount)
-                . '<p>The Treasurer will send a single <strong>e-transfer</strong> for the full amount to <strong>' . htmlspecialchars($b['user_email']) . '</strong> shortly. Use <code>' . htmlspecialchars($b['ref_code']) . '</code> as the reference if prompted.</p>'
+                . '<p>An <strong>e-transfer</strong> for the full amount will be sent to <strong>' . htmlspecialchars($b['user_email']) . '</strong> within <strong>3 business days</strong>. Use <code>' . htmlspecialchars($b['ref_code']) . '</code> as the security question answer if prompted.</p>'
                 . '<p><a class="btn" href="' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/members/exp-claim-view.php?id=' . (int)$b['id'] . '">View Your Claim</a></p>';
     expNotify(
         $b['user_email'],
-        'Expense Claim Authorized — ' . $b['ref_code'] . ' — E-transfer coming',
+        'Expense Approved — ' . $b['ref_code'] . ' — E-transfer within 3 business days',
         _expHtmlWrap('Expense Claim Authorized — Payment Coming', $memberBody)
     );
 
@@ -939,7 +939,7 @@ function _expHtmlWrap(string $title, string $body): string {
     <div class="wrap">
         <div class="hdr"><h1>BVTU Expense Portal</h1><p>' . htmlspecialchars($title) . '</p></div>
         <div class="body">' . $body . '</div>
-        <div class="ftr">Bulkley Valley Teachers\' Union &mdash; This is an automated notification.</div>
+        <div class="ftr">Bulkley Valley Teachers\' Union &mdash; This is an automated notification. Please do not reply to this email &mdash; this mailbox is not monitored. Contact <a href="mailto:lp54@bctf.ca" style="color:#9ca3af;">lp54@bctf.ca</a> if you have questions.</div>
     </div></body></html>';
 }
 
@@ -1009,13 +1009,13 @@ function expEmailSigner1Approved(array $exp): void {
 
 function expEmailSigner2Approved(array $exp): void {
     // To member — payment coming
-    $memberBody = '<p>Great news! Your expense reimbursement has been authorized by two signing officers.</p>'
+    $memberBody = '<p>Your expense reimbursement has been approved by both the Treasurer and Local President.</p>'
                 . _expDetailBox($exp)
-                . '<p>The Treasurer will send an <strong>e-transfer</strong> to <strong>' . htmlspecialchars($exp['user_email']) . '</strong> shortly. Use <code>' . htmlspecialchars($exp['ref_code']) . '</code> as the reference if prompted.</p>';
+                . '<p>An <strong>e-transfer</strong> will be sent to <strong>' . htmlspecialchars($exp['user_email']) . '</strong> within <strong>3 business days</strong>. Use <code>' . htmlspecialchars($exp['ref_code']) . '</code> as the security question answer if prompted.</p>';
     expNotify(
         $exp['user_email'],
-        'Expense Authorized — ' . $exp['ref_code'] . ' — E-transfer coming',
-        _expHtmlWrap('Expense Authorized — Payment Coming', $memberBody)
+        'Expense Approved — ' . $exp['ref_code'] . ' — E-transfer within 3 business days',
+        _expHtmlWrap('Expense Approved — E-transfer within 3 Business Days', $memberBody)
     );
 
     // To treasurers — ready to send

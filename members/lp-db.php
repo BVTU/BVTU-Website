@@ -475,7 +475,7 @@ function _lpWrap(string $title, string $body): string {
     </style></head><body><div class="wrap">
     <div class="hdr"><h1>BVTU LP Expense Voucher</h1><p>' . htmlspecialchars($title) . '</p></div>
     <div class="body">' . $body . '</div>
-    <div class="ftr">Bulkley Valley Teachers\' Union &mdash; Automated notification.</div>
+    <div class="ftr">Bulkley Valley Teachers\' Union &mdash; Automated notification. Please do not reply to this email &mdash; this mailbox is not monitored. Contact <a href="mailto:lp54@bctf.ca" style="color:#9ca3af;">lp54@bctf.ca</a> if you have questions.</div>
     </div></body></html>';
 }
 
