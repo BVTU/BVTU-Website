@@ -88,7 +88,7 @@ $catLabels = [
   <?php endif; ?>
 
   <div class="info-box">
-    &#x1F4DD; As VP or President, your signature is the second and final approval. Once you approve, the member will be notified and the Treasurer will send the e-transfer payment.
+    &#x1F4DD; As Local President, your signature is the second and final approval. Once you approve, the member will be notified and the Treasurer will send the e-transfer payment.
   </div>
 
   <?php if (!$expenses): ?>

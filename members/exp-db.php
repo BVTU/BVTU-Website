@@ -568,8 +568,8 @@ function expIsPresident(string $email): bool {
 }
 
 function expIsEligibleSigner2(string $email): bool {
-    // VP, President role, OR admin constant (Local President)
-    return expIsAdmin($email) || expIsVP($email) || expIsPresident($email);
+    // Second signer for regular member expenses is the Local President
+    return expIsAdmin($email);
 }
 
 function expCanReview(string $email): bool {
@@ -909,29 +909,13 @@ function expGetTreasurerEmails(): array {
 }
 
 function expGetSigner2Emails(): array {
+    // Second signer for regular member expenses is always the Local President
     $emails = [];
-    $db     = getDB();
-
-    // Primary: EC directory (exec_roles) — vice_president or president
-    $s = $db->query("SELECT DISTINCT user_email FROM exec_roles WHERE role IN ('vice_president','president')");
-    foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $email) {
-        $email = strtolower(trim($email));
-        if ($email && !in_array($email, $emails)) $emails[] = $email;
+    if (defined('EXPENSE_ADMIN_EMAIL') && EXPENSE_ADMIN_EMAIL) {
+        $emails[] = strtolower(trim(EXPENSE_ADMIN_EMAIL));
+    } elseif (defined('PROD_ADMIN_EMAIL') && PROD_ADMIN_EMAIL) {
+        $emails[] = strtolower(trim(PROD_ADMIN_EMAIL));
     }
-
-    // Legacy: exp_roles
-    $s = $db->query("SELECT DISTINCT user_email FROM exp_roles WHERE role IN ('vp','president')");
-    foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $email) {
-        $email = strtolower(trim($email));
-        if ($email && !in_array($email, $emails)) $emails[] = $email;
-    }
-
-    // Fallback: admin constants when no signer2 is assigned
-    if (empty($emails)) {
-        if (defined('EXPENSE_ADMIN_EMAIL') && EXPENSE_ADMIN_EMAIL) $emails[] = EXPENSE_ADMIN_EMAIL;
-        elseif (defined('PROD_ADMIN_EMAIL') && PROD_ADMIN_EMAIL)   $emails[] = PROD_ADMIN_EMAIL;
-    }
-
     return $emails;
 }
 
