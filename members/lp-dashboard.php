@@ -236,7 +236,10 @@ $grantSumJson      = json_encode(array_values($grantSum));
   <?php endif; ?>
 
   <!-- Grant summary -->
-  <p class="section-title">BCTF Grants</p>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.85rem;flex-wrap:wrap;gap:.5rem;">
+    <p class="section-title" style="margin:0;">BCTF Grants</p>
+    <a href="lp-grants-manage.php" style="font-size:.78rem;font-weight:700;color:var(--primary);text-decoration:none;background:var(--accent);border:1px solid #b8ddc5;border-radius:6px;padding:.3rem .75rem;">✏ Edit grant budgets</a>
+  </div>
   <div class="grant-grid">
     <?php foreach ($grantSum as $g):
       $pct      = $g['pct'];
