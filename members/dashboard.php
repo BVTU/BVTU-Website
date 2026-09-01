@@ -90,6 +90,16 @@ if (execIsAdmin($myEmail) && empty($myExecRoleSlugs)) {
     .role-chip { font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
                  background: rgba(255,255,255,.18); color: #fff; border: 1px solid rgba(255,255,255,.3);
                  border-radius: 100px; padding: .22rem .7rem; }
+    .lp-quickbar { display: flex; gap: .75rem; flex-wrap: wrap; margin-bottom: 1.75rem; padding: 1rem 1.25rem;
+                   background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; align-items: center; }
+    .lp-quickbar-label { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+                         color: var(--primary); margin-right: .25rem; }
+    .lp-quickbtn { display: inline-flex; align-items: center; gap: .45rem; padding: .55rem 1rem;
+                   background: var(--primary); color: #fff; font-size: .88rem; font-weight: 700;
+                   border-radius: 7px; text-decoration: none; transition: background .15s; }
+    .lp-quickbtn:hover { background: var(--primary-dk); color: #fff; text-decoration: none; }
+    .lp-quickbtn.outline { background: #fff; color: var(--primary); border: 1.5px solid var(--primary); }
+    .lp-quickbtn.outline:hover { background: var(--accent); }
   </style>
 </head>
 <body>
@@ -142,6 +152,20 @@ if (execIsAdmin($myEmail) && empty($myExecRoleSlugs)) {
         <div class="welcome-banner">
           Your account has been created successfully. Welcome to the BVTU members portal.
         </div>
+      <?php endif; ?>
+
+      <?php if (execIsAdmin($myEmail)): ?>
+      <div class="lp-quickbar">
+        <span class="lp-quickbar-label">LP Expenses</span>
+        <a href="lp-dashboard.php" class="lp-quickbtn">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          LP Expense Tracker
+        </a>
+        <a href="lp-voucher-new.php" class="lp-quickbtn outline">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+          New Expense Voucher
+        </a>
+      </div>
       <?php endif; ?>
 
       <div class="doc-section" style="margin-bottom:1.5rem;">

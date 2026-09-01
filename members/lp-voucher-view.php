@@ -53,9 +53,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'submi
     }
 }
 
-// ── Delete draft voucher ──────────────────────────────────────────────────────
+// ── Delete voucher ────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete') {
-    if ($voucher['status'] === 'draft' && $isOwner) {
+    $isAdmin     = execIsAdmin($member['email']);
+    $canDelete   = ($voucher['status'] === 'draft' && $isOwner)
+                || ($isAdmin && $voucher['status'] !== 'paid');
+    if ($canDelete) {
         lpDeleteVoucher($id);
         header('Location: lp-dashboard.php?deleted=1');
         exit;
@@ -248,6 +251,12 @@ arsort($blSummary);
           <?php else: ?>
           <span style="font-size:.82rem;font-weight:700;color:#166534;padding:.45rem .5rem;">✓ Submitted <?= $voucher['submitted_at'] ? date('M j', strtotime($voucher['submitted_at'])) : '' ?></span>
           <a href="lp-voucher-edit.php?id=<?= $id ?>" class="btn btn-outline" style="padding:.45rem .85rem;font-size:.83rem;">✏ Edit</a>
+          <?php if (execIsAdmin($member['email']) && $voucher['status'] !== 'paid'): ?>
+          <form method="POST" style="display:inline;" onsubmit="return confirm('Permanently delete this voucher and all its expenses? This cannot be undone.')">
+            <input type="hidden" name="action" value="delete">
+            <button type="submit" class="btn btn-outline" style="padding:.45rem .85rem;font-size:.83rem;color:#dc2626;border-color:#dc2626;">🗑 Delete</button>
+          </form>
+          <?php endif; ?>
           <?php endif; ?>
         <?php endif; ?>
         <a href="?id=<?= $id ?>&export=csv" class="btn btn-outline" style="padding:.45rem .85rem;font-size:.83rem;">⬇ CSV</a>
