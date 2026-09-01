@@ -227,6 +227,12 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
     #receiptPreview img { max-width: 260px; max-height: 340px; display: block; border-radius: 6px; object-fit: contain; }
     .btn-row-remove { background: none; border: none; cursor: pointer; color: var(--gray-300); font-size: 1rem; padding: .2rem .4rem; border-radius: 4px; transition: color .12s; }
     .btn-row-remove:hover { color: #dc2626; background: #fef2f2; }
+    /* Drag-and-drop */
+    .drop-zone { border: 2px dashed var(--gray-300); border-radius: 10px; padding: .75rem 1rem; text-align: center; color: var(--gray-400); font-size: .84rem; font-weight: 600; margin-bottom: .75rem; transition: border-color .15s, background .15s, color .15s; user-select: none; }
+    .drop-zone.drag-active { border-color: #86efac; background: #f0fdf4; color: var(--primary); }
+    .drop-zone.drag-over   { border-color: var(--primary); background: #dcfce7; color: var(--primary); }
+    .receipt-wrap.drag-over { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 6px; background: #dcfce7; }
+
     .total-label { font-size: .72rem; font-weight: 800; text-transform: uppercase; color: var(--gray-500); letter-spacing: .05em; }
     .save-bar { position: sticky; bottom: 1rem; display: flex; gap: .75rem; align-items: center; background: #fff; border: 1px solid var(--gray-200); border-radius: 12px; padding: 1rem 1.5rem; box-shadow: 0 4px 24px rgba(0,0,0,.1); flex-wrap: wrap; }
     .save-bar .total-display { font-size: 1.2rem; font-weight: 900; color: var(--primary); margin-right: auto; }
@@ -326,6 +332,11 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
     <button type="button" class="btn-phone" onclick="toggleQR()">📱 Phone Upload</button>
     <span class="mileage-note">Mileage: $<?= number_format($mileageRate, 2) ?>/km · attach receipts with 📎</span>
     <button type="button" class="btn-wide" id="btnWide" onclick="toggleWide()">⟷ Widen</button>
+  </div>
+
+  <!-- Global drop zone -->
+  <div id="globalDropZone" class="drop-zone">
+    ⬇ Drop receipt files here — each file is added as a new expense row automatically
   </div>
 
   <!-- QR code panel -->
@@ -492,6 +503,7 @@ function addRow(data = {}) {
     if (data.receipt_path) {
         showThumb(id, data.receipt_path, null);
     }
+    enableRowDrop(id);
     updateRow(id);
     updateTotals();
     return id;
@@ -547,6 +559,70 @@ function updateTotals() {
 function isPdfSrc(src) {
     return src === '__pdf__' || /\.pdf/i.test(src || '') || (src && src.startsWith('data:application/pdf'));
 }
+
+// ── Drag-and-drop ─────────────────────────────────────────────────────────────
+function enableRowDrop(rowId) {
+    const wrap = document.getElementById('receipt-wrap-' + rowId);
+    if (!wrap) return;
+    wrap.addEventListener('dragover', e => {
+        e.preventDefault(); e.stopPropagation();
+        wrap.classList.add('drag-over');
+    });
+    wrap.addEventListener('dragleave', e => {
+        if (!wrap.contains(e.relatedTarget)) wrap.classList.remove('drag-over');
+    });
+    wrap.addEventListener('drop', e => {
+        e.preventDefault(); e.stopPropagation();
+        wrap.classList.remove('drag-over');
+        const file = e.dataTransfer.files[0];
+        if (!file) return;
+        showLocalPreview(rowId, file);
+        uploadAndScan(file, rowId);
+    });
+}
+
+(function initGlobalDrop() {
+    const dz = document.getElementById('globalDropZone');
+    let counter = 0;
+
+    document.addEventListener('dragenter', e => {
+        if (![...e.dataTransfer.types].includes('Files')) return;
+        counter++;
+        dz.classList.add('drag-active');
+    });
+    document.addEventListener('dragleave', () => {
+        if (--counter <= 0) { counter = 0; dz.classList.remove('drag-active'); }
+    });
+    document.addEventListener('dragover', e => e.preventDefault());
+
+    dz.addEventListener('dragover', e => {
+        e.preventDefault(); e.stopPropagation();
+        dz.classList.add('drag-over');
+    });
+    dz.addEventListener('dragleave', e => {
+        if (!dz.contains(e.relatedTarget)) dz.classList.remove('drag-over');
+    });
+    dz.addEventListener('drop', e => {
+        e.preventDefault(); e.stopPropagation();
+        counter = 0;
+        dz.classList.remove('drag-active', 'drag-over');
+
+        const files = [...e.dataTransfer.files].filter(
+            f => f.type.startsWith('image/') || f.type === 'application/pdf'
+        );
+        if (!files.length) return;
+
+        files.forEach(file => {
+            let rowId = null;
+            for (const hidden of document.querySelectorAll('[name="receipt_path[]"]')) {
+                if (!hidden.value) { rowId = hidden.id.replace('rpath-', ''); break; }
+            }
+            if (!rowId) rowId = addRow();
+            showLocalPreview(rowId, file);
+            uploadAndScan(file, rowId);
+        });
+    });
+})();
 
 function triggerRowScan(rowId) { document.getElementById('file-' + rowId).click(); }
 function handleRowScan(input, rowId) {

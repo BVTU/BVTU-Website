@@ -230,6 +230,12 @@ $initRowsJson = json_encode($initRows);
     @keyframes rowFlash { 0%,100%{background:transparent} 30%{background:#dcfce7} }
     .row-flash { animation: rowFlash 1.6s ease; }
 
+    /* Drag-and-drop */
+    .drop-zone { border: 2px dashed var(--gray-300); border-radius: 10px; padding: .75rem 1rem; text-align: center; color: var(--gray-400); font-size: .84rem; font-weight: 600; margin-bottom: .75rem; transition: border-color .15s, background .15s, color .15s; user-select: none; }
+    .drop-zone.drag-active { border-color: #86efac; background: #f0fdf4; color: var(--primary); }
+    .drop-zone.drag-over   { border-color: var(--primary); background: #dcfce7; color: var(--primary); }
+    .receipt-wrap.drag-over { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 6px; background: #dcfce7; }
+
     /* Column total row */
     .total-label { font-size: .72rem; font-weight: 800; text-transform: uppercase; color: var(--gray-500); letter-spacing: .05em; }
 
@@ -341,6 +347,11 @@ $initRowsJson = json_encode($initRows);
     <button type="button" class="btn-phone" onclick="openPhoneUpload()">📱 Phone Upload</button>
     <span class="mileage-note">Mileage rate: $<?= number_format($mileageRate, 2) ?>/km · auto-calculated · attach receipts with 📎 on each row</span>
     <button type="button" class="btn-wide" id="btnWide" onclick="toggleWide()">⟷ Widen</button>
+  </div>
+
+  <!-- Global drop zone -->
+  <div id="globalDropZone" class="drop-zone">
+    ⬇ Drop receipt files here — each file is added as a new expense row automatically
   </div>
 
   <!-- QR code panel -->
@@ -513,6 +524,7 @@ function addRow(data = {}) {
         const receiptWrap = tr.querySelector(`#receipt-wrap-${id}`);
         receiptWrap.insertAdjacentHTML('beforeend', `<div style="margin-top:.2rem;">${flagHtml}</div>`);
     }
+    enableRowDrop(id);
     updateRow(id);
     updateTotals();
     return id;
@@ -570,6 +582,71 @@ function updateTotals() {
     document.getElementById('tot_total').textContent  = grand  ? '$'+grand.toFixed(2)  : '—';
     document.getElementById('grandTotal').textContent = '$' + grand.toFixed(2);
 }
+
+// ── Drag-and-drop ─────────────────────────────────────────────────────────────
+function enableRowDrop(rowId) {
+    const wrap = document.getElementById('receipt-wrap-' + rowId);
+    if (!wrap) return;
+    wrap.addEventListener('dragover', e => {
+        e.preventDefault(); e.stopPropagation();
+        wrap.classList.add('drag-over');
+    });
+    wrap.addEventListener('dragleave', e => {
+        if (!wrap.contains(e.relatedTarget)) wrap.classList.remove('drag-over');
+    });
+    wrap.addEventListener('drop', e => {
+        e.preventDefault(); e.stopPropagation();
+        wrap.classList.remove('drag-over');
+        const file = e.dataTransfer.files[0];
+        if (!file) return;
+        showLocalPreview(rowId, file);
+        uploadAndScan(file, rowId);
+    });
+}
+
+(function initGlobalDrop() {
+    const dz = document.getElementById('globalDropZone');
+    let counter = 0;
+
+    document.addEventListener('dragenter', e => {
+        if (![...e.dataTransfer.types].includes('Files')) return;
+        counter++;
+        dz.classList.add('drag-active');
+    });
+    document.addEventListener('dragleave', () => {
+        if (--counter <= 0) { counter = 0; dz.classList.remove('drag-active'); }
+    });
+    document.addEventListener('dragover', e => e.preventDefault());
+
+    dz.addEventListener('dragover', e => {
+        e.preventDefault(); e.stopPropagation();
+        dz.classList.add('drag-over');
+    });
+    dz.addEventListener('dragleave', e => {
+        if (!dz.contains(e.relatedTarget)) dz.classList.remove('drag-over');
+    });
+    dz.addEventListener('drop', e => {
+        e.preventDefault(); e.stopPropagation();
+        counter = 0;
+        dz.classList.remove('drag-active', 'drag-over');
+
+        const files = [...e.dataTransfer.files].filter(
+            f => f.type.startsWith('image/') || f.type === 'application/pdf'
+        );
+        if (!files.length) return;
+
+        files.forEach(file => {
+            // Use an existing empty row, or add a new one
+            let rowId = null;
+            for (const hidden of document.querySelectorAll('[name="receipt_path[]"]')) {
+                if (!hidden.value) { rowId = hidden.id.replace('rpath-', ''); break; }
+            }
+            if (!rowId) rowId = addRow();
+            showLocalPreview(rowId, file);
+            uploadAndScan(file, rowId);
+        });
+    });
+})();
 
 // ── Receipt scanning ──────────────────────────────────────────────────────────
 function triggerRowScan(rowId) {
