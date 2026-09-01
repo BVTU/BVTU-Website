@@ -41,7 +41,13 @@ if (!$isOwner && !$isPrivileged) { http_response_code(403); exit('Access denied.
 $filePath = LP_RECEIPTS_DIR . $path;
 if (!file_exists($filePath)) { http_response_code(404); exit('File not found on server.'); }
 
-$mimeType = mime_content_type($filePath) ?: 'application/octet-stream';
+$mimeMap = [
+    'jpg'  => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png'  => 'image/png',
+    'gif'  => 'image/gif',  'webp' => 'image/webp', 'heic' => 'image/heic',
+    'heif' => 'image/heif', 'pdf'  => 'application/pdf',
+];
+$ext      = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+$mimeType = mime_content_type($filePath) ?: ($mimeMap[$ext] ?? 'application/octet-stream');
 header('Content-Type: ' . $mimeType);
 header('Content-Disposition: inline; filename="' . addslashes(basename($filePath)) . '"');
 header('Content-Length: ' . filesize($filePath));

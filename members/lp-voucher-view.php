@@ -321,7 +321,7 @@ arsort($blSummary);
         <tr>
           <td>
             <?php if ($e['receipt_path']): ?>
-            <a class="receipt-btn" onclick="openLightbox('lp-receipt.php?f=<?= urlencode($e['receipt_path']) ?>')" href="#">
+            <a class="receipt-btn" href="lp-receipt.php?f=<?= urlencode($e['receipt_path']) ?>" target="_blank">
               📄 View
             </a>
             <?php else: ?>
