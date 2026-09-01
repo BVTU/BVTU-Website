@@ -24,6 +24,31 @@ require_once __DIR__ . '/lib/phpmailer/Exception.php';
 require_once __DIR__ . '/lib/phpmailer/PHPMailer.php';
 require_once __DIR__ . '/lib/phpmailer/SMTP.php';
 
+function _siteMailLog(string $to, string $subject, bool $ok, string $err = ''): void {
+    static $tableReady = false;
+    try {
+        require_once __DIR__ . '/db.php';
+        $db = getDB();
+        if (!$tableReady) {
+            $db->exec("CREATE TABLE IF NOT EXISTS site_email_log (
+                id        INT AUTO_INCREMENT PRIMARY KEY,
+                sent_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+                to_email  VARCHAR(255) NOT NULL,
+                subject   VARCHAR(500) NOT NULL,
+                status    VARCHAR(10)  NOT NULL,
+                error_msg VARCHAR(500),
+                INDEX idx_sent (sent_at),
+                INDEX idx_to   (to_email)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            $tableReady = true;
+        }
+        $db->prepare("INSERT INTO site_email_log (to_email, subject, status, error_msg) VALUES (?,?,?,?)")
+           ->execute([$to, $subject, $ok ? 'sent' : 'failed', $err ?: null]);
+    } catch (\Throwable $e) {
+        error_log('siteMailLog: ' . $e->getMessage());
+    }
+}
+
 function siteMail(string $to, string $subject, string $body, bool $isHtml = false): bool {
     // Load config if not already loaded
     $cfg = __DIR__ . '/config.php';
@@ -64,9 +89,12 @@ function siteMail(string $to, string $subject, string $body, bool $isHtml = fals
         }
 
         $mail->send();
+        _siteMailLog($to, $subject, true);
         return true;
     } catch (Exception $e) {
-        error_log("siteMail failed to {$to}: " . $mail->ErrorInfo);
+        $err = $mail->ErrorInfo;
+        error_log("siteMail failed to {$to}: " . $err);
+        _siteMailLog($to, $subject, false, $err);
         return false;
     }
 }

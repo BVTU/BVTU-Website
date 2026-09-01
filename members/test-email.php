@@ -77,7 +77,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $smtpConfigured) {
 </head>
 <body>
 <div class="wrap">
-  <a class="back" href="dashboard.php">&#x2190; Dashboard</a>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;">
+    <a class="back" href="dashboard.php" style="margin-bottom:0;">&#x2190; Dashboard</a>
+    <a href="email-log.php" style="font-size:.82rem;font-weight:700;color:var(--primary);text-decoration:none;background:var(--accent);border:1px solid #b8ddc5;border-radius:6px;padding:.3rem .7rem;">📋 View Email Log</a>
+  </div>
   <h1>Test Email</h1>
   <p class="sub">Send a test message to verify SMTP is working.</p>
 
