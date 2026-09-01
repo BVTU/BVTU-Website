@@ -213,6 +213,8 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
     .receipt-attach-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--accent); }
     .receipt-has-file { width: 28px; height: 28px; border-radius: 5px; background: #dcfce7; border: 1px solid #86efac; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: .82rem; }
     .receipt-has-file:hover { background: #bbf7d0; }
+    .receipt-open-btn { display: block; font-size: .6rem; font-weight: 700; color: var(--primary); text-decoration: none; text-align: center; line-height: 1.3; margin-top: .1rem; white-space: nowrap; }
+    .receipt-open-btn:hover { text-decoration: underline; color: var(--primary-dk); }
     .receipt-phone-btn { background: none; border: 1px dashed #86efac; border-radius: 5px; width: 28px; height: 28px; cursor: pointer; font-size: .78rem; color: var(--primary); display: flex; align-items: center; justify-content: center; transition: border-color .12s, background .12s; }
     .receipt-phone-btn:hover { background: #f0fdf4; border-style: solid; }
     .receipt-phone-btn.targeting { background: #dcfce7; border-style: solid; border-color: var(--primary); }
@@ -670,12 +672,13 @@ function showThumb(rowId, savedPath, dataUrl) {
     const btn = document.getElementById('attach-btn-' + rowId);
     if (btn) btn.remove();
     wrap.querySelector('.receipt-has-file')?.remove();
+    wrap.querySelector('.receipt-open-btn')?.remove();
     const pdf = isPdfSrc(dataUrl) || isPdfSrc(savedPath);
     const src = (dataUrl && dataUrl !== '__pdf__') ? dataUrl : ('lp-receipt.php?f=' + encodeURIComponent(savedPath || ''));
     const hoverSrc = pdf ? '__pdf__' : src;
     const indicator = document.createElement('div');
     indicator.className = 'receipt-has-file';
-    indicator.title = pdf ? 'PDF receipt — hover for info, click to change' : 'Receipt attached — hover to preview, click to change';
+    indicator.title = 'Click to change file';
     indicator.innerHTML = '📄';
     indicator.dataset.src = src;
     indicator.onclick = () => triggerRowScan(rowId);
@@ -683,6 +686,16 @@ function showThumb(rowId, savedPath, dataUrl) {
     indicator.addEventListener('mouseleave', hideHoverPreview);
     indicator.addEventListener('mousemove',  moveHoverPreview);
     wrap.insertBefore(indicator, wrap.querySelector('.scan-spinner'));
+    if (savedPath) {
+        const openBtn = document.createElement('a');
+        openBtn.href = 'lp-receipt.php?f=' + encodeURIComponent(savedPath);
+        openBtn.target = '_blank';
+        openBtn.title = 'Open receipt in new tab';
+        openBtn.className = 'receipt-open-btn';
+        openBtn.textContent = '↗ open';
+        openBtn.addEventListener('click', e => e.stopPropagation());
+        wrap.insertBefore(openBtn, wrap.querySelector('.scan-spinner'));
+    }
 }
 
 const hoverPreview = document.getElementById('receiptPreview');
