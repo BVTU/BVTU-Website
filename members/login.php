@@ -21,11 +21,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($email && $password) {
         $db   = getDB();
-        $stmt = $db->prepare("SELECT id, name, email, password_hash, must_change_password FROM members WHERE email = ?");
+        $stmt = $db->prepare("SELECT id, name, email, password_hash, must_change_password, active FROM members WHERE email = ?");
         $stmt->execute([$email]);
         $member = $stmt->fetch();
 
-        if ($member && password_verify($password, $member['password_hash'])) {
+        if ($member && password_verify($password, $member['password_hash']) && ($member['active'] ?? 1)) {
             loginMember($member);
             if (!empty($member['must_change_password'])) {
                 header('Location: change-password.php?forced=1');

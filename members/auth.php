@@ -47,6 +47,14 @@ function ensureMembersColumns(): void {
         if (!$exists) {
             getDB()->exec("ALTER TABLE members ADD COLUMN must_change_password TINYINT(1) NOT NULL DEFAULT 0");
         }
+        $hasActive = getDB()->query(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+             AND TABLE_NAME = 'members' AND COLUMN_NAME = 'active'"
+        )->fetchColumn();
+        if (!$hasActive) {
+            getDB()->exec("ALTER TABLE members ADD COLUMN active TINYINT(1) NOT NULL DEFAULT 1");
+        }
     } catch (Exception $e) {
         // Non-fatal — column may already exist
     }
