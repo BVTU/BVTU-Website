@@ -16,7 +16,7 @@ define('LIB_ALLOWED_MIME', [
 
 // Thumbnail constants — stored in a publicly-accessible directory at the site root
 define('LIB_THUMB_DIR',         dirname(__DIR__) . '/lib-thumbs/');
-define('LIB_THUMB_URL',         'lib-thumbs/');     // relative URL from site root
+define('LIB_THUMB_URL',         '/lib-thumbs/');    // absolute path from domain root
 define('LIB_THUMB_MAX_BYTES',   2 * 1024 * 1024);  // 2 MB
 define('LIB_THUMB_ALLOWED_EXT', ['jpg', 'jpeg', 'png', 'webp']);
 
