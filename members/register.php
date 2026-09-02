@@ -177,7 +177,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <span>Bulkley Valley<br>Teachers' Union</span>
       </a>
       <h1>Create Account</h1>
-      <p class="sub">You'll need your SD54 employee number to register. This verifies your BVTU membership.</p>
+      <p class="sub">If you received an invitation email from BVTU, use the link in that email instead — it's faster. Otherwise, enter your employee number below to verify your membership.</p>
 
       <?php if ($error): ?>
         <div class="error-msg"><?= htmlspecialchars($error) ?></div>
