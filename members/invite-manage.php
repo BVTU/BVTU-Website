@@ -26,12 +26,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Send one or more invites
     if ($action === 'send_invites') {
-        $raw   = trim($_POST['invite_list'] ?? '');
-        $lines = array_filter(array_map('trim', explode("\n", $raw)));
+        $lines  = [];
+        $errors = [];
+
+        // ── CSV upload ────────────────────────────────────────────────────────
+        if (!empty($_FILES['csv_file']['tmp_name'])) {
+            $fh = fopen($_FILES['csv_file']['tmp_name'], 'r');
+            if ($fh) {
+                $header     = null;
+                $emailCol   = null;
+                $nameCol    = null;
+                while (($row = fgetcsv($fh)) !== false) {
+                    if (!$header) {
+                        // Auto-detect header row
+                        $header = array_map('strtolower', array_map('trim', $row));
+                        foreach ($header as $i => $h) {
+                            if (in_array($h, ['email', 'email address', 'e-mail', 'emailaddress'])) $emailCol = $i;
+                            if (in_array($h, ['name', 'full name', 'fullname', 'first name', 'firstname', 'display name'])) $nameCol = $i;
+                        }
+                        if ($emailCol === null) {
+                            // No recognisable header — treat first column as email, second as name
+                            $emailCol = 0;
+                            $nameCol  = isset($row[1]) ? 1 : null;
+                            // Re-process this row as data
+                            $header = ['auto'];
+                            $email  = strtolower(trim($row[$emailCol] ?? ''));
+                            $name   = $nameCol !== null ? trim($row[$nameCol]) : '';
+                            if ($email) $lines[] = $name ? "{$name}, {$email}" : $email;
+                        }
+                        continue;
+                    }
+                    $email = strtolower(trim($row[$emailCol] ?? ''));
+                    $name  = $nameCol !== null ? trim($row[$nameCol] ?? '') : '';
+                    if ($email) $lines[] = $name ? "{$name}, {$email}" : $email;
+                }
+                fclose($fh);
+            }
+        }
+
+        // ── Manual paste ──────────────────────────────────────────────────────
+        $raw = trim($_POST['invite_list'] ?? '');
+        if ($raw) {
+            $lines = array_merge($lines, array_filter(array_map('trim', explode("\n", $raw))));
+        }
+
         $sent  = 0;
         $skip  = 0;
         $fail  = 0;
-        $errors = [];
 
         foreach ($lines as $line) {
             // Accept "Name, email@example.com" or just "email@example.com"
@@ -195,14 +236,23 @@ foreach ($invites as $i) $counts[$i['invite_status']]++;
       Each person receives a personal, one-time link valid for 72 hours.
       Sending to someone who already has a pending invite will replace their old link with a fresh one.
     </p>
-    <form method="POST">
+    <form method="POST" enctype="multipart/form-data">
       <input type="hidden" name="action" value="send_invites">
-      <div class="field">
-        <label>Email list</label>
-        <textarea name="invite_list" placeholder="One per line. Optionally include a name before the email:&#10;&#10;Jane Smith, jane@example.com&#10;john@example.com&#10;Alex Johnson, alex@gmail.com"></textarea>
+      <div class="field" style="margin-bottom:1rem;">
+        <label>Upload a CSV file</label>
+        <input type="file" name="csv_file" accept=".csv,text/csv"
+               style="display:block;border:1px solid var(--gray-300);border-radius:7px;padding:.5rem .75rem;font-size:.88rem;width:100%;box-sizing:border-box;background:#fff;">
+        <p class="hint-text" style="margin-top:.35rem;">
+          CSV must have an <code>email</code> column. A <code>name</code> column is optional but recommended.
+          Column headers are auto-detected — exports from Google Contacts, Excel, or a plain spreadsheet all work.
+        </p>
+      </div>
+      <div class="field" style="margin-bottom:.5rem;">
+        <label>Or paste emails manually</label>
+        <textarea name="invite_list" placeholder="One per line. Optionally include a name:&#10;&#10;Jane Smith, jane@example.com&#10;john@example.com&#10;Alex Johnson, alex@gmail.com"></textarea>
       </div>
       <p class="hint-text">
-        Format: <code>Name, email@address.com</code> or just <code>email@address.com</code>.<br>
+        You can use both at once — CSV upload and paste are merged before sending.<br>
         Members who already have accounts are automatically skipped.
         Large lists are sent at a controlled rate to avoid spam filters.
       </p>
