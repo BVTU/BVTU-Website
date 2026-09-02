@@ -65,6 +65,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delet
     }
 }
 
+// ── Resend to treasurer ───────────────────────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'resend_to_treasurer') {
+    $isAdmin = execIsAdmin($member['email']);
+    if ($isAdmin && $voucher['status'] === 'submitted') {
+        $treasurerEmails = lpGetTreasurerEmails();
+        $vNum    = $voucher['voucher_number'] ? '#'.$voucher['voucher_number'].' — ' : '';
+        $subject = "LP Expense Voucher submitted for review: {$vNum}{$voucher['name']}";
+        $viewUrl = 'https://' . $_SERVER['HTTP_HOST'] . '/members/lp-voucher-view.php?id=' . $id;
+        $expCount = count($expenses);
+        $total    = array_sum(array_map('lpRowTotal', $expenses));
+        $body  = "A new expense voucher has been submitted for your review.\n\n";
+        $body .= "Submitted by: {$voucher['submitted_by']}\n";
+        $body .= "Voucher: {$vNum}{$voucher['name']}\n";
+        $body .= "Expenses: {$expCount} line items\n";
+        $body .= "Total: $" . number_format($total, 2) . "\n";
+        if ($voucher['notes']) $body .= "Notes: {$voucher['notes']}\n";
+        $body .= "\nView and approve online:\n{$viewUrl}\n\n";
+        $body .= "— BVTU Members Portal";
+        require_once __DIR__ . '/smtp.php';
+        foreach ($treasurerEmails as $to) {
+            siteMail($to, $subject, $body);
+        }
+        $notice = 'Treasurer notification re-sent.';
+    }
+}
+
 // Export as CSV
 if (($_GET['export'] ?? '') === 'csv') {
     header('Content-Type: text/csv; charset=utf-8');
@@ -252,6 +278,12 @@ arsort($blSummary);
           <span style="font-size:.82rem;font-weight:700;color:#166534;padding:.45rem .5rem;">✓ Submitted <?= $voucher['submitted_at'] ? date('M j', strtotime($voucher['submitted_at'])) : '' ?></span>
           <a href="lp-voucher-edit.php?id=<?= $id ?>" class="btn btn-outline" style="padding:.45rem .85rem;font-size:.83rem;">✏ Edit</a>
           <?php if (execIsAdmin($member['email']) && $voucher['status'] !== 'paid'): ?>
+          <?php if ($voucher['status'] === 'submitted'): ?>
+          <form method="POST" style="display:inline;" onsubmit="return confirm('Re-send the Treasurer notification email for this voucher?')">
+            <input type="hidden" name="action" value="resend_to_treasurer">
+            <button type="submit" class="btn btn-outline" style="padding:.45rem .85rem;font-size:.83rem;">&#x21BA; Resend to Treasurer</button>
+          </form>
+          <?php endif; ?>
           <form method="POST" style="display:inline;" onsubmit="return confirm('Permanently delete this voucher and all its expenses? This cannot be undone.')">
             <input type="hidden" name="action" value="delete">
             <button type="submit" class="btn btn-outline" style="padding:.45rem .85rem;font-size:.83rem;color:#dc2626;border-color:#dc2626;">🗑 Delete</button>
