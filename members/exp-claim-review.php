@@ -179,6 +179,15 @@ function _expClaimBadge(string $status): string {
         </div>
       </form>
       <a href="exp-claim-view.php?id=<?= (int)$b['id'] ?>" class="detail-link">View claim &#x2192;</a>
+      <?php if (expIsAdmin($member['email'])): ?>
+      <form method="POST" action="exp-claim-action.php"
+            onsubmit="return confirm('Re-send the Treasurer notification email for this claim?')">
+        <input type="hidden" name="action"   value="resend_to_treasurer">
+        <input type="hidden" name="batch_id" value="<?= (int)$b['id'] ?>">
+        <input type="hidden" name="redirect" value="exp-claim-review.php">
+        <button type="submit" style="background:none;border:1px solid var(--gray-200);border-radius:6px;padding:.3rem .65rem;font-size:.78rem;color:var(--gray-500);cursor:pointer;">&#x21BA; Resend to Treasurer</button>
+      </form>
+      <?php endif; ?>
     </div>
   </div>
   <?php endforeach; ?>

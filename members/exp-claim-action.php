@@ -86,6 +86,19 @@ try {
             $msg = 'Claim rejected. The member has been notified.';
             break;
 
+        case 'resend_to_treasurer':
+            if (!expIsAdmin($member['email'])) {
+                throw new RuntimeException('Only an admin can resend notifications.');
+            }
+            if ($b['status'] !== 'pending') {
+                throw new RuntimeException('Can only resend to Treasurer while the claim is still awaiting Treasurer approval.');
+            }
+            $total = expBatchTotal($batchId);
+            $items = expBatchGetItems($batchId);
+            expBatchEmailSubmitted($b, $total, count($items));
+            $msg = 'Treasurer notification re-sent.';
+            break;
+
         case 'mark_paid':
             if (!expIsTreasurer($member['email'])) {
                 throw new RuntimeException('Only the Treasurer can mark a claim as paid.');
