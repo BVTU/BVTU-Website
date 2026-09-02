@@ -124,7 +124,7 @@ ksort($siteReps);
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Executive &amp; Roles Directory — BVTU</title>
+  <title>Roles &amp; Directory — BVTU Admin</title>
   <link rel="stylesheet" href="../css/style.css">
   <link rel="icon" href="../favicon.ico">
   <style>
@@ -263,7 +263,7 @@ ksort($siteReps);
   <div class="page-header">
     <div>
       <a class="back-link" href="dashboard.php">&#x2190; Dashboard</a>
-      <h1 style="margin-top:.3rem;">Executive &amp; Roles Directory</h1>
+      <h1 style="margin-top:.3rem;">Roles &amp; Directory</h1>
     </div>
     <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
       <a href="prod-manage.php" class="btn-sm">Pro-D Roles</a>

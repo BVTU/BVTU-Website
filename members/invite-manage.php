@@ -212,7 +212,7 @@ foreach ($invites as $i) $counts[$i['invite_status']]++;
 
   <div class="page-header">
     <div>
-      <a class="back-link" href="dashboard.php">&#x2190; Dashboard</a>
+      <a class="back-link" href="member-manage.php?tab=invitations">&#x2190; Member Management</a>
       <h1 style="margin-top:.3rem;">Member Invitations</h1>
     </div>
   </div>

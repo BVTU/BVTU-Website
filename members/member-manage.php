@@ -1,10 +1,11 @@
 <?php
 /**
- * member-manage.php — Admin: add / edit / deactivate members, reset passwords
+ * member-manage.php — Admin: manage accounts (Members tab) + send invitations (Invitations tab)
  */
 require_once 'auth.php';
 require_once 'db.php';
 require_once 'exec-db.php';
+require_once 'invite-db.php';
 
 requireLogin();
 ensureMembersColumns();
@@ -142,12 +143,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    header('Location: member-manage.php' . ($notice ? '?notice=' . urlencode($notice) : ($error ? '?error=' . urlencode($error) : '')));
+    // ── Invite actions ────────────────────────────────────────────────────────
+    if ($action === 'send_invites') {
+        $lines  = [];
+        $iErrors = [];
+        if (!empty($_FILES['csv_file']['tmp_name'])) {
+            $fh = fopen($_FILES['csv_file']['tmp_name'], 'r');
+            if ($fh) {
+                $header = null; $emailCol = null; $nameCol = null;
+                while (($row = fgetcsv($fh)) !== false) {
+                    if (!$header) {
+                        $header = array_map('strtolower', array_map('trim', $row));
+                        foreach ($header as $i => $h) {
+                            if (in_array($h, ['email','email address','e-mail','emailaddress'])) $emailCol = $i;
+                            if (in_array($h, ['name','full name','fullname','first name','firstname','display name'])) $nameCol = $i;
+                        }
+                        if ($emailCol === null) {
+                            $emailCol = 0; $nameCol = isset($row[1]) ? 1 : null; $header = ['auto'];
+                            $e = strtolower(trim($row[0] ?? '')); $n = $nameCol !== null ? trim($row[1] ?? '') : '';
+                            if ($e) $lines[] = $n ? "{$n}, {$e}" : $e;
+                        }
+                        continue;
+                    }
+                    $e = strtolower(trim($row[$emailCol] ?? '')); $n = $nameCol !== null ? trim($row[$nameCol] ?? '') : '';
+                    if ($e) $lines[] = $n ? "{$n}, {$e}" : $e;
+                }
+                fclose($fh);
+            }
+        }
+        $raw = trim($_POST['invite_list'] ?? '');
+        if ($raw) $lines = array_merge($lines, array_filter(array_map('trim', explode("\n", $raw))));
+        $sent = $iskip = $fail = 0;
+        foreach ($lines as $line) {
+            if (strpos($line, ',') !== false) { [$iname, $iemail] = array_map('trim', explode(',', $line, 2)); }
+            else { $iname = ''; $iemail = trim($line); }
+            $iemail = strtolower($iemail);
+            if (!filter_var($iemail, FILTER_VALIDATE_EMAIL)) { $iErrors[] = "Invalid: {$line}"; $iskip++; continue; }
+            $s = $db->prepare("SELECT id FROM members WHERE email=?"); $s->execute([$iemail]);
+            if ($s->fetch()) { $iErrors[] = "{$iemail} already has an account."; $iskip++; continue; }
+            $tok = inviteCreate($iemail, $iname, $member['email']);
+            $ok  = inviteSendEmail($iemail, $iname ?: $iemail, $tok);
+            if ($ok) { $sent++; } else { $fail++; $iErrors[] = "Send failed: {$iemail}"; }
+            if ($sent % 20 === 0 && $sent > 0) usleep(500000);
+        }
+        $parts = [];
+        if ($sent)   $parts[] = "{$sent} invite" . ($sent !== 1 ? 's' : '') . " sent";
+        if ($iskip)  $parts[] = "{$iskip} skipped";
+        if ($fail)   $parts[] = "{$fail} failed";
+        $notice = implode(', ', $parts) . '.';
+        if ($iErrors) $notice .= ' — ' . implode(' | ', $iErrors);
+    }
+
+    if ($action === 'resend_invite') {
+        $iid = (int)($_POST['invite_id'] ?? 0);
+        $s   = $db->prepare("SELECT * FROM member_invitations WHERE id=?"); $s->execute([$iid]);
+        $inv = $s->fetch();
+        if ($inv && !$inv['accepted_at']) {
+            $tok = inviteCreate($inv['email'], $inv['name'] ?? '', $member['email']);
+            $ok  = inviteSendEmail($inv['email'], $inv['name'] ?: $inv['email'], $tok);
+            $notice = $ok ? 'Invite re-sent to ' . $inv['email'] . '.' : 'Send failed.';
+        }
+    }
+
+    if ($action === 'revoke_invite') {
+        $iid = (int)($_POST['invite_id'] ?? 0);
+        inviteRevoke($iid);
+        $notice = 'Invite revoked.';
+    }
+
+    $tab = in_array($action, ['send_invites','resend_invite','revoke_invite']) ? '&tab=invitations' : '';
+    header('Location: member-manage.php' . ($notice ? '?notice=' . urlencode($notice) . $tab : ($error ? '?error=' . urlencode($error) . $tab : ($tab ? '?'.ltrim($tab,'&') : ''))));
     exit;
 }
 
-$notice = $notice ?: htmlspecialchars($_GET['notice'] ?? '');
-$error  = $error  ?: htmlspecialchars($_GET['error']  ?? '');
+$notice  = $notice ?: htmlspecialchars($_GET['notice'] ?? '');
+$error   = $error  ?: htmlspecialchars($_GET['error']  ?? '');
+$activeTab = ($_GET['tab'] ?? '') === 'invitations' ? 'invitations' : 'members';
 
 // ── Load all members ──────────────────────────────────────────────────────────
 $members = $db->query(
@@ -161,13 +232,19 @@ $execRows = $db->query("SELECT user_email, role FROM exec_roles")->fetchAll();
 foreach ($execRows as $r) $roleMap[strtolower($r['user_email'])][] = $r['role'];
 $expRows  = $db->query("SELECT user_email, role FROM exp_roles")->fetchAll();
 foreach ($expRows  as $r) $roleMap[strtolower($r['user_email'])][] = $r['role'];
+
+// ── Load invitations ──────────────────────────────────────────────────────────
+inviteEnsureTable();
+$invites = inviteGetAll();
+$invCounts = ['pending' => 0, 'accepted' => 0, 'expired' => 0];
+foreach ($invites as $i) $invCounts[$i['invite_status']]++;
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Manage Members — BVTU</title>
+  <title>Member Management — BVTU</title>
   <link rel="stylesheet" href="../css/style.css">
   <link rel="icon" href="../favicon.ico">
   <style>
@@ -243,6 +320,27 @@ foreach ($expRows  as $r) $roleMap[strtolower($r['user_email'])][] = $r['role'];
                  background: none; border: none; cursor: pointer; color: var(--gray-400); padding: .2rem; }
 
     .info-note { font-size: .78rem; color: var(--gray-500); background: #f8f9fa; border: 1px solid var(--gray-200); border-radius: 8px; padding: .6rem .85rem; margin-bottom: 1rem; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 0; border-bottom: 2px solid var(--gray-200); margin-bottom: 1.75rem; }
+    .tab-btn { background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -2px;
+               padding: .6rem 1.1rem; font-size: .9rem; font-weight: 700; color: var(--gray-400);
+               cursor: pointer; font-family: inherit; }
+    .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+    .tab-btn .badge { display: inline-block; background: var(--accent); color: var(--primary);
+                      font-size: .65rem; font-weight: 800; border-radius: 100px;
+                      padding: .1rem .45rem; margin-left: .35rem; vertical-align: middle; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* Invite table */
+    .badge-pending-inv  { display:inline-block;background:#fef3c7;color:#d97706;font-size:.68rem;font-weight:700;border-radius:100px;padding:.15rem .5rem; }
+    .badge-accepted-inv { display:inline-block;background:#dcfce7;color:#166534;font-size:.68rem;font-weight:700;border-radius:100px;padding:.15rem .5rem; }
+    .badge-expired-inv  { display:inline-block;background:#f1f5f9;color:#64748b;font-size:.68rem;font-weight:700;border-radius:100px;padding:.15rem .5rem; }
+    .stat-row { display:flex;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap; }
+    .stat { background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:.75rem 1.1rem;flex:1;min-width:90px;text-align:center; }
+    .stat .n { font-size:1.8rem;font-weight:800;color:var(--gray-800);line-height:1; }
+    .stat .l { font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-top:.2rem; }
   </style>
 </head>
 <body>
@@ -251,16 +349,35 @@ foreach ($expRows  as $r) $roleMap[strtolower($r['user_email'])][] = $r['role'];
   <div class="page-header">
     <div>
       <a class="back-link" href="dashboard.php">&#x2190; Dashboard</a>
-      <h1 style="margin-top:.3rem;">Manage Members</h1>
+      <h1 style="margin-top:.3rem;">Member Management</h1>
     </div>
-    <span style="font-size:.85rem;color:var(--gray-400);"><?= count($members) ?> accounts</span>
   </div>
 
   <?php if ($notice): ?><div class="notice">&#x2713; <?= $notice ?></div><?php endif; ?>
   <?php if ($error):  ?><div class="error-box">&#x26A0; <?= $error ?></div><?php endif; ?>
 
+  <div class="tabs">
+    <button class="tab-btn <?= $activeTab === 'members' ? 'active' : '' ?>"
+            onclick="switchTab('members')">
+      Members
+      <span class="badge"><?= count($members) ?></span>
+    </button>
+    <button class="tab-btn <?= $activeTab === 'invitations' ? 'active' : '' ?>"
+            onclick="switchTab('invitations')">
+      Invitations
+      <?php if ($invCounts['pending']): ?>
+      <span class="badge"><?= $invCounts['pending'] ?> pending</span>
+      <?php endif; ?>
+    </button>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <!-- TAB: Members                                                          -->
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <div id="tab-members" class="tab-panel <?= $activeTab === 'members' ? 'active' : '' ?>">
+
   <div class="info-note">
-    &#x1F4CB; This list and the <a href="roles-overview.php">Executive &amp; Roles Directory</a> both read from the same member database.
+    &#x1F4CB; This list and the <a href="roles-overview.php">Roles &amp; Directory</a> both read from the same member database.
     Editing a name or email here automatically updates all role tables.
   </div>
 
@@ -410,7 +527,119 @@ foreach ($expRows  as $r) $roleMap[strtolower($r['user_email'])][] = $r['role'];
     </table>
   </div>
 
-</div>
+  </div><!-- /tab-members -->
+
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <!-- TAB: Invitations                                                      -->
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <div id="tab-invitations" class="tab-panel <?= $activeTab === 'invitations' ? 'active' : '' ?>">
+
+    <div class="stat-row">
+      <div class="stat"><div class="n"><?= $invCounts['pending'] ?></div><div class="l">Pending</div></div>
+      <div class="stat"><div class="n"><?= $invCounts['accepted'] ?></div><div class="l">Accepted</div></div>
+      <div class="stat"><div class="n"><?= $invCounts['expired'] ?></div><div class="l">Expired</div></div>
+      <div class="stat"><div class="n"><?= count($invites) ?></div><div class="l">Total</div></div>
+    </div>
+
+    <div class="sec-head">Send Invitations</div>
+    <div class="form-card">
+      <h2>Invite Members</h2>
+      <p style="font-size:.83rem;color:var(--gray-500);margin:-.25rem 0 1rem;">
+        Each person gets a personal, one-time link valid for 72 hours.
+        Sending to someone with a pending invite replaces their old link with a fresh one.
+        Members who already have accounts are automatically skipped.
+      </p>
+      <form method="POST" enctype="multipart/form-data" autocomplete="off">
+        <input type="hidden" name="action" value="send_invites">
+        <div class="field">
+          <label>Upload a CSV file</label>
+          <input type="file" name="csv_file" accept=".csv,text/csv"
+                 style="display:block;border:1px solid var(--gray-300);border-radius:7px;padding:.5rem .75rem;font-size:.88rem;width:100%;box-sizing:border-box;background:#fff;">
+          <div class="field-hint">Must have an <code>email</code> column. A <code>name</code> column is optional. Google Contacts / Excel exports work as-is.</div>
+        </div>
+        <div class="field">
+          <label>Or paste emails manually</label>
+          <textarea name="invite_list" rows="5"
+                    style="width:100%;border:1px solid var(--gray-300);border-radius:7px;padding:.6rem .75rem;font-size:.88rem;font-family:monospace;box-sizing:border-box;resize:vertical;"
+                    placeholder="One per line — optionally with a name:&#10;&#10;Jane Smith, jane@example.com&#10;john@example.com"></textarea>
+          <div class="field-hint">CSV and paste are merged before sending.</div>
+        </div>
+        <button type="submit" class="btn btn-primary" style="padding:.55rem 1.1rem;font-size:.9rem;">Send Invites</button>
+      </form>
+    </div>
+
+    <div class="sec-head">All Invitations (<?= count($invites) ?>)</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Name</th>
+            <th>Status</th>
+            <th>Sent</th>
+            <th>Expires / Accepted</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php if (!$invites): ?>
+          <tr><td colspan="6" style="text-align:center;color:var(--gray-400);padding:2rem;">No invitations sent yet.</td></tr>
+          <?php endif; ?>
+          <?php foreach ($invites as $inv):
+            $istatus = $inv['invite_status'];
+          ?>
+          <tr>
+            <td><?= htmlspecialchars($inv['email']) ?></td>
+            <td style="color:var(--gray-500);"><?= htmlspecialchars($inv['name'] ?? '—') ?></td>
+            <td>
+              <?php if ($istatus === 'pending'): ?>
+                <span class="badge-pending-inv">&#x23F3; Pending</span>
+              <?php elseif ($istatus === 'accepted'): ?>
+                <span class="badge-accepted-inv">&#x2713; Accepted</span>
+              <?php else: ?>
+                <span class="badge-expired-inv">Expired</span>
+              <?php endif; ?>
+            </td>
+            <td style="font-size:.78rem;color:var(--gray-400);white-space:nowrap;"><?= date('M j, Y', strtotime($inv['created_at'])) ?></td>
+            <td style="font-size:.78rem;color:var(--gray-400);white-space:nowrap;">
+              <?php if ($inv['accepted_at']): ?>
+                Accepted <?= date('M j, Y', strtotime($inv['accepted_at'])) ?>
+              <?php elseif ($istatus === 'expired'): ?>
+                Expired <?= date('M j, Y', strtotime($inv['expires_at'])) ?>
+              <?php else: ?>
+                Expires <?= date('M j g:ia', strtotime($inv['expires_at'])) ?>
+              <?php endif; ?>
+            </td>
+            <td>
+              <?php if ($istatus !== 'accepted'): ?>
+              <div style="display:flex;gap:.35rem;">
+                <form method="POST" style="display:inline;">
+                  <input type="hidden" name="action"    value="resend_invite">
+                  <input type="hidden" name="invite_id" value="<?= (int)$inv['id'] ?>">
+                  <button type="submit" class="act-btn">&#x21BA; Resend</button>
+                </form>
+                <?php if ($istatus === 'pending'): ?>
+                <form method="POST" style="display:inline;"
+                      onsubmit="return confirm('Revoke invite for <?= htmlspecialchars(addslashes($inv['email'])) ?>?')">
+                  <input type="hidden" name="action"    value="revoke_invite">
+                  <input type="hidden" name="invite_id" value="<?= (int)$inv['id'] ?>">
+                  <button type="submit" class="act-btn danger">Revoke</button>
+                </form>
+                <?php endif; ?>
+              </div>
+              <?php else: ?>
+              <span style="font-size:.75rem;color:var(--gray-300);">—</span>
+              <?php endif; ?>
+            </td>
+          </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+
+  </div><!-- /tab-invitations -->
+
+</div><!-- /wrap -->
 <script>
 function togglePw(id) {
     var el = document.getElementById(id);
@@ -419,8 +648,14 @@ function togglePw(id) {
 function toggleEdit(id) {
     var row = document.getElementById('edit-' + id);
     var isOpen = row.classList.toggle('open');
-    // scroll into view
     if (isOpen) row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+function switchTab(name) {
+    document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+    document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+    document.querySelector('.tab-btn[onclick*="' + name + '"]').classList.add('active');
+    document.getElementById('tab-' + name).classList.add('active');
+    history.replaceState(null, '', '?tab=' + name);
 }
 </script>
 </body>
