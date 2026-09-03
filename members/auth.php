@@ -55,6 +55,28 @@ function ensureMembersColumns(): void {
         if (!$hasActive) {
             getDB()->exec("ALTER TABLE members ADD COLUMN active TINYINT(1) NOT NULL DEFAULT 1");
         }
+
+        // Drop FK on employee_number so invite-based registration (no employee number) works.
+        // Find and drop any FK referencing valid_employee_numbers from members.
+        $fkName = getDB()->query(
+            "SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
+             WHERE TABLE_SCHEMA = DATABASE()
+             AND TABLE_NAME = 'members'
+             AND REFERENCED_TABLE_NAME = 'valid_employee_numbers'
+             LIMIT 1"
+        )->fetchColumn();
+        if ($fkName) {
+            getDB()->exec("ALTER TABLE members DROP FOREIGN KEY `{$fkName}`");
+        }
+        // Also make employee_number nullable so the column can be omitted on insert.
+        $empNullable = getDB()->query(
+            "SELECT IS_NULLABLE FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+             AND TABLE_NAME = 'members' AND COLUMN_NAME = 'employee_number'"
+        )->fetchColumn();
+        if ($empNullable === 'NO') {
+            getDB()->exec("ALTER TABLE members MODIFY COLUMN employee_number VARCHAR(50) NULL DEFAULT NULL");
+        }
     } catch (Exception $e) {
         // Non-fatal — column may already exist
     }
