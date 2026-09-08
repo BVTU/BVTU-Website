@@ -182,7 +182,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </form>
 
       <div class="auth-footer">
-        Don't have an account? <a href="register.php">Create one</a>
+        New member? <a href="resend-invite.php">Get your registration link</a>
       </div>
     </div>
   </div>
