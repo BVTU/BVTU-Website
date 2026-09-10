@@ -1,0 +1,4 @@
+RewriteEngine On
+
+# Short link redirects: /go/{slug} → go.php?slug={slug}
+RewriteRule ^go/([a-zA-Z0-9\-]+)/?$ go.php?slug=$1 [L,QSA]
