@@ -49,7 +49,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'submi
             siteMail($to, $subject, $body);
         }
 
-        $notice = 'Voucher submitted — the treasurer has been notified by email.';
+        $notice = $treasurerEmails
+            ? 'Voucher submitted — the treasurer has been notified by email.'
+            : 'Voucher submitted, but no Treasurer is assigned so no email was sent. '
+            . 'Assign a Treasurer in the Roles &amp; Directory, then use “Resend to Treasurer”.';
     }
 }
 
@@ -87,7 +90,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'resen
         foreach ($treasurerEmails as $to) {
             siteMail($to, $subject, $body);
         }
-        $notice = 'Treasurer notification re-sent.';
+        $notice = $treasurerEmails
+            ? 'Treasurer notification re-sent to ' . htmlspecialchars(implode(', ', $treasurerEmails)) . '.'
+            : 'No Treasurer is assigned — nothing was sent. Assign one in the Roles &amp; Directory first.';
     }
 }
 

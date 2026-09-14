@@ -368,26 +368,55 @@ function lpGrantSummary(int $year = 0): array {
     return $grants;
 }
 
-/** BVTU Treasurer emails (from exp_roles, not Pro-D treasurer) */
+/** BVTU Treasurer emails — EC directory first, legacy exp_roles second */
 function lpGetTreasurerEmails(): array {
     $emails = [];
-    if (defined('PROD_ADMIN_EMAIL') && PROD_ADMIN_EMAIL) $emails[] = PROD_ADMIN_EMAIL;
+    $db     = getDB();
+
+    // Primary: EC directory (exec_roles) — source of truth
     try {
-        $s = getDB()->query("SELECT DISTINCT user_email FROM exp_roles WHERE role='treasurer'");
+        $s = $db->query("SELECT DISTINCT user_email FROM exec_roles WHERE role='treasurer'");
         foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $e) {
-            if (!in_array($e, $emails)) $emails[] = $e;
+            $e = strtolower(trim($e));
+            if ($e && !in_array($e, $emails)) $emails[] = $e;
         }
-    } catch (Exception $e) {}
-    return array_unique($emails);
+    } catch (Exception $ex) {}
+
+    // Legacy: exp_roles (manual assignments, kept for backward compat)
+    try {
+        $s = $db->query("SELECT DISTINCT user_email FROM exp_roles WHERE role='treasurer'");
+        foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $e) {
+            $e = strtolower(trim($e));
+            if ($e && !in_array($e, $emails)) $emails[] = $e;
+        }
+    } catch (Exception $ex) {}
+
+    // No Pro-D admin fallback — LP vouchers go to the BVTU Treasurer only.
+    // Callers must handle an empty result and warn the submitter.
+    return $emails;
 }
 
-/** VP emails (signer 2) */
+/** VP emails (signer 2) — exec_roles uses 'vice_president', exp_roles uses 'vp' */
 function lpGetVPEmails(): array {
     $emails = [];
+    $db     = getDB();
+
     try {
-        $s = getDB()->query("SELECT DISTINCT user_email FROM exp_roles WHERE role='vp'");
-        foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $e) $emails[] = $e;
-    } catch (Exception $e) {}
+        $s = $db->query("SELECT DISTINCT user_email FROM exec_roles WHERE role='vice_president'");
+        foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $e) {
+            $e = strtolower(trim($e));
+            if ($e && !in_array($e, $emails)) $emails[] = $e;
+        }
+    } catch (Exception $ex) {}
+
+    try {
+        $s = $db->query("SELECT DISTINCT user_email FROM exp_roles WHERE role='vp'");
+        foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $e) {
+            $e = strtolower(trim($e));
+            if ($e && !in_array($e, $emails)) $emails[] = $e;
+        }
+    } catch (Exception $ex) {}
+
     return $emails;
 }
 
