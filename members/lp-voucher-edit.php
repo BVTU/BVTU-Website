@@ -2,6 +2,7 @@
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/prod-db.php';
 require_once __DIR__ . '/lp-db.php';
+require_once __DIR__ . '/exec-db.php';
 requireLogin();
 
 $member = getMember();
@@ -14,7 +15,8 @@ if (!$id) { header('Location: lp-dashboard.php'); exit; }
 $voucher = lpGetVoucher($id);
 if (!$voucher) { header('Location: lp-dashboard.php'); exit; }
 
-$isOwner   = $voucher['submitted_by_email'] === $member['email'];
+$isOwner    = $voucher['submitted_by_email'] === $member['email'];
+$isAdmin    = execIsAdmin($member['email']);
 $isReviewer = lpCanReview($member['email']);
 if (!$isOwner && !prodIsExec($member['email']) && !$isReviewer) {
     header('Location: lp-dashboard.php');
@@ -409,28 +411,28 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
     <div class="total-display"><span>Voucher Total</span><br><span id="grandTotal">$0.00</span></div>
     <?php if ($readOnly): ?>
     <a href="lp-review.php" class="btn btn-primary" style="padding:.65rem 1.5rem;font-size:.95rem;">&#x2190; Back to Review Queue</a>
-    <?php elseif ($voucher['status'] === 'draft'): ?>
+    <?php elseif ($voucher['status'] === 'draft' || (($isOwner || $isAdmin) && !in_array($voucher['status'], ['paid']))): ?>
     <button type="submit" class="btn btn-primary" style="padding:.65rem 1.5rem;font-size:.95rem;">💾 Save Changes</button>
-    <?php if (count($expenses) > 0): ?>
+    <?php if ($voucher['status'] === 'draft' && count($expenses) > 0): ?>
     <button type="submit" name="_submit_for_approval" value="1"
             class="btn btn-primary" style="padding:.65rem 1.5rem;font-size:.95rem;background:#166534;"
             onclick="return confirm('Save and submit this voucher for Treasurer approval? You will not be able to edit it after submission.')">
       ✅ Submit for Approval
     </button>
     <?php endif; ?>
-    <?php elseif ($voucher['status'] !== 'draft'): ?>
+    <?php if ($voucher['status'] !== 'draft'): ?>
     <span style="font-size:.88rem;color:var(--gray-500);font-style:italic;">
       <?php
         $statusLabels = [
           'submitted'          => '⏳ Awaiting Treasurer approval',
           'treasurer_approved' => '⏳ Awaiting VP signature',
           'vp_approved'        => '✅ Approved — awaiting payment',
-          'paid'               => '✅ Paid',
           'rejected'           => '❌ Rejected',
         ];
         echo $statusLabels[$voucher['status']] ?? ucfirst($voucher['status']);
       ?>
     </span>
+    <?php endif; ?>
     <?php endif; ?>
   </div>
 
