@@ -201,9 +201,15 @@ arsort($blSummary);
     .sum-card.total .val { color: #fff; font-size: 1.5rem; }
 
     /* Expense table */
-    .table-wrap { overflow-x: auto; background: #fff; border: 1px solid var(--gray-200); border-radius: 12px; margin-bottom: 1.5rem; }
+    /* No overflow here on wide screens: a scroll container would become the
+       scrollport and break the sticky header below. 900px table fits inside the
+       1200px wrap, so horizontal scroll is only needed on narrower viewports. */
+    .table-wrap { background: #fff; border: 1px solid var(--gray-200); border-radius: 12px; margin-bottom: 1.5rem; }
+    @media (max-width: 980px) { .table-wrap { overflow-x: auto; } }
     table.etable { width: 100%; border-collapse: collapse; min-width: 900px; font-size: .83rem; }
-    .etable thead th { background: #1a2e1a; color: #fff; padding: .6rem .75rem; text-align: left; font-size: .71rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
+    .etable thead th { position: sticky; top: 0; z-index: 3; background: #1a2e1a; color: #fff; padding: .6rem .75rem; text-align: left; font-size: .71rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,.18); }
+    .etable thead th:first-child { border-top-left-radius: 12px; }
+    .etable thead th:last-child  { border-top-right-radius: 12px; }
     .etable thead th.r { text-align: right; }
     .etable tbody tr { border-bottom: 1px solid var(--gray-100); }
     .etable tbody tr:last-child { border-bottom: none; }
@@ -236,7 +242,7 @@ arsort($blSummary);
       .wrap { padding: 0; max-width: 100%; }
       .no-print { display: none !important; }
       .table-wrap, .breakdown-card { border: 1px solid #ccc; box-shadow: none; }
-      .etable thead th { background: #1a2e1a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .etable thead th { position: static; box-shadow: none; background: #1a2e1a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     }
 
     /* Lightbox */
