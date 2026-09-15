@@ -175,11 +175,15 @@ $initRowsJson = json_encode($initRows);
     .mileage-note { font-size: .78rem; color: var(--gray-400); margin-left: auto; }
 
     /* Expense table */
-    /* Height bound makes this the vertical scrollport so the sticky header
-       below actually sticks; overflow-x alone would let it scroll away. */
-    .expense-table-wrap { overflow: auto; max-height: calc(100vh - 230px); min-height: 280px; background: #fff; border: 1px solid var(--gray-200); border-radius: 12px; margin-bottom: 1.25rem; }
+    /* No overflow here on wide screens: any scroll container would become the
+       scrollport and break the sticky header below. Table fits under 1500px
+       wrap, so horizontal scroll is only needed on narrower viewports. */
+    .expense-table-wrap { background: #fff; border: 1px solid var(--gray-200); border-radius: 12px; margin-bottom: 1.25rem; }
+    @media (max-width: 1200px) { .expense-table-wrap { overflow-x: auto; } }
     table.expense-table { width: 100%; border-collapse: collapse; min-width: 1100px; font-size: .83rem; }
-    .expense-table thead th { position: sticky; top: 0; z-index: 3; background: #1a2e1a; color: #fff; padding: .6rem .75rem; text-align: left; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
+    .expense-table thead th { position: sticky; top: 0; z-index: 3; background: #1a2e1a; color: #fff; padding: .6rem .75rem; text-align: left; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,.18); }
+    .expense-table thead th:first-child { border-top-left-radius: 12px; }
+    .expense-table thead th:last-child  { border-top-right-radius: 12px; }
     .expense-table thead th.num { text-align: right; }
     .expense-table tbody tr { border-bottom: 1px solid var(--gray-100); }
     .expense-table tbody tr:last-child { border-bottom: none; }
