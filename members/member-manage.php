@@ -145,42 +145,80 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // ── Invite actions ────────────────────────────────────────────────────────
     if ($action === 'send_invites') {
-        $lines  = [];
+        $entries = [];
         $iErrors = [];
+
+        // Builds a display name from whichever columns the sheet provides:
+        // a single full-name column, or separate first/last columns.
+        $buildName = function (array $row, $nameCol, $firstCol, $lastCol): string {
+            if ($nameCol !== null && trim($row[$nameCol] ?? '') !== '') {
+                return trim($row[$nameCol]);
+            }
+            $first = $firstCol !== null ? trim($row[$firstCol] ?? '') : '';
+            $last  = $lastCol  !== null ? trim($row[$lastCol]  ?? '') : '';
+            return trim($first . ' ' . $last);
+        };
+
         if (!empty($_FILES['csv_file']['tmp_name'])) {
             $fh = fopen($_FILES['csv_file']['tmp_name'], 'r');
             if ($fh) {
-                $header = null; $emailCol = null; $nameCol = null;
+                $header = null;
+                $emailCol = $nameCol = $firstCol = $lastCol = null;
                 while (($row = fgetcsv($fh)) !== false) {
                     if (!$header) {
                         $header = array_map('strtolower', array_map('trim', $row));
                         foreach ($header as $i => $h) {
-                            if (in_array($h, ['email','email address','e-mail','emailaddress'])) $emailCol = $i;
-                            if (in_array($h, ['name','full name','fullname','first name','firstname','display name'])) $nameCol = $i;
+                            if (in_array($h, ['email','email address','e-mail','emailaddress','email 1 - value'])) $emailCol = $i;
+                            if (in_array($h, ['name','full name','fullname','display name'])) $nameCol  = $i;
+                            if (in_array($h, ['first name','firstname','first','given name'])) $firstCol = $i;
+                            if (in_array($h, ['last name','lastname','last','surname','family name'])) $lastCol = $i;
                         }
                         if ($emailCol === null) {
-                            $emailCol = 0; $nameCol = isset($row[1]) ? 1 : null; $header = ['auto'];
-                            $e = strtolower(trim($row[0] ?? '')); $n = $nameCol !== null ? trim($row[1] ?? '') : '';
-                            if ($e) $lines[] = $n ? "{$n}, {$e}" : $e;
+                            // No recognisable header row — assume col 0 is the
+                            // email and col 1 the name, and treat this as data.
+                            $emailCol = 0; $nameCol = isset($row[1]) ? 1 : null;
+                            $header = ['auto'];
+                            $e = strtolower(trim($row[0] ?? ''));
+                            $n = $nameCol !== null ? trim($row[1] ?? '') : '';
+                            if ($e) $entries[] = ['email' => $e, 'name' => $n];
                         }
                         continue;
                     }
-                    $e = strtolower(trim($row[$emailCol] ?? '')); $n = $nameCol !== null ? trim($row[$nameCol] ?? '') : '';
-                    if ($e) $lines[] = $n ? "{$n}, {$e}" : $e;
+                    $e = strtolower(trim($row[$emailCol] ?? ''));
+                    $n = $buildName($row, $nameCol, $firstCol, $lastCol);
+                    if ($e) $entries[] = ['email' => $e, 'name' => $n];
                 }
                 fclose($fh);
             }
         }
+
+        // Pasted lines: "Jane Smith, jane@example.com" or a bare address.
+        // Split on the LAST comma — an email never contains one, but a name
+        // written "Smith, Jane" does.
         $raw = trim($_POST['invite_list'] ?? '');
-        if ($raw) $lines = array_merge($lines, array_filter(array_map('trim', explode("\n", $raw))));
+        if ($raw) {
+            foreach (array_filter(array_map('trim', explode("\n", $raw))) as $line) {
+                $cut = strrpos($line, ',');
+                if ($cut === false) {
+                    $entries[] = ['email' => strtolower($line), 'name' => ''];
+                } else {
+                    $entries[] = [
+                        'email' => strtolower(trim(substr($line, $cut + 1))),
+                        'name'  => trim(substr($line, 0, $cut)),
+                    ];
+                }
+            }
+        }
         // Import only — nothing is emailed here. Sending is a separate,
         // deliberate step so a roster upload can never blast the membership.
         $added = $updated = $dupe = $iskip = 0;
-        foreach ($lines as $line) {
-            if (strpos($line, ',') !== false) { [$iname, $iemail] = array_map('trim', explode(',', $line, 2)); }
-            else { $iname = ''; $iemail = trim($line); }
-            $iemail = strtolower($iemail);
-            if (!filter_var($iemail, FILTER_VALIDATE_EMAIL)) { $iErrors[] = "Invalid: {$line}"; $iskip++; continue; }
+        foreach ($entries as $entry) {
+            $iname  = $entry['name'];
+            $iemail = strtolower(trim($entry['email']));
+            if (!filter_var($iemail, FILTER_VALIDATE_EMAIL)) {
+                $iErrors[] = 'Invalid: ' . htmlspecialchars($entry['email'] ?: '(blank)');
+                $iskip++; continue;
+            }
             $s = $db->prepare("SELECT id FROM members WHERE email=?"); $s->execute([$iemail]);
             if ($s->fetch()) { $iErrors[] = "{$iemail} already has an account."; $iskip++; continue; }
             $res = inviteImport($iemail, $iname, $member['email']);
@@ -593,7 +631,10 @@ foreach ($invites as $i) $invCounts[$i['invite_status']]++;
           <label>Upload a CSV file</label>
           <input type="file" name="csv_file" accept=".csv,text/csv"
                  style="display:block;border:1px solid var(--gray-300);border-radius:7px;padding:.5rem .75rem;font-size:.88rem;width:100%;box-sizing:border-box;background:#fff;">
-          <div class="field-hint">Must have an <code>email</code> column. A <code>name</code> column is optional. Google Contacts / Excel exports work as-is.</div>
+          <div class="field-hint">Must have an <code>email</code> column. For names, either a single
+            <code>name</code> column or separate <code>first name</code> / <code>last name</code> columns —
+            both are combined into the full name. Google Contacts / Outlook / Excel exports work as-is.
+            Save as <strong>CSV</strong>, not .xlsx.</div>
         </div>
         <div class="field">
           <label>Or paste emails manually</label>
