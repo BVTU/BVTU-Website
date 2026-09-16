@@ -268,13 +268,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    // Bulk actions on checkbox-selected rows
+    if ($action === 'send_selected' || $action === 'revoke_selected') {
+        $ids = array_filter(array_map('intval', (array)($_POST['invite_ids'] ?? [])));
+        if (!$ids) {
+            $error = 'No rows were selected.';
+        } elseif ($action === 'send_selected') {
+            $sent = $fail = 0;
+            foreach (array_values($ids) as $n => $iid) {
+                if (inviteIssue($iid)) $sent++; else $fail++;
+                if (($n + 1) % 20 === 0) usleep(500000);
+            }
+            $notice = "{$sent} registration link" . ($sent !== 1 ? 's' : '') . ' sent.'
+                    . ($fail ? " {$fail} could not be sent — check the Email Log." : '');
+        } else {
+            $gone = 0;
+            foreach ($ids as $iid) { inviteRevoke($iid); $gone++; }
+            $notice = "{$gone} entr" . ($gone !== 1 ? 'ies' : 'y') . ' removed from the invitation list.';
+        }
+    }
+
     if ($action === 'revoke_invite') {
         $iid = (int)($_POST['invite_id'] ?? 0);
         inviteRevoke($iid);
         $notice = 'Removed from the invitation list.';
     }
 
-    $tab = in_array($action, ['send_invites','send_all_invites','resend_invite','revoke_invite']) ? '&tab=invitations' : '';
+    $tab = in_array($action, ['send_invites','send_all_invites','resend_invite','revoke_invite',
+                              'send_selected','revoke_selected']) ? '&tab=invitations' : '';
     header('Location: member-manage.php' . ($notice ? '?notice=' . urlencode($notice) . $tab : ($error ? '?error=' . urlencode($error) . $tab : ($tab ? '?'.ltrim($tab,'&') : ''))));
     exit;
 }
@@ -397,6 +418,15 @@ foreach ($invites as $i) $invCounts[$i['invite_status']]++;
     .tab-panel.active { display: block; }
 
     /* Invite table */
+    /* Bulk action bar */
+    .bulk-bar { display: flex; align-items: center; gap: .5rem; margin-bottom: .6rem;
+                padding: .5rem .75rem; background: #fff; border: 1px solid var(--gray-200);
+                border-radius: 10px; }
+    .bulk-count { font-size: .8rem; font-weight: 700; color: var(--gray-500); margin-right: auto; }
+    .bulk-bar button[disabled] { opacity: .4; cursor: not-allowed; }
+    .bulk-bar button[disabled]:hover { background: none; border-color: var(--gray-200); color: var(--gray-600); }
+    .inv-check, #invSelectAll { width: 15px; height: 15px; cursor: pointer; accent-color: #1a6b35; }
+
     /* Sortable column headers */
     th.sortable { cursor: pointer; user-select: none; position: relative; padding-right: 1.5rem; }
     th.sortable:hover { background: #24422a; }
@@ -672,26 +702,47 @@ foreach ($invites as $i) $invCounts[$i['invite_status']]++;
     </div>
 
     <div class="sec-head">All Invitations (<?= count($invites) ?>)</div>
+
+    <!-- Bulk actions. Sits outside the table because each row already contains
+         its own form, and forms cannot nest. Checkboxes below opt in via the
+         HTML5 form="bulkInviteForm" attribute. -->
+    <form method="POST" id="bulkInviteForm" class="bulk-bar" onsubmit="return bulkConfirm(event);">
+      <input type="hidden" name="action" id="bulkAction" value="">
+      <span class="bulk-count" id="bulkCount">None selected</span>
+      <button type="submit" class="act-btn go"     id="bulkSendBtn"   disabled
+              onclick="document.getElementById('bulkAction').value='send_selected';">
+        &#x2709; Send to selected
+      </button>
+      <button type="submit" class="act-btn danger" id="bulkRemoveBtn" disabled
+              onclick="document.getElementById('bulkAction').value='revoke_selected';">
+        Remove selected
+      </button>
+    </form>
+
     <div class="table-wrap">
       <table id="invitesTable">
         <thead>
           <tr>
-            <th class="sortable" data-col="0">Email</th>
-            <th class="sortable" data-col="1">Name</th>
-            <th class="sortable" data-col="2">Status</th>
-            <th class="sortable" data-col="3">Sent</th>
+            <th style="width:34px;"><input type="checkbox" id="invSelectAll" title="Select all"></th>
+            <th class="sortable" data-col="1">Email</th>
+            <th class="sortable" data-col="2">Name</th>
+            <th class="sortable" data-col="3">Status</th>
+            <th class="sortable" data-col="4">Sent</th>
             <th>Expires / Accepted</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           <?php if (!$invites): ?>
-          <tr><td colspan="6" style="text-align:center;color:var(--gray-400);padding:2rem;">Nobody on the list yet — import a membership list above.</td></tr>
+          <tr><td colspan="7" style="text-align:center;color:var(--gray-400);padding:2rem;">Nobody on the list yet — import a membership list above.</td></tr>
           <?php endif; ?>
           <?php foreach ($invites as $inv):
             $istatus = $inv['invite_status'];
           ?>
           <tr>
+            <td><input type="checkbox" class="inv-check" form="bulkInviteForm"
+                       name="invite_ids[]" value="<?= (int)$inv['id'] ?>"
+                       data-status="<?= htmlspecialchars($istatus) ?>"></td>
             <td><?= htmlspecialchars($inv['email']) ?></td>
             <td style="color:var(--gray-500);"><?= htmlspecialchars($inv['name'] ?? '—') ?></td>
             <td>
@@ -820,6 +871,68 @@ function makeSortable(tableId, paired) {
 
 makeSortable('membersTable', true);
 makeSortable('invitesTable', false);
+
+/* ── Bulk selection on the Invitations table ─────────────────────────────── */
+(function () {
+    var selectAll = document.getElementById('invSelectAll');
+    var countEl   = document.getElementById('bulkCount');
+    var sendBtn   = document.getElementById('bulkSendBtn');
+    var removeBtn = document.getElementById('bulkRemoveBtn');
+    if (!countEl) return;
+
+    function checks() {
+        return Array.prototype.slice.call(document.querySelectorAll('.inv-check'));
+    }
+    function selected() {
+        return checks().filter(function (c) { return c.checked; });
+    }
+
+    function refresh() {
+        var sel = selected();
+        var n   = sel.length;
+        countEl.textContent = n ? n + ' selected' : 'None selected';
+        sendBtn.disabled = removeBtn.disabled = (n === 0);
+
+        if (selectAll) {
+            var all = checks();
+            selectAll.checked = all.length > 0 && n === all.length;
+            selectAll.indeterminate = n > 0 && n < all.length;
+        }
+    }
+
+    if (selectAll) {
+        selectAll.addEventListener('change', function () {
+            checks().forEach(function (c) { c.checked = selectAll.checked; });
+            refresh();
+        });
+    }
+    document.addEventListener('change', function (e) {
+        if (e.target && e.target.classList.contains('inv-check')) refresh();
+    });
+
+    window.bulkConfirm = function (ev) {
+        var sel = selected();
+        if (!sel.length) return false;
+        var action = document.getElementById('bulkAction').value;
+
+        if (action === 'revoke_selected') {
+            return confirm('Remove ' + sel.length + ' entr' + (sel.length === 1 ? 'y' : 'ies') +
+                           ' from the invitation list? This does not affect anyone who has already registered.');
+        }
+        // Warn when a resend would invalidate a link someone may still be holding
+        var resends = sel.filter(function (c) { return c.dataset.status !== 'not_sent'; }).length;
+        var msg = 'Email a registration link to ' + sel.length + ' member' +
+                  (sel.length === 1 ? '' : 's') + ' right now?';
+        if (resends) {
+            msg += '\n\n' + resends + ' of them ' + (resends === 1 ? 'has' : 'have') +
+                   ' already been emailed. Resending replaces their previous link, so any' +
+                   ' older one still in their inbox will stop working.';
+        }
+        return confirm(msg);
+    };
+
+    refresh();
+})();
 
 function switchTab(name) {
     document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
