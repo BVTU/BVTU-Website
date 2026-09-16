@@ -359,6 +359,14 @@ foreach ($invites as $i) $invCounts[$i['invite_status']]++;
     .tab-panel.active { display: block; }
 
     /* Invite table */
+    /* Sortable column headers */
+    th.sortable { cursor: pointer; user-select: none; position: relative; padding-right: 1.5rem; }
+    th.sortable:hover { background: #24422a; }
+    th.sortable::after { content: '\2195'; position: absolute; right: .5rem; top: 50%;
+                         transform: translateY(-50%); opacity: .35; font-size: .8rem; }
+    th.sortable.asc::after  { content: '\25B2'; opacity: 1; font-size: .6rem; }
+    th.sortable.desc::after { content: '\25BC'; opacity: 1; font-size: .6rem; }
+
     .badge-notsent-inv  { display:inline-block;background:#e0e7ff;color:#3730a3;font-size:.68rem;font-weight:700;border-radius:100px;padding:.15rem .5rem; }
     .badge-pending-inv  { display:inline-block;background:#fef3c7;color:#d97706;font-size:.68rem;font-weight:700;border-radius:100px;padding:.15rem .5rem; }
     .badge-accepted-inv { display:inline-block;background:#dcfce7;color:#166534;font-size:.68rem;font-weight:700;border-radius:100px;padding:.15rem .5rem; }
@@ -453,14 +461,14 @@ foreach ($invites as $i) $invCounts[$i['invite_status']]++;
   <!-- ── Member list ────────────────────────────────────────────────────────── -->
   <div class="sec-head">All Members (<?= count($members) ?>)</div>
   <div class="table-wrap">
-    <table>
+    <table id="membersTable">
       <thead>
         <tr>
-          <th>Name</th>
-          <th>Email</th>
-          <th>Status</th>
+          <th class="sortable" data-col="0">Name</th>
+          <th class="sortable" data-col="1">Email</th>
+          <th class="sortable" data-col="2">Status</th>
           <th>Roles</th>
-          <th>Joined</th>
+          <th class="sortable" data-col="4">Joined</th>
           <th>Actions</th>
         </tr>
       </thead>
@@ -471,7 +479,7 @@ foreach ($invites as $i) $invCounts[$i['invite_status']]++;
           $roles    = $roleMap[strtolower($m['email'])] ?? [];
         ?>
         <tr id="main-<?= $m['id'] ?>" class="<?= !$isActive ? 'inactive-row' : '' ?>">
-          <td>
+          <td data-sort="<?= htmlspecialchars($m['name']) ?>">
             <strong><?= htmlspecialchars($m['name']) ?></strong>
             <?php if ($isYou): ?><span class="badge-you">you</span><?php endif; ?>
           </td>
@@ -491,7 +499,8 @@ foreach ($invites as $i) $invCounts[$i['invite_status']]++;
             <?php endforeach; ?>
             <?php if (!$roles): ?><span style="color:var(--gray-300);font-size:.78rem;">—</span><?php endif; ?>
           </td>
-          <td style="font-size:.78rem;color:var(--gray-400);white-space:nowrap;">
+          <td style="font-size:.78rem;color:var(--gray-400);white-space:nowrap;"
+              data-sort="<?= $m['created_at'] ? (int)strtotime($m['created_at']) : 0 ?>">
             <?= $m['created_at'] ? date('M j, Y', strtotime($m['created_at'])) : '—' ?>
           </td>
           <td>
@@ -623,13 +632,13 @@ foreach ($invites as $i) $invCounts[$i['invite_status']]++;
 
     <div class="sec-head">All Invitations (<?= count($invites) ?>)</div>
     <div class="table-wrap">
-      <table>
+      <table id="invitesTable">
         <thead>
           <tr>
-            <th>Email</th>
-            <th>Name</th>
-            <th>Status</th>
-            <th>Sent</th>
+            <th class="sortable" data-col="0">Email</th>
+            <th class="sortable" data-col="1">Name</th>
+            <th class="sortable" data-col="2">Status</th>
+            <th class="sortable" data-col="3">Sent</th>
             <th>Expires / Accepted</th>
             <th>Actions</th>
           </tr>
@@ -655,7 +664,8 @@ foreach ($invites as $i) $invCounts[$i['invite_status']]++;
                 <span class="badge-expired-inv">Expired</span>
               <?php endif; ?>
             </td>
-            <td style="font-size:.78rem;color:var(--gray-400);white-space:nowrap;">
+            <td style="font-size:.78rem;color:var(--gray-400);white-space:nowrap;"
+                data-sort="<?= $inv['sent_at'] ? (int)strtotime($inv['sent_at']) : 0 ?>">
               <?= $inv['sent_at'] ? date('M j, Y', strtotime($inv['sent_at'])) : '—' ?>
             </td>
             <td style="font-size:.78rem;color:var(--gray-400);white-space:nowrap;">
@@ -710,6 +720,66 @@ function toggleEdit(id) {
     var isOpen = row.classList.toggle('open');
     if (isOpen) row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
+/**
+ * Excel-style column sorting.
+ * `paired` tables (Members) have a hidden .edit-row after each member row that
+ * has to travel with it, so rows are grouped into units before sorting.
+ */
+function makeSortable(tableId, paired) {
+    var table = document.getElementById(tableId);
+    if (!table || !table.tBodies.length) return;
+    var tbody   = table.tBodies[0];
+    var headers = table.querySelectorAll('th.sortable');
+
+    function keyFor(row, col) {
+        var cell = row.cells[col];
+        if (!cell) return '';
+        var explicit = cell.getAttribute('data-sort');
+        if (explicit !== null) return explicit;
+        return cell.textContent.trim();
+    }
+
+    Array.prototype.forEach.call(headers, function (th) {
+        th.addEventListener('click', function () {
+            var col = parseInt(th.getAttribute('data-col'), 10);
+            var asc = !th.classList.contains('asc');
+
+            Array.prototype.forEach.call(headers, function (o) {
+                o.classList.remove('asc', 'desc');
+            });
+            th.classList.add(asc ? 'asc' : 'desc');
+
+            // Group rows into sortable units, keeping edit rows with their owner
+            var units = [];
+            Array.prototype.forEach.call(tbody.rows, function (row) {
+                if (paired && row.classList.contains('edit-row')) {
+                    if (units.length) units[units.length - 1].rows.push(row);
+                    return;
+                }
+                // Skip placeholder rows like "No members yet" (single wide cell)
+                if (row.cells.length < 2) return;
+                units.push({ rows: [row], key: keyFor(row, col) });
+            });
+
+            units.sort(function (a, b) {
+                var x = a.key, y = b.key;
+                var nx = parseFloat(x), ny = parseFloat(y);
+                var bothNumeric = !isNaN(nx) && !isNaN(ny) && x !== '' && y !== '';
+                var res = bothNumeric ? nx - ny
+                                      : x.localeCompare(y, undefined, { sensitivity: 'base' });
+                return asc ? res : -res;
+            });
+
+            units.forEach(function (u) {
+                u.rows.forEach(function (r) { tbody.appendChild(r); });
+            });
+        });
+    });
+}
+
+makeSortable('membersTable', true);
+makeSortable('invitesTable', false);
+
 function switchTab(name) {
     document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
     document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
