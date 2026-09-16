@@ -160,11 +160,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         };
 
         if (!empty($_FILES['csv_file']['tmp_name'])) {
-            $fh = fopen($_FILES['csv_file']['tmp_name'], 'r');
-            if ($fh) {
+            // Handles .xlsx and .csv alike; detects by content, not extension.
+            $sheetRows = inviteReadSheet($_FILES['csv_file']['tmp_name']);
+            if (!$sheetRows) {
+                $iErrors[] = 'Could not read that file. Save it as .csv or .xlsx and try again.';
+            }
+            {
                 $header = null;
                 $emailCol = $nameCol = $firstCol = $lastCol = null;
-                while (($row = fgetcsv($fh)) !== false) {
+                foreach ($sheetRows as $row) {
                     if (!$header) {
                         $header = array_map('strtolower', array_map('trim', $row));
                         foreach ($header as $i => $h) {
@@ -188,7 +192,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $n = $buildName($row, $nameCol, $firstCol, $lastCol);
                     if ($e) $entries[] = ['email' => $e, 'name' => $n];
                 }
-                fclose($fh);
+                if ($sheetRows && $emailCol === null) {
+                    $iErrors[] = 'No email column found — expected a header named "Email".';
+                }
             }
         }
 
@@ -659,12 +665,12 @@ foreach ($invites as $i) $invCounts[$i['invite_status']]++;
         <input type="hidden" name="action" value="send_invites">
         <div class="field">
           <label>Upload a CSV file</label>
-          <input type="file" name="csv_file" accept=".csv,text/csv"
+          <input type="file" name="csv_file" accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                  style="display:block;border:1px solid var(--gray-300);border-radius:7px;padding:.5rem .75rem;font-size:.88rem;width:100%;box-sizing:border-box;background:#fff;">
           <div class="field-hint">Must have an <code>email</code> column. For names, either a single
             <code>name</code> column or separate <code>first name</code> / <code>last name</code> columns —
             both are combined into the full name. Google Contacts / Outlook / Excel exports work as-is.
-            Save as <strong>CSV</strong>, not .xlsx.</div>
+            Excel <strong>.xlsx</strong> and <strong>.csv</strong> both work — no need to convert.</div>
         </div>
         <div class="field">
           <label>Or paste emails manually</label>

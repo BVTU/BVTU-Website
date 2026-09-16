@@ -165,6 +165,116 @@ function inviteRevoke(int $id): void {
     )->execute([$id]);
 }
 
+/** "B" -> 1, "AA" -> 26. Used to place cells that the sheet omits when blank. */
+function _inviteColToIndex(string $letters): int {
+    $n = 0;
+    $letters = strtoupper($letters);
+    for ($i = 0, $len = strlen($letters); $i < $len; $i++) {
+        $n = $n * 26 + (ord($letters[$i]) - 64);
+    }
+    return $n - 1;
+}
+
+function _inviteDecode(string $v): string {
+    return html_entity_decode($v, ENT_QUOTES | ENT_XML1, 'UTF-8');
+}
+
+/**
+ * Read the first worksheet of an .xlsx into rows of plain strings.
+ * An .xlsx is a ZIP of XML, so this needs no PHP extension beyond ZipArchive.
+ * Returns [] if the file can't be read as a spreadsheet.
+ */
+function _inviteReadXlsx(string $path): array {
+    if (!class_exists('ZipArchive')) return [];
+    $zip = new ZipArchive();
+    if ($zip->open($path) !== true) return [];
+
+    // Shared string table — most text cells are references into this.
+    $shared = [];
+    $ss = $zip->getFromName('xl/sharedStrings.xml');
+    if ($ss !== false && preg_match_all('/<si>(.*?)<\/si>/s', $ss, $m)) {
+        foreach ($m[1] as $si) {
+            // Rich text is split across multiple <t> runs; join them.
+            preg_match_all('/<t[^>]*>(.*?)<\/t>/s', $si, $tm);
+            $shared[] = _inviteDecode(implode('', $tm[1]));
+        }
+    }
+
+    $sheetXml = $zip->getFromName('xl/worksheets/sheet1.xml');
+    if ($sheetXml === false) {
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $name = $zip->getNameIndex($i);
+            if (preg_match('#^xl/worksheets/sheet\d+\.xml$#', $name)) {
+                $sheetXml = $zip->getFromName($name);
+                break;
+            }
+        }
+    }
+    $zip->close();
+    if (!$sheetXml) return [];
+
+    $rows = [];
+    preg_match_all('/<row[^>]*>(.*?)<\/row>/s', $sheetXml, $rm);
+    foreach ($rm[1] as $rowXml) {
+        preg_match_all('/<c\b([^>]*?)(?:\/>|>(.*?)<\/c>)/s', $rowXml, $cm, PREG_SET_ORDER);
+        $cells = [];
+        foreach ($cm as $c) {
+            $attrs = $c[1];
+            $inner = $c[2] ?? '';
+            $col   = preg_match('/r="([A-Za-z]+)/', $attrs, $r) ? _inviteColToIndex($r[1]) : count($cells);
+            $type  = preg_match('/t="([^"]+)"/', $attrs, $t) ? $t[1] : 'n';
+
+            $val = '';
+            if ($type === 'inlineStr') {
+                preg_match_all('/<t[^>]*>(.*?)<\/t>/s', $inner, $im);
+                $val = _inviteDecode(implode('', $im[1]));
+            } elseif (preg_match('/<v>(.*?)<\/v>/s', $inner, $vm)) {
+                $val = $type === 's' ? ($shared[(int)$vm[1]] ?? '') : _inviteDecode($vm[1]);
+            }
+            $cells[$col] = $val;
+        }
+        if (!$cells) continue;
+        // Fill gaps so column positions line up with the header row
+        $dense = [];
+        for ($i = 0, $max = max(array_keys($cells)); $i <= $max; $i++) {
+            $dense[$i] = $cells[$i] ?? '';
+        }
+        $rows[] = $dense;
+    }
+    return $rows;
+}
+
+/**
+ * Read an uploaded roster (.xlsx or .csv) into rows of plain strings.
+ * Detects by content rather than filename — a mislabelled file is common.
+ */
+function inviteReadSheet(string $path): array {
+    // Every .xlsx starts with the ZIP magic bytes "PK\x03\x04"
+    $fh = fopen($path, 'rb');
+    $magic = $fh ? fread($fh, 4) : '';
+    if ($fh) fclose($fh);
+
+    if (strncmp($magic, "PK\x03\x04", 4) === 0) {
+        return _inviteReadXlsx($path);
+    }
+
+    $rows = [];
+    $fh = fopen($path, 'r');
+    if (!$fh) return $rows;
+    $first = true;
+    while (($row = fgetcsv($fh)) !== false) {
+        if ($first && isset($row[0])) {
+            // Strip the UTF-8 BOM Excel writes, which otherwise corrupts the
+            // first header name and breaks column detection.
+            $row[0] = preg_replace('/^\xEF\xBB\xBF/', '', $row[0]);
+            $first = false;
+        }
+        $rows[] = $row;
+    }
+    fclose($fh);
+    return $rows;
+}
+
 /** Send the invite email. Plain text for best deliverability. */
 function inviteSendEmail(string $email, string $name, string $token): bool {
     $host    = 'bvtu.ca';
