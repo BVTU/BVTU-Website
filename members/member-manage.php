@@ -173,7 +173,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $raw = trim($_POST['invite_list'] ?? '');
         if ($raw) $lines = array_merge($lines, array_filter(array_map('trim', explode("\n", $raw))));
-        $sent = $iskip = $fail = 0;
+        // Import only — nothing is emailed here. Sending is a separate,
+        // deliberate step so a roster upload can never blast the membership.
+        $added = $updated = $dupe = $iskip = 0;
         foreach ($lines as $line) {
             if (strpos($line, ',') !== false) { [$iname, $iemail] = array_map('trim', explode(',', $line, 2)); }
             else { $iname = ''; $iemail = trim($line); }
@@ -181,37 +183,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!filter_var($iemail, FILTER_VALIDATE_EMAIL)) { $iErrors[] = "Invalid: {$line}"; $iskip++; continue; }
             $s = $db->prepare("SELECT id FROM members WHERE email=?"); $s->execute([$iemail]);
             if ($s->fetch()) { $iErrors[] = "{$iemail} already has an account."; $iskip++; continue; }
-            $tok = inviteCreate($iemail, $iname, $member['email']);
-            $ok  = inviteSendEmail($iemail, $iname ?: $iemail, $tok);
-            if ($ok) { $sent++; } else { $fail++; $iErrors[] = "Send failed: {$iemail}"; }
-            if ($sent % 20 === 0 && $sent > 0) usleep(500000);
+            $res = inviteImport($iemail, $iname, $member['email']);
+            if ($res === 'added') $added++;
+            elseif ($res === 'updated') $updated++;
+            else $dupe++;
         }
         $parts = [];
-        if ($sent)   $parts[] = "{$sent} invite" . ($sent !== 1 ? 's' : '') . " sent";
-        if ($iskip)  $parts[] = "{$iskip} skipped";
-        if ($fail)   $parts[] = "{$fail} failed";
-        $notice = implode(', ', $parts) . '.';
+        if ($added)   $parts[] = "{$added} added";
+        if ($updated) $parts[] = "{$updated} updated";
+        if ($dupe)    $parts[] = "{$dupe} already on the list";
+        if ($iskip)   $parts[] = "{$iskip} skipped";
+        $notice = ($parts ? implode(', ', $parts) : 'Nothing imported') . '.'
+                . ' No emails were sent — use “Send to everyone not yet emailed” or the per-member Send button.';
         if ($iErrors) $notice .= ' — ' . implode(' | ', $iErrors);
     }
 
+    // Email everyone on the list who has never been sent a link
+    if ($action === 'send_all_invites') {
+        $unsent = inviteGetUnsent();
+        $sent = $fail = 0;
+        foreach ($unsent as $i => $inv) {
+            if (inviteIssue((int)$inv['id'])) $sent++; else $fail++;
+            // Pace the batch so Hostinger doesn't throttle or spam-flag it
+            if (($i + 1) % 20 === 0) usleep(500000);
+        }
+        if (!$unsent) {
+            $notice = 'Everyone on the list has already been emailed.';
+        } else {
+            $notice = "{$sent} registration link" . ($sent !== 1 ? 's' : '') . ' sent.'
+                    . ($fail ? " {$fail} failed — check the Email Log." : '');
+        }
+    }
+
+    // Email (or re-email) one member
     if ($action === 'resend_invite') {
         $iid = (int)($_POST['invite_id'] ?? 0);
-        $s   = $db->prepare("SELECT * FROM member_invitations WHERE id=?"); $s->execute([$iid]);
+        $s   = $db->prepare("SELECT email, sent_at FROM member_invitations WHERE id=?"); $s->execute([$iid]);
         $inv = $s->fetch();
-        if ($inv && !$inv['accepted_at']) {
-            $tok = inviteCreate($inv['email'], $inv['name'] ?? '', $member['email']);
-            $ok  = inviteSendEmail($inv['email'], $inv['name'] ?: $inv['email'], $tok);
-            $notice = $ok ? 'Invite re-sent to ' . $inv['email'] . '.' : 'Send failed.';
+        if ($inv) {
+            $wasSent = !empty($inv['sent_at']);
+            $ok = inviteIssue($iid);
+            $verb = $wasSent ? 're-sent' : 'sent';
+            $notice = $ok
+                ? "Registration link {$verb} to " . htmlspecialchars($inv['email']) . '.'
+                : 'Send failed — check the Email Log.';
         }
     }
 
     if ($action === 'revoke_invite') {
         $iid = (int)($_POST['invite_id'] ?? 0);
         inviteRevoke($iid);
-        $notice = 'Invite revoked.';
+        $notice = 'Removed from the invitation list.';
     }
 
-    $tab = in_array($action, ['send_invites','resend_invite','revoke_invite']) ? '&tab=invitations' : '';
+    $tab = in_array($action, ['send_invites','send_all_invites','resend_invite','revoke_invite']) ? '&tab=invitations' : '';
     header('Location: member-manage.php' . ($notice ? '?notice=' . urlencode($notice) . $tab : ($error ? '?error=' . urlencode($error) . $tab : ($tab ? '?'.ltrim($tab,'&') : ''))));
     exit;
 }
@@ -236,7 +261,7 @@ foreach ($expRows  as $r) $roleMap[strtolower($r['user_email'])][] = $r['role'];
 // ── Load invitations ──────────────────────────────────────────────────────────
 inviteEnsureTable();
 $invites = inviteGetAll();
-$invCounts = ['pending' => 0, 'accepted' => 0, 'expired' => 0];
+$invCounts = ['not_sent' => 0, 'pending' => 0, 'accepted' => 0, 'expired' => 0];
 foreach ($invites as $i) $invCounts[$i['invite_status']]++;
 ?>
 <!DOCTYPE html>
@@ -334,6 +359,7 @@ foreach ($invites as $i) $invCounts[$i['invite_status']]++;
     .tab-panel.active { display: block; }
 
     /* Invite table */
+    .badge-notsent-inv  { display:inline-block;background:#e0e7ff;color:#3730a3;font-size:.68rem;font-weight:700;border-radius:100px;padding:.15rem .5rem; }
     .badge-pending-inv  { display:inline-block;background:#fef3c7;color:#d97706;font-size:.68rem;font-weight:700;border-radius:100px;padding:.15rem .5rem; }
     .badge-accepted-inv { display:inline-block;background:#dcfce7;color:#166534;font-size:.68rem;font-weight:700;border-radius:100px;padding:.15rem .5rem; }
     .badge-expired-inv  { display:inline-block;background:#f1f5f9;color:#64748b;font-size:.68rem;font-weight:700;border-radius:100px;padding:.15rem .5rem; }
@@ -365,7 +391,9 @@ foreach ($invites as $i) $invCounts[$i['invite_status']]++;
     <button class="tab-btn <?= $activeTab === 'invitations' ? 'active' : '' ?>"
             onclick="switchTab('invitations')">
       Invitations
-      <?php if ($invCounts['pending']): ?>
+      <?php if ($invCounts['not_sent']): ?>
+      <span class="badge"><?= $invCounts['not_sent'] ?> to send</span>
+      <?php elseif ($invCounts['pending']): ?>
       <span class="badge"><?= $invCounts['pending'] ?> pending</span>
       <?php endif; ?>
     </button>
@@ -535,19 +563,20 @@ foreach ($invites as $i) $invCounts[$i['invite_status']]++;
   <div id="tab-invitations" class="tab-panel <?= $activeTab === 'invitations' ? 'active' : '' ?>">
 
     <div class="stat-row">
-      <div class="stat"><div class="n"><?= $invCounts['pending'] ?></div><div class="l">Pending</div></div>
-      <div class="stat"><div class="n"><?= $invCounts['accepted'] ?></div><div class="l">Accepted</div></div>
+      <div class="stat"><div class="n"><?= $invCounts['not_sent'] ?></div><div class="l">Not yet sent</div></div>
+      <div class="stat"><div class="n"><?= $invCounts['pending'] ?></div><div class="l">Awaiting signup</div></div>
+      <div class="stat"><div class="n"><?= $invCounts['accepted'] ?></div><div class="l">Registered</div></div>
       <div class="stat"><div class="n"><?= $invCounts['expired'] ?></div><div class="l">Expired</div></div>
       <div class="stat"><div class="n"><?= count($invites) ?></div><div class="l">Total</div></div>
     </div>
 
-    <div class="sec-head">Send Invitations</div>
+    <div class="sec-head">Step 1 — Import the Membership List</div>
     <div class="form-card">
-      <h2>Invite Members</h2>
+      <h2>Import Members</h2>
       <p style="font-size:.83rem;color:var(--gray-500);margin:-.25rem 0 1rem;">
-        Each person gets a personal, one-time link valid for 72 hours.
-        Sending to someone with a pending invite replaces their old link with a fresh one.
-        Members who already have accounts are automatically skipped.
+        This only builds the list — <strong>no emails are sent</strong>.
+        Anyone who already has an account or is already on the list is skipped.
+        You choose when to send in Step 2.
       </p>
       <form method="POST" enctype="multipart/form-data" autocomplete="off">
         <input type="hidden" name="action" value="send_invites">
@@ -562,9 +591,33 @@ foreach ($invites as $i) $invCounts[$i['invite_status']]++;
           <textarea name="invite_list" rows="5"
                     style="width:100%;border:1px solid var(--gray-300);border-radius:7px;padding:.6rem .75rem;font-size:.88rem;font-family:monospace;box-sizing:border-box;resize:vertical;"
                     placeholder="One per line — optionally with a name:&#10;&#10;Jane Smith, jane@example.com&#10;john@example.com"></textarea>
-          <div class="field-hint">CSV and paste are merged before sending.</div>
+          <div class="field-hint">CSV and paste are merged on import.</div>
         </div>
-        <button type="submit" class="btn btn-primary" style="padding:.55rem 1.1rem;font-size:.9rem;">Send Invites</button>
+        <button type="submit" class="btn btn-primary" style="padding:.55rem 1.1rem;font-size:.9rem;">Import to List</button>
+      </form>
+    </div>
+
+    <div class="sec-head">Step 2 — Send Registration Links</div>
+    <div class="form-card">
+      <h2>Send to Everyone Not Yet Emailed</h2>
+      <p style="font-size:.83rem;color:var(--gray-500);margin:-.25rem 0 1rem;">
+        <?php if ($invCounts['not_sent']): ?>
+          <strong><?= $invCounts['not_sent'] ?></strong> member<?= $invCounts['not_sent'] !== 1 ? 's have' : ' has' ?>
+          not been emailed yet. Each gets a personal one-time link valid for 72 hours
+          from the moment it is sent.
+        <?php else: ?>
+          Everyone currently on the list has already been emailed.
+          Import more members above, or use the Send button on an individual row below.
+        <?php endif; ?>
+      </p>
+      <form method="POST"
+            onsubmit="return confirm('Send a registration link to <?= (int)$invCounts['not_sent'] ?> member(s)? This emails them right now.')">
+        <input type="hidden" name="action" value="send_all_invites">
+        <button type="submit" class="btn btn-primary"
+                style="padding:.55rem 1.1rem;font-size:.9rem;<?= $invCounts['not_sent'] ? '' : 'opacity:.5;' ?>"
+                <?= $invCounts['not_sent'] ? '' : 'disabled' ?>>
+          ✉ Send to <?= (int)$invCounts['not_sent'] ?> Member<?= $invCounts['not_sent'] !== 1 ? 's' : '' ?>
+        </button>
       </form>
     </div>
 
@@ -583,7 +636,7 @@ foreach ($invites as $i) $invCounts[$i['invite_status']]++;
         </thead>
         <tbody>
           <?php if (!$invites): ?>
-          <tr><td colspan="6" style="text-align:center;color:var(--gray-400);padding:2rem;">No invitations sent yet.</td></tr>
+          <tr><td colspan="6" style="text-align:center;color:var(--gray-400);padding:2rem;">Nobody on the list yet — import a membership list above.</td></tr>
           <?php endif; ?>
           <?php foreach ($invites as $inv):
             $istatus = $inv['invite_status'];
@@ -592,18 +645,24 @@ foreach ($invites as $i) $invCounts[$i['invite_status']]++;
             <td><?= htmlspecialchars($inv['email']) ?></td>
             <td style="color:var(--gray-500);"><?= htmlspecialchars($inv['name'] ?? '—') ?></td>
             <td>
-              <?php if ($istatus === 'pending'): ?>
-                <span class="badge-pending-inv">&#x23F3; Pending</span>
+              <?php if ($istatus === 'not_sent'): ?>
+                <span class="badge-notsent-inv">&#x2709; Not sent</span>
+              <?php elseif ($istatus === 'pending'): ?>
+                <span class="badge-pending-inv">&#x23F3; Awaiting signup</span>
               <?php elseif ($istatus === 'accepted'): ?>
-                <span class="badge-accepted-inv">&#x2713; Accepted</span>
+                <span class="badge-accepted-inv">&#x2713; Registered</span>
               <?php else: ?>
                 <span class="badge-expired-inv">Expired</span>
               <?php endif; ?>
             </td>
-            <td style="font-size:.78rem;color:var(--gray-400);white-space:nowrap;"><?= date('M j, Y', strtotime($inv['created_at'])) ?></td>
+            <td style="font-size:.78rem;color:var(--gray-400);white-space:nowrap;">
+              <?= $inv['sent_at'] ? date('M j, Y', strtotime($inv['sent_at'])) : '—' ?>
+            </td>
             <td style="font-size:.78rem;color:var(--gray-400);white-space:nowrap;">
               <?php if ($inv['accepted_at']): ?>
-                Accepted <?= date('M j, Y', strtotime($inv['accepted_at'])) ?>
+                Registered <?= date('M j, Y', strtotime($inv['accepted_at'])) ?>
+              <?php elseif ($istatus === 'not_sent'): ?>
+                <span style="color:var(--gray-300);">Not sent yet</span>
               <?php elseif ($istatus === 'expired'): ?>
                 Expired <?= date('M j, Y', strtotime($inv['expires_at'])) ?>
               <?php else: ?>
@@ -613,19 +672,20 @@ foreach ($invites as $i) $invCounts[$i['invite_status']]++;
             <td>
               <?php if ($istatus !== 'accepted'): ?>
               <div style="display:flex;gap:.35rem;">
-                <form method="POST" style="display:inline;">
+                <form method="POST" style="display:inline;"
+                      onsubmit="return confirm('Email a registration link to <?= htmlspecialchars(addslashes($inv['email'])) ?> now?')">
                   <input type="hidden" name="action"    value="resend_invite">
                   <input type="hidden" name="invite_id" value="<?= (int)$inv['id'] ?>">
-                  <button type="submit" class="act-btn">&#x21BA; Resend</button>
+                  <button type="submit" class="act-btn<?= $istatus === 'not_sent' ? ' go' : '' ?>">
+                    <?= $istatus === 'not_sent' ? '&#x2709; Send' : '&#x21BA; Resend' ?>
+                  </button>
                 </form>
-                <?php if ($istatus === 'pending'): ?>
                 <form method="POST" style="display:inline;"
-                      onsubmit="return confirm('Revoke invite for <?= htmlspecialchars(addslashes($inv['email'])) ?>?')">
+                      onsubmit="return confirm('Remove <?= htmlspecialchars(addslashes($inv['email'])) ?> from the invitation list?')">
                   <input type="hidden" name="action"    value="revoke_invite">
                   <input type="hidden" name="invite_id" value="<?= (int)$inv['id'] ?>">
-                  <button type="submit" class="act-btn danger">Revoke</button>
+                  <button type="submit" class="act-btn danger">Remove</button>
                 </form>
-                <?php endif; ?>
               </div>
               <?php else: ?>
               <span style="font-size:.75rem;color:var(--gray-300);">—</span>
