@@ -7,3 +7,8 @@ members/config.php
 
 # Protected PDFs — kept on server only, not in public repo
 members/protected-docs/
+
+# Membership rosters — personal contact data. The repo root is the web root,
+# so anything committed here is downloadable from the live site.
+/*.xlsx
+/*.csv
