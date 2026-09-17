@@ -1,9 +1,10 @@
 <?php
 /**
- * prod-manage.php — Exec-only management: schools, roles, portal accounts
+ * prod-manage.php — Exec-only management: Pro-D role assignments and schools
  */
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/prod-db.php';
+require_once __DIR__ . '/member-picker.php';
 requireLogin();
 
 $member = getMember();
@@ -16,7 +17,9 @@ if (!prodIsExec($member['email'])) {
 
 $notice = null;
 $error  = null;
-$tab    = $_GET['tab'] ?? 'roles';
+// Whitelisted so a stale ?tab=accounts bookmark doesn't render an empty page
+// now that the Create Account tab is gone.
+$tab    = in_array($_GET['tab'] ?? '', ['roles', 'schools'], true) ? $_GET['tab'] : 'roles';
 
 // ── Handle POST actions ───────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -80,42 +83,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // Create portal account
-    if ($action === 'create_account') {
-        $name     = trim($_POST['new_name']     ?? '');
-        $email    = strtolower(trim($_POST['new_email'] ?? ''));
-        $password = $_POST['new_password']      ?? '';
-        $role     = trim($_POST['new_role']     ?? '');
-        $schoolId = (int)($_POST['new_school_id'] ?? 0) ?: null;
-
-        if (!$name || !$email || strlen($password) < 8) {
-            $error = 'Name and email are required; password must be at least 8 characters.';
-        } else {
-            // Check if member already exists
-            $s = getDB()->prepare("SELECT id FROM members WHERE email=?");
-            $s->execute([$email]);
-            $exists = $s->fetchColumn();
-
-            if ($exists) {
-                $error = "An account with {$email} already exists.";
-            } else {
-                $hash = password_hash($password, PASSWORD_DEFAULT);
-                getDB()->prepare("INSERT INTO members (name, email, password_hash) VALUES (?,?,?)")
-                       ->execute([$name, $email, $hash]);
-
-                // Assign role if provided
-                if ($role && in_array($role, ['exec','treasurer','site_rep'])) {
-                    getDB()->prepare("INSERT IGNORE INTO prod_roles (user_email, user_name, role, school_id, assigned_by)
-                                      VALUES (?,?,?,?,?)")
-                           ->execute([$email, $name, $role, $schoolId, $member['email']]);
-                }
-
-                $notice = "Account created for {$name} ({$email})." .
-                          ($role ? " Role '{$role}' assigned." : '') .
-                          " Share the temporary password with them.";
-                $tab = 'accounts';
-            }
-        }
-    }
 }
 
 $roles   = getDB()->query("SELECT r.*, s.name as school_name FROM prod_roles r LEFT JOIN prod_schools s ON s.id = r.school_id ORDER BY r.role, r.user_name")->fetchAll();
@@ -188,6 +155,7 @@ $roleBgs    = ['exec' => '#eff6ff', 'treasurer' => '#f0fdf4', 'site_rep' => '#f5
     .pw-toggle:hover { color: var(--gray-700); }
 
     .section-note { font-size: .82rem; color: var(--gray-500); background: #f8f9fa; border-radius: 8px; padding: .75rem 1rem; margin-bottom: 1.25rem; line-height: 1.6; }
+<?php memberPickerStyles(); ?>
   </style>
 </head>
 <body>
@@ -204,7 +172,6 @@ $roleBgs    = ['exec' => '#eff6ff', 'treasurer' => '#f0fdf4', 'site_rep' => '#f5
   <div class="tab-bar">
     <button class="tab-btn <?= $tab==='roles'    ? 'active' : '' ?>" onclick="switchTab('roles')">Role Assignments</button>
     <button class="tab-btn <?= $tab==='schools'  ? 'active' : '' ?>" onclick="switchTab('schools')">Schools</button>
-    <button class="tab-btn <?= $tab==='accounts' ? 'active' : '' ?>" onclick="switchTab('accounts')">Create Account</button>
   </div>
 
   <!-- ── ROLES TAB ─────────────────────────────────────────────────────────── -->
@@ -249,16 +216,29 @@ $roleBgs    = ['exec' => '#eff6ff', 'treasurer' => '#f0fdf4', 'site_rep' => '#f5
     <!-- Add role form -->
     <div class="form-card">
       <h2>Assign a Role</h2>
-      <form method="POST">
+      <form method="POST" id="form-prod" onsubmit="return confirmAssign(event, 'prod')">
         <input type="hidden" name="action" value="add_role">
+        <input type="hidden" name="role_email" id="sel-email-prod" value="">
+        <input type="hidden" name="role_name"  id="sel-name-prod"  value="">
         <div class="field-row">
           <div class="field">
-            <label>Full Name</label>
-            <input type="text" name="role_name" placeholder="e.g. Jane Smith">
+            <label>Member *</label>
+            <div class="typeahead-wrap">
+              <input type="text" class="typeahead-input" id="search-prod"
+                     placeholder="Type a name or email&hellip;" autocomplete="off"
+                     oninput="filterMembers('prod')" onkeydown="handleKey(event,'prod')">
+              <ul class="suggestions" id="sugg-prod"></ul>
+            </div>
+            <div class="field-hint">Searches everyone on the membership list, registered or not.</div>
           </div>
           <div class="field">
-            <label>Email Address *</label>
-            <input type="email" name="role_email" required placeholder="e.g. treasurer@bvtu.ca">
+            <label>Name to record</label>
+            <input type="text" class="typeahead-input offlist-name" id="offname-prod"
+                   placeholder="Their full name" autocomplete="off" style="display:none;"
+                   oninput="offlistNameInput('prod')">
+            <div class="field-hint" id="offhint-prod" style="display:none;">
+              This address isn't on the member list — type their name for the directory.
+            </div>
           </div>
         </div>
         <div class="field-row">
@@ -281,7 +261,8 @@ $roleBgs    = ['exec' => '#eff6ff', 'treasurer' => '#f0fdf4', 'site_rep' => '#f5
             </select>
           </div>
         </div>
-        <button type="submit" class="btn btn-primary" style="padding:.55rem 1.1rem;font-size:.9rem;">Assign Role</button>
+        <button type="submit" class="btn btn-primary save-btn" id="save-prod"
+                style="padding:.55rem 1.1rem;font-size:.9rem;">Assign Role</button>
       </form>
     </div>
   </div>
@@ -351,71 +332,10 @@ $roleBgs    = ['exec' => '#eff6ff', 'treasurer' => '#f0fdf4', 'site_rep' => '#f5
     </div>
   </div>
 
-  <!-- ── ACCOUNTS TAB ───────────────────────────────────────────────────────── -->
-  <div class="tab-pane <?= $tab==='accounts' ? 'active' : '' ?>" id="tab-accounts">
-
-    <div class="section-note">
-      Create a portal login for someone who doesn't have one yet — like the treasurer or a site rep.
-      Set a temporary password and share it with them privately. They can use <strong>Forgot Password</strong>
-      on the login page to change it once their email is active.
-      <br><br>
-      <strong>Note:</strong> If <code>treasurer@bvtu.ca</code> doesn't exist yet on Hostinger, you can
-      create the account now — it will be ready to use as soon as the email is set up.
-    </div>
-
-    <div class="form-card">
-      <h2>Create Portal Account</h2>
-      <form method="POST" autocomplete="off">
-        <input type="hidden" name="action" value="create_account">
-        <div class="field-row">
-          <div class="field">
-            <label>Full Name *</label>
-            <input type="text" name="new_name" required placeholder="e.g. BVTU Treasurer" autocomplete="off">
-          </div>
-          <div class="field">
-            <label>Email Address *</label>
-            <input type="email" name="new_email" required placeholder="e.g. treasurer@bvtu.ca" autocomplete="off">
-            <div class="field-hint">This is what they'll log in with.</div>
-          </div>
-        </div>
-        <div class="field">
-          <label>Temporary Password *</label>
-          <div class="pw-field">
-            <input type="password" name="new_password" id="newPw" required minlength="8"
-              placeholder="Min. 8 characters" autocomplete="new-password">
-            <button type="button" class="pw-toggle" onclick="togglePw()" title="Show/hide password">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-            </button>
-          </div>
-          <div class="field-hint">Share this with the person privately — they should change it on first login.</div>
-        </div>
-        <div class="field-row">
-          <div class="field">
-            <label>Assign Role (optional)</label>
-            <select name="new_role" id="newRoleSelect" onchange="toggleNewSchool(this.value)">
-              <option value="">No role yet</option>
-              <option value="exec">Exec / President</option>
-              <option value="treasurer">Treasurer</option>
-              <option value="site_rep">Site Rep</option>
-            </select>
-          </div>
-          <div class="field" id="newSchoolField" style="display:none;">
-            <label>Assigned School</label>
-            <select name="new_school_id">
-              <option value="">Choose school…</option>
-              <?php foreach ($schools as $s): ?>
-              <option value="<?= $s['id'] ?>"><?= htmlspecialchars($s['name']) ?></option>
-              <?php endforeach; ?>
-            </select>
-          </div>
-        </div>
-        <button type="submit" class="btn btn-primary" style="padding:.55rem 1.1rem;font-size:.9rem;">Create Account</button>
-      </form>
-    </div>
-  </div>
 
 </div>
 
+<?php memberPickerScript(true); ?>
 <script>
 function switchTab(name) {
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
@@ -427,14 +347,7 @@ function switchTab(name) {
 function toggleSchoolField(role) {
   document.getElementById('schoolField').style.display = role === 'site_rep' ? 'block' : 'none';
 }
-function toggleNewSchool(role) {
-  document.getElementById('newSchoolField').style.display = role === 'site_rep' ? 'block' : 'none';
-}
 
-function togglePw() {
-  const input = document.getElementById('newPw');
-  input.type = input.type === 'password' ? 'text' : 'password';
-}
 </script>
 </body>
 </html>
