@@ -49,6 +49,79 @@ function _siteMailLog(string $to, string $subject, bool $ok, string $err = ''): 
     }
 }
 
+/**
+ * Like siteMail(), with file attachments and an optional Reply-To.
+ *
+ * From stays the authenticated SMTP mailbox. Putting someone else's address
+ * there — lp54@bctf.ca, say — means the recipient's server checks that domain's
+ * SPF record, doesn't find this host, and bins the message. Reply-To carries
+ * the human address instead, which is unauthenticated and so unaffected.
+ *
+ * $attachments: [ ['path' => '/abs/path', 'name' => 'shown_name.jpg'], ... ]
+ */
+function siteMailWithAttachments(
+    string $to,
+    string $subject,
+    string $body,
+    array $attachments = [],
+    string $replyTo = '',
+    string $replyToName = '',
+    string $fromNameOverride = ''
+): bool {
+    $cfg = __DIR__ . '/config.php';
+    if (file_exists($cfg)) require_once $cfg;
+
+    $host = defined('SMTP_HOST') ? SMTP_HOST : null;
+    $port = defined('SMTP_PORT') ? (int)SMTP_PORT : 587;
+    $user = defined('SMTP_USER') ? SMTP_USER : null;
+    $pass = defined('SMTP_PASS') ? SMTP_PASS : null;
+    $fromName = $fromNameOverride ?: (defined('SMTP_FROM_NAME') ? SMTP_FROM_NAME : 'BVTU Member Portal');
+
+    if (!$host || !$user || !$pass) {
+        error_log('siteMailWithAttachments: SMTP not configured');
+        return false;
+    }
+
+    $mail = new PHPMailer(true);
+    try {
+        $mail->isSMTP();
+        $mail->Host       = $host;
+        $mail->SMTPAuth   = true;
+        $mail->Username   = $user;
+        $mail->Password   = $pass;
+        $mail->SMTPSecure = ($port === 465) ? PHPMailer::ENCRYPTION_SMTPS : PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->Port       = $port;
+
+        $mail->setFrom($user, $fromName);
+        if ($replyTo) {
+            $mail->addReplyTo($replyTo, $replyToName ?: $replyTo);
+        } else {
+            $mail->addReplyTo($user, $fromName);
+        }
+        $mail->addAddress($to);
+
+        foreach ($attachments as $a) {
+            if (!empty($a['path']) && file_exists($a['path'])) {
+                $mail->addAttachment($a['path'], $a['name'] ?? basename($a['path']));
+            }
+        }
+
+        $mail->isHTML(false);
+        $mail->CharSet = 'UTF-8';
+        $mail->Subject = $subject;
+        $mail->Body    = $body;
+
+        $mail->send();
+        _siteMailLog($to, $subject, true);
+        return true;
+    } catch (Exception $e) {
+        $err = $mail->ErrorInfo;
+        error_log("siteMailWithAttachments failed to {$to}: " . $err);
+        _siteMailLog($to, $subject, false, $err);
+        return false;
+    }
+}
+
 function siteMail(string $to, string $subject, string $body, bool $isHtml = false): bool {
     // Load config if not already loaded
     $cfg = __DIR__ . '/config.php';
