@@ -59,3 +59,13 @@ define('SESSION_SECRET', 'change-this-to-a-long-random-string-xyz');
 // define('MS_CLIENT_ID',     'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx');
 // define('MS_CLIENT_SECRET', 'the Value from Certificates & secrets, not the ID');
 // define('MS_TENANT',        'consumers'); // personal Microsoft account
+
+// ── Contacts / Mailchimp (optional) ───────────────────────────────────────────
+// API key: Mailchimp → Account → Extras → API keys. The data centre is the
+// suffix of the key itself (…-us21), so no separate setting is needed.
+// Audience ID: Audience → Settings → Audience name and defaults.
+// Webhook secret: any long random string you choose; it goes in the webhook URL
+// and is what authenticates incoming calls, so treat it like a password.
+// define('MC_API_KEY',        'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-us21');
+// define('MC_LIST_ID',        'xxxxxxxxxx');
+// define('MC_WEBHOOK_SECRET', 'a-long-random-string');

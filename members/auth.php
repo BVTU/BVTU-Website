@@ -1,8 +1,66 @@
 <?php
 function startSession(): void {
-    if (session_status() === PHP_SESSION_NONE) {
-        session_start();
+    if (session_status() !== PHP_SESSION_NONE) return;
+
+    // Cookie flags were never set, so the session cookie was readable by
+    // JavaScript and sent cross-site. Set before session_start() or they are
+    // ignored. Applies to every page, not only the contact system.
+    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+          || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path'     => '/',
+        'secure'   => $https,   // only over HTTPS; left off locally so dev still works
+        'httponly' => true,     // not reachable from JavaScript
+        'samesite' => 'Lax',    // blocks cross-site POSTs while keeping normal links working
+    ]);
+    session_start();
+}
+
+/**
+ * Per-session CSRF token for state-changing forms.
+ * Emit with csrfField(); check with csrfCheck() before acting on any POST.
+ */
+function csrfToken(): string {
+    startSession();
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
     }
+    return $_SESSION['csrf_token'];
+}
+
+function csrfField(): string {
+    return '<input type="hidden" name="csrf_token" value="' . htmlspecialchars(csrfToken()) . '">';
+}
+
+/** True when the submitted token matches. hash_equals avoids timing leaks. */
+function csrfValid(): bool {
+    startSession();
+    $sent = $_POST['csrf_token'] ?? '';
+    return !empty($_SESSION['csrf_token']) && is_string($sent)
+        && hash_equals($_SESSION['csrf_token'], $sent);
+}
+
+/** Stop a POST that fails CSRF, without leaking why to a crawler. */
+function csrfCheck(): void {
+    if (!csrfValid()) {
+        http_response_code(400);
+        exit('Request could not be verified. Go back, reload the page and try again.');
+    }
+}
+
+/**
+ * Headers for pages showing personal data: keep them out of caches and out of
+ * search results. Authentication is the actual protection; this is hygiene.
+ */
+function sendPrivateHeaders(): void {
+    header('Cache-Control: no-store, no-cache, must-revalidate, private');
+    header('Pragma: no-cache');
+    header('X-Robots-Tag: noindex, nofollow, noarchive');
+    header('X-Content-Type-Options: nosniff');
+    header('Referrer-Policy: same-origin');
+    header('X-Frame-Options: SAMEORIGIN');
 }
 
 function isLoggedIn(): bool {
