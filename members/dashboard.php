@@ -171,7 +171,7 @@ if (execIsAdmin($myEmail) && empty($myExecRoleSlugs)) {
 
       <?php ob_start(); ?>
       <div class="doc-section" style="margin-bottom:1.5rem;">
-        <h2>Expense Reimbursement</h2>
+        <h2><?= execIsAdmin($myEmail) ? 'Expenses' : 'Expense Reimbursement' ?></h2>
         <div class="doc-list">
           <?php
             // The President claims through LP vouchers, so these two — which are
@@ -219,21 +219,8 @@ if (execIsAdmin($myEmail) && empty($myExecRoleSlugs)) {
       <!-- LP voucher review now lives behind Approvals & Payments, so signers
            have one door rather than a queue link in each section. -->
 
-      <?php if (execIsAdmin($myEmail)): ?>
-      <div class="doc-section" style="margin-bottom:1.5rem;">
-        <h2>LP Expense Tracker</h2>
-        <div class="doc-list">
-          <a href="lp-dashboard.php" class="doc-item">
-            <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-            Expense Dashboard &amp; Grant Summary
-          </a>
-          <a href="lp-voucher-new.php" class="doc-item">
-            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-            New Expense Voucher
-          </a>
-        </div>
-      </div>
-      <?php endif; ?>
+      <!-- LP Expense Tracker section removed: it rendered only for the President
+           and repeated the two links already in the quickbar above. -->
 
       <div class="doc-section" style="margin-bottom:1.5rem;">
         <h2>Newsletter Archive</h2>
