@@ -24,49 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrfCheck();
     $action = $_POST['action'] ?? '';
 
-    if ($action === 'retry_failed') {
-        $failed = contactSyncFailures();
-        $ok = $bad = 0;
-        // Capped per run so a long queue cannot exhaust the request timeout and
-        // leave the work half done with no record of where it stopped.
-        foreach (array_slice($failed, 0, 50) as $c) {
-            $r = mcSyncContact((int)$c['id'], $member['email']);
-            $r['ok'] ? $ok++ : $bad++;
-            usleep(120000);   // stay well inside Mailchimp's rate limit
-        }
-        $left = max(0, count($failed) - 50);
-        $notice = "{$ok} synced" . ($bad ? ", {$bad} still failing" : '')
-                . ($left ? ", {$left} left — run again" : '') . '.';
-        contactAudit(null, 'manual_sync', $member['email'], '', "retry: {$ok} ok, {$bad} failed");
-        header('Location: contacts-sync.php?notice=' . urlencode($notice));
-        exit;
-    }
-
-    if ($action === 'pull_statuses') {
-        // Reads Mailchimp's view for contacts we have not checked recently.
-        // Read-only: it can change our stored status but never theirs.
-        $rows = getDB()->query(
-            "SELECT id, email FROM contacts
-             WHERE status <> 'archived'
-             ORDER BY mailchimp_last_synced_at IS NOT NULL, mailchimp_last_synced_at
-             LIMIT 50"
-        )->fetchAll();
-
-        $checked = $changed = 0;
-        foreach ($rows as $c) {
-            $r = mcFetchStatus($c['email']);
-            if (!$r['ok']) { contactMarkSyncFailed((int)$c['id'], $r['error'], $member['email']); continue; }
-            $before = contactGet((int)$c['id'])['mailchimp_status'] ?? '';
-            contactApplyMailchimpStatus((int)$c['id'], $r['status'], $r['mc_id'], $member['email']);
-            $checked++;
-            if ($before !== $r['status']) $changed++;
-            usleep(120000);
-        }
-        contactAudit(null, 'manual_sync', $member['email'], '', "pull: {$checked} checked, {$changed} changed");
-        header('Location: contacts-sync.php?notice=' . urlencode(
-            "Checked {$checked} contacts against Mailchimp; {$changed} had changed."));
-        exit;
-    }
+    // Bulk work now runs through contacts-sync-run.php, a batch at a time.
 }
 
 $failed  = contactSyncFailures();
@@ -234,28 +192,93 @@ $webhookUrl = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'bvtu.ca') . '/members/mail
       <?php endforeach; ?>
     </tbody>
   </table>
-  <form method="POST" style="margin-top:.8rem;">
-    <?= csrfField() ?>
-    <input type="hidden" name="action" value="retry_failed">
-    <button class="btn btn-primary" style="padding:.5rem 1.1rem;font-size:.88rem;"
-            <?= $connOk ? '' : 'disabled' ?>>Retry failed syncs</button>
-  </form>
+  <p style="font-size:.84rem;color:var(--gray-500);margin-top:.7rem;">
+    These are picked up automatically by the sync below.
+  </p>
   <?php endif; ?>
 
-  <?php if ($connOk): ?>
-  <h2 class="sec">Check statuses</h2>
+  <?php if ($connOk && !$missingFields): ?>
+  <h2 class="sec">Sync</h2>
   <div class="card">
-    <p style="font-size:.87rem;color:var(--gray-700);margin:0 0 .7rem;line-height:1.7;">
-      Reads Mailchimp's subscription state for the 50 contacts checked least recently and
-      records it here. Read-only — it never changes anything in Mailchimp. Day to day the
-      webhook keeps this current; this is for catching up after an outage.
+    <p style="font-size:.88rem;color:var(--gray-700);margin:0 0 .9rem;line-height:1.7;">
+      Sends every contact's name, school and role to Mailchimp and reads back their
+      subscription status. Runs in batches because Mailchimp limits how fast we may
+      call it &mdash; leave the page open until it finishes. Stopping early is safe:
+      whatever has been done stays done.
     </p>
-    <form method="POST">
-      <?= csrfField() ?>
-      <input type="hidden" name="action" value="pull_statuses">
-      <button class="act-btn">Check 50 contacts now</button>
-    </form>
+
+    <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;">
+      <button class="btn btn-primary" id="syncBtn" style="padding:.55rem 1.2rem;font-size:.92rem;"
+              onclick="runSync('push')">Sync contacts</button>
+      <button class="act-btn" id="pullBtn" onclick="runSync('pull')">Check statuses only</button>
+      <span id="syncMsg" style="font-size:.86rem;color:var(--gray-500);"></span>
+    </div>
+
+    <div id="bar" style="display:none;height:6px;background:#e5e7eb;border-radius:100px;margin-top:.9rem;overflow:hidden;">
+      <div id="barFill" style="height:100%;width:0;background:var(--primary);transition:width .25s;"></div>
+    </div>
   </div>
+
+  <script>
+  var CSRF = <?= json_encode(csrfToken()) ?>;
+
+  function runSync(direction) {
+    var btn  = document.getElementById('syncBtn');
+    var pull = document.getElementById('pullBtn');
+    var msg  = document.getElementById('syncMsg');
+    var bar  = document.getElementById('bar');
+    var fill = document.getElementById('barFill');
+
+    btn.disabled = pull.disabled = true;
+    bar.style.display = 'block';
+
+    var since = '';          // set by the first response, fixing the run's scope
+    var done = 0, failed = 0, total = 0;
+
+    function step() {
+      var fd = new FormData();
+      fd.append('csrf_token', CSRF);
+      fd.append('direction', direction);
+      if (since) fd.append('since', since);
+
+      fetch('contacts-sync-run.php', { method: 'POST', body: fd })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d.error) {
+            msg.textContent = d.error;
+            msg.style.color = '#991b1b';
+            btn.disabled = pull.disabled = false;
+            return;
+          }
+          since  = d.since;
+          done   += d.processed;
+          failed += d.failed;
+          if (!total) total = done + d.remaining;
+
+          var pct = total ? Math.round((done + failed) / total * 100) : 100;
+          fill.style.width = pct + '%';
+          msg.textContent = d.finished
+            ? 'Finished — ' + done + ' synced' + (failed ? ', ' + failed + ' failed' : '') + '.'
+            : done + ' of ' + total + '\u2026';
+
+          if (d.finished) {
+            msg.style.color = failed ? '#b45309' : '#166534';
+            btn.disabled = pull.disabled = false;
+            // Reload so the failure list and counts reflect the run
+            setTimeout(function () { location.reload(); }, 1200);
+          } else {
+            step();
+          }
+        })
+        .catch(function () {
+          msg.textContent = 'Connection lost — press Sync contacts to carry on.';
+          msg.style.color = '#991b1b';
+          btn.disabled = pull.disabled = false;
+        });
+    }
+    step();
+  }
+  </script>
   <?php endif; ?>
 
 </div>
