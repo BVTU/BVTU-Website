@@ -35,18 +35,7 @@ $readyToPay   = $isTreasurer ? lpGetVouchers('', 'vp_approved') : [];
 $historyStatuses = $isTreasurer ? ['paid', 'rejected'] : ['vp_approved', 'paid', 'rejected'];
 $history         = lpGetVouchersByStatuses($historyStatuses);
 
-function _lpStatusBadge(string $status): string {
-    $map = [
-        'draft'               => ['#f1f5f9','#64748b','Draft'],
-        'submitted'           => ['#fffbeb','#d97706','Awaiting Treasurer'],
-        'treasurer_approved'  => ['#eff6ff','#1e40af','Awaiting VP'],
-        'vp_approved'         => ['#f0fdf4','#166534','Ready to Pay'],
-        'paid'                => ['#f0fdf4','#166534','Paid'],
-        'rejected'            => ['#fef2f2','#991b1b','Rejected'],
-    ];
-    $s = $map[$status] ?? ['#f8f9fa','#555', ucfirst($status)];
-    return '<span style="display:inline-block;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:.2rem .6rem;border-radius:100px;background:' . $s[0] . ';color:' . $s[1] . ';">' . $s[2] . '</span>';
-}
+// Status pill now lives in lp-db.php so every page labels a status identically.
 
 function _lpExpenseTotal(int $voucherId): float {
     $expenses = lpGetExpenses($voucherId);
@@ -150,7 +139,7 @@ function _lpExpenseTotal(int $voucherId): float {
         <span>Total</span>
       </div>
     </div>
-    <?= _lpStatusBadge($v['status']) ?>
+    <?= lpStatusBadge($v['status']) ?>
     <div class="action-row">
       <form method="POST" action="lp-action.php">
         <input type="hidden" name="action"     value="treasurer_approve">
@@ -206,7 +195,7 @@ function _lpExpenseTotal(int $voucherId): float {
         <span>E-transfer amount</span>
       </div>
     </div>
-    <?= _lpStatusBadge($v['status']) ?>
+    <?= lpStatusBadge($v['status']) ?>
     <div class="action-row" style="margin-top:.85rem;">
       <form method="POST" action="lp-action.php">
         <input type="hidden" name="action"     value="mark_paid">
@@ -269,7 +258,7 @@ function _lpExpenseTotal(int $voucherId): float {
         <span>Total</span>
       </div>
     </div>
-    <?= _lpStatusBadge($v['status']) ?>
+    <?= lpStatusBadge($v['status']) ?>
     <div class="action-row">
       <form method="POST" action="lp-action.php">
         <input type="hidden" name="action"     value="vp_approve">
@@ -328,7 +317,7 @@ function _lpExpenseTotal(int $voucherId): float {
       <div class="voucher-total">$<?= number_format($total, 2) ?></div>
     </div>
 
-    <?= _lpStatusBadge($v['status']) ?>
+    <?= lpStatusBadge($v['status']) ?>
 
     <div class="voucher-meta" style="margin-top:.5rem;">
       <?php if (!empty($v['signer1_at'])): ?>

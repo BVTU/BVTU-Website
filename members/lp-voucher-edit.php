@@ -181,6 +181,10 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
   <link rel="icon" href="../favicon.ico">
   <style>
     body { background: #f4f6f8; }
+    .approval-card { background:#fff; border:1px solid var(--gray-200); border-radius:12px;
+                     padding:1rem 1.25rem; margin-bottom:1.25rem; max-width:520px; }
+    .approval-head { font-size:.72rem; font-weight:800; text-transform:uppercase;
+                     letter-spacing:.06em; color:var(--gray-400); margin-bottom:.5rem; }
     .wrap { max-width: 1500px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
     .portal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
     .portal-header h1 { font-size: 1.35rem; font-weight: 800; color: var(--gray-800); margin: 0; }
@@ -324,6 +328,13 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
     <a href="lp-review.php" style="color:#1e40af;font-weight:700;margin-left:.5rem;">&#x2190; Back to review queue</a>
   </div>
   <?php endif; ?>
+  <?php if ($voucher['status'] !== 'draft'): ?>
+  <div class="approval-card">
+    <div class="approval-head">Approval Progress</div>
+    <?= lpApprovalTrail($voucher) ?>
+  </div>
+  <?php endif; ?>
+
   <?php if ($saved): ?>
   <div class="saved-notice">&#x2713; Voucher updated successfully.</div>
   <?php endif; ?>

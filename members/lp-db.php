@@ -310,6 +310,102 @@ function lpGetBudgetLines(int $year = 0): array {
  * Vouchers in any of the given statuses, newest activity first.
  * Used by the review page's history section, which spans several statuses.
  */
+/** Coloured status pill. Shared so every page labels a status identically. */
+function lpStatusBadge(string $status): string {
+    $map = [
+        'draft'              => ['#f1f5f9', '#64748b', 'Draft'],
+        'submitted'          => ['#fffbeb', '#d97706', 'Awaiting Treasurer'],
+        'treasurer_approved' => ['#eff6ff', '#1e40af', 'Awaiting VP'],
+        'vp_approved'        => ['#f0fdf4', '#166534', 'Ready to Pay'],
+        'paid'               => ['#f0fdf4', '#166534', 'Paid'],
+        'rejected'           => ['#fef2f2', '#991b1b', 'Rejected'],
+    ];
+    $c = $map[$status] ?? ['#f8f9fa', '#555', ucfirst($status)];
+    return '<span style="display:inline-block;font-size:.72rem;font-weight:700;'
+         . 'text-transform:uppercase;letter-spacing:.04em;padding:.2rem .6rem;'
+         . 'border-radius:100px;background:' . $c[0] . ';color:' . $c[1] . ';">'
+         . $c[2] . '</span>';
+}
+
+/**
+ * Who has signed a voucher and when, as a step list.
+ *
+ * The voucher pages previously showed a flat "Submitted" for every non-draft
+ * status, so an approval was invisible to the submitter. Self-contained inline
+ * styles so any page can drop it in.
+ */
+function lpApprovalTrail(array $v): string {
+    $status   = $v['status'] ?? 'draft';
+    $rejected = $status === 'rejected';
+
+    $row = function (string $state, string $label, string $detail): string {
+        $icon = ['done' => '&#x2713;', 'current' => '&#x23F3;', 'todo' => '&#x25CB;',
+                 'stopped' => '&#x2715;'][$state];
+        $col  = ['done' => '#166534', 'current' => '#d97706', 'todo' => '#cbd5e1',
+                 'stopped' => '#991b1b'][$state];
+        $weight = $state === 'todo' ? '500' : '700';
+        return '<li style="display:flex;gap:.55rem;align-items:flex-start;padding:.3rem 0;">'
+             . '<span style="color:' . $col . ';font-weight:700;line-height:1.35;">' . $icon . '</span>'
+             . '<span style="line-height:1.35;">'
+             . '<span style="font-weight:' . $weight . ';color:' . ($state === 'todo' ? '#94a3b8' : '#1f2937') . ';">'
+             . htmlspecialchars($label) . '</span>'
+             . ($detail !== '' ? '<br><span style="font-size:.78rem;color:#64748b;">' . $detail . '</span>' : '')
+             . '</span></li>';
+    };
+
+    $when = function (?string $ts, string $fmt = 'M j, Y'): string {
+        return $ts ? date($fmt, strtotime($ts)) : '';
+    };
+    $note = function (?string $n): string {
+        return !empty($n) ? '<br><em>&ldquo;' . htmlspecialchars($n) . '&rdquo;</em>' : '';
+    };
+
+    $out = '<ul style="list-style:none;margin:0;padding:0;">';
+
+    // 1. Submitted
+    $out .= $status === 'draft'
+        ? $row('todo', 'Not yet submitted', '')
+        : $row('done', 'Submitted', htmlspecialchars($v['submitted_by'] ?? '')
+               . ($v['submitted_at'] ? ' &middot; ' . $when($v['submitted_at']) : ''));
+
+    if ($rejected) {
+        $out .= $row('stopped', 'Rejected',
+            htmlspecialchars($v['rejected_by_name'] ?: ($v['rejected_by_email'] ?? ''))
+            . ($v['rejected_at'] ? ' &middot; ' . $when($v['rejected_at']) : '')
+            . $note($v['rejection_note'] ?? ''));
+        return $out . '</ul>';
+    }
+
+    // 2. Treasurer (signer 1)
+    if (!empty($v['signer1_at'])) {
+        $out .= $row('done', 'Approved by Treasurer',
+            htmlspecialchars($v['signer1_name'] ?: $v['signer1_email'])
+            . ' &middot; ' . $when($v['signer1_at']) . $note($v['signer1_note'] ?? ''));
+    } else {
+        $out .= $row($status === 'submitted' ? 'current' : 'todo', 'Treasurer approval', '');
+    }
+
+    // 3. Vice-President (signer 2)
+    if (!empty($v['signer2_at'])) {
+        $out .= $row('done', 'Approved by Vice-President',
+            htmlspecialchars($v['signer2_name'] ?: $v['signer2_email'])
+            . ' &middot; ' . $when($v['signer2_at']) . $note($v['signer2_note'] ?? ''));
+    } else {
+        $out .= $row($status === 'treasurer_approved' ? 'current' : 'todo', 'Vice-President signature', '');
+    }
+
+    // 4. Payment
+    if (!empty($v['paid_at'])) {
+        $ref = !empty($v['payment_ref']) ? ' &middot; ref ' . htmlspecialchars($v['payment_ref']) : '';
+        $out .= $row('done', 'Paid',
+            $when($v['payment_date'] ?: $v['paid_at']) . $ref . $note($v['payment_note'] ?? ''));
+    } else {
+        $out .= $row($status === 'vp_approved' ? 'current' : 'todo', 'E-transfer sent', '');
+    }
+
+    return $out . '</ul>';
+}
+
 function lpGetVouchersByStatuses(array $statuses): array {
     if (!$statuses) return [];
     $in = implode(',', array_fill(0, count($statuses), '?'));

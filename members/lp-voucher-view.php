@@ -6,6 +6,7 @@ requireLogin();
 
 $member = getMember();
 lpEnsureTables();
+lpEnsureApprovalColumns();
 
 $id = (int)($_GET['id'] ?? 0);
 if (!$id) { header('Location: lp-dashboard.php'); exit; }
@@ -182,6 +183,10 @@ arsort($blSummary);
   <link rel="stylesheet" href="../css/style.css">
   <link rel="icon" href="../favicon.ico">
   <style>
+    .approval-card { background:#fff; border:1px solid var(--gray-200); border-radius:12px;
+                     padding:1rem 1.25rem; margin-bottom:1.25rem; max-width:520px; }
+    .approval-head { font-size:.72rem; font-weight:800; text-transform:uppercase;
+                     letter-spacing:.06em; color:var(--gray-400); margin-bottom:.5rem; }
     body { background: #f4f6f8; }
     .wrap { max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
     .portal-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
@@ -286,7 +291,7 @@ arsort($blSummary);
           </form>
           <?php endif; ?>
           <?php else: ?>
-          <span style="font-size:.82rem;font-weight:700;color:#166534;padding:.45rem .5rem;">✓ Submitted <?= $voucher['submitted_at'] ? date('M j', strtotime($voucher['submitted_at'])) : '' ?></span>
+          <span style="padding:.45rem .5rem;"><?= lpStatusBadge($voucher['status']) ?></span>
           <a href="lp-voucher-edit.php?id=<?= $id ?>" class="btn btn-outline" style="padding:.45rem .85rem;font-size:.83rem;">✏ Edit</a>
           <?php if (execIsAdmin($member['email']) && $voucher['status'] !== 'paid'): ?>
           <?php if ($voucher['status'] === 'submitted'): ?>
@@ -308,6 +313,15 @@ arsort($blSummary);
       <a class="back-link no-print" href="lp-dashboard.php">← LP Expenses</a>
     </div>
   </div>
+
+  <?php if ($voucher['status'] !== 'draft'): ?>
+  <!-- Approval progress. Previously the page showed a flat "Submitted" for every
+       non-draft status, so a Treasurer sign-off was invisible to the submitter. -->
+  <div class="approval-card">
+    <div class="approval-head">Approval Progress</div>
+    <?= lpApprovalTrail($voucher) ?>
+  </div>
+  <?php endif; ?>
 
   <?php if ($notice): ?>
   <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:.75rem 1rem;margin-bottom:1.25rem;font-size:.88rem;color:#166534;font-weight:600;">
@@ -455,7 +469,14 @@ arsort($blSummary);
     </div>
     <div>
       <div style="font-size:.75rem;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.3rem;">Approved by Treasurer</div>
-      <div style="font-size:.92rem;font-weight:600;">&nbsp;</div>
+      <div style="font-size:.92rem;font-weight:600;">
+        <?php if (!empty($voucher['signer1_at'])): ?>
+          <?= htmlspecialchars($voucher['signer1_name'] ?: $voucher['signer1_email']) ?>
+          <span style="font-weight:400;color:var(--gray-500);">
+            &middot; <?= date('M j, Y', strtotime($voucher['signer1_at'])) ?>
+          </span>
+        <?php else: ?>&nbsp;<?php endif; ?>
+      </div>
       <div style="margin-top:2.5rem;border-top:1px solid #ccc;padding-top:.3rem;font-size:.75rem;color:var(--gray-400);">Signature &amp; Date</div>
     </div>
   </div>
