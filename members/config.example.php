@@ -66,6 +66,9 @@ define('SESSION_SECRET', 'change-this-to-a-long-random-string-xyz');
 // Audience ID: Audience → Settings → Audience name and defaults.
 // Webhook secret: any long random string you choose; it goes in the webhook URL
 // and is what authenticates incoming calls, so treat it like a password.
+// NOTE: the newsletter tool already uses MC_API_KEY. If it is defined above,
+// do NOT add it again — PHP keeps the first definition and warns about the rest.
+// Contacts shares the same key; only MC_LIST_ID and MC_WEBHOOK_SECRET are new.
 // define('MC_API_KEY',        'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-us21');
 // define('MC_LIST_ID',        'xxxxxxxxxx');
 // define('MC_WEBHOOK_SECRET', 'a-long-random-string');
