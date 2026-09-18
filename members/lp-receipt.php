@@ -34,7 +34,10 @@ if (!$row) {
 if (!$row) { http_response_code(404); exit('Receipt not found.'); }
 
 $isOwner      = $row['submitted_by_email'] === $member['email'];
-$isPrivileged = lpCanView($member['email']);
+// lpCanView() is President-only. The Treasurer and VP reach the voucher itself
+// through lp-voucher-edit.php (gated on lpCanReview), so without this they could
+// read the line items but got 403 on every receipt they were being asked to sign.
+$isPrivileged = lpCanView($member['email']) || lpCanReview($member['email']);
 
 if (!$isOwner && !$isPrivileged) { http_response_code(403); exit('Access denied.'); }
 

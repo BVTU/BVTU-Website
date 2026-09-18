@@ -18,6 +18,7 @@ if (!$voucher) { header('Location: lp-dashboard.php'); exit; }
 $isOwner    = $voucher['submitted_by_email'] === $member['email'];
 $isAdmin    = execIsAdmin($member['email']);
 $isReviewer = lpCanReview($member['email']);
+$isTreasurer = lpCanSign1($member['email']);   // signer 1; labels the read-only banner
 if (!$isOwner && !prodIsExec($member['email']) && !$isReviewer) {
     header('Location: lp-dashboard.php');
     exit;
