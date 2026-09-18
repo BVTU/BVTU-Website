@@ -508,16 +508,16 @@ function _lpExpenseTotal(int $voucherId): float {
   <!-- ── Treasurer: ready to pay ─────────────────────────────────────────────── -->
   <div class="sec-head">
     Ready for E-Transfer
-    <?php if ($readyToPay): ?>
-    <span style="background:#f0fdf4;color:#166534;font-size:.7rem;font-weight:700;border-radius:100px;padding:.1rem .5rem;margin-left:.4rem;"><?= count($readyToPay) ?></span>
+    <?php if ($lpReadyToPay): ?>
+    <span style="background:#f0fdf4;color:#166534;font-size:.7rem;font-weight:700;border-radius:100px;padding:.1rem .5rem;margin-left:.4rem;"><?= count($lpReadyToPay) ?></span>
     <?php endif; ?>
   </div>
 
-  <?php if (!$readyToPay): ?>
+  <?php if (!$lpReadyToPay): ?>
     <p class="empty-note">No vouchers ready for payment.</p>
   <?php endif; ?>
 
-  <?php foreach ($readyToPay as $v):
+  <?php foreach ($lpReadyToPay as $v):
     $total = _lpExpenseTotal($v['id']);
   ?>
   <div class="voucher-card">
@@ -567,6 +567,87 @@ function _lpExpenseTotal(int $voucherId): float {
 
   
   <?php endif; ?>
+
+  <!-- Signed-off items from both systems. Without this a voucher sitting between
+       signatures shows nowhere for the officer who already signed it. -->
+  <?php $historyCount = count($claimHistory) + count($lpHistory); ?>
+  <div class="system-head">Approved &amp; Completed</div>
+  <div class="system-sub">
+    No action needed &mdash; kept so you can look up what has already been signed.
+  </div>
+
+  <?php if ($historyCount === 0): ?>
+    <p class="empty-note">Nothing signed off yet.</p>
+  <?php endif; ?>
+
+  <?php foreach ($claimHistory as $b):
+    $total = expBatchTotal($b['id']);
+  ?>
+  <div class="claim-card" style="opacity:.85;">
+    <div class="claim-top">
+      <div>
+        <div class="claim-name"><?= htmlspecialchars($b['title'] ?: $b['ref_code']) ?></div>
+        <div class="claim-meta">
+          Member reimbursement &middot; <?= htmlspecialchars($b['user_name']) ?>
+          &middot; <?= htmlspecialchars($b['ref_code']) ?>
+        </div>
+      </div>
+      <div class="claim-total">$<?= number_format($total, 2) ?><span>Claim total</span></div>
+    </div>
+    <?= _expClaimBadge($b['status']) ?>
+    <div class="claim-meta" style="margin-top:.5rem;">
+      <?php if (!empty($b['signer1_at'])): ?>
+        President: <?= htmlspecialchars($b['signer1_name'] ?: $b['signer1_email']) ?>
+        on <?= date('M j, Y', strtotime($b['signer1_at'])) ?>
+      <?php endif; ?>
+      <?php if (!empty($b['signer2_at'])): ?>
+        &middot; Treasurer: <?= htmlspecialchars($b['signer2_name'] ?: $b['signer2_email']) ?>
+        on <?= date('M j, Y', strtotime($b['signer2_at'])) ?>
+      <?php endif; ?>
+      <?php if (!empty($b['paid_at'])): ?>
+        &middot; Paid <?= date('M j, Y', strtotime($b['payment_date'] ?: $b['paid_at'])) ?>
+      <?php endif; ?>
+    </div>
+    <div class="action-row">
+      <a href="exp-claim-view.php?id=<?= (int)$b['id'] ?>" class="detail-link">View claim &#x2192;</a>
+    </div>
+  </div>
+  <?php endforeach; ?>
+
+  <?php foreach ($lpHistory as $v):
+    $vTotal = _lpExpenseTotal($v['id']);
+  ?>
+  <div class="voucher-card" style="opacity:.85;">
+    <div class="voucher-top">
+      <div>
+        <div class="voucher-name"><?= htmlspecialchars($v['name']) ?></div>
+        <div class="voucher-meta">
+          President&rsquo;s expenses
+          <?= $v['voucher_number'] ? '&middot; #' . htmlspecialchars($v['voucher_number']) : '' ?>
+          &middot; <?= htmlspecialchars($v['submitted_by']) ?>
+        </div>
+      </div>
+      <div class="voucher-total">$<?= number_format($vTotal, 2) ?></div>
+    </div>
+    <?= lpStatusBadge($v['status']) ?>
+    <div class="voucher-meta" style="margin-top:.5rem;">
+      <?php if (!empty($v['signer1_at'])): ?>
+        Treasurer: <?= htmlspecialchars($v['signer1_name'] ?: $v['signer1_email']) ?>
+        on <?= date('M j, Y', strtotime($v['signer1_at'])) ?>
+      <?php endif; ?>
+      <?php if (!empty($v['signer2_at'])): ?>
+        &middot; VP: <?= htmlspecialchars($v['signer2_name'] ?: $v['signer2_email']) ?>
+        on <?= date('M j, Y', strtotime($v['signer2_at'])) ?>
+      <?php endif; ?>
+      <?php if (!empty($v['paid_at'])): ?>
+        &middot; Paid <?= date('M j, Y', strtotime($v['payment_date'] ?: $v['paid_at'])) ?>
+      <?php endif; ?>
+    </div>
+    <div class="action-row">
+      <a href="lp-voucher-edit.php?id=<?= (int)$v['id'] ?>" class="detail-link">View voucher &#x2192;</a>
+    </div>
+  </div>
+  <?php endforeach; ?>
 
   <div class="system-head">Payment History</div>
   <div class="ref-card">
