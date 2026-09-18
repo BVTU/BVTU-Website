@@ -29,10 +29,17 @@ $forVP        = $isVP        ? lpGetVouchers('', 'treasurer_approved') : [];
 // Treasurer sees: vp_approved (ready to pay)
 $readyToPay   = $isTreasurer ? lpGetVouchers('', 'vp_approved') : [];
 
-// Signed-off vouchers drop out of every queue above, so there was no way to look
-// one up after the fact. vp_approved is left out for the Treasurer because it is
-// already actionable for them under "Ready for E-Transfer" just above.
-$historyStatuses = $isTreasurer ? ['paid', 'rejected'] : ['vp_approved', 'paid', 'rejected'];
+// Vouchers drop out of the queues above the moment they are signed, so there was
+// no way to look one up afterwards. Show anything that has had at least one
+// approval or reached a terminal state, minus whatever is still actionable for
+// this viewer above — so a Treasurer sees the voucher they approved while it
+// waits on the VP, without it being listed twice for either of them.
+$approvedOrDone = ['treasurer_approved', 'vp_approved', 'paid', 'rejected'];
+$actionable     = [];
+if ($isTreasurer) $actionable[] = 'vp_approved';         // "Ready for E-Transfer"
+if ($isVP)        $actionable[] = 'treasurer_approved';  // "Awaiting Your Approval (VP)"
+
+$historyStatuses = array_values(array_diff($approvedOrDone, $actionable));
 $history         = lpGetVouchersByStatuses($historyStatuses);
 
 // Status pill now lives in lp-db.php so every page labels a status identically.
