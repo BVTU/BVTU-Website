@@ -87,6 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $dates      = $_POST['expense_date']   ?? [];
     $cats       = $_POST['category']       ?? [];
     $amounts    = $_POST['amount']         ?? [];
+    $travelKms  = $_POST['travel_km']      ?? [];
     $descs      = $_POST['description']    ?? [];
     $rPaths     = $_POST['receipt_path']   ?? [];
     $rOrigs     = $_POST['receipt_orig']   ?? [];
@@ -137,7 +138,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 expense_date = ?, category = ?, amount = ?, description = ?,
                 receipt_path = ?, receipt_filename = ?,
                 extracted_vendor = ?, extracted_date = ?, extracted_amount = ?,
-                extraction_flag = ?, extraction_concerns = ?, sort_order = ?
+                extraction_flag = ?, extraction_concerns = ?, travel_km = ?, sort_order = ?
              WHERE id = ? AND batch_id = ?"
         );
         $ins = $db->prepare(
@@ -145,8 +146,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
              (batch_id, expense_date, category, amount, description,
               receipt_path, receipt_filename,
               extracted_vendor, extracted_date, extracted_amount,
-              extraction_flag, extraction_concerns, sort_order)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"
+              extraction_flag, extraction_concerns, travel_km, sort_order)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         );
 
         foreach ($descs as $i => $desc) {
@@ -168,6 +169,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 is_numeric($exAmount[$i] ?? '') ? round((float)$exAmount[$i], 2) : null,
                 ($exFlag[$i]     ?? '') ?: null,
                 ($exConcerns[$i] ?? '') ?: null,
+                is_numeric($travelKms[$i] ?? '') && (float)$travelKms[$i] > 0
+                    ? round((float)$travelKms[$i], 1) : null,
                 $i,
             ];
 
@@ -376,6 +379,7 @@ $rows = $items ?: [[
             <th class="cell-date">Date</th>
             <th class="cell-cat">Category</th>
             <th class="cell-desc">Description</th>
+            <th class="cell-km num" title="Kilometres — fills in the amount automatically">km</th>
             <th class="cell-amount num">Amount ($)</th>
             <th class="cell-receipt">Receipt</th>
           </tr>
@@ -418,6 +422,33 @@ var ROW_INDEX = <?= count($rows) ?>;
 var CATEGORIES = <?= json_encode($catLabels) ?>;
 
 function emptyRowHtml(idx) {
+  var MILEAGE_RATE = <?= json_encode((float)BVTU_MILEAGE_RATE) ?>;
+
+  // Mileage used to be a separate tool with no approval trail. Entering
+  // kilometres here fills in the amount so the claim goes through the same
+  // two signatures as everything else.
+  function mileageFromKm(el) {
+    var row = el.closest('tr');
+    var km  = parseFloat(el.value);
+    if (!row || isNaN(km) || km <= 0) return;
+
+    var amt = row.querySelector('.cell-amount');
+    if (amt) { amt.value = (km * MILEAGE_RATE).toFixed(2); }
+
+    var cat = row.querySelector('.cell-cat');
+    if (cat && !cat.value) {
+      for (var i = 0; i < cat.options.length; i++) {
+        if (cat.options[i].value === 'travel') { cat.selectedIndex = i; break; }
+      }
+    }
+    // Leave a written trail of the calculation for whoever signs it off.
+    var desc = row.querySelector('.cell-desc');
+    if (desc && !desc.value.trim()) {
+      desc.value = 'Mileage — ' + km + ' km @ $' + MILEAGE_RATE.toFixed(2) + '/km';
+    }
+    if (typeof recalcTotal === 'function') recalcTotal();
+  }
+
   var catOptions = '<option value="">Choose&hellip;</option>';
   for (var key in CATEGORIES) {
     catOptions += '<option value="' + key + '">' + CATEGORIES[key] + '</option>';
@@ -429,6 +460,7 @@ function emptyRowHtml(idx) {
         '<input type="date" name="expense_date[]" class="cell-input cell-date" value="' + new Date().toISOString().slice(0,10) + '"></td>' +
       '<td data-label="Category"><select name="category[]" class="cell-select cell-cat">' + catOptions + '</select></td>' +
       '<td data-label="Description"><textarea name="description[]" class="cell-textarea cell-desc" rows="2" placeholder="What was this for?"></textarea></td>' +
+      '<td data-label="km"><input type="number" name="travel_km[]" class="cell-input num cell-km" min="0" step="0.1" placeholder="km" title="Kilometres driven — fills in the amount at $' + MILEAGE_RATE.toFixed(2) + '/km" oninput="mileageFromKm(this)"></td>' +
       '<td data-label="Amount ($)"><input type="number" name="amount[]" class="cell-input num cell-amount" min="0.01" step="0.01" placeholder="0.00" oninput="recalcTotal()"></td>' +
       '<td data-label="Receipt">' +
         '<input type="hidden" name="receipt_path[]" class="f-receipt-path">' +
@@ -628,6 +660,7 @@ function renderItemRow(int $idx, array $row, array $catLabels): string {
       </td>
       <td data-label="Category"><select name="category[]" class="cell-select cell-cat">' . $catOptions . '</select></td>
       <td data-label="Description"><textarea name="description[]" class="cell-textarea cell-desc" rows="2" placeholder="What was this for?">' . htmlspecialchars($row['description'] ?? '') . '</textarea></td>
+      <td data-label="km"><input type="number" name="travel_km[]" class="cell-input num cell-km" min="0" step="0.1" placeholder="km" value="' . htmlspecialchars($row['travel_km'] ?? '') . '" oninput="mileageFromKm(this)"></td>
       <td data-label="Amount ($)"><input type="number" name="amount[]" class="cell-input num cell-amount" min="0.01" step="0.01" placeholder="0.00" value="' . htmlspecialchars($amountVal) . '" oninput="recalcTotal()"></td>
       <td data-label="Receipt">
         <input type="hidden" name="receipt_path[]"   class="f-receipt-path"   value="' . htmlspecialchars($row['receipt_path'] ?? '') . '">

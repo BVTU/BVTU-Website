@@ -4,6 +4,10 @@
  * Include this in every Expense portal page.
  */
 require_once __DIR__ . '/db.php';
+
+// The single mileage rate for the whole site — member claims and LP vouchers
+// both read this, so it changes in one place each year.
+define('BVTU_MILEAGE_RATE', 0.70);
 date_default_timezone_set('America/Vancouver');
 
 define('EXP_RECEIPTS_DIR', __DIR__ . '/exp-receipts/');
@@ -210,6 +214,19 @@ function expBatchEnsureTables(): void {
         created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_batch (batch_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // Mileage folded in from the old standalone tool: kilometres are stored so
+    // they can be totalled later, not just described in prose.
+    try {
+        $hasKm = $db->query(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+             AND TABLE_NAME = 'exp_batch_items' AND COLUMN_NAME = 'travel_km'"
+        )->fetchColumn();
+        if (!$hasKm) {
+            $db->exec("ALTER TABLE exp_batch_items ADD COLUMN travel_km DECIMAL(8,1) DEFAULT NULL");
+        }
+    } catch (Exception $ex) {}
 
     expEnsureTables(); // shares EXP_RECEIPTS_DIR with single-item expenses
 }
