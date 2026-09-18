@@ -111,7 +111,7 @@ $mobileUrl = 'https://' . $host . '/members/bctf-mobile.php?token=' . $token;
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Membership Forms — BVTU</title>
+  <title>BCTF Membership Forms — BVTU</title>
   <link rel="stylesheet" href="../css/style.css">
   <link rel="icon" href="../favicon.ico">
   <style>
@@ -168,7 +168,7 @@ $mobileUrl = 'https://' . $host . '/members/bctf-mobile.php?token=' . $token;
 
   <div class="page-header">
     <a class="back-link" href="dashboard.php">&#x2190; Dashboard</a>
-    <h1>Membership Forms</h1>
+    <h1>BCTF Membership Forms</h1>
   </div>
 
   <?php if ($notice): ?><div class="notice">&#x2713; <?= $notice ?></div><?php endif; ?>

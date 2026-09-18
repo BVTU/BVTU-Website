@@ -189,6 +189,17 @@ function _signedLine(array $r, string $role1, string $role2): string {
 
   <?php if (!$claimsActive): ?><p class="empty">Nothing open.</p><?php endif; ?>
 
+  <?php if (expCanSubmitOnBehalf($email)): ?>
+  <!-- The on-behalf form used to be reachable only from "Submit New Expense" on
+       the dashboard, which is hidden from the President — they claim through LP
+       vouchers. Kept here so a member who cannot file for themselves still can. -->
+  <p style="margin:.2rem 0 1rem;">
+    <a href="exp-submit.php" class="link-sm" style="font-weight:700;color:var(--primary);">
+      + File a claim for a member &rarr;
+    </a>
+  </p>
+  <?php endif; ?>
+
   <?php foreach ($claimsActive as $b):
     $mine  = _claimNeedsMe($b, $canSign1, $canSign2, $canPayClaim);
     $items = expBatchGetItems($b['id']);

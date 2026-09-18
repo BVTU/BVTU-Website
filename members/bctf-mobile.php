@@ -15,7 +15,7 @@ $row   = $token ? bctfValidateUploadToken($token) : null;
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Membership Forms — BVTU</title>
+  <title>BCTF Membership Forms — BVTU</title>
   <link rel="icon" href="../favicon.ico">
   <style>
     * { box-sizing: border-box; }
@@ -53,7 +53,7 @@ $row   = $token ? bctfValidateUploadToken($token) : null;
   </div>
 <?php else: ?>
 
-  <h1>Membership Forms</h1>
+  <h1>BCTF Membership Forms</h1>
   <div class="sub">Photograph each form. The surname is read automatically — check it before sending.</div>
 
   <button class="shoot" onclick="document.getElementById('cam').click();">
