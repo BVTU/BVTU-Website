@@ -153,6 +153,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Reload expenses (fresh after save or on GET)
 $expenses = lpGetExpenses($id);
+$receiptCount = count(array_filter($expenses, function ($e) {
+    return !empty($e['receipt_path']);
+}));
 // Reload voucher header in case it was updated
 $voucher = lpGetVoucher($id);
 
@@ -297,8 +300,21 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
   <div class="portal-header">
     <h1>Edit Voucher</h1>
     <div style="display:flex;gap:.75rem;align-items:center;">
+      <?php if ($receiptCount): ?>
+      <a href="lp-export-receipts.php?voucher_id=<?= $id ?>" class="btn btn-outline"
+         style="padding:.45rem .9rem;font-size:.85rem;"
+         title="Download every receipt on this voucher as a ZIP, with a summary.csv">
+        &#x2B07; All Receipts (<?= $receiptCount ?>)
+      </a>
+      <?php endif; ?>
+      <?php if (!$readOnly): ?>
+      <!-- lp-voucher-view.php is President-only, so this would just bounce a reviewer -->
       <a href="lp-voucher-view.php?id=<?= $id ?>" class="btn btn-outline" style="padding:.45rem .9rem;font-size:.85rem;">View &amp; Export</a>
-      <a class="back-link" href="lp-dashboard.php">← LP Expenses</a>
+      <?php endif; ?>
+      <!-- Reviewers can't open lp-dashboard.php either — send them to their queue -->
+      <a class="back-link" href="<?= $readOnly ? 'lp-review.php' : 'lp-dashboard.php' ?>">
+        ← <?= $readOnly ? 'Review queue' : 'LP Expenses' ?>
+      </a>
     </div>
   </div>
 

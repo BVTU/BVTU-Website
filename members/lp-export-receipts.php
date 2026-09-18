@@ -1,10 +1,15 @@
 <?php
 /**
- * lp-export-receipts.php — Bundle all receipts for an LP grant into a ZIP
+ * lp-export-receipts.php — Bundle LP receipts into a ZIP
  *
- * Click-to-download: gathers every uploaded receipt for the given grant,
- * renames each to a readable date/description, and adds a summary.csv
- * so the whole package can be forwarded to the BCTF in one shot.
+ * Two modes:
+ *   ?grant_id=N    every receipt filed against a BCTF grant, for forwarding
+ *                  the whole package to the BCTF in one shot. President only.
+ *   ?voucher_id=N  every receipt attached to one voucher, so a signer can read
+ *                  them offline. Owner, President, Treasurer or VP.
+ *
+ * Either way each file is renamed to a readable date/description and a
+ * summary.csv is included.
  */
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/lp-db.php';
@@ -13,35 +18,76 @@ requireLogin();
 $member = getMember();
 lpEnsureTables();
 
-if (!lpCanView($member['email'])) {
-    header('Location: lp-dashboard.php');
-    exit;
+$voucherId = (int)($_GET['voucher_id'] ?? 0);
+$grantId   = (int)($_GET['grant_id']   ?? 0);
+
+if ($voucherId) {
+    // Per-voucher: whoever may review the voucher may bundle its receipts.
+    // Mirrors lp-receipt.php — a signer can't approve what they can't read.
+    $voucher = lpGetVoucher($voucherId);
+    if (!$voucher) { http_response_code(404); exit('Voucher not found.'); }
+
+    $isOwner = $voucher['submitted_by_email'] === $member['email'];
+    if (!$isOwner && !lpCanView($member['email']) && !lpCanReview($member['email'])) {
+        http_response_code(403);
+        exit('Access denied.');
+    }
+
+    $expenses = lpGetExpenses($voucherId);
+    $label    = ($voucher['voucher_number'] ? $voucher['voucher_number'] . '-' : '')
+              . $voucher['name'];
+    $zipStem  = 'Voucher-' . $label;
+
+    // One voucher, so naming the voucher on every row is noise — the grant and
+    // budget line the signer is actually checking against are more useful.
+    $contextHeaders = ['Grant', 'Budget Line'];
+    $contextCells   = function (array $e): array {
+        return [$e['grant_name'] ?? '', $e['budget_line_name'] ?? ''];
+    };
+
+} elseif ($grantId) {
+    if (!lpCanView($member['email'])) {
+        header('Location: lp-dashboard.php');
+        exit;
+    }
+
+    $grantStmt = getDB()->prepare("SELECT * FROM lp_grants WHERE id=?");
+    $grantStmt->execute([$grantId]);
+    $grant = $grantStmt->fetch();
+    if (!$grant) { http_response_code(404); exit('Grant not found.'); }
+
+    $expenses = lpGetExpensesByGrant($grantId);
+    $zipStem  = $grant['name'] . '-Receipts-' . $grant['year'];
+
+    $contextHeaders = ['Voucher'];
+    $contextCells   = function (array $e): array {
+        return [($e['voucher_number'] ? '#' . $e['voucher_number'] . ' — ' : '')
+                . ($e['voucher_name'] ?? '')];
+    };
+
+} else {
+    http_response_code(400);
+    exit('Specify a voucher or a grant.');
 }
-
-$grantId = (int)($_GET['grant_id'] ?? 0);
-if (!$grantId) { http_response_code(400); exit('Invalid grant.'); }
-
-$grantStmt = getDB()->prepare("SELECT * FROM lp_grants WHERE id=?");
-$grantStmt->execute([$grantId]);
-$grant = $grantStmt->fetch();
-if (!$grant) { http_response_code(404); exit('Grant not found.'); }
-
-$expenses = lpGetExpensesByGrant($grantId);
 
 if (!class_exists('ZipArchive')) {
     http_response_code(500);
     exit('ZIP support is not available on this server.');
 }
 
-$safeName = preg_replace('/[^A-Za-z0-9_-]+/', '-', $grant['name']);
-$zipName  = 'BVTU-' . $safeName . '-Receipts-' . $grant['year'] . '.zip';
+$safeName = trim(preg_replace('/[^A-Za-z0-9_-]+/', '-', $zipStem), '-');
+$zipName  = 'BVTU-' . ($safeName !== '' ? $safeName : 'Receipts') . '.zip';
 $tmpZip   = tempnam(sys_get_temp_dir(), 'lpzip');
 
 $zip = new ZipArchive();
 $zip->open($tmpZip, ZipArchive::OVERWRITE);
 
 $csvRows   = [];
-$csvRows[] = ['Date', 'Voucher', 'Description', 'Travel (km)', 'Travel $', 'Meals $', 'Gifts $', 'Misc $', 'Office $', 'Phone $', 'Total $', 'Receipt File'];
+$csvRows[] = array_merge(
+    ['Date'], $contextHeaders,
+    ['Description', 'Travel (km)', 'Travel $', 'Meals $', 'Gifts $', 'Misc $',
+     'Office $', 'Phone $', 'Total $', 'Receipt File']
+);
 
 $usedNames = [];
 $grandTotal = 0;
@@ -81,9 +127,10 @@ foreach ($expenses as $e) {
         $receiptLabel = '(no receipt)';
     }
 
-    $csvRows[] = [
-        $e['expense_date'],
-        ($e['voucher_number'] ? '#' . $e['voucher_number'] . ' — ' : '') . $e['voucher_name'],
+    $csvRows[] = array_merge(
+        [$e['expense_date']],
+        $contextCells($e),
+        [
         $e['description'],
         $e['travel_km'] > 0 ? $e['travel_km'] : '',
         $e['travel_amt'] > 0 ? number_format((float)$e['travel_amt'], 2) : '',
@@ -94,11 +141,15 @@ foreach ($expenses as $e) {
         $e['phone']      > 0 ? number_format((float)$e['phone'], 2)      : '',
         number_format($rowTotal, 2),
         $receiptLabel,
-    ];
+        ]
+    );
 }
 
 $csvRows[] = [];
-$csvRows[] = ['', '', '', '', '', '', '', '', '', 'GRAND TOTAL', number_format($grandTotal, 2), ''];
+$totalRow = array_fill(0, count($csvRows[0]), '');
+$totalRow[count($totalRow) - 3] = 'GRAND TOTAL';
+$totalRow[count($totalRow) - 2] = number_format($grandTotal, 2);
+$csvRows[] = $totalRow;
 
 $csvHandle = fopen('php://temp', 'w+');
 foreach ($csvRows as $row) {
