@@ -69,13 +69,19 @@ function bctfGetPending(): array {
     )->fetchAll();
 }
 
+/**
+ * One row per batch. Grouped on sent_at itself rather than a formatted string:
+ * bctfMarkSent() stamps every row in a batch with a single NOW(), so the raw
+ * DATETIME already identifies the batch — and comparing a DATE_FORMAT() result
+ * against a bound parameter fails on servers whose column and connection
+ * collations differ.
+ */
 function bctfGetSentBatches(int $limit = 20): array {
     bctfEnsureTables();
     $s = getDB()->prepare(
-        "SELECT DATE_FORMAT(sent_at, '%Y-%m-%d %H:%i') AS batch,
-                COUNT(*) AS n, MAX(sent_at) AS sent_at
+        "SELECT sent_at AS batch, COUNT(*) AS n
          FROM bctf_forms WHERE sent_at IS NOT NULL
-         GROUP BY batch ORDER BY sent_at DESC LIMIT " . (int)$limit
+         GROUP BY sent_at ORDER BY sent_at DESC LIMIT " . (int)$limit
     );
     $s->execute();
     return $s->fetchAll();
@@ -136,10 +142,10 @@ function bctfAttachmentNames(array $forms): array {
 /** Every form in one sent batch, keyed by the minute it went out. */
 function bctfGetBatch(string $batchKey): array {
     bctfEnsureTables();
+    // Compared as a DATETIME, so no string collation is involved.
     $s = getDB()->prepare(
         "SELECT * FROM bctf_forms
-         WHERE sent_at IS NOT NULL
-         AND DATE_FORMAT(sent_at, '%Y-%m-%d %H:%i') = ?
+         WHERE sent_at IS NOT NULL AND sent_at = ?
          ORDER BY created_at"
     );
     $s->execute([$batchKey]);

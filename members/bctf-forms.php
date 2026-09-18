@@ -56,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 foreach ($attachments as $a) $lines[] = '  ' . $a['name'];
                 $ok = siteMailWithAttachments(
                     BCTF_REPLY_TO,
-                    'Copy — ' . BCTF_SUBJECT . ' (' . trim($_POST['batch'] ?? '') . ')',
+                    'Copy — ' . BCTF_SUBJECT . ' (' . date('M j, Y', strtotime(trim($_POST['batch'] ?? ''))) . ')',
                     "Your copy of a batch already sent to " . BCTF_TO_ADDRESS . ".\n\n"
                     . implode("\n", $lines) . "\n",
                     $attachments,
@@ -289,7 +289,7 @@ $mobileUrl = 'https://' . $host . '/members/bctf-mobile.php?token=' . $token;
   <ul class="hist">
     <?php foreach ($sentBatches as $b): ?>
     <li style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:.4rem;">
-      <span><?= date('M j, Y \a\t g:ia', strtotime($b['sent_at'])) ?> &mdash;
+      <span><?= date('M j, Y \a\t g:ia', strtotime($b['batch'])) ?> &mdash;
             <?= (int)$b['n'] ?> form<?= (int)$b['n'] === 1 ? '' : 's' ?></span>
       <a class="act-btn" href="bctf-download.php?batch=<?= urlencode($b['batch']) ?>">&#x2B07; Download ZIP</a>
       <form method="POST" style="display:inline;">
