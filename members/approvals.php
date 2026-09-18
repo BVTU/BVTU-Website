@@ -42,37 +42,37 @@ $actions = [];
 
 if ($claimSign1) $actions[] = [
     'n'     => expBatchPendingCount('pending'),
-    'label' => 'Member claims awaiting your approval',
+    'label' => 'Member reimbursements awaiting your approval',
     'sub'   => 'You authorise the spend; the Treasurer then verifies and pays.',
     'href'  => 'exp-claim-review.php',
 ];
 if ($claimSign2) $actions[] = [
     'n'     => expBatchPendingCount('signer1_approved'),
-    'label' => 'Member claims awaiting your signature',
+    'label' => 'Member reimbursements awaiting your signature',
     'sub'   => 'The President has approved these. Yours is the second signature.',
     'href'  => 'exp-claim-review.php',
 ];
 if ($lpSign1) $actions[] = [
     'n'     => lpCountByStatus('submitted'),
-    'label' => 'LP vouchers awaiting your approval',
+    'label' => 'President&rsquo;s expenses awaiting your approval',
     'sub'   => 'First signature on the President&rsquo;s own expenses.',
     'href'  => 'lp-review.php',
 ];
 if ($lpSign2) $actions[] = [
     'n'     => lpCountByStatus('treasurer_approved'),
-    'label' => 'LP vouchers awaiting your signature',
+    'label' => 'President&rsquo;s expenses awaiting your signature',
     'sub'   => 'The Treasurer has approved these. Yours is the second signature.',
     'href'  => 'lp-review.php',
 ];
 if ($claimPay) $actions[] = [
     'n'     => expBatchPendingCount('signer2_approved'),
-    'label' => 'Member claims ready for e-transfer',
+    'label' => 'Member reimbursements ready for e-transfer',
     'sub'   => 'Both signatures are in. Send the transfer, then record it.',
     'href'  => 'exp-claim-review.php',
 ];
 if ($lpSign1) $actions[] = [
     'n'     => lpCountByStatus('vp_approved'),
-    'label' => 'LP vouchers ready for e-transfer',
+    'label' => 'President&rsquo;s expenses ready for e-transfer',
     'sub'   => 'Both signatures are in. Send the transfer, then record it.',
     'href'  => 'lp-review.php',
 ];
@@ -153,7 +153,7 @@ $totalWaiting = array_sum(array_column($actions, 'n'));
 
   <?php if (expCanReview($email)): ?>
   <div class="ref-card">
-    <div class="label">Expense Claim Review</div>
+    <div class="label">Member Reimbursements</div>
     <div class="sub">
       Reimbursements claimed by members. Signed by the President, then the Treasurer,
       and paid by either.
@@ -164,7 +164,7 @@ $totalWaiting = array_sum(array_column($actions, 'n'));
 
   <?php if (lpCanReview($email)): ?>
   <div class="ref-card">
-    <div class="label">LP Voucher Review</div>
+    <div class="label">President's Expenses</div>
     <div class="sub">
       The President&rsquo;s own expenses. Signed by the Treasurer, then the Vice-President,
       and paid by the Treasurer &mdash; the President cannot sign their own.

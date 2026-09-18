@@ -54,7 +54,7 @@ function _lpExpenseTotal(int $voucherId): float {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LP Voucher Review — BVTU</title>
+  <title>President's Expenses — BVTU</title>
   <link rel="stylesheet" href="../css/style.css">
   <link rel="icon" href="../favicon.ico">
   <style>
@@ -106,7 +106,7 @@ function _lpExpenseTotal(int $voucherId): float {
     <div>
       <!-- lp-dashboard.php is President-only; reviewers were silently bounced. -->
       <a class="back-link" href="approvals.php">&#x2190; Approvals</a>
-      <h1 style="margin-top:.3rem;">LP Voucher Review</h1>
+      <h1 style="margin-top:.3rem;">President's Expenses</h1>
     </div>
       <!-- Unified Ledger paused pending rebuild — see treasurer-ledger.php -->
   </div>

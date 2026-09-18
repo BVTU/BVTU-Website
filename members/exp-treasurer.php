@@ -91,7 +91,7 @@ $catLabels = [
               margin-bottom:1.25rem;font-size:.88rem;color:#334155;line-height:1.6;">
     <strong>Archive &mdash; this is the older single-item expense system.</strong><br>
     Nothing new arrives here: submissions now create multi-item claims, handled in
-    <a href="exp-claim-review.php" style="color:#1a6b35;font-weight:700;">Expense Claim Review</a>.
+    <a href="exp-claim-review.php" style="color:#1a6b35;font-weight:700;">Member Reimbursements</a>.
     Past records are kept for reference.
     <a href="dashboard.php" style="color:#1a6b35;font-weight:700;">&larr; Dashboard</a>
   </div>

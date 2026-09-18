@@ -193,7 +193,7 @@ function _expClaimStatusBadge(string $status): string {
         $backIsReview = $canReview && !$isOwner && !$isSubmitter;
       ?>
       <a class="back-link" href="<?= $backIsReview ? 'exp-claim-review.php' : 'exp-dashboard.php' ?>">
-        &#x2190; <?= $backIsReview ? 'Claim Review' : 'My Expenses' ?>
+        &#x2190; <?= $backIsReview ? 'Member Reimbursements' : 'My Expenses' ?>
       </a>
     </div>
   </div>

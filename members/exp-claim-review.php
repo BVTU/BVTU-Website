@@ -71,7 +71,7 @@ function _expClaimBadge(string $status): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Expense Claim Review — BVTU</title>
+  <title>Member Reimbursements — BVTU</title>
   <link rel="stylesheet" href="../css/style.css">
   <link rel="icon" href="../favicon.ico">
   <style>
@@ -118,7 +118,7 @@ function _expClaimBadge(string $status): string {
   <div class="page-header">
     <div>
       <a class="back-link" href="approvals.php">&#x2190; Approvals</a>
-      <h1 style="margin-top:.3rem;">Expense Claim Review</h1>
+      <h1 style="margin-top:.3rem;">Member Reimbursements</h1>
     </div>
   </div>
 

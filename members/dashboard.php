@@ -191,17 +191,8 @@ if (execIsAdmin($myEmail) && empty($myExecRoleSlugs)) {
         </div>
       </div>
 
-      <?php if ((expIsTreasurer($myEmail) || expIsVP($myEmail)) && !execIsAdmin($myEmail)): ?>
-      <div class="doc-section" style="margin-bottom:1.5rem;">
-        <h2>LP Voucher Review</h2>
-        <div class="doc-list">
-          <a href="lp-review.php" class="doc-item">
-            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 12 18 15 15"/><line x1="12" y1="12" x2="12" y2="18"/></svg>
-            LP Voucher Review Queue
-          </a>
-        </div>
-      </div>
-      <?php endif; ?>
+      <!-- LP voucher review now lives behind Approvals & Payments, so signers
+           have one door rather than a queue link in each section. -->
 
       <?php if (execIsAdmin($myEmail)): ?>
       <div class="doc-section" style="margin-bottom:1.5rem;">
@@ -310,22 +301,6 @@ if (execIsAdmin($myEmail) && empty($myExecRoleSlugs)) {
             <?php endif; ?>
           </a>
           <?php endif; ?>
-          <?php if (expCanReview($member['email'])): ?>
-          <!-- The live review queue for member claims. Replaces Expense Review
-               Queue, Second Signature Queue and Payment Records, which all read
-               exp_expenses — a table nothing writes to since exp-submit.php
-               moved to batch claims. Those pages and their data remain on the
-               server, just no longer presented as live tools. -->
-          <a href="exp-claim-review.php" class="doc-item">
-            <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-            Expense Claim Review
-            <?php
-              $claimsPending = expBatchPendingCount('pending')
-                             + expBatchPendingCount('signer1_approved')
-                             + expBatchPendingCount('signer2_approved');
-              if ($claimsPending > 0): ?>
-            <span class="lock-badge"><?= $claimsPending ?> open</span>
-            <?php endif; ?>
           </a>
           <?php endif; ?>
           <?php if (expIsAdmin($member['email'])): ?>
