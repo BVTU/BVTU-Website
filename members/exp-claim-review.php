@@ -1,10 +1,13 @@
 <?php
 /**
- * exp-claim-review.php — Treasurer + second-signer review queue for multi-item expense claims
+ * exp-claim-review.php — review queue for multi-item member expense claims
  *
- * Mirrors lp-review.php: each claim is reviewed and signed ONCE as a whole
- * (not item-by-item), and the Treasurer issues a single e-transfer for the
- * combined total once both signatures are in place.
+ * Signed President first, then Treasurer: the President authorises the spend,
+ * the Treasurer verifies and pays. (LP vouchers run Treasurer then VP, because
+ * the President is the claimant there.)
+ *
+ * Mirrors lp-review.php: each claim is signed ONCE as a whole, not item-by-item,
+ * and a single e-transfer covers the combined total once both signatures are in.
  */
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/exp-db.php';
@@ -14,20 +17,32 @@ $member = getMember();
 expEnsureTables();
 expBatchEnsureTables();
 
-$isTreasurer = expIsTreasurer($member['email']) || expIsAdmin($member['email']);
-$isSigner2   = expIsEligibleSigner2($member['email']) || expIsAdmin($member['email']);
+// Member claims are signed President first, then Treasurer. Sections are gated
+// on the signature each viewer may actually give, rather than a single
+// "is a reviewer" flag — the President previously matched the Treasurer check
+// through expIsAdmin() and was shown the wrong heading.
+$canSign1 = expIsEligibleSigner1($member['email']);   // President
+$canSign2 = expIsEligibleSigner2($member['email']);   // Treasurer
+$canPay   = expCanMarkPaid($member['email']);         // either
 
-if (!$isTreasurer && !$isSigner2) {
-    header('Location: exp-dashboard.php');
+if (!expCanReview($member['email'])) {
+    header('Location: dashboard.php');
     exit;
 }
 
 $notice = $_GET['notice'] ?? '';
 $error  = $_GET['error']  ?? '';
 
-$forTreasurer = $isTreasurer ? expBatchGetAll('pending')          : [];
-$forSigner2   = $isSigner2   ? expBatchGetAll('signer1_approved') : [];
-$readyToPay   = $isTreasurer ? expBatchGetAll('signer2_approved') : [];
+$forSigner1 = $canSign1 ? expBatchGetAll('pending')          : [];
+$forSigner2   = $canSign2 ? expBatchGetAll('signer1_approved') : [];
+$readyToPay   = $canPay   ? expBatchGetAll('signer2_approved') : [];
+
+// Signed-off claims otherwise drop out of every list above with no way to look
+// one up again. Mirrors the LP review page.
+$history = array_merge(expBatchGetAll('paid'), expBatchGetAll('rejected'));
+usort($history, function ($a, $b) {
+    return strcmp($b['paid_at'] ?? $b['submitted_at'] ?? '', $a['paid_at'] ?? $a['submitted_at'] ?? '');
+});
 
 $catLabels = [
     'meals'         => 'Meals',
@@ -40,8 +55,8 @@ $catLabels = [
 
 function _expClaimBadge(string $status): string {
     $map = [
-        'pending'           => ['#fffbeb', '#d97706', 'Awaiting Treasurer'],
-        'signer1_approved'  => ['#eff6ff', '#1e40af', 'Awaiting Second Signature'],
+        'pending'           => ['#fffbeb', '#d97706', 'Awaiting President'],
+        'signer1_approved'  => ['#eff6ff', '#1e40af', 'Awaiting Treasurer'],
         'signer2_approved'  => ['#f0fdf4', '#166534', 'Ready to Pay'],
         'paid'              => ['#f0fdf4', '#166534', 'Paid'],
         'rejected'          => ['#fef2f2', '#991b1b', 'Rejected'],
@@ -128,16 +143,16 @@ function _expClaimBadge(string $status): string {
   }
   ?>
 
-  <?php if ($isTreasurer): ?>
-  <!-- ── Treasurer: awaiting first approval ── -->
+  <?php if ($canSign1): ?>
+  <!-- ── Step 1: President authorises ── -->
   <div class="sec-head">
-    Awaiting Your Approval (Treasurer)
-    <?php if ($forTreasurer): ?><span style="background:#fef3c7;color:#d97706;font-size:.7rem;font-weight:700;border-radius:100px;padding:.1rem .5rem;"><?= count($forTreasurer) ?></span><?php endif; ?>
+    Awaiting President's Approval
+    <?php if ($forSigner1): ?><span style="background:#fef3c7;color:#d97706;font-size:.7rem;font-weight:700;border-radius:100px;padding:.1rem .5rem;"><?= count($forSigner1) ?></span><?php endif; ?>
   </div>
-  <?php if (!$forTreasurer): ?>
-    <p class="empty-note">No expense claims awaiting Treasurer approval.</p>
+  <?php if (!$forSigner1): ?>
+    <p class="empty-note">No claims awaiting the President's approval.</p>
   <?php endif; ?>
-  <?php foreach ($forTreasurer as $b):
+  <?php foreach ($forSigner1 as $b):
     $items = expBatchGetItems((int)$b['id']);
     $total = array_sum(array_map(function($i){ return (float)$i['amount']; }, $items));
   ?>
@@ -182,14 +197,71 @@ function _expClaimBadge(string $status): string {
         <input type="hidden" name="action"   value="resend_to_treasurer">
         <input type="hidden" name="batch_id" value="<?= (int)$b['id'] ?>">
         <input type="hidden" name="redirect" value="exp-claim-review.php">
-        <button type="submit" style="background:none;border:1px solid var(--gray-200);border-radius:6px;padding:.3rem .65rem;font-size:.78rem;color:var(--gray-500);cursor:pointer;">&#x21BA; Resend to Treasurer</button>
+        <button type="submit" style="background:none;border:1px solid var(--gray-200);border-radius:6px;padding:.3rem .65rem;font-size:.78rem;color:var(--gray-500);cursor:pointer;">&#x21BA; Resend notification</button>
       </form>
       <?php endif; ?>
     </div>
   </div>
   <?php endforeach; ?>
 
-  <!-- ── Treasurer: ready to pay ── -->
+  <?php endif; ?>
+
+  <?php if ($canSign2): ?>
+  <!-- ── Step 2: Treasurer signs ── -->
+  <div class="sec-head" style="margin-top:2.5rem;">
+    Awaiting Treasurer's Signature
+    <?php if ($forSigner2): ?><span style="background:#eff6ff;color:#1e40af;font-size:.7rem;font-weight:700;border-radius:100px;padding:.1rem .5rem;"><?= count($forSigner2) ?></span><?php endif; ?>
+  </div>
+  <?php if (!$forSigner2): ?>
+    <p class="empty-note">No claims awaiting the Treasurer's signature.</p>
+  <?php endif; ?>
+  <?php foreach ($forSigner2 as $b):
+    $items = expBatchGetItems((int)$b['id']);
+    $total = array_sum(array_map(function($i){ return (float)$i['amount']; }, $items));
+  ?>
+  <div class="claim-card">
+    <div class="claim-top">
+      <div>
+        <div class="claim-name"><?= htmlspecialchars($b['title'] ?: $b['user_name']) ?></div>
+        <div class="claim-meta">
+          <?= htmlspecialchars($b['user_name']) ?> &middot; <?= htmlspecialchars($b['ref_code']) ?>
+          &middot; <?= count($items) ?> item<?= count($items) === 1 ? '' : 's' ?>
+          &middot; Treasurer approved by <strong><?= htmlspecialchars($b['signer1_name'] ?: '—') ?></strong>
+          on <?= $b['signer1_at'] ? date('M j, Y', strtotime($b['signer1_at'])) : '—' ?>
+        </div>
+      </div>
+      <div class="claim-total">$<?= number_format($total, 2) ?><span>Claim total</span></div>
+    </div>
+    <?= _expClaimBadge($b['status']) ?>
+    <?php if ($b['signer1_note']): ?>
+    <div class="claim-meta" style="font-style:italic;margin-top:.4rem;">&#x201C;<?= htmlspecialchars($b['signer1_note']) ?>&#x201D; &mdash; <?= htmlspecialchars($b['signer1_name']) ?></div>
+    <?php endif; ?>
+    <?= _expClaimItemPreview($items, $catLabels) ?>
+    <div class="action-row">
+      <form method="POST" action="exp-claim-action.php">
+        <input type="hidden" name="action"   value="signer2_approve">
+        <input type="hidden" name="batch_id" value="<?= (int)$b['id'] ?>">
+        <input type="hidden" name="redirect" value="exp-claim-review.php">
+        <button type="submit" class="btn-approve">&#x2713; Approve &amp; Sign</button>
+        <div class="note-area"><textarea class="note-input" name="note" placeholder="Optional note&hellip;"></textarea></div>
+      </form>
+      <form method="POST" action="exp-claim-action.php" onsubmit="return confirm('Reject this claim?')">
+        <input type="hidden" name="action"   value="reject">
+        <input type="hidden" name="batch_id" value="<?= (int)$b['id'] ?>">
+        <input type="hidden" name="redirect" value="exp-claim-review.php">
+        <div>
+          <textarea class="note-input" name="note" placeholder="Reason for rejection (required)" required style="width:220px;min-height:60px;"></textarea><br>
+          <button type="submit" class="btn-reject" style="margin-top:.35rem;">&#x2715; Reject</button>
+        </div>
+      </form>
+      <a href="exp-claim-view.php?id=<?= (int)$b['id'] ?>" class="detail-link">View claim &#x2192;</a>
+    </div>
+  </div>
+  <?php endforeach; ?>
+  <?php endif; ?>
+
+  <?php if ($canPay): ?>
+  <!-- ── Step 3: e-transfer ── -->
   <div class="sec-head" style="margin-top:2.5rem;">
     Ready for E-Transfer
     <?php if ($readyToPay): ?><span style="background:#f0fdf4;color:#166534;font-size:.7rem;font-weight:700;border-radius:100px;padding:.1rem .5rem;"><?= count($readyToPay) ?></span><?php endif; ?>
@@ -242,61 +314,62 @@ function _expClaimBadge(string $status): string {
     </div>
   </div>
   <?php endforeach; ?>
-  <?php endif; // isTreasurer ?>
-
-  <?php if ($isSigner2): ?>
-  <!-- ── Second signer: awaiting signature ── -->
-  <div class="sec-head" style="margin-top:2.5rem;">
-    Awaiting Your Signature (Second Signer)
-    <?php if ($forSigner2): ?><span style="background:#eff6ff;color:#1e40af;font-size:.7rem;font-weight:700;border-radius:100px;padding:.1rem .5rem;"><?= count($forSigner2) ?></span><?php endif; ?>
-  </div>
-  <?php if (!$forSigner2): ?>
-    <p class="empty-note">No claims awaiting your signature.</p>
   <?php endif; ?>
-  <?php foreach ($forSigner2 as $b):
-    $items = expBatchGetItems((int)$b['id']);
-    $total = array_sum(array_map(function($i){ return (float)$i['amount']; }, $items));
+
+  <!-- ── Signed off: reference only ── -->
+  <div class="sec-head" style="margin-top:2.5rem;">
+    Approved &amp; Completed
+    <?php if ($history): ?>
+    <span style="background:#f1f5f9;color:#64748b;font-size:.7rem;font-weight:700;border-radius:100px;padding:.1rem .5rem;"><?= count($history) ?></span>
+    <?php endif; ?>
+    <span style="font-weight:400;font-size:.7rem;color:var(--gray-400);text-transform:none;letter-spacing:0;">
+      &mdash; no action needed, kept for reference
+    </span>
+  </div>
+
+  <?php if (!$history): ?>
+    <p class="empty-note">Nothing signed off yet.</p>
+  <?php endif; ?>
+
+  <?php foreach ($history as $b):
+    $items = expBatchGetItems($b['id']);
+    $total = expBatchTotal($b['id']);
   ?>
-  <div class="claim-card">
+  <div class="claim-card" style="opacity:.85;">
     <div class="claim-top">
       <div>
-        <div class="claim-name"><?= htmlspecialchars($b['title'] ?: $b['user_name']) ?></div>
+        <div class="claim-name"><?= htmlspecialchars($b['title'] ?: $b['ref_code']) ?></div>
         <div class="claim-meta">
-          <?= htmlspecialchars($b['user_name']) ?> &middot; <?= htmlspecialchars($b['ref_code']) ?>
+          <?= htmlspecialchars($b['user_name']) ?>
           &middot; <?= count($items) ?> item<?= count($items) === 1 ? '' : 's' ?>
-          &middot; Treasurer approved by <strong><?= htmlspecialchars($b['signer1_name'] ?: '—') ?></strong>
-          on <?= $b['signer1_at'] ? date('M j, Y', strtotime($b['signer1_at'])) : '—' ?>
+          &middot; <?= htmlspecialchars($b['ref_code']) ?>
         </div>
       </div>
       <div class="claim-total">$<?= number_format($total, 2) ?><span>Claim total</span></div>
     </div>
+
     <?= _expClaimBadge($b['status']) ?>
-    <?php if ($b['signer1_note']): ?>
-    <div class="claim-meta" style="font-style:italic;margin-top:.4rem;">&#x201C;<?= htmlspecialchars($b['signer1_note']) ?>&#x201D; &mdash; <?= htmlspecialchars($b['signer1_name']) ?></div>
-    <?php endif; ?>
-    <?= _expClaimItemPreview($items, $catLabels) ?>
+
+    <div class="claim-meta" style="margin-top:.5rem;">
+      <?php if (!empty($b['signer1_at'])): ?>
+        President: <?= htmlspecialchars($b['signer1_name'] ?: $b['signer1_email']) ?>
+        on <?= date('M j, Y', strtotime($b['signer1_at'])) ?>
+      <?php endif; ?>
+      <?php if (!empty($b['signer2_at'])): ?>
+        &middot; Treasurer: <?= htmlspecialchars($b['signer2_name'] ?: $b['signer2_email']) ?>
+        on <?= date('M j, Y', strtotime($b['signer2_at'])) ?>
+      <?php endif; ?>
+      <?php if (!empty($b['paid_at'])): ?>
+        &middot; Paid <?= date('M j, Y', strtotime($b['payment_date'] ?: $b['paid_at'])) ?>
+        <?= !empty($b['payment_ref']) ? '(ref ' . htmlspecialchars($b['payment_ref']) . ')' : '' ?>
+      <?php endif; ?>
+    </div>
+
     <div class="action-row">
-      <form method="POST" action="exp-claim-action.php">
-        <input type="hidden" name="action"   value="signer2_approve">
-        <input type="hidden" name="batch_id" value="<?= (int)$b['id'] ?>">
-        <input type="hidden" name="redirect" value="exp-claim-review.php">
-        <button type="submit" class="btn-approve">&#x2713; Approve &amp; Sign</button>
-        <div class="note-area"><textarea class="note-input" name="note" placeholder="Optional note&hellip;"></textarea></div>
-      </form>
-      <form method="POST" action="exp-claim-action.php" onsubmit="return confirm('Reject this claim?')">
-        <input type="hidden" name="action"   value="reject">
-        <input type="hidden" name="batch_id" value="<?= (int)$b['id'] ?>">
-        <input type="hidden" name="redirect" value="exp-claim-review.php">
-        <div>
-          <textarea class="note-input" name="note" placeholder="Reason for rejection (required)" required style="width:220px;min-height:60px;"></textarea><br>
-          <button type="submit" class="btn-reject" style="margin-top:.35rem;">&#x2715; Reject</button>
-        </div>
-      </form>
       <a href="exp-claim-view.php?id=<?= (int)$b['id'] ?>" class="detail-link">View claim &#x2192;</a>
     </div>
   </div>
   <?php endforeach; ?>
-  <?php endif; // isSigner2 ?>
 
 </div>
 </body>

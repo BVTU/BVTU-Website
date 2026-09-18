@@ -52,12 +52,12 @@ try {
             expBatchSubmit($batchId);
             $b = expBatchGet($batchId);
             expBatchEmailSubmitted($b, $total, count($items));
-            $msg = 'Claim submitted for Treasurer approval. They have been notified.';
+            $msg = 'Claim submitted for the President\'s approval. They have been notified.';
             break;
 
         case 'signer1_approve':
-            if (!expIsTreasurer($member['email'])) {
-                throw new RuntimeException('Only the Treasurer can give first approval.');
+            if (!expIsEligibleSigner1($member['email'])) {
+                throw new RuntimeException('Only the President can give first approval.');
             }
             expBatchApproveAsSigner1($batchId, $member['email'], $member['name'], $note);
             $b = expBatchGet($batchId);
@@ -72,11 +72,11 @@ try {
             expBatchApproveAsSigner2($batchId, $member['email'], $member['name'], $note);
             $b = expBatchGet($batchId);
             expBatchEmailSigner2Approved($b, $total, count($items));
-            $msg = 'Claim approved. The Treasurer has been notified to send the e-transfer.';
+            $msg = 'Claim approved. It is now ready for the e-transfer.';
             break;
 
         case 'reject':
-            if (!expIsTreasurer($member['email']) && !expIsEligibleSigner2($member['email'])) {
+            if (!expIsEligibleSigner1($member['email']) && !expIsEligibleSigner2($member['email'])) {
                 throw new RuntimeException('You do not have permission to reject this claim.');
             }
             if (!$note) throw new RuntimeException('Please provide a reason for rejection.');
@@ -86,22 +86,24 @@ try {
             $msg = 'Claim rejected. The member has been notified.';
             break;
 
+        // Re-sends the first-signature notification, which now goes to the
+        // President. Action name kept so existing forms keep working.
         case 'resend_to_treasurer':
             if (!expIsAdmin($member['email'])) {
                 throw new RuntimeException('Only an admin can resend notifications.');
             }
             if ($b['status'] !== 'pending') {
-                throw new RuntimeException('Can only resend to Treasurer while the claim is still awaiting Treasurer approval.');
+                throw new RuntimeException('Can only resend while the claim is still awaiting first approval.');
             }
             $total = expBatchTotal($batchId);
             $items = expBatchGetItems($batchId);
             expBatchEmailSubmitted($b, $total, count($items));
-            $msg = 'Treasurer notification re-sent.';
+            $msg = 'First-approval notification re-sent.';
             break;
 
         case 'mark_paid':
-            if (!expIsTreasurer($member['email'])) {
-                throw new RuntimeException('Only the Treasurer can mark a claim as paid.');
+            if (!expCanMarkPaid($member['email'])) {
+                throw new RuntimeException('Only the President or Treasurer can mark a claim as paid.');
             }
             expEnsurePaymentColumns();
             expBatchMarkPaid($batchId, $member['email'], $member['name'], $note, $paymentRef, $paymentDate);

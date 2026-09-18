@@ -332,11 +332,11 @@ function expBatchApproveAsSigner1(int $id, string $email, string $name, string $
     $b = expBatchGet($id);
     if (!$b) throw new RuntimeException("Claim #{$id} not found.");
     if ($b['status'] !== 'pending') {
-        throw new RuntimeException("Cannot approve as Signer 1: claim is not awaiting Treasurer approval (current: {$b['status']}).");
+        throw new RuntimeException("Cannot approve as Signer 1: claim is not awaiting the President's approval (current: {$b['status']}).");
     }
     expAssertNotOwnClaim($email, $b['user_email'] ?? null, $b['submitted_by_email'] ?? null);
-    if (!expIsTreasurer($email)) {
-        throw new RuntimeException("Only a Treasurer can approve as Signer 1.");
+    if (!expIsEligibleSigner1($email)) {
+        throw new RuntimeException("Only the President can give first approval on a member claim.");
     }
     getDB()->prepare(
         "UPDATE exp_batches SET status='signer1_approved',
@@ -367,11 +367,11 @@ function expBatchApproveAsSigner2(int $id, string $email, string $name, string $
     $b = expBatchGet($id);
     if (!$b) throw new RuntimeException("Claim #{$id} not found.");
     if ($b['status'] !== 'signer1_approved') {
-        throw new RuntimeException("Cannot approve as Signer 2: claim must have Treasurer approval first (current: {$b['status']}).");
+        throw new RuntimeException("Cannot approve as Signer 2: claim must have the President's approval first (current: {$b['status']}).");
     }
     expAssertNotOwnClaim($email, $b['user_email'] ?? null, $b['submitted_by_email'] ?? null);
     if (!expIsEligibleSigner2($email)) {
-        throw new RuntimeException("Only a VP, President, or Admin can approve as Signer 2.");
+        throw new RuntimeException("Only the Treasurer can give second approval on a member claim.");
     }
     if ($email === $b['signer1_email']) {
         throw new RuntimeException("Signer 2 cannot be the same person as Signer 1.");
@@ -389,8 +389,8 @@ function expBatchMarkPaid(int $id, string $email, string $name, string $paymentN
     if ($b['status'] !== 'signer2_approved') {
         throw new RuntimeException("Cannot mark as paid: claim must have both signatures first (current: {$b['status']}).");
     }
-    if (!expIsTreasurer($email)) {
-        throw new RuntimeException("Only a Treasurer can mark a claim as paid.");
+    if (!expCanMarkPaid($email)) {
+        throw new RuntimeException("Only the President or Treasurer can mark a claim as paid.");
     }
     $pd = ($paymentDate && preg_match('/^\d{4}-\d{2}-\d{2}$/', $paymentDate)) ? $paymentDate : date('Y-m-d');
     getDB()->prepare(
@@ -442,7 +442,7 @@ function expBatchEmailSubmitted(array $b, float $total, int $itemCount): void {
     $treasurerBody = $submitterLine
                    . _expBatchDetailBox($b, $total, $itemCount)
                    . '<p><a class="btn" href="' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/members/exp-claim-review.php">Review in Expense Portal</a></p>';
-    foreach (expGetTreasurerEmails() as $email) {
+    foreach (expGetSigner1Emails() as $email) {
         expNotify(
             $email,
             'New Expense Claim for Review — ' . $b['ref_code'],
@@ -484,7 +484,7 @@ function expBatchEmailSigner2Approved(array $b, float $total, int $itemCount): v
                    . '<div class="row"><span class="lbl">Message / Ref</span><span class="val">' . htmlspecialchars($b['ref_code']) . '</span></div>'
                    . '</div>'
                    . '<p><a class="btn" href="' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/members/exp-claim-review.php">Open Treasurer Dashboard</a></p>';
-    foreach (expGetTreasurerEmails() as $email) {
+    foreach (expGetPayerEmails() as $email) {
         expNotify(
             $email,
             'Ready to Pay — ' . $b['ref_code'],
@@ -589,9 +589,32 @@ function expIsPresident(string $email): bool {
     return expHasRole($email, 'president') || expHasExecRole($email, 'president') || expIsAdmin($email);
 }
 
+/**
+ * Strictly the assigned Treasurer. Unlike expIsTreasurer(), which also returns
+ * true for the President via expIsAdmin() — convenient for read access, wrong
+ * for deciding who may give a particular signature.
+ */
+function expIsTreasurerRole(string $email): bool {
+    return expHasRole($email, 'treasurer') || expHasExecRole($email, 'treasurer');
+}
+
+/**
+ * Member claims are signed President first, then Treasurer: the President
+ * authorises the spend, the Treasurer verifies and pays. (LP vouchers run
+ * Treasurer then VP, because the President is the claimant there — see
+ * lpCanSign1()/lpCanSign2().)
+ */
+function expIsEligibleSigner1(string $email): bool {
+    return expIsPresident($email);
+}
+
 function expIsEligibleSigner2(string $email): bool {
-    // Second signer for regular member expenses is the Local President
-    return expIsAdmin($email);
+    return expIsTreasurerRole($email);
+}
+
+/** Either officer may record the e-transfer on a member claim. */
+function expCanMarkPaid(string $email): bool {
+    return expIsPresident($email) || expIsTreasurerRole($email);
 }
 
 function expCanReview(string $email): bool {
@@ -943,15 +966,43 @@ function expGetTreasurerEmails(): array {
     return $emails;
 }
 
-function expGetSigner2Emails(): array {
-    // Second signer for regular member expenses is always the Local President
+/** The President — first signer on a member claim. */
+function expGetSigner1Emails(): array {
     $emails = [];
-    if (defined('EXPENSE_ADMIN_EMAIL') && EXPENSE_ADMIN_EMAIL) {
-        $emails[] = strtolower(trim(EXPENSE_ADMIN_EMAIL));
-    } elseif (defined('PROD_ADMIN_EMAIL') && PROD_ADMIN_EMAIL) {
-        $emails[] = strtolower(trim(PROD_ADMIN_EMAIL));
+    $s = getDB()->query("SELECT DISTINCT user_email FROM exec_roles WHERE role='president'");
+    foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $e) {
+        $e = strtolower(trim($e));
+        if ($e && !in_array($e, $emails)) $emails[] = $e;
+    }
+    // Configured admin address, in case the EC directory has no president row
+    $cfg = defined('EXPENSE_ADMIN_EMAIL') && EXPENSE_ADMIN_EMAIL
+        ? strtolower(trim(EXPENSE_ADMIN_EMAIL))
+        : (defined('PROD_ADMIN_EMAIL') && PROD_ADMIN_EMAIL ? strtolower(trim(PROD_ADMIN_EMAIL)) : null);
+    if ($cfg && !in_array($cfg, $emails)) $emails[] = $cfg;
+    return $emails;
+}
+
+/**
+ * The Treasurer — second signer. Deliberately excludes the President, unlike
+ * expGetTreasurerEmails(), which appends them so they stay in the loop; here
+ * that would notify the person who already signed.
+ */
+function expGetSigner2Emails(): array {
+    $emails = [];
+    $db = getDB();
+    foreach (["SELECT DISTINCT user_email FROM exec_roles WHERE role='treasurer'",
+              "SELECT DISTINCT user_email FROM exp_roles  WHERE role='treasurer'"] as $sql) {
+        foreach ($db->query($sql)->fetchAll(PDO::FETCH_COLUMN) as $e) {
+            $e = strtolower(trim($e));
+            if ($e && !in_array($e, $emails)) $emails[] = $e;
+        }
     }
     return $emails;
+}
+
+/** Whoever can send the e-transfer once both signatures are in. */
+function expGetPayerEmails(): array {
+    return array_values(array_unique(array_merge(expGetSigner1Emails(), expGetSigner2Emails())));
 }
 
 function _expHtmlWrap(string $title, string $body): string {
