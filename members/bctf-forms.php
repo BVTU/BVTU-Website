@@ -76,7 +76,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $attachments,
                     BCTF_REPLY_TO,
                     'BVTU Local 54 President',
-                    'BVTU Local 54'
+                    'BVTU Local 54',
+                    [BCTF_REPLY_TO]   // copy to the President, attachments included
                 );
 
                 if ($sent) {
@@ -232,7 +233,8 @@ $mobileUrl = 'https://' . $host . '/members/bctf-mobile.php?token=' . $token;
     <div class="to">
       To <strong><?= htmlspecialchars(BCTF_TO_ADDRESS) ?></strong>,
       subject &ldquo;<?= htmlspecialchars(BCTF_SUBJECT) ?>&rdquo;.<br>
-      Replies come back to <strong><?= htmlspecialchars(BCTF_REPLY_TO) ?></strong>.
+      Copied to <strong><?= htmlspecialchars(BCTF_REPLY_TO) ?></strong> with the attachments,
+      and replies come back there too.
     </div>
     <form method="POST"
           onsubmit="return confirm('Send <?= count($forms) ?> form(s) to <?= htmlspecialchars(BCTF_TO_ADDRESS) ?>?')">

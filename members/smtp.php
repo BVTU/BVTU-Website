@@ -66,7 +66,8 @@ function siteMailWithAttachments(
     array $attachments = [],
     string $replyTo = '',
     string $replyToName = '',
-    string $fromNameOverride = ''
+    string $fromNameOverride = '',
+    array $cc = []
 ): bool {
     $cfg = __DIR__ . '/config.php';
     if (file_exists($cfg)) require_once $cfg;
@@ -99,6 +100,9 @@ function siteMailWithAttachments(
             $mail->addReplyTo($user, $fromName);
         }
         $mail->addAddress($to);
+        foreach ($cc as $addr) {
+            if (filter_var($addr, FILTER_VALIDATE_EMAIL)) $mail->addCC($addr);
+        }
 
         foreach ($attachments as $a) {
             if (!empty($a['path']) && file_exists($a['path'])) {
@@ -112,7 +116,9 @@ function siteMailWithAttachments(
         $mail->Body    = $body;
 
         $mail->send();
-        _siteMailLog($to, $subject, true);
+        // The log is keyed on one recipient, so record the copies in the subject
+        // rather than leaving them invisible.
+        _siteMailLog($to . ($cc ? ' (cc ' . implode(', ', $cc) . ')' : ''), $subject, true);
         return true;
     } catch (Exception $e) {
         $err = $mail->ErrorInfo;
