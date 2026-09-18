@@ -29,6 +29,12 @@ $forVP        = $isVP        ? lpGetVouchers('', 'treasurer_approved') : [];
 // Treasurer sees: vp_approved (ready to pay)
 $readyToPay   = $isTreasurer ? lpGetVouchers('', 'vp_approved') : [];
 
+// Signed-off vouchers drop out of every queue above, so there was no way to look
+// one up after the fact. vp_approved is left out for the Treasurer because it is
+// already actionable for them under "Ready for E-Transfer" just above.
+$historyStatuses = $isTreasurer ? ['paid', 'rejected'] : ['vp_approved', 'paid', 'rejected'];
+$history         = lpGetVouchersByStatuses($historyStatuses);
+
 function _lpStatusBadge(string $status): string {
     $map = [
         'draft'               => ['#f1f5f9','#64748b','Draft'],
@@ -290,6 +296,65 @@ function _lpExpenseTotal(int $voucherId): float {
   </div>
   <?php endforeach; ?>
   <?php endif; // isVP ?>
+
+  <!-- ── Signed off: reference only ──────────────────────────────────────────── -->
+  <div class="sec-head" style="margin-top:2.5rem;">
+    Approved &amp; Completed
+    <?php if ($history): ?>
+    <span style="background:#f1f5f9;color:#64748b;font-size:.7rem;font-weight:700;border-radius:100px;padding:.1rem .5rem;margin-left:.4rem;"><?= count($history) ?></span>
+    <?php endif; ?>
+    <span style="font-weight:400;font-size:.7rem;color:var(--gray-400);text-transform:none;letter-spacing:0;margin-left:.4rem;">
+      &mdash; no action needed, kept for reference
+    </span>
+  </div>
+
+  <?php if (!$history): ?>
+    <p class="empty-note">Nothing signed off yet.</p>
+  <?php endif; ?>
+
+  <?php foreach ($history as $v):
+    $total = _lpExpenseTotal($v['id']);
+  ?>
+  <div class="voucher-card" style="opacity:.85;">
+    <div class="voucher-top">
+      <div>
+        <div class="voucher-name"><?= htmlspecialchars($v['name']) ?></div>
+        <div class="voucher-meta">
+          <?= $v['voucher_number'] ? '#' . htmlspecialchars($v['voucher_number']) . ' &middot; ' : '' ?>
+          <?= htmlspecialchars($v['submitted_by']) ?>
+          &middot; <?= (int)$v['expense_count'] ?> item<?= (int)$v['expense_count'] === 1 ? '' : 's' ?>
+        </div>
+      </div>
+      <div class="voucher-total">$<?= number_format($total, 2) ?></div>
+    </div>
+
+    <?= _lpStatusBadge($v['status']) ?>
+
+    <div class="voucher-meta" style="margin-top:.5rem;">
+      <?php if (!empty($v['signer1_at'])): ?>
+        Treasurer: <?= htmlspecialchars($v['signer1_name'] ?: $v['signer1_email']) ?>
+        on <?= date('M j, Y', strtotime($v['signer1_at'])) ?>
+      <?php endif; ?>
+      <?php if (!empty($v['signer2_at'])): ?>
+        &middot; VP: <?= htmlspecialchars($v['signer2_name'] ?: $v['signer2_email']) ?>
+        on <?= date('M j, Y', strtotime($v['signer2_at'])) ?>
+      <?php endif; ?>
+      <?php if (!empty($v['paid_at'])): ?>
+        &middot; Paid <?= date('M j, Y', strtotime($v['payment_date'] ?: $v['paid_at'])) ?>
+        <?= !empty($v['payment_ref']) ? '(ref ' . htmlspecialchars($v['payment_ref']) . ')' : '' ?>
+      <?php endif; ?>
+      <?php if (!empty($v['rejected_at'])): ?>
+        &middot; Rejected by <?= htmlspecialchars($v['rejected_by_name'] ?: $v['rejected_by_email']) ?>
+        on <?= date('M j, Y', strtotime($v['rejected_at'])) ?>
+        <?= !empty($v['rejection_note']) ? '&mdash; ' . htmlspecialchars($v['rejection_note']) : '' ?>
+      <?php endif; ?>
+    </div>
+
+    <div class="action-row">
+      <a href="lp-voucher-edit.php?id=<?= (int)$v['id'] ?>" class="detail-link">View voucher &#x2192;</a>
+    </div>
+  </div>
+  <?php endforeach; ?>
 
 </div>
 </body>

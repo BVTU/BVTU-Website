@@ -85,7 +85,9 @@ function _dateWhere(string $col, string $from, string $to): array {
     $params = array_merge($params, $dp);
     $sql = "SELECT b.id, b.user_name, b.user_email, b.ref_code, b.title,
                    b.payment_date, b.paid_at, b.payment_ref, b.payment_note,
-                   COALESCE(SUM(i.travel_amt + i.meals + i.gifts + i.misc + i.office + i.phone), 0) AS total,
+                   -- exp_batch_items stores one `amount` per line; the per-category
+                   -- breakdown below belongs to lp_expenses (see section 3).
+                   COALESCE(SUM(i.amount), 0) AS total,
                    COUNT(i.id) AS item_count,
                    SUM(CASE WHEN i.receipt_path IS NOT NULL AND i.receipt_path != '' THEN 1 ELSE 0 END) AS receipt_count,
                    MIN(i.expense_date) AS first_date

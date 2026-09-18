@@ -306,6 +306,27 @@ function lpGetBudgetLines(int $year = 0): array {
     return $s->fetchAll();
 }
 
+/**
+ * Vouchers in any of the given statuses, newest activity first.
+ * Used by the review page's history section, which spans several statuses.
+ */
+function lpGetVouchersByStatuses(array $statuses): array {
+    if (!$statuses) return [];
+    $in = implode(',', array_fill(0, count($statuses), '?'));
+    $s = getDB()->prepare(
+        "SELECT v.*,
+                COALESCE(SUM(e.travel_amt + e.meals + e.gifts + e.misc + e.office + e.phone), 0) AS total_amount,
+                COUNT(e.id) AS expense_count
+         FROM lp_vouchers v
+         LEFT JOIN lp_expenses e ON e.voucher_id = v.id
+         WHERE v.status IN ($in)
+         GROUP BY v.id
+         ORDER BY COALESCE(v.paid_at, v.rejected_at, v.signer2_at, v.signer1_at, v.submitted_at) DESC"
+    );
+    $s->execute(array_values($statuses));
+    return $s->fetchAll();
+}
+
 function lpGetVouchers(string $email = '', string $status = ''): array {
     $db = getDB();
     $sql = "SELECT v.*,
