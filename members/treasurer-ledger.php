@@ -288,10 +288,17 @@ $sourceLabels = [
       <div style="font-size:.82rem;color:var(--gray-500);">All paid expenses across all systems</div>
     </div>
     <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;">
-      <a href="exp-treasurer.php" class="back-link">← Expense Review</a>
-      <a href="exp-claim-review.php" class="back-link">← Claim Review</a>
-      <a href="lp-review.php" class="back-link">← LP Review</a>
+      <!-- These were three lateral links all styled as "back" with a left arrow,
+           and there was no link home at all. -->
+      <a href="dashboard.php" class="back-link">← Dashboard</a>
     </div>
+  </div>
+
+  <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:.85rem 1.1rem;
+              margin-bottom:1.25rem;font-size:.88rem;color:#92400e;line-height:1.6;">
+    <strong>This page is paused while the Treasurer tools are reorganised.</strong><br>
+    The figures below are accurate, but the surrounding navigation is being rebuilt,
+    so it has been unlinked from the other review pages for now.
   </div>
 
   <!-- Hero stats -->

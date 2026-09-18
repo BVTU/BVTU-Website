@@ -93,7 +93,7 @@ $catLabels = [
       <a class="back-link" href="dashboard.php">&#x2190; Dashboard</a>
       <a href="exp-claim-review.php" class="btn btn-outline" style="padding:.45rem .9rem;font-size:.85rem;">Multi-item Claims &#x2192;</a>
       <a href="exp-payments.php" class="btn btn-outline" style="padding:.45rem .9rem;font-size:.85rem;">Payment Records</a>
-      <a href="treasurer-ledger.php" class="btn btn-outline" style="padding:.45rem .9rem;font-size:.85rem;background:#1a2e1a;color:#fff;border-color:#1a2e1a;">📒 Unified Ledger</a>
+      <!-- Unified Ledger paused pending rebuild — see treasurer-ledger.php -->
     </div>
   </div>
 
