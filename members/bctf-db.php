@@ -133,6 +133,19 @@ function bctfAttachmentNames(array $forms): array {
     return $out;
 }
 
+/** Every form in one sent batch, keyed by the minute it went out. */
+function bctfGetBatch(string $batchKey): array {
+    bctfEnsureTables();
+    $s = getDB()->prepare(
+        "SELECT * FROM bctf_forms
+         WHERE sent_at IS NOT NULL
+         AND DATE_FORMAT(sent_at, '%Y-%m-%d %H:%i') = ?
+         ORDER BY created_at"
+    );
+    $s->execute([$batchKey]);
+    return $s->fetchAll();
+}
+
 function bctfMarkSent(array $ids): void {
     if (!$ids) return;
     $in = implode(',', array_fill(0, count($ids), '?'));

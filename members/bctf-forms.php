@@ -35,6 +35,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $notice = 'Form removed.';
     }
 
+    if ($action === 'resend_copy') {
+        // Batches sent before lp54@bctf.ca was CC'd never reached the President.
+        // This re-sends that batch to them alone; the BCTF is not contacted.
+        $batch = bctfGetBatch(trim($_POST['batch'] ?? ''));
+        if (!$batch) {
+            $error = 'That batch could not be found.';
+        } else {
+            $names = bctfAttachmentNames($batch);
+            $attachments = [];
+            foreach ($batch as $f) {
+                $path = BCTF_FORMS_DIR . basename($f['saved_path']);
+                if (file_exists($path)) $attachments[] = ['path' => $path, 'name' => $names[(int)$f['id']]];
+            }
+            if (!$attachments) {
+                $error = 'The images for that batch are missing from the server.';
+            } else {
+                require_once __DIR__ . '/smtp.php';
+                $lines = [];
+                foreach ($attachments as $a) $lines[] = '  ' . $a['name'];
+                $ok = siteMailWithAttachments(
+                    BCTF_REPLY_TO,
+                    'Copy — ' . BCTF_SUBJECT . ' (' . trim($_POST['batch'] ?? '') . ')',
+                    "Your copy of a batch already sent to " . BCTF_TO_ADDRESS . ".\n\n"
+                    . implode("\n", $lines) . "\n",
+                    $attachments,
+                    BCTF_REPLY_TO,
+                    'BVTU Local 54 President',
+                    'BVTU Local 54'
+                );
+                $notice = $ok
+                    ? 'Copy sent to ' . BCTF_REPLY_TO . '.'
+                    : 'Could not send the copy — check the Email Log.';
+                if (!$ok) { $error = $notice; $notice = ''; }
+            }
+        }
+    }
+
     if ($action === 'send') {
         $forms = bctfGetPending();
         $unnamed = array_filter($forms, function ($f) { return trim($f['last_name']) === ''; });
@@ -251,8 +288,16 @@ $mobileUrl = 'https://' . $host . '/members/bctf-mobile.php?token=' . $token;
   <h2 class="sec">Previously sent</h2>
   <ul class="hist">
     <?php foreach ($sentBatches as $b): ?>
-    <li><?= date('M j, Y \a\t g:ia', strtotime($b['sent_at'])) ?> &mdash;
-        <?= (int)$b['n'] ?> form<?= (int)$b['n'] === 1 ? '' : 's' ?></li>
+    <li style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:.4rem;">
+      <span><?= date('M j, Y \a\t g:ia', strtotime($b['sent_at'])) ?> &mdash;
+            <?= (int)$b['n'] ?> form<?= (int)$b['n'] === 1 ? '' : 's' ?></span>
+      <a class="act-btn" href="bctf-download.php?batch=<?= urlencode($b['batch']) ?>">&#x2B07; Download ZIP</a>
+      <form method="POST" style="display:inline;">
+        <input type="hidden" name="action" value="resend_copy">
+        <input type="hidden" name="batch" value="<?= htmlspecialchars($b['batch']) ?>">
+        <button class="act-btn">&#x2709; Email me a copy</button>
+      </form>
+    </li>
     <?php endforeach; ?>
   </ul>
   <?php endif; ?>
