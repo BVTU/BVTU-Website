@@ -138,6 +138,15 @@ $statusBadges = [
 <body>
 <div class="portal-wrap">
 
+  <div style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:10px;padding:.85rem 1.1rem;
+              margin-bottom:1.25rem;font-size:.88rem;color:#334155;line-height:1.6;">
+    <strong>Archive &mdash; this page lists the retired single-item expense system.</strong><br>
+    Member accounts are created and managed in
+    <a href="member-manage.php" style="color:#1a6b35;font-weight:700;">Member Management</a>,
+    which also checks the employee number and requires a password change on first login.
+    <a href="dashboard.php" style="color:#1a6b35;font-weight:700;">&larr; Dashboard</a>
+  </div>
+
   <div class="portal-header">
     <h1>Expense Admin</h1>
     <div style="display:flex;gap:.75rem;flex-wrap:wrap;">

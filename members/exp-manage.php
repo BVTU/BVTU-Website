@@ -89,6 +89,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
 <div class="portal-wrap">
 
+  <div style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:10px;padding:.85rem 1.1rem;
+              margin-bottom:1.25rem;font-size:.88rem;color:#334155;line-height:1.6;">
+    <strong>Archive &mdash; this page only created accounts, which Member Management does more safely.</strong><br>
+    Member accounts are created and managed in
+    <a href="member-manage.php" style="color:#1a6b35;font-weight:700;">Member Management</a>,
+    which also checks the employee number and requires a password change on first login.
+    <a href="dashboard.php" style="color:#1a6b35;font-weight:700;">&larr; Dashboard</a>
+  </div>
+
   <div class="portal-header">
     <h1>Expense Portal Admin</h1>
     <a class="back-link" href="dashboard.php">&#x2190; Dashboard</a>
