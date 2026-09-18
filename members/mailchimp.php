@@ -119,6 +119,30 @@ function mcPushContact(array $c): array {
     return ['ok' => false, 'error' => mcErrorMessage($code, $body)];
 }
 
+/**
+ * Which of the merge fields we push are missing from the audience.
+ *
+ * FNAME and LNAME exist in every audience; SCHOOL and ROLE do not. Mailchimp
+ * rejects an entire request that names an unknown merge field, so without these
+ * every sync fails with "invalid merge fields" and no hint as to which. Checked
+ * up front so the setup page can name them.
+ */
+function mcMissingMergeFields(): array {
+    if (!mcConfigured()) return [];
+    [$code, $body] = mcRequest('GET', '/lists/' . MC_LIST_ID . '/merge-fields?count=100&fields=merge_fields.tag');
+    if ($code < 200 || $code >= 300) return [];
+
+    $have = [];
+    foreach ($body['merge_fields'] ?? [] as $f) {
+        if (!empty($f['tag'])) $have[strtoupper($f['tag'])] = true;
+    }
+    $missing = [];
+    foreach (['SCHOOL' => 'School', 'ROLE' => 'Role'] as $tag => $label) {
+        if (empty($have[$tag])) $missing[$tag] = $label;
+    }
+    return $missing;
+}
+
 /** Read Mailchimp's current view of one contact, without changing anything. */
 function mcFetchStatus(string $email): array {
     [$code, $body] = mcRequest('GET', '/lists/' . MC_LIST_ID . '/members/' . mcSubscriberHash($email));

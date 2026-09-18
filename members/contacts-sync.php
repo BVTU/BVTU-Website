@@ -81,6 +81,7 @@ if ($configured) {
     $listName = $connOk ? ($body['name'] ?? '') : '';
     $connMsg = $connOk ? '' : mcErrorMessage($code, $body);
 }
+$missingFields = $connOk ? mcMissingMergeFields() : [];
 $webhookUrl = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'bvtu.ca') . '/members/mailchimp-webhook.php?s=YOUR_SECRET';
 ?>
 <!DOCTYPE html>
@@ -166,6 +167,34 @@ $webhookUrl = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'bvtu.ca') . '/members/mail
       </div>
     <?php endif; ?>
   </div>
+
+  <?php if ($missingFields): ?>
+  <h2 class="sec">Merge fields needed</h2>
+  <div class="card" style="border-color:#fde68a;background:#fffbeb;">
+    <p style="font-size:.88rem;color:#92400e;margin:0 0 .6rem;line-height:1.7;">
+      Mailchimp rejects any update naming a merge field the audience doesn't have, so
+      <strong>every sync will fail</strong> until these exist. Add them under
+      <em>Audience &rarr; Settings &rarr; Audience fields and *|MERGE|* tags</em>, as
+      <strong>Text</strong> fields, with exactly these tags:
+    </p>
+    <table style="margin:0;">
+      <thead><tr><th>Field label</th><th>Tag</th></tr></thead>
+      <tbody>
+        <?php foreach ($missingFields as $tag => $label): ?>
+        <tr><td><?= htmlspecialchars($label) ?></td><td><code><?= htmlspecialchars($tag) ?></code></td></tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
+    <p style="font-size:.82rem;color:#92400e;margin:.6rem 0 0;">
+      The tag must match exactly — Mailchimp sometimes suggests a different one when you
+      type the label. Reload this page once they are added.
+    </p>
+  </div>
+  <?php elseif ($connOk): ?>
+  <div class="card" style="border-color:#bbf7d0;background:#f0fdf4;margin-top:.6rem;">
+    <span style="font-size:.87rem;color:#166534;">&#x2713; SCHOOL and ROLE merge fields are present.</span>
+  </div>
+  <?php endif; ?>
 
   <?php if ($configured): ?>
   <h2 class="sec">Webhook</h2>
