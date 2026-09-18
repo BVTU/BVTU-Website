@@ -167,7 +167,8 @@ function odGraph(string $method, string $path, array $opts = []): array {
         if (!$token) return [401, ['error' => ['message' => 'OneDrive is not connected.']]];
     }
 
-    $url = str_starts_with($path, 'http') ? $path : MS_GRAPH_BASE . $path;
+    // strncmp rather than str_starts_with — this host runs PHP 7.
+    $url = strncmp($path, 'http', 4) === 0 ? $path : MS_GRAPH_BASE . $path;
     $ch  = curl_init($url);
     $headers = $needsAuth ? ['Authorization: Bearer ' . $token] : [];
 
