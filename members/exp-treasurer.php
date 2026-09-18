@@ -91,7 +91,7 @@ $catLabels = [
               margin-bottom:1.25rem;font-size:.88rem;color:#334155;line-height:1.6;">
     <strong>Archive &mdash; this is the older single-item expense system.</strong><br>
     Nothing new arrives here: submissions now create multi-item claims, handled in
-    <a href="exp-claim-review.php" style="color:#1a6b35;font-weight:700;">Member Reimbursements</a>.
+    <a href="approvals.php" style="color:#1a6b35;font-weight:700;">Member Reimbursements</a>.
     Past records are kept for reference.
     <a href="dashboard.php" style="color:#1a6b35;font-weight:700;">&larr; Dashboard</a>
   </div>
@@ -100,7 +100,7 @@ $catLabels = [
     <h1>Treasurer Review Queue</h1>
     <div style="display:flex;gap:.75rem;flex-wrap:wrap;">
       <a class="back-link" href="dashboard.php">&#x2190; Dashboard</a>
-      <a href="exp-claim-review.php" class="btn btn-outline" style="padding:.45rem .9rem;font-size:.85rem;">Multi-item Claims &#x2192;</a>
+      <a href="approvals.php" class="btn btn-outline" style="padding:.45rem .9rem;font-size:.85rem;">Member Reimbursements &#x2192;</a>
       <a href="exp-payments.php" class="btn btn-outline" style="padding:.45rem .9rem;font-size:.85rem;">Payment Records</a>
       <!-- Unified Ledger paused pending rebuild — see treasurer-ledger.php -->
     </div>

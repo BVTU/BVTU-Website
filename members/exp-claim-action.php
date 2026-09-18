@@ -23,11 +23,11 @@ $batchId     = (int)($_POST['batch_id'] ?? 0);
 $note        = trim($_POST['note']         ?? '');
 $paymentRef  = trim($_POST['payment_ref']  ?? '');
 $paymentDate = trim($_POST['payment_date'] ?? '');
-$redirect    = $_POST['redirect'] ?? 'exp-claim-review.php';
+$redirect    = $_POST['redirect'] ?? 'approvals.php';
 
 // Whitelist redirect targets
-if (!preg_match('#^exp-claim-(review|view)\.php(\?.*)?$#', $redirect)) {
-    $redirect = 'exp-claim-review.php';
+if (!preg_match('#^(exp-claim-(review|view)|approvals)\.php(\?.*)?$#', $redirect)) {
+    $redirect = 'approvals.php';
 }
 
 try {

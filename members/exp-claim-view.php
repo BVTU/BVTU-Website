@@ -184,7 +184,7 @@ function _expClaimStatusBadge(string $status): string {
         <?php endif; ?>
         <?php endif; ?>
         <?php if ($canReview && in_array($batch['status'], ['pending','signer1_approved','signer2_approved'], true)): ?>
-        <a href="exp-claim-review.php" class="btn btn-outline" style="padding:.5rem .9rem;font-size:.85rem;">Review Queue &#x2192;</a>
+        <a href="approvals.php" class="btn btn-outline" style="padding:.5rem .9rem;font-size:.85rem;">Approvals &amp; Payments &#x2192;</a>
         <?php endif; ?>
       </div>
       <?php
@@ -192,7 +192,7 @@ function _expClaimStatusBadge(string $status): string {
         // a reviewer to "My Expenses" dropped them into the wrong portal.
         $backIsReview = $canReview && !$isOwner && !$isSubmitter;
       ?>
-      <a class="back-link" href="<?= $backIsReview ? 'exp-claim-review.php' : 'exp-dashboard.php' ?>">
+      <a class="back-link" href="<?= $backIsReview ? 'approvals.php' : 'exp-dashboard.php' ?>">
         &#x2190; <?= $backIsReview ? 'Member Reimbursements' : 'My Expenses' ?>
       </a>
     </div>

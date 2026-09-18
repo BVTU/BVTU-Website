@@ -30,11 +30,11 @@ $mileageRate = (float)($voucher['mileage_rate'] ?: LP_MILEAGE_RATE);
 $errors      = [];
 $saved       = false;
 
-// Reviewers (treasurer/VP) see the voucher read-only — they approve via lp-review.php
+// Reviewers (treasurer/VP) see the voucher read-only — they approve via approvals.php
 $readOnly = $isReviewer && !$isOwner;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $readOnly) {
-    header('Location: lp-review.php');
+    header('Location: approvals.php');
     exit;
 }
 
@@ -316,7 +316,7 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
       <a href="lp-voucher-view.php?id=<?= $id ?>" class="btn btn-outline" style="padding:.45rem .9rem;font-size:.85rem;">View &amp; Export</a>
       <?php endif; ?>
       <!-- Reviewers can't open lp-dashboard.php either — send them to their queue -->
-      <a class="back-link" href="<?= $readOnly ? 'lp-review.php' : 'lp-dashboard.php' ?>">
+      <a class="back-link" href="<?= $readOnly ? 'approvals.php' : 'lp-dashboard.php' ?>">
         ← <?= $readOnly ? 'Review queue' : 'LP Expenses' ?>
       </a>
     </div>
@@ -325,7 +325,7 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
   <?php if ($readOnly): ?>
   <div class="saved-notice" style="background:#eff6ff;border-color:#bfdbfe;color:#1e40af;">
     &#x1F441; Reviewing as <?= $isTreasurer ? 'Treasurer' : 'Vice-President' ?> — read only.
-    <a href="lp-review.php" style="color:#1e40af;font-weight:700;margin-left:.5rem;">&#x2190; Back to review queue</a>
+    <a href="approvals.php" style="color:#1e40af;font-weight:700;margin-left:.5rem;">&#x2190; Back to review queue</a>
   </div>
   <?php endif; ?>
   <?php if ($voucher['status'] !== 'draft'): ?>
@@ -444,7 +444,7 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
   <div class="save-bar">
     <div class="total-display"><span>Voucher Total</span><br><span id="grandTotal">$0.00</span></div>
     <?php if ($readOnly): ?>
-    <a href="lp-review.php" class="btn btn-primary" style="padding:.65rem 1.5rem;font-size:.95rem;">&#x2190; Back to Review Queue</a>
+    <a href="approvals.php" class="btn btn-primary" style="padding:.65rem 1.5rem;font-size:.95rem;">&#x2190; Back to Approvals</a>
     <?php elseif ($voucher['status'] === 'draft' || (($isOwner || $isAdmin) && !in_array($voucher['status'], ['paid']))): ?>
     <button type="submit" class="btn btn-primary" style="padding:.65rem 1.5rem;font-size:.95rem;">💾 Save Changes</button>
     <?php if ($voucher['status'] === 'draft' && count($expenses) > 0): ?>

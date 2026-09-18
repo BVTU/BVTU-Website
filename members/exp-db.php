@@ -441,7 +441,7 @@ function expBatchEmailSubmitted(array $b, float $total, int $itemCount): void {
         : '<p><strong>' . htmlspecialchars($b['user_name']) . '</strong> has submitted a new expense claim (' . $itemCount . ' item' . ($itemCount === 1 ? '' : 's') . ', $' . number_format($total, 2) . ') for your review.</p>';
     $treasurerBody = $submitterLine
                    . _expBatchDetailBox($b, $total, $itemCount)
-                   . '<p><a class="btn" href="' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/members/exp-claim-review.php">Review in Expense Portal</a></p>';
+                   . '<p><a class="btn" href="' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/members/approvals.php">Review in Expense Portal</a></p>';
     foreach (expGetSigner1Emails() as $email) {
         expNotify(
             $email,
@@ -455,7 +455,7 @@ function expBatchEmailSubmitted(array $b, float $total, int $itemCount): void {
 function expBatchEmailSigner1Approved(array $b, float $total, int $itemCount): void {
     $body = '<p>The following expense claim has been approved by the BVTU Treasurer (<strong>' . htmlspecialchars($b['signer1_name']) . '</strong>) and now requires a second signature.</p>'
           . _expBatchDetailBox($b, $total, $itemCount)
-          . '<p><a class="btn" href="' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/members/exp-claim-review.php">Review &amp; Sign in Expense Portal</a></p>';
+          . '<p><a class="btn" href="' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/members/approvals.php">Review &amp; Sign in Expense Portal</a></p>';
     foreach (expGetSigner2Emails() as $email) {
         expNotify(
             $email,
@@ -483,7 +483,7 @@ function expBatchEmailSigner2Approved(array $b, float $total, int $itemCount): v
                    . '<div class="row"><span class="lbl">Amount</span><span class="val">$' . number_format($total, 2) . '</span></div>'
                    . '<div class="row"><span class="lbl">Message / Ref</span><span class="val">' . htmlspecialchars($b['ref_code']) . '</span></div>'
                    . '</div>'
-                   . '<p><a class="btn" href="' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/members/exp-claim-review.php">Open Treasurer Dashboard</a></p>';
+                   . '<p><a class="btn" href="' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/members/approvals.php">Open Approvals &amp; Payments</a></p>';
     foreach (expGetPayerEmails() as $email) {
         expNotify(
             $email,
@@ -1112,7 +1112,7 @@ function expEmailSigner2Approved(array $exp): void {
                    . '<div class="row"><span class="lbl">Amount</span><span class="val">$' . number_format((float)$exp['amount'], 2) . '</span></div>'
                    . '<div class="row"><span class="lbl">Message / Ref</span><span class="val">' . htmlspecialchars($exp['ref_code']) . '</span></div>'
                    . '</div>'
-                   . '<p><a class="btn" href="' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/members/exp-treasurer.php">Open Treasurer Dashboard</a></p>';
+                   . '<p><a class="btn" href="' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/members/exp-treasurer.php">Open Approvals &amp; Payments</a></p>';
     foreach (expGetTreasurerEmails() as $email) {
         expNotify(
             $email,

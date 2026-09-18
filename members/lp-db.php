@@ -654,7 +654,7 @@ function _lpVoucherBox(array $v, float $total): string {
          . '<div class="row"><span class="lbl">Submitted by</span><span class="val">' . htmlspecialchars($v['submitted_by']) . '</span></div>'
          . '<div class="row"><span class="lbl">Total</span><span class="val">$' . number_format($total, 2) . '</span></div>'
          . '</div>'
-         . '<p><a class="btn" href="' . $siteUrl . '/members/lp-review.php">Review in LP Portal</a></p>';
+         . '<p><a class="btn" href="' . $siteUrl . '/members/approvals.php">Review in Approvals &amp; Payments</a></p>';
 }
 
 function lpEmailSubmitted(array $v, float $total): void {
@@ -681,7 +681,7 @@ function lpEmailVPApproved(array $v, float $total): void {
           . '<div class="row"><span class="lbl">Send e-transfer to</span><span class="val">' . htmlspecialchars($v['submitted_by_email']) . '</span></div>'
           . '<div class="row"><span class="lbl">Amount</span><span class="val">$' . number_format($total, 2) . '</span></div>'
           . '</div>'
-          . '<p><a class="btn" href="' . $siteUrl . '/members/lp-review.php">Open LP Portal</a></p>';
+          . '<p><a class="btn" href="' . $siteUrl . '/members/approvals.php">Open Approvals &amp; Payments</a></p>';
     foreach (lpGetTreasurerEmails() as $email) {
         lpNotify($email, 'LP Voucher Ready for Payment — ' . $v['name'], _lpWrap('Ready for E-Transfer', $body));
     }

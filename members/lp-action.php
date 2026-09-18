@@ -21,11 +21,11 @@ $voucherId   = (int)($_POST['voucher_id'] ?? 0);
 $note        = trim($_POST['note']         ?? '');
 $paymentRef  = trim($_POST['payment_ref']  ?? '');
 $paymentDate = trim($_POST['payment_date'] ?? '');
-$redirect    = $_POST['redirect'] ?? 'lp-dashboard.php';
+$redirect    = $_POST['redirect'] ?? 'approvals.php';
 
 // Whitelist redirect
-if (!preg_match('#^lp-[a-z\-]+\.php(\?.*)?$#', $redirect)) {
-    $redirect = 'lp-dashboard.php';
+if (!preg_match('#^(lp-[a-z\-]+|approvals)\.php(\?.*)?$#', $redirect)) {
+    $redirect = 'approvals.php';
 }
 
 try {
