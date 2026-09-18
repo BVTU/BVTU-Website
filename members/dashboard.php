@@ -169,27 +169,51 @@ if (execIsAdmin($myEmail) && empty($myExecRoleSlugs)) {
       </div>
       <?php endif; ?>
 
+      <?php ob_start(); ?>
       <div class="doc-section" style="margin-bottom:1.5rem;">
-        <h2>Pro-D Portal</h2>
+        <h2>Expense Reimbursement</h2>
         <div class="doc-list">
-          <a href="prod-dashboard.php" class="doc-item">
-            <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-            Professional Development Portal
+          <a href="exp-dashboard.php" class="doc-item">
+            <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            My Expense Submissions
           </a>
-          <?php if (prodIsExec($myEmail) || prodIsSiteRep($myEmail)): ?>
-          <a href="prod-admin.php" class="doc-item">
-            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            Pro-D Review Queue
+          <a href="exp-submit.php" class="doc-item">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+            Submit New Expense
+          </a>
+          <?php if (expCanReview($member['email']) || lpCanReview($member['email'])): ?>
+          <a href="approvals.php" class="doc-item">
+            <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            Approvals &amp; Payments
+            <?php
+              $waiting = 0;
+              if (expIsEligibleSigner1($member['email'])) $waiting += expBatchPendingCount('pending');
+              if (expIsEligibleSigner2($member['email'])) $waiting += expBatchPendingCount('signer1_approved');
+              if (expCanMarkPaid($member['email']))       $waiting += expBatchPendingCount('signer2_approved');
+              if (lpCanSign1($member['email']))           $waiting += lpCountByStatus('submitted') + lpCountByStatus('vp_approved');
+              if (lpCanSign2($member['email']))           $waiting += lpCountByStatus('treasurer_approved');
+              if ($waiting > 0): ?>
+            <span class="lock-badge"><?= $waiting ?> waiting on you</span>
+            <?php endif; ?>
           </a>
           <?php endif; ?>
-          <?php if (prodIsExec($myEmail)): ?>
-          <a href="prod-manage.php" class="doc-item">
+          <?php if (expIsAdmin($member['email'])): ?>
+          <a href="exp-manage.php" class="doc-item">
             <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-            Pro-D Schools &amp; Roles
+            Expense Portal Admin
           </a>
           <?php endif; ?>
         </div>
       </div>
+      <?php $expenseSection = ob_get_clean(); ?>
+
+      <?php
+        // Signers live in this section, so it leads for them; everyone else
+        // sees it in its usual place further down.
+        $isSigner = execIsAdmin($myEmail) || expIsVP($myEmail) || expIsTreasurerRole($myEmail);
+        if ($isSigner) echo $expenseSection;
+      ?>
+      <!-- Pro-D Portal hidden until it is ready to launch. -->
 
       <!-- LP voucher review now lives behind Approvals & Payments, so signers
            have one door rather than a queue link in each section. -->
@@ -274,41 +298,8 @@ if (execIsAdmin($myEmail) && empty($myExecRoleSlugs)) {
         </div>
       </div>
 
-      <div class="doc-section" style="margin-bottom:1.5rem;">
-        <h2>Expense Reimbursement</h2>
-        <div class="doc-list">
-          <a href="exp-dashboard.php" class="doc-item">
-            <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-            My Expense Submissions
-          </a>
-          <a href="exp-submit.php" class="doc-item">
-            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-            Submit New Expense
-          </a>
-          <?php if (expCanReview($member['email']) || lpCanReview($member['email'])): ?>
-          <a href="approvals.php" class="doc-item">
-            <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-            Approvals &amp; Payments
-            <?php
-              $waiting = 0;
-              if (expIsEligibleSigner1($member['email'])) $waiting += expBatchPendingCount('pending');
-              if (expIsEligibleSigner2($member['email'])) $waiting += expBatchPendingCount('signer1_approved');
-              if (expCanMarkPaid($member['email']))       $waiting += expBatchPendingCount('signer2_approved');
-              if (lpCanSign1($member['email']))           $waiting += lpCountByStatus('submitted') + lpCountByStatus('vp_approved');
-              if (lpCanSign2($member['email']))           $waiting += lpCountByStatus('treasurer_approved');
-              if ($waiting > 0): ?>
-            <span class="lock-badge"><?= $waiting ?> waiting on you</span>
-            <?php endif; ?>
-          </a>
-          <?php endif; ?>
-          <?php if (expIsAdmin($member['email'])): ?>
-          <a href="exp-manage.php" class="doc-item">
-            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-            Expense Portal Admin
-          </a>
-          <?php endif; ?>
-        </div>
-      </div>
+
+      <?php if (!$isSigner) echo $expenseSection; ?>
 
       <div class="doc-section" style="margin-bottom:1.5rem;">
         <h2>My Account</h2>
