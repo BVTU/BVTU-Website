@@ -4,6 +4,10 @@
  */
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/exec-db.php';
+// Signer role checks and expAssertNotOwnClaim() live here. Required at the top
+// rather than inside lpCanSign1()/lpCanSign2(), because the self-approval guard
+// runs before those are called.
+require_once __DIR__ . '/exp-db.php';
 date_default_timezone_set('America/Vancouver');
 
 define('LP_RECEIPTS_DIR', __DIR__ . '/lp-receipts/');
@@ -552,6 +556,9 @@ function lpApproveAsSigner1(int $id, string $email, string $name, string $note =
     $v = lpGetVoucher($id);
     if (!$v) throw new RuntimeException("Voucher not found.");
     if ($v['status'] !== 'submitted') throw new RuntimeException("Voucher must be in 'submitted' state.");
+    // The President submits LP vouchers and passes lpCanSign1() through
+    // expIsAdmin(), so without this they could sign their own.
+    expAssertNotOwnClaim($email, $v['submitted_by_email'] ?? null);
     if (!lpCanSign1($email)) throw new RuntimeException("Only the BVTU Treasurer can give first approval.");
     getDB()->prepare(
         "UPDATE lp_vouchers SET status='treasurer_approved',
@@ -563,7 +570,11 @@ function lpApproveAsSigner2(int $id, string $email, string $name, string $note =
     $v = lpGetVoucher($id);
     if (!$v) throw new RuntimeException("Voucher not found.");
     if ($v['status'] !== 'treasurer_approved') throw new RuntimeException("Voucher must have Treasurer approval first.");
+    expAssertNotOwnClaim($email, $v['submitted_by_email'] ?? null);
     if (!lpCanSign2($email)) throw new RuntimeException("Only the Vice-President can give second approval.");
+    if (!empty($v['signer1_email']) && strtolower(trim($email)) === strtolower(trim($v['signer1_email']))) {
+        throw new RuntimeException("Signer 2 cannot be the same person as Signer 1.");
+    }
     getDB()->prepare(
         "UPDATE lp_vouchers SET status='vp_approved',
          signer2_email=?, signer2_name=?, signer2_at=NOW(), signer2_note=? WHERE id=?"
@@ -587,6 +598,9 @@ function lpMarkPaid(int $id, string $email, string $name, string $note, string $
     $v = lpGetVoucher($id);
     if (!$v) throw new RuntimeException("Voucher not found.");
     if ($v['status'] !== 'vp_approved') throw new RuntimeException("Voucher must have both signatures before marking paid.");
+    // lpCanSign1() admits the President via expIsAdmin(); they are the payee on
+    // their own voucher, so recording payment on it stays with the Treasurer.
+    expAssertNotOwnClaim($email, $v['submitted_by_email'] ?? null);
     if (!lpCanSign1($email)) throw new RuntimeException("Only the Treasurer can mark a voucher as paid.");
     $pd = ($paymentDate && preg_match('/^\d{4}-\d{2}-\d{2}$/', $paymentDate)) ? $paymentDate : date('Y-m-d');
     getDB()->prepare(

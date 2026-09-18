@@ -308,12 +308,33 @@ function expBatchSubmit(int $id): void {
     )->execute([$id]);
 }
 
+/**
+ * Two signatures only count if neither is the claimant. Blocks both the person
+ * being reimbursed and whoever filed on their behalf, since either signing is
+ * self-authorisation. Role checks alone don't cover this: expIsTreasurer()
+ * returns true for the President via expIsAdmin(), so without this the
+ * President could sign their own LP voucher as first signer — the exact thing
+ * the VP substitution exists to prevent.
+ */
+function expAssertNotOwnClaim(string $signerEmail, ?string $beneficiaryEmail, ?string $submitterEmail = null): void {
+    $signer = strtolower(trim($signerEmail));
+    foreach ([$beneficiaryEmail, $submitterEmail] as $conflict) {
+        if ($conflict && strtolower(trim($conflict)) === $signer) {
+            throw new RuntimeException(
+                'You cannot sign a claim you submitted or are being reimbursed for. '
+              . 'It needs two signatures from other officers.'
+            );
+        }
+    }
+}
+
 function expBatchApproveAsSigner1(int $id, string $email, string $name, string $note = ''): void {
     $b = expBatchGet($id);
     if (!$b) throw new RuntimeException("Claim #{$id} not found.");
     if ($b['status'] !== 'pending') {
         throw new RuntimeException("Cannot approve as Signer 1: claim is not awaiting Treasurer approval (current: {$b['status']}).");
     }
+    expAssertNotOwnClaim($email, $b['user_email'] ?? null, $b['submitted_by_email'] ?? null);
     if (!expIsTreasurer($email)) {
         throw new RuntimeException("Only a Treasurer can approve as Signer 1.");
     }
@@ -348,6 +369,7 @@ function expBatchApproveAsSigner2(int $id, string $email, string $name, string $
     if ($b['status'] !== 'signer1_approved') {
         throw new RuntimeException("Cannot approve as Signer 2: claim must have Treasurer approval first (current: {$b['status']}).");
     }
+    expAssertNotOwnClaim($email, $b['user_email'] ?? null, $b['submitted_by_email'] ?? null);
     if (!expIsEligibleSigner2($email)) {
         throw new RuntimeException("Only a VP, President, or Admin can approve as Signer 2.");
     }
@@ -720,6 +742,7 @@ function expApproveAsSigner1(int $id, string $email, string $name, string $note 
     if (!$exp) {
         throw new RuntimeException("Expense #{$id} not found.");
     }
+    expAssertNotOwnClaim($email, $exp['user_email'] ?? null);
     if ($exp['status'] !== 'pending') {
         throw new RuntimeException("Cannot approve as Signer 1: expense is not in 'pending' state (current: {$exp['status']}).");
     }
@@ -769,6 +792,7 @@ function expApproveAsSigner2(int $id, string $email, string $name, string $note 
     if (!$exp) {
         throw new RuntimeException("Expense #{$id} not found.");
     }
+    expAssertNotOwnClaim($email, $exp['user_email'] ?? null);
     if ($exp['status'] !== 'signer1_approved') {
         throw new RuntimeException("Cannot approve as Signer 2: expense must be in 'signer1_approved' state (current: {$exp['status']}).");
     }
