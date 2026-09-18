@@ -2,17 +2,17 @@
 /**
  * approvals.php — everything a signer needs, in one page.
  *
- * Member reimbursements and the President's expenses used to live on separate
- * pages reachable only sideways from each other. Both queues now render here,
- * so a signer sees their whole workload without navigating between systems.
- *
- * The two sign in opposite orders, which is why the sections differ:
+ * Both queues render here; the two sign in opposite orders:
  *   Member reimbursement — President signs, then Treasurer; either one pays.
  *   President's expenses — Treasurer signs, then VP; Treasurer pays.
  *                          (The President is the claimant and cannot sign.)
  *
- * Actions still POST to exp-claim-action.php and lp-action.php, which own the
- * workflow rules; this page only renders and links.
+ * One list per system rather than a section per stage: each card carries its own
+ * status badge and only the buttons that person can actually press, so the stage
+ * headings and their empty-state lines are unnecessary.
+ *
+ * Actions POST to exp-claim-action.php and lp-action.php, which own the workflow
+ * rules; this page only renders.
  */
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/exp-db.php';
@@ -35,60 +35,70 @@ if (!expCanReview($email) && !lpCanReview($email)) {
 $notice = $_GET['notice'] ?? '';
 $error  = $_GET['error']  ?? '';
 
-// ── Member reimbursements ────────────────────────────────────────────────────
-$canSign1 = expIsEligibleSigner1($email);   // President
-$canSign2 = expIsEligibleSigner2($email);   // Treasurer
-$canPay   = expCanMarkPaid($email);         // either
+// Who may do what
+$canSign1    = expIsEligibleSigner1($email);   // President — member claims
+$canSign2    = expIsEligibleSigner2($email);   // Treasurer — member claims
+$canPayClaim = expCanMarkPaid($email);         // either
+$isTreasurer = lpCanSign1($email);             // Treasurer — vouchers
+$isVP        = lpCanSign2($email);             // VP — vouchers
 
-$forSigner1 = $canSign1 ? expBatchGetAll('pending')          : [];
-$forSigner2 = $canSign2 ? expBatchGetAll('signer1_approved') : [];
-$readyToPay = $canPay   ? expBatchGetAll('signer2_approved') : [];
-
-// ── President's expenses ─────────────────────────────────────────────────────
-$isTreasurer = lpCanSign1($email);
-$isVP        = lpCanSign2($email);
-
-$forTreasurer  = $isTreasurer ? lpGetVouchers('', 'submitted')          : [];
-$forVP         = $isVP        ? lpGetVouchers('', 'treasurer_approved') : [];
-$lpReadyToPay  = $isTreasurer ? lpGetVouchers('', 'vp_approved')        : [];
-
-$waiting = count($forSigner1) + count($forSigner2) + count($readyToPay)
-         + count($forTreasurer) + count($forVP) + count($lpReadyToPay);
-
-// Signed-off items from both systems, newest first, for reference only.
-$claimHistory = array_merge(expBatchGetAll('paid'), expBatchGetAll('rejected'));
-$lpActionable = [];
-if ($isTreasurer) $lpActionable[] = 'vp_approved';
-if ($isVP)        $lpActionable[] = 'treasurer_approved';
-$lpHistory = lpGetVouchersByStatuses(
-    array_values(array_diff(['treasurer_approved','vp_approved','paid','rejected'], $lpActionable))
+// Active items, newest stage first. Ordering the statuses puts anything needing
+// this person nearer the top without a heading to say so.
+$claimsActive = array_merge(
+    expBatchGetAll('pending'),
+    expBatchGetAll('signer1_approved'),
+    expBatchGetAll('signer2_approved')
 );
+$claimsDone = array_merge(expBatchGetAll('paid'), expBatchGetAll('rejected'));
 
-$catLabels = [
-    'meals'         => 'Meals',
-    'travel'        => 'Travel',
-    'supplies'      => 'Supplies',
-    'conference'    => 'Conference / Workshop',
-    'accommodation' => 'Accommodation',
-    'other'         => 'Other',
-];
+$lpActive = lpGetVouchersByStatuses(['submitted', 'treasurer_approved', 'vp_approved']);
+$lpDone   = lpGetVouchersByStatuses(['paid', 'rejected']);
 
-function _expClaimBadge(string $status): string {
-    $map = [
-        'pending'           => ['#fffbeb', '#d97706', 'Awaiting President'],
-        'signer1_approved'  => ['#eff6ff', '#1e40af', 'Awaiting Treasurer'],
-        'signer2_approved'  => ['#f0fdf4', '#166534', 'Ready to Pay'],
-        'paid'              => ['#f0fdf4', '#166534', 'Paid'],
-        'rejected'          => ['#fef2f2', '#991b1b', 'Rejected'],
-    ];
-    $s = $map[$status] ?? ['#f8f9fa', '#555', ucfirst($status)];
-    return '<span style="display:inline-block;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;'
-         . 'padding:.2rem .6rem;border-radius:100px;background:' . $s[0] . ';color:' . $s[1] . ';">' . $s[2] . '</span>';
+/** Does this claim need this viewer right now? Drives the highlight. */
+function _claimNeedsMe(array $b, bool $s1, bool $s2, bool $pay): bool {
+    if ($b['status'] === 'pending')           return $s1;
+    if ($b['status'] === 'signer1_approved')  return $s2;
+    if ($b['status'] === 'signer2_approved')  return $pay;
+    return false;
+}
+function _lpNeedsMe(array $v, bool $treas, bool $vp): bool {
+    if ($v['status'] === 'submitted')           return $treas;
+    if ($v['status'] === 'treasurer_approved')  return $vp;
+    if ($v['status'] === 'vp_approved')         return $treas;
+    return false;
 }
 
-function _lpExpenseTotal(int $voucherId): float {
-    $expenses = lpGetExpenses($voucherId);
-    return array_sum(array_map('lpRowTotal', $expenses));
+$waiting = 0;
+foreach ($claimsActive as $b) if (_claimNeedsMe($b, $canSign1, $canSign2, $canPayClaim)) $waiting++;
+foreach ($lpActive   as $v) if (_lpNeedsMe($v, $isTreasurer, $isVP)) $waiting++;
+
+$catLabels = [
+    'meals' => 'Meals', 'travel' => 'Travel', 'supplies' => 'Supplies',
+    'conference' => 'Conference / Workshop', 'accommodation' => 'Accommodation',
+    'other' => 'Other',
+];
+
+function _badge(string $status): string {
+    $map = [
+        'pending'            => ['#fffbeb', '#d97706', 'Awaiting President'],
+        'signer1_approved'   => ['#eff6ff', '#1e40af', 'Awaiting Treasurer'],
+        'signer2_approved'   => ['#ecfdf5', '#047857', 'Ready to pay'],
+        'submitted'          => ['#fffbeb', '#d97706', 'Awaiting Treasurer'],
+        'treasurer_approved' => ['#eff6ff', '#1e40af', 'Awaiting VP'],
+        'vp_approved'        => ['#ecfdf5', '#047857', 'Ready to pay'],
+        'paid'               => ['#f0fdf4', '#166534', 'Paid'],
+        'rejected'           => ['#fef2f2', '#991b1b', 'Rejected'],
+    ];
+    $c = $map[$status] ?? ['#f8f9fa', '#555', ucfirst($status)];
+    return '<span class="badge" style="background:' . $c[0] . ';color:' . $c[1] . ';">' . $c[2] . '</span>';
+}
+
+function _signedLine(array $r, string $role1, string $role2): string {
+    $bits = [];
+    if (!empty($r['signer1_at'])) $bits[] = $role1 . ' ' . date('M j', strtotime($r['signer1_at']));
+    if (!empty($r['signer2_at'])) $bits[] = $role2 . ' ' . date('M j', strtotime($r['signer2_at']));
+    if (!empty($r['paid_at']))    $bits[] = 'paid ' . date('M j', strtotime($r['payment_date'] ?: $r['paid_at']));
+    return $bits ? implode(' &middot; ', $bits) : '';
 }
 ?>
 <!DOCTYPE html>
@@ -100,563 +110,270 @@ function _lpExpenseTotal(int $voucherId): float {
   <link rel="stylesheet" href="../css/style.css">
   <link rel="icon" href="../favicon.ico">
   <style>
-
     body { background: #f4f6f8; }
-    .wrap { max-width: 980px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
-    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.75rem; flex-wrap: wrap; gap: 1rem; }
-    .page-header h1 { font-size: 1.35rem; font-weight: 800; color: var(--gray-800); margin: 0; }
+    .wrap { max-width: 800px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    .page-header { margin-bottom: 1.5rem; }
+    .page-header h1 { font-size: 1.35rem; font-weight: 800; color: var(--gray-800); margin: .3rem 0 0; }
     .back-link { font-size: .85rem; color: var(--primary); text-decoration: none; }
     .back-link:hover { text-decoration: underline; }
-    .notice   { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: .75rem 1rem; font-size: .88rem; color: #166534; margin-bottom: 1.25rem; }
-    .error-box{ background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: .75rem 1rem; font-size: .88rem; color: #991b1b; margin-bottom: 1.25rem; }
-    .sec-head { font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: var(--gray-400); margin: 2rem 0 .75rem; display: flex; align-items: center; gap: .5rem; }
-    .empty-note { font-size: .88rem; color: var(--gray-400); font-style: italic; padding: .5rem 0 1rem; }
+    .notice   { background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:.7rem 1rem;
+                font-size:.88rem;color:#166534;margin-bottom:1rem; }
+    .error-box{ background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:.7rem 1rem;
+                font-size:.88rem;color:#991b1b;margin-bottom:1rem; }
+    .all-clear{ background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:.9rem 1.1rem;
+                font-size:.9rem;color:#166534;margin-bottom:1.5rem; }
 
-    .claim-card { background: #fff; border: 1px solid var(--gray-200); border-radius: 10px; padding: 1.25rem 1.5rem; margin-bottom: 1rem; }
-    .claim-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: .6rem; }
-    .claim-name { font-size: 1rem; font-weight: 800; color: var(--gray-800); }
-    .claim-meta { font-size: .82rem; color: var(--gray-400); margin-top: .2rem; }
-    .claim-total { font-size: 1.15rem; font-weight: 800; color: var(--primary); text-align: right; }
-    .claim-total span { display: block; font-size: .72rem; font-weight: 600; color: var(--gray-400); text-transform: uppercase; letter-spacing: .04em; }
-    .item-list { font-size: .82rem; color: var(--gray-500); margin: .6rem 0; padding: .6rem .8rem; background: #f8f9fa; border-radius: 7px; }
-    .item-list .it { display: flex; justify-content: space-between; padding: .15rem 0; }
-    .item-list .it.more { color: var(--gray-400); font-style: italic; }
+    h2.system { font-size: 1rem; font-weight: 800; color: var(--gray-800);
+                margin: 2rem 0 .75rem; padding-bottom: .4rem; border-bottom: 2px solid var(--accent); }
+    h2.system .n { font-weight: 600; color: var(--gray-400); font-size: .8rem; margin-left: .4rem; }
 
-    .action-row { display: flex; gap: .6rem; align-items: flex-start; flex-wrap: wrap; margin-top: .85rem; }
-    .note-area { width: 100%; margin-top: .4rem; }
-    textarea.note-input { width: 100%; border: 1px solid var(--gray-300); border-radius: 7px; padding: .5rem .75rem; font-size: .85rem; font-family: inherit; resize: vertical; min-height: 60px; box-sizing: border-box; }
-    .btn-approve { background: var(--primary); color: #fff; border: none; border-radius: 7px; padding: .5rem 1.1rem; font-size: .88rem; font-weight: 700; cursor: pointer; }
-    .btn-approve:hover { background: var(--primary-dk); }
-    .btn-reject  { background: none; border: 1px solid #fecaca; color: #dc2626; border-radius: 7px; padding: .5rem 1rem; font-size: .88rem; font-weight: 600; cursor: pointer; }
-    .btn-reject:hover { background: #fef2f2; }
-    .btn-paid    { background: #166534; color: #fff; border: none; border-radius: 7px; padding: .5rem 1.1rem; font-size: .88rem; font-weight: 700; cursor: pointer; }
-    .btn-paid:hover { background: #14532d; }
-    .detail-link { font-size: .82rem; color: var(--gray-500); align-self: center; }
-    .detail-link:hover { color: var(--primary); }
-    .etransfer-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: .75rem 1rem; margin: .6rem 0; font-family: monospace; font-size: .85rem; color: #14532d; }
-    .etransfer-box .row { display: flex; gap: .5rem; }
-    .etransfer-box .lbl { color: #4ade80; width: 70px; flex-shrink: 0; }
-  
-    /* Card styles unique to the voucher queue */
-    .voucher-card { background: #fff; border: 1px solid var(--gray-200); border-radius: 10px;
-                    padding: 1.25rem 1.5rem; margin-bottom: 1rem; }
-    .voucher-top { display: flex; align-items: flex-start; justify-content: space-between;
-                   gap: 1rem; flex-wrap: wrap; margin-bottom: .85rem; }
-    .voucher-name { font-size: 1rem; font-weight: 800; color: var(--gray-800); }
-    .voucher-meta { font-size: .82rem; color: var(--gray-400); margin-top: .2rem; }
-    .voucher-total { font-size: 1.15rem; font-weight: 800; color: var(--primary); text-align: right; }
-    .voucher-total span { display: block; font-size: .72rem; font-weight: 600;
-                          color: var(--gray-400); text-transform: uppercase; letter-spacing: .04em; }
-    .system-head { font-size: .95rem; font-weight: 800; color: var(--gray-800);
-                   margin: 2.5rem 0 .25rem; padding-bottom: .4rem;
-                   border-bottom: 2px solid var(--accent); }
-    .system-sub  { font-size: .8rem; color: var(--gray-500); margin-bottom: .5rem; }
-    .all-clear   { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px;
-                   padding: 1rem 1.25rem; font-size: .9rem; color: #166534; margin-bottom: 1rem; }
-    .muted-note  { font-size: .8rem; color: var(--gray-400); font-style: italic; }
-    .ref-card    { background: #fff; border: 1px solid var(--gray-200); border-radius: 10px;
-                   padding: .9rem 1.1rem; margin-top: .6rem; }
+    .card { background:#fff;border:1px solid var(--gray-200);border-radius:10px;
+            padding:.85rem 1.1rem;margin-bottom:.55rem; }
+    .card.mine { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(26,107,53,.08); }
+    .card.done { opacity: .7; }
+    .card-top { display:flex;align-items:baseline;gap:.6rem;flex-wrap:wrap; }
+    .card-name { font-weight:700;color:var(--gray-800);font-size:.93rem; }
+    .card-amt  { margin-left:auto;font-weight:800;color:var(--primary);font-size:1rem;white-space:nowrap; }
+    .card-meta { font-size:.78rem;color:var(--gray-500);margin-top:.15rem; }
+    .badge { display:inline-block;font-size:.66rem;font-weight:800;text-transform:uppercase;
+             letter-spacing:.04em;padding:.15rem .5rem;border-radius:100px;white-space:nowrap; }
+
+    .acts { display:flex;gap:.4rem;align-items:center;margin-top:.6rem;flex-wrap:wrap; }
+    .acts .spacer { margin-left:auto; }
+    .btn-go   { background:var(--primary);color:#fff;border:none;border-radius:6px;
+                padding:.35rem .85rem;font-size:.82rem;font-weight:700;cursor:pointer; }
+    .btn-go:hover { background:var(--primary-dk); }
+    .btn-pay  { background:#166534;color:#fff;border:none;border-radius:6px;
+                padding:.35rem .85rem;font-size:.82rem;font-weight:700;cursor:pointer; }
+    .link-sm  { font-size:.8rem;color:var(--gray-500);text-decoration:none; }
+    .link-sm:hover { color:var(--primary); }
+
+    /* Secondary forms stay folded away until needed */
+    details.more { margin-top:.5rem; }
+    details.more > summary { font-size:.8rem;color:var(--gray-500);cursor:pointer;
+                             list-style:none;display:inline-block; }
+    details.more > summary::-webkit-details-marker { display:none; }
+    details.more > summary:hover { color:var(--primary); }
+    details.more[open] > summary { margin-bottom:.45rem; }
+    .form-inline { display:flex;gap:.4rem;flex-wrap:wrap;align-items:center; }
+    .form-inline input, .form-inline textarea {
+        border:1px solid var(--gray-300);border-radius:6px;padding:.35rem .55rem;
+        font-size:.82rem;font-family:inherit; }
+    .form-inline textarea { min-height:34px;resize:vertical;flex:1;min-width:180px; }
+
+    details.done-list { margin-top:.6rem; }
+    details.done-list > summary { font-size:.82rem;font-weight:700;color:var(--gray-500);
+                                  cursor:pointer;padding:.4rem 0; }
+    details.done-list > summary:hover { color:var(--primary); }
+    .empty { font-size:.85rem;color:var(--gray-400);font-style:italic;padding:.3rem 0 .6rem; }
+    .ledger-note { font-size:.8rem;color:var(--gray-400);font-style:italic;margin-top:1.5rem; }
   </style>
 </head>
 <body>
 <div class="wrap">
 
   <div class="page-header">
-    <div>
-      <a class="back-link" href="dashboard.php">&#x2190; Dashboard</a>
-      <h1 style="margin-top:.3rem;">Approvals &amp; Payments</h1>
-    </div>
+    <a class="back-link" href="dashboard.php">&#x2190; Dashboard</a>
+    <h1>Approvals &amp; Payments</h1>
   </div>
 
   <?php if ($notice): ?><div class="notice">&#x2713; <?= htmlspecialchars($notice) ?></div><?php endif; ?>
   <?php if ($error):  ?><div class="error-box">&#x26A0; <?= htmlspecialchars($error) ?></div><?php endif; ?>
 
   <?php if ($waiting === 0): ?>
-    <div class="all-clear">&#x2713; Nothing needs your signature right now.</div>
+    <div class="all-clear">&#x2713; Nothing needs you right now.</div>
   <?php endif; ?>
 
   <?php if (expCanReview($email)): ?>
-  <div class="system-head">Member Reimbursements</div>
-  <div class="system-sub">
-    Claims from members. The President approves, the Treasurer signs, either one pays.
-  </div>
+  <h2 class="system">Member Reimbursements<?php if ($claimsActive): ?><span class="n"><?= count($claimsActive) ?> open</span><?php endif; ?></h2>
 
-  <?php
-  function _expClaimItemPreview(array $items, array $catLabels): string {
-      if (!$items) return '';
-      $html = '<div class="item-list">';
-      $shown = array_slice($items, 0, 4);
-      foreach ($shown as $it) {
-          $label = $catLabels[$it['category']] ?? ucfirst($it['category']);
-          $html .= '<div class="it"><span>' . htmlspecialchars(($it['expense_date'] ? date('M j', strtotime($it['expense_date'])) . ' — ' : '') . $label . ': ' . $it['description']) . '</span>'
-                 . '<span>$' . number_format((float)$it['amount'], 2) . '</span></div>';
-      }
-      if (count($items) > count($shown)) {
-          $html .= '<div class="it more">+ ' . (count($items) - count($shown)) . ' more item' . ((count($items) - count($shown)) === 1 ? '' : 's') . '&hellip;</div>';
-      }
-      $html .= '</div>';
-      return $html;
-  }
-  ?>
+  <?php if (!$claimsActive): ?><p class="empty">Nothing open.</p><?php endif; ?>
 
-  <?php if ($canSign1): ?>
-  <!-- ── Step 1: President authorises ── -->
-  <div class="sec-head">
-    Awaiting President's Approval
-    <?php if ($forSigner1): ?><span style="background:#fef3c7;color:#d97706;font-size:.7rem;font-weight:700;border-radius:100px;padding:.1rem .5rem;"><?= count($forSigner1) ?></span><?php endif; ?>
-  </div>
-  <?php if (!$forSigner1): ?>
-    <p class="empty-note">No claims awaiting the President's approval.</p>
-  <?php endif; ?>
-  <?php foreach ($forSigner1 as $b):
-    $items = expBatchGetItems((int)$b['id']);
-    $total = array_sum(array_map(function($i){ return (float)$i['amount']; }, $items));
+  <?php foreach ($claimsActive as $b):
+    $mine  = _claimNeedsMe($b, $canSign1, $canSign2, $canPayClaim);
+    $items = expBatchGetItems($b['id']);
+    $total = expBatchTotal($b['id']);
   ?>
-  <div class="claim-card">
-    <div class="claim-top">
-      <div>
-        <div class="claim-name"><?= htmlspecialchars($b['title'] ?: $b['user_name']) ?></div>
-        <div class="claim-meta">
-          <?= htmlspecialchars($b['user_name']) ?> &middot; <?= htmlspecialchars($b['ref_code']) ?>
-          &middot; <?= count($items) ?> item<?= count($items) === 1 ? '' : 's' ?>
-          &middot; submitted <?= $b['submitted_at'] ? date('M j, Y', strtotime($b['submitted_at'])) : '—' ?>
-          <?php if (!empty($b['submitted_by_email']) && strtolower($b['submitted_by_email']) !== strtolower($b['user_email'])): ?>
-          &middot; <span style="color:var(--gray-400);">submitted by <?= htmlspecialchars($b['submitted_by_name'] ?: $b['submitted_by_email']) ?></span>
-          <?php endif; ?>
-        </div>
-      </div>
-      <div class="claim-total">$<?= number_format($total, 2) ?><span>Claim total</span></div>
+  <div class="card <?= $mine ? 'mine' : '' ?>">
+    <div class="card-top">
+      <span class="card-name"><?= htmlspecialchars($b['title'] ?: $b['ref_code']) ?></span>
+      <?= _badge($b['status']) ?>
+      <span class="card-amt">$<?= number_format($total, 2) ?></span>
     </div>
-    <?= _expClaimBadge($b['status']) ?>
-    <?= _expClaimItemPreview($items, $catLabels) ?>
-    <div class="action-row">
-      <form method="POST" action="exp-claim-action.php">
-        <input type="hidden" name="action"   value="signer1_approve">
-        <input type="hidden" name="batch_id" value="<?= (int)$b['id'] ?>">
-        <input type="hidden" name="redirect" value="approvals.php">
-        <button type="submit" class="btn-approve">&#x2713; Approve</button>
-        <div class="note-area"><textarea class="note-input" name="note" placeholder="Optional note for second signer&hellip;"></textarea></div>
-      </form>
-      <form method="POST" action="exp-claim-action.php" onsubmit="return confirm('Reject this claim?')">
-        <input type="hidden" name="action"   value="reject">
-        <input type="hidden" name="batch_id" value="<?= (int)$b['id'] ?>">
-        <input type="hidden" name="redirect" value="approvals.php">
-        <div>
-          <textarea class="note-input" name="note" placeholder="Reason for rejection (required)" required style="width:220px;min-height:60px;"></textarea><br>
-          <button type="submit" class="btn-reject" style="margin-top:.35rem;">&#x2715; Reject</button>
-        </div>
-      </form>
-      <a href="exp-claim-view.php?id=<?= (int)$b['id'] ?>" class="detail-link">View claim &#x2192;</a>
-      <?php if (expIsAdmin($member['email'])): ?>
-      <form method="POST" action="exp-claim-action.php"
-            onsubmit="return confirm('Re-send the Treasurer notification email for this claim?')">
-        <input type="hidden" name="action"   value="resend_to_treasurer">
-        <input type="hidden" name="batch_id" value="<?= (int)$b['id'] ?>">
-        <input type="hidden" name="redirect" value="approvals.php">
-        <button type="submit" style="background:none;border:1px solid var(--gray-200);border-radius:6px;padding:.3rem .65rem;font-size:.78rem;color:var(--gray-500);cursor:pointer;">&#x21BA; Resend notification</button>
-      </form>
+    <div class="card-meta">
+      <?= htmlspecialchars($b['user_name']) ?> &middot;
+      <?= count($items) ?> item<?= count($items) === 1 ? '' : 's' ?> &middot;
+      <?= htmlspecialchars($b['ref_code']) ?>
+    </div>
+
+    <div class="acts">
+      <?php if ($b['status'] === 'pending' && $canSign1): ?>
+        <form method="POST" action="exp-claim-action.php" style="display:inline;">
+          <input type="hidden" name="action" value="signer1_approve">
+          <input type="hidden" name="batch_id" value="<?= (int)$b['id'] ?>">
+          <input type="hidden" name="redirect" value="approvals.php">
+          <button type="submit" class="btn-go">&#x2713; Approve</button>
+        </form>
+      <?php elseif ($b['status'] === 'signer1_approved' && $canSign2): ?>
+        <form method="POST" action="exp-claim-action.php" style="display:inline;">
+          <input type="hidden" name="action" value="signer2_approve">
+          <input type="hidden" name="batch_id" value="<?= (int)$b['id'] ?>">
+          <input type="hidden" name="redirect" value="approvals.php">
+          <button type="submit" class="btn-go">&#x2713; Sign</button>
+        </form>
       <?php endif; ?>
+      <span class="spacer"></span>
+      <a class="link-sm" href="exp-claim-view.php?id=<?= (int)$b['id'] ?>">View &rarr;</a>
     </div>
-  </div>
-  <?php endforeach; ?>
 
-  <?php endif; ?>
-
-  <?php if ($canSign2): ?>
-  <!-- ── Step 2: Treasurer signs ── -->
-  <div class="sec-head" style="margin-top:2.5rem;">
-    Awaiting Treasurer's Signature
-    <?php if ($forSigner2): ?><span style="background:#eff6ff;color:#1e40af;font-size:.7rem;font-weight:700;border-radius:100px;padding:.1rem .5rem;"><?= count($forSigner2) ?></span><?php endif; ?>
-  </div>
-  <?php if (!$forSigner2): ?>
-    <p class="empty-note">No claims awaiting the Treasurer's signature.</p>
-  <?php endif; ?>
-  <?php foreach ($forSigner2 as $b):
-    $items = expBatchGetItems((int)$b['id']);
-    $total = array_sum(array_map(function($i){ return (float)$i['amount']; }, $items));
-  ?>
-  <div class="claim-card">
-    <div class="claim-top">
-      <div>
-        <div class="claim-name"><?= htmlspecialchars($b['title'] ?: $b['user_name']) ?></div>
-        <div class="claim-meta">
-          <?= htmlspecialchars($b['user_name']) ?> &middot; <?= htmlspecialchars($b['ref_code']) ?>
-          &middot; <?= count($items) ?> item<?= count($items) === 1 ? '' : 's' ?>
-          &middot; Treasurer approved by <strong><?= htmlspecialchars($b['signer1_name'] ?: '—') ?></strong>
-          on <?= $b['signer1_at'] ? date('M j, Y', strtotime($b['signer1_at'])) : '—' ?>
-        </div>
-      </div>
-      <div class="claim-total">$<?= number_format($total, 2) ?><span>Claim total</span></div>
-    </div>
-    <?= _expClaimBadge($b['status']) ?>
-    <?php if ($b['signer1_note']): ?>
-    <div class="claim-meta" style="font-style:italic;margin-top:.4rem;">&#x201C;<?= htmlspecialchars($b['signer1_note']) ?>&#x201D; &mdash; <?= htmlspecialchars($b['signer1_name']) ?></div>
+    <?php if ($b['status'] === 'signer2_approved' && $canPayClaim): ?>
+    <details class="more">
+      <summary>&#x25B8; Record e-transfer</summary>
+      <form method="POST" action="exp-claim-action.php" class="form-inline">
+        <input type="hidden" name="action" value="mark_paid">
+        <input type="hidden" name="batch_id" value="<?= (int)$b['id'] ?>">
+        <input type="hidden" name="redirect" value="approvals.php">
+        <input type="date" name="payment_date" value="<?= date('Y-m-d') ?>">
+        <input type="text" name="payment_ref" placeholder="Reference">
+        <textarea name="note" placeholder="Optional note"></textarea>
+        <button type="submit" class="btn-pay">Mark paid</button>
+      </form>
+    </details>
     <?php endif; ?>
-    <?= _expClaimItemPreview($items, $catLabels) ?>
-    <div class="action-row">
-      <form method="POST" action="exp-claim-action.php">
-        <input type="hidden" name="action"   value="signer2_approve">
+
+    <?php if ($mine && $b['status'] !== 'signer2_approved'): ?>
+    <details class="more">
+      <summary>&#x25B8; Reject</summary>
+      <form method="POST" action="exp-claim-action.php" class="form-inline">
+        <input type="hidden" name="action" value="reject">
         <input type="hidden" name="batch_id" value="<?= (int)$b['id'] ?>">
         <input type="hidden" name="redirect" value="approvals.php">
-        <button type="submit" class="btn-approve">&#x2713; Approve &amp; Sign</button>
-        <div class="note-area"><textarea class="note-input" name="note" placeholder="Optional note&hellip;"></textarea></div>
+        <textarea name="note" placeholder="Reason (required)" required></textarea>
+        <button type="submit" class="btn-go" style="background:#dc2626;">Reject</button>
       </form>
-      <form method="POST" action="exp-claim-action.php" onsubmit="return confirm('Reject this claim?')">
-        <input type="hidden" name="action"   value="reject">
-        <input type="hidden" name="batch_id" value="<?= (int)$b['id'] ?>">
-        <input type="hidden" name="redirect" value="approvals.php">
-        <div>
-          <textarea class="note-input" name="note" placeholder="Reason for rejection (required)" required style="width:220px;min-height:60px;"></textarea><br>
-          <button type="submit" class="btn-reject" style="margin-top:.35rem;">&#x2715; Reject</button>
-        </div>
-      </form>
-      <a href="exp-claim-view.php?id=<?= (int)$b['id'] ?>" class="detail-link">View claim &#x2192;</a>
-    </div>
+    </details>
+    <?php endif; ?>
   </div>
   <?php endforeach; ?>
-  <?php endif; ?>
 
-  <?php if ($canPay): ?>
-  <!-- ── Step 3: e-transfer ── -->
-  <div class="sec-head" style="margin-top:2.5rem;">
-    Ready for E-Transfer
-    <?php if ($readyToPay): ?><span style="background:#f0fdf4;color:#166534;font-size:.7rem;font-weight:700;border-radius:100px;padding:.1rem .5rem;"><?= count($readyToPay) ?></span><?php endif; ?>
-  </div>
-  <?php if (!$readyToPay): ?>
-    <p class="empty-note">No claims ready for payment.</p>
-  <?php endif; ?>
-  <?php foreach ($readyToPay as $b):
-    $items = expBatchGetItems((int)$b['id']);
-    $total = array_sum(array_map(function($i){ return (float)$i['amount']; }, $items));
-  ?>
-  <div class="claim-card">
-    <div class="claim-top">
-      <div>
-        <div class="claim-name"><?= htmlspecialchars($b['title'] ?: $b['user_name']) ?></div>
-        <div class="claim-meta">
-          <?= htmlspecialchars($b['user_name']) ?> &middot; <?= htmlspecialchars($b['ref_code']) ?>
-          &middot; Both signatures complete &middot; <?= count($items) ?> item<?= count($items) === 1 ? '' : 's' ?>
-        </div>
+  <?php if ($claimsDone): ?>
+  <details class="done-list">
+    <summary>Completed (<?= count($claimsDone) ?>)</summary>
+    <?php foreach ($claimsDone as $b): $total = expBatchTotal($b['id']); ?>
+    <div class="card done">
+      <div class="card-top">
+        <span class="card-name"><?= htmlspecialchars($b['title'] ?: $b['ref_code']) ?></span>
+        <?= _badge($b['status']) ?>
+        <span class="card-amt">$<?= number_format($total, 2) ?></span>
       </div>
-      <div class="claim-total">$<?= number_format($total, 2) ?><span>E-transfer amount</span></div>
+      <div class="card-meta">
+        <?= htmlspecialchars($b['user_name']) ?>
+        <?php $sl = _signedLine($b, 'President', 'Treasurer'); ?>
+        <?= $sl ? '&middot; ' . $sl : '' ?>
+        &middot; <a class="link-sm" href="exp-claim-view.php?id=<?= (int)$b['id'] ?>">View &rarr;</a>
+      </div>
     </div>
-    <?= _expClaimBadge($b['status']) ?>
-    <div class="etransfer-box">
-      <div class="row"><span class="lbl">To:</span><span><?= htmlspecialchars($b['user_email']) ?></span></div>
-      <div class="row"><span class="lbl">Amount:</span><span>$<?= number_format($total, 2) ?></span></div>
-      <div class="row"><span class="lbl">Message:</span><span><?= htmlspecialchars($b['ref_code']) ?></span></div>
-    </div>
-    <div class="action-row" style="margin-top:.4rem;">
-      <form method="POST" action="exp-claim-action.php">
-        <input type="hidden" name="action"   value="mark_paid">
-        <input type="hidden" name="batch_id" value="<?= (int)$b['id'] ?>">
-        <input type="hidden" name="redirect" value="approvals.php">
-        <div>
-          <div style="display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:.4rem;">
-            <div>
-              <label style="font-size:.75rem;color:#6b7280;display:block;margin-bottom:.2rem;">Payment date</label>
-              <input type="date" name="payment_date" value="<?= date('Y-m-d') ?>" style="border:1px solid #d1d5db;border-radius:6px;padding:.35rem .5rem;font-size:.83rem;">
-            </div>
-            <div style="flex:1;min-width:160px;">
-              <label style="font-size:.75rem;color:#6b7280;display:block;margin-bottom:.2rem;">Cheque # or e-transfer ref</label>
-              <input type="text" name="payment_ref" placeholder="e.g. Cheque #1042 or ET-abc123" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:.35rem .5rem;font-size:.83rem;box-sizing:border-box;">
-            </div>
-          </div>
-          <textarea class="note-input" name="note" placeholder="Optional note&hellip;" style="width:280px;min-height:40px;"></textarea><br>
-          <button type="submit" class="btn-paid" style="margin-top:.35rem;">&#x2713; Mark as Paid &mdash; Single E-Transfer Sent</button>
-        </div>
-      </form>
-      <a href="exp-claim-view.php?id=<?= (int)$b['id'] ?>" class="detail-link">View claim &#x2192;</a>
-    </div>
-  </div>
-  <?php endforeach; ?>
+    <?php endforeach; ?>
+  </details>
   <?php endif; ?>
-
-  
   <?php endif; ?>
 
   <?php if (lpCanReview($email)): ?>
-  <div class="system-head">President&rsquo;s Expenses</div>
-  <div class="system-sub">
-    The President&rsquo;s own expenses. The Treasurer approves, the Vice-President signs,
-    the Treasurer pays &mdash; the President cannot sign their own.
-  </div>
+  <h2 class="system">President&rsquo;s Expenses<?php if ($lpActive): ?><span class="n"><?= count($lpActive) ?> open</span><?php endif; ?></h2>
 
-  <?php
-  // ── Treasurer: awaiting first approval ──────────────────────────────────────
-  if ($isTreasurer):
+  <?php if (!$lpActive): ?><p class="empty">Nothing open.</p><?php endif; ?>
+
+  <?php foreach ($lpActive as $v):
+    $mine   = _lpNeedsMe($v, $isTreasurer, $isVP);
+    $vTotal = array_sum(array_map('lpRowTotal', lpGetExpenses($v['id'])));
   ?>
-  <div class="sec-head">
-    Awaiting Treasurer&rsquo;s Approval
-    <?php if ($forTreasurer): ?>
-    <span style="background:#fef3c7;color:#d97706;font-size:.7rem;font-weight:700;border-radius:100px;padding:.1rem .5rem;margin-left:.4rem;"><?= count($forTreasurer) ?></span>
+  <div class="card <?= $mine ? 'mine' : '' ?>">
+    <div class="card-top">
+      <span class="card-name"><?= htmlspecialchars($v['name']) ?></span>
+      <?= _badge($v['status']) ?>
+      <span class="card-amt">$<?= number_format($vTotal, 2) ?></span>
+    </div>
+    <div class="card-meta">
+      <?= htmlspecialchars($v['submitted_by']) ?>
+      <?= $v['voucher_number'] ? '&middot; #' . htmlspecialchars($v['voucher_number']) : '' ?>
+      &middot; <?= (int)$v['expense_count'] ?> item<?= (int)$v['expense_count'] === 1 ? '' : 's' ?>
+    </div>
+
+    <div class="acts">
+      <?php if ($v['status'] === 'submitted' && $isTreasurer): ?>
+        <form method="POST" action="lp-action.php" style="display:inline;">
+          <input type="hidden" name="action" value="treasurer_approve">
+          <input type="hidden" name="voucher_id" value="<?= (int)$v['id'] ?>">
+          <input type="hidden" name="redirect" value="approvals.php">
+          <button type="submit" class="btn-go">&#x2713; Approve</button>
+        </form>
+      <?php elseif ($v['status'] === 'treasurer_approved' && $isVP): ?>
+        <form method="POST" action="lp-action.php" style="display:inline;">
+          <input type="hidden" name="action" value="vp_approve">
+          <input type="hidden" name="voucher_id" value="<?= (int)$v['id'] ?>">
+          <input type="hidden" name="redirect" value="approvals.php">
+          <button type="submit" class="btn-go">&#x2713; Sign</button>
+        </form>
+      <?php endif; ?>
+      <span class="spacer"></span>
+      <a class="link-sm" href="lp-voucher-edit.php?id=<?= (int)$v['id'] ?>">View &rarr;</a>
+    </div>
+
+    <?php if ($v['status'] === 'vp_approved' && $isTreasurer): ?>
+    <details class="more">
+      <summary>&#x25B8; Record e-transfer</summary>
+      <form method="POST" action="lp-action.php" class="form-inline">
+        <input type="hidden" name="action" value="mark_paid">
+        <input type="hidden" name="voucher_id" value="<?= (int)$v['id'] ?>">
+        <input type="hidden" name="redirect" value="approvals.php">
+        <input type="date" name="payment_date" value="<?= date('Y-m-d') ?>">
+        <input type="text" name="payment_ref" placeholder="Reference">
+        <textarea name="note" placeholder="Optional note"></textarea>
+        <button type="submit" class="btn-pay">Mark paid</button>
+      </form>
+    </details>
+    <?php endif; ?>
+
+    <?php if ($mine && $v['status'] !== 'vp_approved'): ?>
+    <details class="more">
+      <summary>&#x25B8; Reject</summary>
+      <form method="POST" action="lp-action.php" class="form-inline">
+        <input type="hidden" name="action" value="reject">
+        <input type="hidden" name="voucher_id" value="<?= (int)$v['id'] ?>">
+        <input type="hidden" name="redirect" value="approvals.php">
+        <textarea name="note" placeholder="Reason (required)" required></textarea>
+        <button type="submit" class="btn-go" style="background:#dc2626;">Reject</button>
+      </form>
+    </details>
     <?php endif; ?>
   </div>
-
-  <?php if (!$forTreasurer): ?>
-    <p class="empty-note">No expenses awaiting the Treasurer&rsquo;s approval.</p>
-  <?php endif; ?>
-
-  <?php foreach ($forTreasurer as $v):
-    $total = _lpExpenseTotal($v['id']);
-  ?>
-  <div class="voucher-card">
-    <div class="voucher-top">
-      <div>
-        <div class="voucher-name"><?= htmlspecialchars($v['name']) ?></div>
-        <div class="voucher-meta">
-          <?= htmlspecialchars($v['submitted_by']) ?> &middot;
-          Submitted <?= $v['submitted_at'] ? date('M j, Y', strtotime($v['submitted_at'])) : '—' ?>
-          <?php if ($v['voucher_number']): ?>&middot; #<?= htmlspecialchars($v['voucher_number']) ?><?php endif; ?>
-        </div>
-      </div>
-      <div class="voucher-total">
-        $<?= number_format($total, 2) ?>
-        <span>Total</span>
-      </div>
-    </div>
-    <?= lpStatusBadge($v['status']) ?>
-    <div class="action-row">
-      <form method="POST" action="lp-action.php">
-        <input type="hidden" name="action"     value="treasurer_approve">
-        <input type="hidden" name="voucher_id" value="<?= (int)$v['id'] ?>">
-        <input type="hidden" name="redirect"   value="approvals.php">
-        <button type="submit" class="btn-approve">&#x2713; Approve</button>
-        <div class="note-area">
-          <textarea class="note-input" name="note" placeholder="Optional note for VP&hellip;"></textarea>
-        </div>
-      </form>
-      <form method="POST" action="lp-action.php" onsubmit="return confirm('Reject this voucher?')">
-        <input type="hidden" name="action"     value="reject">
-        <input type="hidden" name="voucher_id" value="<?= (int)$v['id'] ?>">
-        <input type="hidden" name="redirect"   value="approvals.php">
-        <div>
-          <textarea class="note-input" name="note" placeholder="Reason for rejection (required)" required
-                    style="width:220px;min-height:60px;"></textarea>
-          <br>
-          <button type="submit" class="btn-reject" style="margin-top:.35rem;">&#x2715; Reject</button>
-        </div>
-      </form>
-      <a href="lp-voucher-edit.php?id=<?= (int)$v['id'] ?>" class="detail-link">View voucher &#x2192;</a>
-    </div>
-  </div>
   <?php endforeach; ?>
 
-  <?php endif; // isTreasurer ?>
-
-  <?php
-  // ── VP: awaiting second approval ────────────────────────────────────────────
-  if ($isVP):
-  ?>
-  <div class="sec-head">
-    Awaiting Vice-President&rsquo;s Signature
-    <?php if ($forVP): ?>
-    <span style="background:#eff6ff;color:#1e40af;font-size:.7rem;font-weight:700;border-radius:100px;padding:.1rem .5rem;margin-left:.4rem;"><?= count($forVP) ?></span>
-    <?php endif; ?>
-  </div>
-
-  <?php if (!$forVP): ?>
-    <p class="empty-note">No vouchers awaiting VP signature.</p>
+  <?php if ($lpDone): ?>
+  <details class="done-list">
+    <summary>Completed (<?= count($lpDone) ?>)</summary>
+    <?php foreach ($lpDone as $v):
+      $vTotal = array_sum(array_map('lpRowTotal', lpGetExpenses($v['id'])));
+    ?>
+    <div class="card done">
+      <div class="card-top">
+        <span class="card-name"><?= htmlspecialchars($v['name']) ?></span>
+        <?= _badge($v['status']) ?>
+        <span class="card-amt">$<?= number_format($vTotal, 2) ?></span>
+      </div>
+      <div class="card-meta">
+        <?= htmlspecialchars($v['submitted_by']) ?>
+        <?php $sl = _signedLine($v, 'Treasurer', 'VP'); ?>
+        <?= $sl ? '&middot; ' . $sl : '' ?>
+        &middot; <a class="link-sm" href="lp-voucher-edit.php?id=<?= (int)$v['id'] ?>">View &rarr;</a>
+      </div>
+    </div>
+    <?php endforeach; ?>
+  </details>
+  <?php endif; ?>
   <?php endif; ?>
 
-  <?php foreach ($forVP as $v):
-    $total = _lpExpenseTotal($v['id']);
-  ?>
-  <div class="voucher-card">
-    <div class="voucher-top">
-      <div>
-        <div class="voucher-name"><?= htmlspecialchars($v['name']) ?></div>
-        <div class="voucher-meta">
-          Treasurer approved by <strong><?= htmlspecialchars($v['signer1_name'] ?? '—') ?></strong>
-          on <?= $v['signer1_at'] ? date('M j, Y', strtotime($v['signer1_at'])) : '—' ?>
-        </div>
-      </div>
-      <div class="voucher-total">
-        $<?= number_format($total, 2) ?>
-        <span>Total</span>
-      </div>
-    </div>
-    <?= lpStatusBadge($v['status']) ?>
-    <div class="action-row">
-      <form method="POST" action="lp-action.php">
-        <input type="hidden" name="action"     value="vp_approve">
-        <input type="hidden" name="voucher_id" value="<?= (int)$v['id'] ?>">
-        <input type="hidden" name="redirect"   value="approvals.php">
-        <button type="submit" class="btn-approve">&#x2713; Approve &amp; Sign</button>
-        <div class="note-area">
-          <textarea class="note-input" name="note" placeholder="Optional note&hellip;"></textarea>
-        </div>
-      </form>
-      <form method="POST" action="lp-action.php" onsubmit="return confirm('Reject this voucher?')">
-        <input type="hidden" name="action"     value="reject">
-        <input type="hidden" name="voucher_id" value="<?= (int)$v['id'] ?>">
-        <input type="hidden" name="redirect"   value="approvals.php">
-        <div>
-          <textarea class="note-input" name="note" placeholder="Reason for rejection (required)" required
-                    style="width:220px;min-height:60px;"></textarea>
-          <br>
-          <button type="submit" class="btn-reject" style="margin-top:.35rem;">&#x2715; Reject</button>
-        </div>
-      </form>
-      <a href="lp-voucher-edit.php?id=<?= (int)$v['id'] ?>" class="detail-link">View voucher &#x2192;</a>
-    </div>
-  </div>
-  <?php endforeach; ?>
-  <?php endif; // isVP ?>
-
-  <?php if ($isTreasurer): ?>
-  <!-- ── Treasurer: ready to pay ─────────────────────────────────────────────── -->
-  <div class="sec-head">
-    Ready for E-Transfer
-    <?php if ($lpReadyToPay): ?>
-    <span style="background:#f0fdf4;color:#166534;font-size:.7rem;font-weight:700;border-radius:100px;padding:.1rem .5rem;margin-left:.4rem;"><?= count($lpReadyToPay) ?></span>
-    <?php endif; ?>
-  </div>
-
-  <?php if (!$lpReadyToPay): ?>
-    <p class="empty-note">No vouchers ready for payment.</p>
-  <?php endif; ?>
-
-  <?php foreach ($lpReadyToPay as $v):
-    $total = _lpExpenseTotal($v['id']);
-  ?>
-  <div class="voucher-card">
-    <div class="voucher-top">
-      <div>
-        <div class="voucher-name"><?= htmlspecialchars($v['name']) ?></div>
-        <div class="voucher-meta">
-          Both signatures complete &middot; Send e-transfer to
-          <strong><?= htmlspecialchars($v['submitted_by_email']) ?></strong>
-        </div>
-      </div>
-      <div class="voucher-total">
-        $<?= number_format($total, 2) ?>
-        <span>E-transfer amount</span>
-      </div>
-    </div>
-    <?= lpStatusBadge($v['status']) ?>
-    <div class="action-row" style="margin-top:.85rem;">
-      <form method="POST" action="lp-action.php">
-        <input type="hidden" name="action"     value="mark_paid">
-        <input type="hidden" name="voucher_id" value="<?= (int)$v['id'] ?>">
-        <input type="hidden" name="redirect"   value="approvals.php">
-        <div>
-          <div style="display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:.4rem;">
-            <div>
-              <label style="font-size:.75rem;color:#6b7280;display:block;margin-bottom:.2rem;">Payment date</label>
-              <input type="date" name="payment_date" value="<?= date('Y-m-d') ?>" style="border:1px solid #d1d5db;border-radius:6px;padding:.35rem .5rem;font-size:.83rem;">
-            </div>
-            <div style="flex:1;min-width:160px;">
-              <label style="font-size:.75rem;color:#6b7280;display:block;margin-bottom:.2rem;">Cheque # or e-transfer ref</label>
-              <input type="text" name="payment_ref" placeholder="e.g. Cheque #1042 or ET-abc123" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:.35rem .5rem;font-size:.83rem;box-sizing:border-box;">
-            </div>
-          </div>
-          <textarea class="note-input" name="note" placeholder="Optional note&hellip;" style="width:280px;min-height:40px;"></textarea>
-          <br>
-          <button type="submit" class="btn-paid" style="margin-top:.35rem;">
-            &#x2713; Mark as Paid
-          </button>
-        </div>
-      </form>
-      <a href="lp-voucher-edit.php?id=<?= (int)$v['id'] ?>" class="detail-link">View voucher &#x2192;</a>
-    </div>
-  </div>
-  <?php endforeach; ?>
-
-  <?php endif; ?>
-
-  
-  <?php endif; ?>
-
-  <!-- Signed-off items from both systems. Without this a voucher sitting between
-       signatures shows nowhere for the officer who already signed it. -->
-  <?php $historyCount = count($claimHistory) + count($lpHistory); ?>
-  <div class="system-head">Approved &amp; Completed</div>
-  <div class="system-sub">
-    No action needed &mdash; kept so you can look up what has already been signed.
-  </div>
-
-  <?php if ($historyCount === 0): ?>
-    <p class="empty-note">Nothing signed off yet.</p>
-  <?php endif; ?>
-
-  <?php foreach ($claimHistory as $b):
-    $total = expBatchTotal($b['id']);
-  ?>
-  <div class="claim-card" style="opacity:.85;">
-    <div class="claim-top">
-      <div>
-        <div class="claim-name"><?= htmlspecialchars($b['title'] ?: $b['ref_code']) ?></div>
-        <div class="claim-meta">
-          Member reimbursement &middot; <?= htmlspecialchars($b['user_name']) ?>
-          &middot; <?= htmlspecialchars($b['ref_code']) ?>
-        </div>
-      </div>
-      <div class="claim-total">$<?= number_format($total, 2) ?><span>Claim total</span></div>
-    </div>
-    <?= _expClaimBadge($b['status']) ?>
-    <div class="claim-meta" style="margin-top:.5rem;">
-      <?php if (!empty($b['signer1_at'])): ?>
-        President: <?= htmlspecialchars($b['signer1_name'] ?: $b['signer1_email']) ?>
-        on <?= date('M j, Y', strtotime($b['signer1_at'])) ?>
-      <?php endif; ?>
-      <?php if (!empty($b['signer2_at'])): ?>
-        &middot; Treasurer: <?= htmlspecialchars($b['signer2_name'] ?: $b['signer2_email']) ?>
-        on <?= date('M j, Y', strtotime($b['signer2_at'])) ?>
-      <?php endif; ?>
-      <?php if (!empty($b['paid_at'])): ?>
-        &middot; Paid <?= date('M j, Y', strtotime($b['payment_date'] ?: $b['paid_at'])) ?>
-      <?php endif; ?>
-    </div>
-    <div class="action-row">
-      <a href="exp-claim-view.php?id=<?= (int)$b['id'] ?>" class="detail-link">View claim &#x2192;</a>
-    </div>
-  </div>
-  <?php endforeach; ?>
-
-  <?php foreach ($lpHistory as $v):
-    $vTotal = _lpExpenseTotal($v['id']);
-  ?>
-  <div class="voucher-card" style="opacity:.85;">
-    <div class="voucher-top">
-      <div>
-        <div class="voucher-name"><?= htmlspecialchars($v['name']) ?></div>
-        <div class="voucher-meta">
-          President&rsquo;s expenses
-          <?= $v['voucher_number'] ? '&middot; #' . htmlspecialchars($v['voucher_number']) : '' ?>
-          &middot; <?= htmlspecialchars($v['submitted_by']) ?>
-        </div>
-      </div>
-      <div class="voucher-total">$<?= number_format($vTotal, 2) ?></div>
-    </div>
-    <?= lpStatusBadge($v['status']) ?>
-    <div class="voucher-meta" style="margin-top:.5rem;">
-      <?php if (!empty($v['signer1_at'])): ?>
-        Treasurer: <?= htmlspecialchars($v['signer1_name'] ?: $v['signer1_email']) ?>
-        on <?= date('M j, Y', strtotime($v['signer1_at'])) ?>
-      <?php endif; ?>
-      <?php if (!empty($v['signer2_at'])): ?>
-        &middot; VP: <?= htmlspecialchars($v['signer2_name'] ?: $v['signer2_email']) ?>
-        on <?= date('M j, Y', strtotime($v['signer2_at'])) ?>
-      <?php endif; ?>
-      <?php if (!empty($v['paid_at'])): ?>
-        &middot; Paid <?= date('M j, Y', strtotime($v['payment_date'] ?: $v['paid_at'])) ?>
-      <?php endif; ?>
-    </div>
-    <div class="action-row">
-      <a href="lp-voucher-edit.php?id=<?= (int)$v['id'] ?>" class="detail-link">View voucher &#x2192;</a>
-    </div>
-  </div>
-  <?php endforeach; ?>
-
-  <div class="system-head">Payment History</div>
-  <div class="ref-card">
-    <div style="font-weight:700;color:var(--gray-800);font-size:.93rem;">Payment Ledger</div>
-    <div style="font-size:.8rem;color:var(--gray-500);margin-top:.15rem;">
-      Every paid claim and voucher in one list, for reconciling against e-transfers.
-    </div>
-    <span class="muted-note">Paused while these tools are reorganised.</span>
-  </div>
+  <p class="ledger-note">Payment ledger paused while these tools are reorganised.</p>
 
 </div>
 </body>
