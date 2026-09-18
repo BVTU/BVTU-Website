@@ -66,7 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delet
 }
 
 if (!empty($_GET['submitted'])) {
-    $notice = 'Claim submitted — the Treasurer has been notified for the first signature.';
+    $notice = 'Claim submitted — the President has been notified for the first signature.';
 }
 
 $items = expBatchGetItems($id);
@@ -84,8 +84,8 @@ $catLabels = [
 function _expClaimStatusBadge(string $status): string {
     $map = [
         'draft'             => ['#f1f5f9', '#64748b', 'Draft'],
-        'pending'           => ['#fffbeb', '#d97706', 'Awaiting Treasurer'],
-        'signer1_approved'  => ['#eff6ff', '#1e40af', 'Awaiting Second Signature'],
+        'pending'           => ['#fffbeb', '#d97706', 'Awaiting President'],
+        'signer1_approved'  => ['#eff6ff', '#1e40af', 'Awaiting Treasurer'],
         'signer2_approved'  => ['#f0fdf4', '#166534', 'Ready to Pay'],
         'paid'              => ['#f0fdf4', '#166534', 'Paid'],
         'rejected'          => ['#fef2f2', '#991b1b', 'Rejected'],
@@ -187,7 +187,14 @@ function _expClaimStatusBadge(string $status): string {
         <a href="exp-claim-review.php" class="btn btn-outline" style="padding:.5rem .9rem;font-size:.85rem;">Review Queue &#x2192;</a>
         <?php endif; ?>
       </div>
-      <a class="back-link" href="exp-dashboard.php">&#x2190; My Expenses</a>
+      <?php
+        // Reviewers arrive from the queue; members from their own list. Sending
+        // a reviewer to "My Expenses" dropped them into the wrong portal.
+        $backIsReview = $canReview && !$isOwner && !$isSubmitter;
+      ?>
+      <a class="back-link" href="<?= $backIsReview ? 'exp-claim-review.php' : 'exp-dashboard.php' ?>">
+        &#x2190; <?= $backIsReview ? 'Claim Review' : 'My Expenses' ?>
+      </a>
     </div>
   </div>
 

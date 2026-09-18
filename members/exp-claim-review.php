@@ -117,7 +117,7 @@ function _expClaimBadge(string $status): string {
 
   <div class="page-header">
     <div>
-      <a class="back-link" href="dashboard.php">&#x2190; Dashboard</a>
+      <a class="back-link" href="approvals.php">&#x2190; Approvals</a>
       <h1 style="margin-top:.3rem;">Expense Claim Review</h1>
     </div>
   </div>

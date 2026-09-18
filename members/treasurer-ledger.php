@@ -290,7 +290,7 @@ $sourceLabels = [
     <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;">
       <!-- These were three lateral links all styled as "back" with a left arrow,
            and there was no link home at all. -->
-      <a href="dashboard.php" class="back-link">← Dashboard</a>
+      <a href="approvals.php" class="back-link">← Approvals</a>
     </div>
   </div>
 

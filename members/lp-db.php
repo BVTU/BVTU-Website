@@ -410,6 +410,13 @@ function lpApprovalTrail(array $v): string {
     return $out . '</ul>';
 }
 
+/** Vouchers in a given status. Cheap count for dashboards and the hub. */
+function lpCountByStatus(string $status): int {
+    $s = getDB()->prepare("SELECT COUNT(*) FROM lp_vouchers WHERE status=?");
+    $s->execute([$status]);
+    return (int)$s->fetchColumn();
+}
+
 function lpGetVouchersByStatuses(array $statuses): array {
     if (!$statuses) return [];
     $in = implode(',', array_fill(0, count($statuses), '?'));

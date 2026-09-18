@@ -104,7 +104,8 @@ function _lpExpenseTotal(int $voucherId): float {
 
   <div class="page-header">
     <div>
-      <a class="back-link" href="lp-dashboard.php">&#x2190; LP Dashboard</a>
+      <!-- lp-dashboard.php is President-only; reviewers were silently bounced. -->
+      <a class="back-link" href="approvals.php">&#x2190; Approvals</a>
       <h1 style="margin-top:.3rem;">LP Voucher Review</h1>
     </div>
       <!-- Unified Ledger paused pending rebuild — see treasurer-ledger.php -->
