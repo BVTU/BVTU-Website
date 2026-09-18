@@ -19,10 +19,18 @@
  */
 require_once __DIR__ . '/contacts-db.php';
 
-// Mailchimp verifies a new webhook with a GET. Answer without revealing anything.
+// Mailchimp validates a new webhook by sending a GET and requiring a 200 — a
+// 405 here makes it report the URL as unverifiable. Answer 200 with an empty
+// body: it confirms the endpoint exists without listing or revealing anything.
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
+    http_response_code(200);
+    exit('');
+}
+
+// Anything that is neither GET nor POST is not part of the contract.
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     http_response_code(405);
-    header('Allow: POST');
+    header('Allow: GET, POST');
     exit('');
 }
 
