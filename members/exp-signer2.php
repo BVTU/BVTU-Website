@@ -72,6 +72,15 @@ $catLabels = [
 <body>
 <div class="portal-wrap">
 
+  <div style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:10px;padding:.85rem 1.1rem;
+              margin-bottom:1.25rem;font-size:.88rem;color:#334155;line-height:1.6;">
+    <strong>Archive &mdash; this is the older single-item expense system.</strong><br>
+    Nothing new arrives here: submissions now create multi-item claims, handled in
+    <a href="exp-claim-review.php" style="color:#1a6b35;font-weight:700;">Expense Claim Review</a>.
+    Past records are kept for reference.
+    <a href="dashboard.php" style="color:#1a6b35;font-weight:700;">&larr; Dashboard</a>
+  </div>
+
   <div class="portal-header">
     <h1>Second Signature Queue</h1>
     <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:center;">

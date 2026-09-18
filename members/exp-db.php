@@ -886,6 +886,17 @@ function expClaimPendingReceipt(int $id): void {
 
 // ── Badge counts ───────────────────────────────────────────────────────────────
 
+/**
+ * Claims awaiting a given signature. Counts exp_batches, the live system —
+ * expPendingForTreasurer()/expPendingForSigner2() below count exp_expenses,
+ * which nothing writes to any more.
+ */
+function expBatchPendingCount(string $status): int {
+    $s = getDB()->prepare("SELECT COUNT(*) FROM exp_batches WHERE status=?");
+    $s->execute([$status]);
+    return (int)$s->fetchColumn();
+}
+
 function expPendingForTreasurer(): int {
     return (int)getDB()->query(
         "SELECT COUNT(*) FROM exp_expenses WHERE status='pending'"

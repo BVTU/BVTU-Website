@@ -102,11 +102,10 @@ function _expClaimBadge(string $status): string {
 
   <div class="page-header">
     <div>
-      <a class="back-link" href="exp-dashboard.php">&#x2190; Expense Dashboard</a>
+      <a class="back-link" href="dashboard.php">&#x2190; Dashboard</a>
       <h1 style="margin-top:.3rem;">Expense Claim Review</h1>
     </div>
     <?php if ($isTreasurer): ?>
-    <a href="exp-payments.php" class="btn btn-outline" style="padding:.45rem .9rem;font-size:.85rem;">Payment Records</a>
     <?php endif; ?>
   </div>
 

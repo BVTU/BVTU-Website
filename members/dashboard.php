@@ -293,28 +293,22 @@ if (execIsAdmin($myEmail) && empty($myExecRoleSlugs)) {
             <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
             Submit New Expense
           </a>
-          <?php if (expIsTreasurer($member['email']) || expIsAdmin($member['email'])): ?>
-          <a href="exp-treasurer.php" class="doc-item">
+          <?php if (expCanReview($member['email'])): ?>
+          <!-- The live review queue for member claims. Replaces Expense Review
+               Queue, Second Signature Queue and Payment Records, which all read
+               exp_expenses — a table nothing writes to since exp-submit.php
+               moved to batch claims. Those pages and their data remain on the
+               server, just no longer presented as live tools. -->
+          <a href="exp-claim-review.php" class="doc-item">
             <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-            Expense Review Queue
-            <?php $pendingN = expPendingForTreasurer(); if ($pendingN > 0): ?>
-            <span class="lock-badge"><?= $pendingN ?> pending</span>
+            Expense Claim Review
+            <?php
+              $claimsPending = expBatchPendingCount('pending')
+                             + expBatchPendingCount('signer1_approved')
+                             + expBatchPendingCount('signer2_approved');
+              if ($claimsPending > 0): ?>
+            <span class="lock-badge"><?= $claimsPending ?> open</span>
             <?php endif; ?>
-          </a>
-          <?php endif; ?>
-          <?php if (expIsEligibleSigner2($member['email']) || expIsAdmin($member['email'])): ?>
-          <a href="exp-signer2.php" class="doc-item">
-            <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            Second Signature Queue
-            <?php $signer2N = expPendingForSigner2(); if ($signer2N > 0): ?>
-            <span class="lock-badge"><?= $signer2N ?> pending</span>
-            <?php endif; ?>
-          </a>
-          <?php endif; ?>
-          <?php if (expIsTreasurer($member['email']) || expIsAdmin($member['email'])): ?>
-          <a href="exp-payments.php" class="doc-item">
-            <svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-            Payment Records
           </a>
           <?php endif; ?>
           <?php if (expIsAdmin($member['email'])): ?>
