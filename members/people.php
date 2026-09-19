@@ -369,7 +369,9 @@ function stateBadge(string $s): string {
   <table>
     <thead>
       <tr>
-        <th><?= sortLink('name','Name',$filters) ?></th>
+        <th><?= sortLink('name','Name',$filters) ?>
+            <span style="font-weight:400;text-transform:none;letter-spacing:0;opacity:.75;">
+              / <?= sortLink('surname','surname',$filters) ?></span></th>
         <th><?= sortLink('email','Email',$filters) ?></th>
         <th><?= sortLink('school','School',$filters) ?></th>
         <th>Portal</th>

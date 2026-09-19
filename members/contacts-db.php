@@ -190,23 +190,42 @@ function contactSearch(array $f, int $page = 1, int $perPage = 50): array {
     $total = (int)$cnt->fetchColumn();
 
     // Whitelisted so the sort parameter can never reach SQL directly
+    // "name" sorts by the name the list actually displays — preferred name if
+    // there is one, otherwise first name, then surname — because sorting by a
+    // column the screen never shows reads as no sorting at all.
+    //
+    // Each sort is a LIST of expressions and the direction is applied to every
+    // one of them. Writing "ORDER BY a, b DESC" instead attaches DESC to b
+    // alone, leaving a ascending: the toggle then appears to do nothing.
+    $blankLast = "CASE WHEN TRIM(CONCAT(COALESCE(NULLIF(TRIM(preferred_name),''), TRIM(first_name)),"
+               . " ' ', TRIM(last_name))) = '' THEN 1 ELSE 0 END";
+
     $sorts = [
-        'name'    => 'last_name, first_name',
-        'email'   => 'email',
-        'school'  => 'school_id',
-        'role'    => 'role',
-        'status'  => 'status',
-        'mc'      => 'mailchimp_status',
-        'updated' => 'updated_at',
+        'name'    => ["COALESCE(NULLIF(TRIM(preferred_name),''), TRIM(first_name))", 'TRIM(last_name)'],
+        'surname' => ['TRIM(last_name)', 'TRIM(first_name)'],
+        'email'   => ['email'],
+        'school'  => ['school_id'],
+        'role'    => ['role'],
+        'status'  => ['status'],
+        'mc'      => ['mailchimp_status'],
+        'updated' => ['updated_at'],
     ];
-    $col = $sorts[$f['sort'] ?? 'name'] ?? $sorts['name'];
-    $dir = (($f['dir'] ?? 'asc') === 'desc') ? 'DESC' : 'ASC';
+    $key  = (string)($f['sort'] ?? 'name');
+    if (!isset($sorts[$key])) $key = 'name';
+    $dir  = (($f['dir'] ?? 'asc') === 'desc') ? 'DESC' : 'ASC';
+
+    $terms = [];
+    // People with no name at all sit at the end either way, rather than
+    // heading the list on one click and trailing it on the next.
+    if ($key === 'name') $terms[] = $blankLast . ' ASC';
+    foreach ($sorts[$key] as $expr) $terms[] = $expr . ' ' . $dir;
+    $order = implode(', ', $terms);
 
     $perPage = max(10, min(200, $perPage));
     $offset  = max(0, ($page - 1) * $perPage);
 
     $s = getDB()->prepare(
-        "SELECT * FROM contacts" . $sql . " ORDER BY {$col} {$dir} LIMIT {$perPage} OFFSET {$offset}"
+        "SELECT * FROM contacts" . $sql . " ORDER BY {$order} LIMIT {$perPage} OFFSET {$offset}"
     );
     $s->execute($params);
     return [$s->fetchAll(), $total];
