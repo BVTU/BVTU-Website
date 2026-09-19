@@ -108,9 +108,9 @@ $totalClicks = array_sum(array_column($links, 'click_count'));
                  padding: .75rem 1rem; font-size: .88rem; color: #991b1b; margin-bottom: 1.25rem; }
     .sec-head { font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em;
                 color: var(--gray-400); margin: 2rem 0 .75rem; }
-    .card { background: #fff; border: 1px solid var(--gray-200); border-radius: 12px;
+    .pcard { background: #fff; border: 1px solid var(--gray-200); border-radius: 12px;
             padding: 1.5rem; margin-bottom: 1.75rem; }
-    .card h2 { font-size: 1rem; font-weight: 800; color: var(--gray-800); margin: 0 0 1rem; }
+    .pcard h2 { font-size: 1rem; font-weight: 800; color: var(--gray-800); margin: 0 0 1rem; }
     .field { margin-bottom: .85rem; }
     .field label { display: block; font-size: .75rem; font-weight: 700; text-transform: uppercase;
                    letter-spacing: .04em; color: var(--gray-500); margin-bottom: .28rem; }
@@ -189,7 +189,7 @@ $totalClicks = array_sum(array_column($links, 'click_count'));
 
   <!-- Create -->
   <div class="sec-head">New Short Link</div>
-  <div class="card">
+  <div class="pcard">
     <h2>Create a link</h2>
     <form method="POST" autocomplete="off">
       <input type="hidden" name="action" value="create">

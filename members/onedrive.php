@@ -56,7 +56,7 @@ $recent = odRecentUploads();
               font-size:.88rem;color:#991b1b;margin:1rem 0; }
     h2.sec { font-size:1rem;font-weight:800;color:var(--gray-800);margin:2rem 0 .75rem;
              padding-bottom:.4rem;border-bottom:2px solid var(--accent); }
-    .card { background:#fff;border:1px solid var(--gray-200);border-radius:12px;padding:1.25rem; }
+    .pcard { background:#fff;border:1px solid var(--gray-200);border-radius:12px;padding:1.25rem; }
     .state { display:flex;gap:1rem;align-items:center;flex-wrap:wrap; }
     .dot { width:10px;height:10px;border-radius:50%;flex-shrink:0; }
     .dot.on { background:#16a34a; } .dot.off { background:#dc2626; } .dot.warn { background:#d97706; }
@@ -89,7 +89,7 @@ $recent = odRecentUploads();
   <?php if ($error):  ?><div class="error-box">&#x26A0; <?= $error ?></div><?php endif; ?>
 
   <h2 class="sec">Connection</h2>
-  <div class="card">
+  <div class="pcard">
     <?php if (!$configured): ?>
       <div class="state">
         <span class="dot off"></span>
@@ -160,7 +160,7 @@ $recent = odRecentUploads();
 
   <?php if ($live): ?>
   <h2 class="sec">Take photos</h2>
-  <div class="card qr-row">
+  <div class="pcard qr-row">
     <img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&color=1a2e1a&bgcolor=ffffff&data=<?= urlencode($mobileUrl) ?>"
          width="160" height="160" alt="QR code to open the camera page on your phone">
     <div class="txt">

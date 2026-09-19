@@ -108,8 +108,8 @@ $yearLabel = $yr . '–' . ($yr + 1);
     .notice { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: .75rem 1rem; font-size: .88rem; color: #166534; margin-bottom: 1.25rem; }
     .error-box { background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: .75rem 1rem; font-size: .88rem; color: #991b1b; margin-bottom: 1.25rem; }
 
-    .card { background: #fff; border: 1px solid var(--gray-200); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
-    .card h2 { font-size: .75rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--gray-500); margin: 0 0 1.1rem; }
+    .pcard { background: #fff; border: 1px solid var(--gray-200); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .pcard h2 { font-size: .75rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--gray-500); margin: 0 0 1.1rem; }
 
     .grant-row { display: flex; gap: .65rem; align-items: center; margin-bottom: .65rem; }
     .grant-row input[type="text"]   { flex: 1; border: 1px solid var(--gray-300); border-radius: 7px; padding: .5rem .7rem; font-size: .9rem; font-family: inherit; }
@@ -156,7 +156,7 @@ $yearLabel = $yr . '–' . ($yr + 1);
   <?php if ($error):  ?><div class="error-box">⚠ <?= $error ?></div><?php endif; ?>
 
   <!-- Edit existing grants -->
-  <div class="card">
+  <div class="pcard">
     <h2>Grant Amounts — <?= $yearLabel ?></h2>
     <?php if ($grants): ?>
     <form method="POST">
@@ -189,7 +189,7 @@ $yearLabel = $yr . '–' . ($yr + 1);
   </div>
 
   <!-- Add new grant -->
-  <div class="card">
+  <div class="pcard">
     <h2>Add a Grant</h2>
     <form method="POST">
       <input type="hidden" name="action" value="add_grant">

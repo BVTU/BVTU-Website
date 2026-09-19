@@ -52,9 +52,9 @@ $row = $row->fetch();
                 padding: .75rem 1rem; font-size: .88rem; color: #166534; margin-bottom: 1.25rem; }
     .error-box{ background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px;
                 padding: .75rem 1rem; font-size: .88rem; color: #991b1b; margin-bottom: 1.25rem; }
-    .card { background: #fff; border: 1px solid var(--gray-200); border-radius: 12px;
+    .pcard { background: #fff; border: 1px solid var(--gray-200); border-radius: 12px;
             padding: 1.5rem; margin-bottom: 1.25rem; }
-    .card h2 { font-size: 1rem; font-weight: 800; color: var(--gray-800); margin: 0 0 1.1rem; }
+    .pcard h2 { font-size: 1rem; font-weight: 800; color: var(--gray-800); margin: 0 0 1.1rem; }
     .field { margin-bottom: .9rem; }
     .field label { display: block; font-size: .75rem; font-weight: 700; text-transform: uppercase;
                    letter-spacing: .04em; color: var(--gray-500); margin-bottom: .28rem; }
@@ -89,7 +89,7 @@ $row = $row->fetch();
   <?php if ($error):  ?><div class="error-box">&#x26A0; <?= htmlspecialchars($error) ?></div><?php endif; ?>
 
   <!-- ── Profile info ────────────────────────────────────────────────────────── -->
-  <div class="card">
+  <div class="pcard">
     <h2>Profile</h2>
     <div class="meta-row">
       <span class="meta-label">Email</span>
@@ -102,7 +102,7 @@ $row = $row->fetch();
   </div>
 
   <!-- ── Update name ──────────────────────────────────────────────────────────── -->
-  <div class="card">
+  <div class="pcard">
     <h2>Update Name</h2>
     <form method="POST">
       <div class="field">
@@ -123,7 +123,7 @@ $row = $row->fetch();
   </div>
 
   <!-- ── Password ────────────────────────────────────────────────────────────── -->
-  <div class="card">
+  <div class="pcard">
     <h2>Password</h2>
     <a href="change-password.php" class="action-link">
       <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>

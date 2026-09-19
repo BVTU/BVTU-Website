@@ -127,10 +127,10 @@ function _signedLine(array $r, string $role1, string $role2): string {
                 margin: 2rem 0 .75rem; padding-bottom: .4rem; border-bottom: 2px solid var(--accent); }
     h2.system .n { font-weight: 600; color: var(--gray-400); font-size: .8rem; margin-left: .4rem; }
 
-    .card { background:#fff;border:1px solid var(--gray-200);border-radius:10px;
+    .pcard { background:#fff;border:1px solid var(--gray-200);border-radius:10px;
             padding:.85rem 1.1rem;margin-bottom:.55rem; }
-    .card.mine { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(26,107,53,.08); }
-    .card.done { opacity: .7; }
+    .pcard.mine { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(26,107,53,.08); }
+    .pcard.done { opacity: .7; }
     .card-top { display:flex;align-items:baseline;gap:.6rem;flex-wrap:wrap; }
     .card-name { font-weight:700;color:var(--gray-800);font-size:.93rem; }
     .card-amt  { margin-left:auto;font-weight:800;color:var(--primary);font-size:1rem;white-space:nowrap; }
@@ -205,7 +205,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
     $items = expBatchGetItems($b['id']);
     $total = expBatchTotal($b['id']);
   ?>
-  <div class="card <?= $mine ? 'mine' : '' ?>">
+  <div class="pcard <?= $mine ? 'mine' : '' ?>">
     <div class="card-top">
       <span class="card-name"><?= htmlspecialchars($b['title'] ?: $b['ref_code']) ?></span>
       <?= _badge($b['status']) ?>
@@ -271,7 +271,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
   <details class="done-list">
     <summary>Completed (<?= count($claimsDone) ?>)</summary>
     <?php foreach ($claimsDone as $b): $total = expBatchTotal($b['id']); ?>
-    <div class="card done">
+    <div class="pcard done">
       <div class="card-top">
         <span class="card-name"><?= htmlspecialchars($b['title'] ?: $b['ref_code']) ?></span>
         <?= _badge($b['status']) ?>
@@ -298,7 +298,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
     $mine   = _lpNeedsMe($v, $isTreasurer, $isVP);
     $vTotal = array_sum(array_map('lpRowTotal', lpGetExpenses($v['id'])));
   ?>
-  <div class="card <?= $mine ? 'mine' : '' ?>">
+  <div class="pcard <?= $mine ? 'mine' : '' ?>">
     <div class="card-top">
       <span class="card-name"><?= htmlspecialchars($v['name']) ?></span>
       <?= _badge($v['status']) ?>
@@ -366,7 +366,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
     <?php foreach ($lpDone as $v):
       $vTotal = array_sum(array_map('lpRowTotal', lpGetExpenses($v['id'])));
     ?>
-    <div class="card done">
+    <div class="pcard done">
       <div class="card-top">
         <span class="card-name"><?= htmlspecialchars($v['name']) ?></span>
         <?= _badge($v['status']) ?>

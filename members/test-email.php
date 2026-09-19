@@ -55,8 +55,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $smtpConfigured) {
     .wrap { max-width: 580px; margin: 3rem auto; padding: 0 1.5rem 4rem; }
     h1 { font-size: 1.3rem; font-weight: 800; color: var(--gray-800); margin-bottom: .3rem; }
     .sub { font-size: .88rem; color: var(--gray-500); margin-bottom: 1.75rem; }
-    .card { background: #fff; border: 1px solid var(--gray-200); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.25rem; }
-    .card h2 { font-size: .75rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--gray-500); margin: 0 0 1rem; }
+    .pcard { background: #fff; border: 1px solid var(--gray-200); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.25rem; }
+    .pcard h2 { font-size: .75rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--gray-500); margin: 0 0 1rem; }
     .field { margin-bottom: 1rem; }
     .field label { display: block; font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--gray-500); margin-bottom: .3rem; }
     .field input { width: 100%; border: 1px solid var(--gray-300); border-radius: 7px; padding: .6rem .8rem; font-size: .95rem; font-family: inherit; box-sizing: border-box; }
@@ -98,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $smtpConfigured) {
   <?php endif; ?>
 
   <!-- SMTP config status -->
-  <div class="card">
+  <div class="pcard">
     <h2>SMTP Configuration</h2>
     <?php if (!$smtpConfigured): ?>
     <div class="warn" style="margin:0;">
@@ -124,7 +124,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $smtpConfigured) {
 
   <!-- Send form -->
   <?php if ($smtpConfigured): ?>
-  <div class="card">
+  <div class="pcard">
     <h2>Send Test</h2>
     <form method="POST">
       <div class="field">
