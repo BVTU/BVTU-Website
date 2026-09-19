@@ -42,6 +42,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Location: people.php?notice=' . urlencode($msg));
         exit;
     }
+    // Archive and restore, one row or many. Archiving hides someone from the
+    // list, exports and sync without deleting anything — the record and its
+    // audit trail stay, and "Show archived" brings them back into view.
+    if ($act === 'archive' || $act === 'restore') {
+        $ids = array_filter(array_map('intval', (array)($_POST['ids'] ?? [])));
+        if (!$ids && !empty($_POST['id'])) $ids = [(int)$_POST['id']];
+        $n = 0;
+        $stillActive = 0;
+        foreach ($ids as $cid) {
+            $c = contactGet($cid);
+            if (!$c) continue;
+            contactArchive($cid, $member['email'], $act === 'archive');
+            $n++;
+            // Archiving is about the contact list; it does not touch a login.
+            // Say so rather than leaving someone to assume access was removed.
+            if ($act === 'archive') {
+                $acct = peopleAccountsByEmail()[$c['email_normalized']] ?? null;
+                if ($acct && (int)$acct['active']) $stillActive++;
+            }
+        }
+        $msg = $n . ($act === 'archive' ? ' archived.' : ' restored.');
+        if ($stillActive) {
+            $msg .= " {$stillActive} can still log in — deactivate the account separately if that is the intent.";
+        }
+        header('Location: people.php?notice=' . urlencode($msg));
+        exit;
+    }
     if ($act === 'import_roster') {
         $n = contactsMigrateFromInvitations($member['email']);
         header('Location: people.php?notice=' . urlencode($n
@@ -366,9 +393,29 @@ function stateBadge(string $s): string {
       <p class="empty">Nobody matches those filters.</p>
     </div>
   <?php else: ?>
+  <div id="bulkbar" style="display:none;background:#fff;border:1px solid var(--gray-200);
+       border-radius:10px;padding:.6rem .9rem;margin-bottom:.6rem;
+       align-items:center;gap:.6rem;flex-wrap:wrap;">
+    <span id="bulkcount" style="font-size:.85rem;font-weight:700;color:var(--gray-700);"></span>
+    <form method="POST" style="display:inline;" onsubmit="return bulkGo(this,'archive');">
+      <?= csrfField() ?>
+      <input type="hidden" name="action" value="archive">
+      <button class="act-btn warn">Archive selected</button>
+    </form>
+    <form method="POST" style="display:inline;" onsubmit="return bulkGo(this,'restore');">
+      <?= csrfField() ?>
+      <input type="hidden" name="action" value="restore">
+      <button class="act-btn">Restore selected</button>
+    </form>
+    <span style="font-size:.78rem;color:var(--gray-400);">
+      Archiving hides someone from this list, exports and Mailchimp sync. Nothing is deleted.
+    </span>
+  </div>
+
   <table>
     <thead>
       <tr>
+        <th style="width:2rem;"><input type="checkbox" onclick="pAll(this)"></th>
         <th><?= sortLink('name','Name',$filters) ?>
             <span style="font-weight:400;text-transform:none;letter-spacing:0;opacity:.75;">
               / <?= sortLink('surname','surname',$filters) ?></span></th>
@@ -388,6 +435,7 @@ function stateBadge(string $s): string {
         $isSelf = $acct && strtolower($acct['email']) === strtolower($member['email']);
       ?>
       <tr class="<?= $c['status'] === 'archived' ? 'arch' : '' ?>">
+        <td><input type="checkbox" class="ppick" value="<?= (int)$c['id'] ?>" onclick="pCount()"></td>
         <td>
           <span class="nm"><?= htmlspecialchars(contactDisplayName($c)) ?></span>
           <?php if ($acct && !(int)$acct['active']): ?>
@@ -417,6 +465,23 @@ function stateBadge(string $s): string {
         <td>
           <div class="rowacts">
             <a class="act-btn" href="contact-edit.php?id=<?= (int)$c['id'] ?>">Edit</a>
+
+            <?php if ($c['status'] === 'archived'): ?>
+              <form method="POST" style="display:inline;">
+                <?= csrfField() ?>
+                <input type="hidden" name="action" value="restore">
+                <input type="hidden" name="id" value="<?= (int)$c['id'] ?>">
+                <button class="act-btn">Restore</button>
+              </form>
+            <?php else: ?>
+              <form method="POST" style="display:inline;"
+                    onsubmit="return confirm('Archive <?= htmlspecialchars(addslashes(contactDisplayName($c))) ?>? They stay in the database and can be restored.');">
+                <?= csrfField() ?>
+                <input type="hidden" name="action" value="archive">
+                <input type="hidden" name="id" value="<?= (int)$c['id'] ?>">
+                <button class="act-btn warn">Archive</button>
+              </form>
+            <?php endif; ?>
 
             <?php if ($inv && in_array($state, ['listed','sent','expired'], true)): ?>
               <form method="POST" action="member-manage.php" style="display:inline;">
@@ -468,6 +533,42 @@ function stateBadge(string $s): string {
   </div>
   <?php endif; ?>
   <?php endif; ?>
+
+  <script>
+  function pBoxes() { return document.querySelectorAll('.ppick'); }
+  function pChecked() { return document.querySelectorAll('.ppick:checked'); }
+
+  function pAll(box) {
+    var l = pBoxes();
+    for (var i = 0; i < l.length; i++) l[i].checked = box.checked;
+    pCount();
+  }
+
+  function pCount() {
+    var n = pChecked().length;
+    var bar = document.getElementById('bulkbar');
+    bar.style.display = n ? 'flex' : 'none';
+    document.getElementById('bulkcount').textContent =
+      n + (n === 1 ? ' person selected' : ' people selected');
+  }
+
+  // Checkboxes live outside these forms, because each row already contains its
+  // own forms and forms cannot nest. Collect the ids at submit instead.
+  function bulkGo(form, what) {
+    var picked = pChecked();
+    if (!picked.length) return false;
+    if (what === 'archive' &&
+        !confirm('Archive ' + picked.length + ' ' + (picked.length === 1 ? 'person' : 'people') +
+                 '? They stay in the database and can be restored.')) return false;
+
+    for (var i = 0; i < picked.length; i++) {
+      var h = document.createElement('input');
+      h.type = 'hidden'; h.name = 'ids[]'; h.value = picked[i].value;
+      form.appendChild(h);
+    }
+    return true;
+  }
+  </script>
 
   <p style="font-size:.8rem;color:var(--gray-400);margin-top:2rem;text-align:center;">
     Account and invite actions are handled by the original
