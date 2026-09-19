@@ -197,8 +197,23 @@ $webhookUrl = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'bvtu.ca') . '/members/mail
   </p>
   <?php endif; ?>
 
-  <?php if ($connOk && !$missingFields): ?>
   <h2 class="sec">Sync</h2>
+  <?php if (!$connOk): ?>
+  <div class="card" style="border-color:#fde68a;background:#fffbeb;">
+    <p style="font-size:.88rem;color:#92400e;margin:0;line-height:1.7;">
+      Syncing is unavailable until the connection above works. Nothing is lost &mdash;
+      contact edits are queued and the first sync will send them.
+    </p>
+  </div>
+  <?php elseif ($missingFields): ?>
+  <div class="card" style="border-color:#fde68a;background:#fffbeb;">
+    <p style="font-size:.88rem;color:#92400e;margin:0;line-height:1.7;">
+      Syncing is unavailable until the merge fields above exist &mdash; without them
+      Mailchimp rejects every contact, so the button is hidden rather than letting you
+      start a run that would fail on every contact. Add them, then reload this page.
+    </p>
+  </div>
+  <?php else: ?>
   <div class="card">
     <p style="font-size:.88rem;color:var(--gray-700);margin:0 0 .9rem;line-height:1.7;">
       Sends every contact's name, school and role to Mailchimp and reads back their
