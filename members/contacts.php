@@ -36,11 +36,15 @@ if (($_POST['action'] ?? '') === 'import_roster') {
 if (($_POST['action'] ?? '') === 'reconcile_accounts') {
     csrfCheck();
     $added  = contactsMigrateFromMembers($member['email']);
-    $linked = contactsLinkMembers();
+    $link   = contactsLinkMembers();
+    $linked = $link['linked'];
     $msg = $added
         ? "Added {$added} " . ($added === 1 ? 'person' : 'people') . " who had a login but no contact record."
         : 'Every login account already had a contact record.';
     if ($linked) $msg .= " Linked {$linked} to their account.";
+    if ($link['cleared']) $msg .= " Cleared {$link['cleared']} link" .
+                                  ($link['cleared'] === 1 ? '' : 's') .
+                                  " whose addresses no longer match.";
     header('Location: contacts.php?notice=' . urlencode($msg));
     exit;
 }

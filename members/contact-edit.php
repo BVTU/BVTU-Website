@@ -110,7 +110,7 @@ if ($contact) {
               font-size:.88rem;color:#166534;margin:1rem 0; }
     .error-box { background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:.7rem 1rem;
               font-size:.88rem;color:#991b1b;margin:1rem 0; }
-    .card { background:#fff;border:1px solid var(--gray-200);border-radius:12px;padding:1.5rem;margin-bottom:1.25rem; }
+    .pcard { background:#fff;border:1px solid var(--gray-200);border-radius:12px;padding:1.5rem;margin-bottom:1.25rem; }
     h2.sec { font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.07em;
              color:var(--gray-400);margin:0 0 .9rem; }
     .row { display:grid;grid-template-columns:1fr 1fr;gap:1rem; }
@@ -150,7 +150,7 @@ if ($contact) {
     <?= csrfField() ?>
     <input type="hidden" name="action" value="save">
 
-    <div class="card">
+    <div class="pcard">
       <h2 class="sec">Person</h2>
       <div class="row">
         <div class="field"><label>First name</label>
@@ -172,7 +172,7 @@ if ($contact) {
         <input name="phone" value="<?= htmlspecialchars($form['phone']) ?>"></div>
     </div>
 
-    <div class="card">
+    <div class="pcard">
       <h2 class="sec">Union</h2>
       <div class="row">
         <div class="field"><label>School</label>
@@ -215,7 +215,7 @@ if ($contact) {
   </form>
 
   <?php if ($contact): ?>
-  <div class="card" style="margin-top:1.5rem;">
+  <div class="pcard" style="margin-top:1.5rem;">
     <h2 class="sec">Mailchimp</h2>
     <div class="mc-box">
       <div class="mc-row">
@@ -245,7 +245,7 @@ if ($contact) {
     </div>
   </div>
 
-  <div class="card">
+  <div class="pcard">
     <h2 class="sec">History</h2>
     <?php if (!$history): ?>
       <p style="font-size:.85rem;color:var(--gray-400);font-style:italic;margin:0;">No changes recorded yet.</p>

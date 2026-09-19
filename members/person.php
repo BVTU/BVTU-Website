@@ -89,9 +89,9 @@ function when($v, string $fmt = 'M j, Y'): string {
 
     .cols { display:flex;gap:1.2rem;align-items:flex-start;flex-wrap:wrap; }
     .col { flex:1;min-width:290px; }
-    .card { background:#fff;border:1px solid var(--gray-200);border-radius:12px;
+    .pcard { background:#fff;border:1px solid var(--gray-200);border-radius:12px;
             padding:1.1rem 1.25rem;margin-bottom:1rem; }
-    .card h2 { font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;
+    .pcard h2 { font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;
                color:var(--gray-500);margin:0 0 .75rem; }
     .kv { display:flex;justify-content:space-between;gap:1rem;font-size:.87rem;
           padding:.35rem 0;border-bottom:1px solid var(--gray-100); }
@@ -172,7 +172,7 @@ function when($v, string $fmt = 'M j, Y'): string {
   <div class="cols">
     <div class="col">
 
-      <div class="card">
+      <div class="pcard">
         <h2>Portal access</h2>
         <?php if ($acct): ?>
           <div class="kv"><span class="k">Account</span>
@@ -215,7 +215,7 @@ function when($v, string $fmt = 'M j, Y'): string {
         <?php endif; ?>
       </div>
 
-      <div class="card">
+      <div class="pcard">
         <h2>Executive roles</h2>
         <?php if (!$roles): ?>
           <p class="empty">Holds no executive position.</p>
@@ -234,7 +234,7 @@ function when($v, string $fmt = 'M j, Y'): string {
         <?php endif; ?>
       </div>
 
-      <div class="card">
+      <div class="pcard">
         <h2>Mailchimp</h2>
         <div class="kv"><span class="k">Status</span>
           <span class="v"><span class="badge b-<?= pv($mcTone) ?>"><?= pv($mcLabel) ?></span></span></div>
@@ -252,7 +252,7 @@ function when($v, string $fmt = 'M j, Y'): string {
     </div>
     <div class="col">
 
-      <div class="card">
+      <div class="pcard">
         <h2>Expense claims</h2>
         <?php if (!$claims): ?>
           <p class="empty">No claims on record.</p>
@@ -277,7 +277,7 @@ function when($v, string $fmt = 'M j, Y'): string {
       </div>
 
       <?php if ($vouchers): ?>
-      <div class="card">
+      <div class="pcard">
         <h2>President's expense vouchers</h2>
         <div class="rowlist">
           <?php foreach ($vouchers as $v): ?>
@@ -293,7 +293,7 @@ function when($v, string $fmt = 'M j, Y'): string {
       </div>
       <?php endif; ?>
 
-      <div class="card">
+      <div class="pcard">
         <h2>Timeline</h2>
         <?php if (!$timeline): ?>
           <p class="empty">Nothing recorded yet.</p>

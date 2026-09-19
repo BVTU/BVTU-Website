@@ -221,7 +221,9 @@ function contactSearch(array $f, int $page = 1, int $perPage = 50): array {
     foreach ($sorts[$key] as $expr) $terms[] = $expr . ' ' . $dir;
     $order = implode(', ', $terms);
 
-    $perPage = max(10, min(200, $perPage));
+    // Ceiling is high enough for an export to ask for everything. List pages
+    // pass their own page size, so this does not make a screen unbounded.
+    $perPage = max(10, min(100000, $perPage));
     $offset  = max(0, ($page - 1) * $perPage);
 
     $s = getDB()->prepare(
@@ -351,6 +353,9 @@ function contactApplyMailchimpStatus(int $id, string $status, ?string $mcId = nu
 
 function contactMarkSyncFailed(int $id, string $error, string $actor = 'sync'): void {
     contactsEnsureTables();
+    // No timestamp: a failure taught us nothing, and mailchimp_last_synced_at
+    // means "when we last learned their real status". The sync runner walks an
+    // id cursor, so it advances past a failing contact without needing one.
     getDB()->prepare(
         "UPDATE contacts SET mailchimp_sync_status='error', mailchimp_sync_error=? WHERE id=?"
     )->execute([substr($error, 0, 500), $id]);
@@ -468,18 +473,24 @@ function contactSplitName(string $full): array {
 
 /**
  * Point each contact at its login account, matching on the normalised address.
- * Safe to re-run: it only ever sets the link, and clears one that has gone
- * stale because the account was deleted. Returns the number of rows changed.
+ * Safe to re-run: it only ever sets the link, and clears one whose addresses
+ * no longer match — because the account was deleted, or because one side's
+ * email was changed and the other's was not.
+ *
+ * Returns ['linked' => n, 'cleared' => n] rather than one total. Those are
+ * opposite outcomes, and a caller reporting "linked 3" when two of them were
+ * stale links being removed would be telling the admin the reverse of what
+ * happened.
  */
-function contactsLinkMembers(): int {
+function contactsLinkMembers(): array {
     contactsEnsureTables();
     $db = getDB();
-    $changed = 0;
+    $linked = 0; $cleared = 0;
 
     try {
         $accounts = $db->query("SELECT id, email FROM members")->fetchAll();
     } catch (Exception $e) {
-        return 0;   // no members table — nothing to link
+        return ['linked' => 0, 'cleared' => 0];   // no members table
     }
 
     $byEmail = [];
@@ -490,14 +501,18 @@ function contactsLinkMembers(): int {
     $rows = $db->query("SELECT id, email_normalized, member_id FROM contacts")->fetchAll();
     $set  = $db->prepare("UPDATE contacts SET member_id=? WHERE id=?");
     foreach ($rows as $r) {
-        $want = $byEmail[$r['email_normalized']] ?? null;
+        // Normalised on both sides. A legacy row whose stored value was never
+        // lower-cased would otherwise be counted as unlinked by
+        // contactsAccountGap() but never matched here, leaving a "Link them"
+        // prompt that does nothing however often it is pressed.
+        $want = $byEmail[contactNormalizeEmail($r['email_normalized'])] ?? null;
         $have = $r['member_id'] !== null ? (int)$r['member_id'] : null;
         if ($want !== $have) {
             $set->execute([$want, (int)$r['id']]);
-            $changed++;
+            if ($want === null) { $cleared++; } else { $linked++; }
         }
     }
-    return $changed;
+    return ['linked' => $linked, 'cleared' => $cleared];
 }
 
 /**
@@ -556,27 +571,59 @@ function contactsAccountGap(): array {
     // "Illegal mix of collations" — the same failure that broke the email log.
     // Two small lists; the set difference is cheaper than the risk.
     try {
-        $memberEmails  = $db->query("SELECT email FROM members")->fetchAll(PDO::FETCH_COLUMN);
-        $contactEmails = $db->query("SELECT email_normalized FROM contacts")->fetchAll(PDO::FETCH_COLUMN);
+        $accountRows = $db->query("SELECT id, email FROM members")->fetchAll();
+        $contactRows = $db->query("SELECT email_normalized, member_id FROM contacts")->fetchAll();
     } catch (Exception $e) {
         // Report the failure rather than reading as "nothing to reconcile".
-        return ['accounts' => 0, 'accounts_nocontact' => 0,
-                'contacts_withaccount' => 0, 'error' => $e->getMessage()];
+        return ['accounts' => 0, 'accounts_nocontact' => 0, 'contacts_withaccount' => 0,
+                'unlinked' => 0, 'error' => $e->getMessage()];
     }
 
-    $have = array_flip(array_map('contactNormalizeEmail', $contactEmails));
+    $have = [];
+    foreach ($contactRows as $r) $have[contactNormalizeEmail($r['email_normalized'])] = $r;
+
+    // id => address, so a link can be judged against the account it points at
+    // rather than merely against whether that account still exists.
+    $accountEmail = [];
+    foreach ($accountRows as $a) $accountEmail[(int)$a['id']] = contactNormalizeEmail($a['email']);
+
     $orphans = 0;
-    foreach ($memberEmails as $e) {
-        if (!isset($have[contactNormalizeEmail((string)$e)])) $orphans++;
+    foreach ($accountEmail as $e) {
+        if (!isset($have[$e])) $orphans++;
     }
 
-    $accounts = count($memberEmails);
+    // Counted directly rather than inferred from the difference between two
+    // totals: duplicate addresses among accounts mean those totals can never
+    // reach parity, which would leave a "Link them" prompt on screen forever
+    // with nothing left for it to do.
+    $accountKeys = array_flip(array_values($accountEmail));
+
+    $unlinked = 0;
+    // Over every row, not over $have: that map keeps one row per address, so a
+    // duplicate pair — one linked, one not — would hide the unlinked one and
+    // the prompt to fix it would never appear.
+    // "Needs work" is any row whose link disagrees with the addresses: missing
+    // when an account matches, or present while pointing at an account that is
+    // gone OR whose address is no longer this person's. member_id is derived
+    // from the address, so a link that contradicts it is wrong by definition.
+    foreach ($contactRows as $r) {
+        $key = contactNormalizeEmail($r['email_normalized']);
+        if ($r['member_id'] === null) {
+            if (isset($accountKeys[$key])) $unlinked++;
+        } else {
+            $pointsAt = $accountEmail[(int)$r['member_id']] ?? null;
+            if ($pointsAt === null || $pointsAt !== $key) $unlinked++;
+        }
+    }
+
+    $accounts = count($accountEmail);
     $linked   = (int)$db->query("SELECT COUNT(*) FROM contacts WHERE member_id IS NOT NULL")->fetchColumn();
 
     return [
         'accounts'             => $accounts,
         'accounts_nocontact'   => $orphans,
         'contacts_withaccount' => $linked,
+        'unlinked'             => $unlinked,
         'error'                => '',
     ];
 }
@@ -627,6 +674,14 @@ function contactMcLabel(array $c): array {
     $status  = $c['mailchimp_status'] ?? 'unknown';
     $checked = $c['mailchimp_last_synced_at'] ?? null;
 
+    // Only when we have nothing better to say. A push that failed while their
+    // status was already verified does not make that status unknown — and the
+    // failure itself is surfaced separately on the list and on the record.
+    if ($status === 'unknown' && !$checked && ($c['mailchimp_sync_status'] ?? '') === 'error') {
+        return ['Sync failed', 'amber',
+                trim((string)(($c['mailchimp_sync_error'] ?? '') ?: 'The last attempt to reach Mailchimp failed.'))];
+    }
+
     if ($status === 'unknown') {
         if (!$checked) {
             return ['Not checked', 'grey', 'This record has never been compared with Mailchimp.'];
@@ -647,3 +702,4 @@ function contactMcLabel(array $c): array {
 
     return [$label, $tone, $detail];
 }
+

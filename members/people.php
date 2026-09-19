@@ -34,11 +34,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $act = $_POST['action'] ?? '';
     if ($act === 'reconcile_accounts') {
         $added  = contactsMigrateFromMembers($member['email']);
-        $linked = contactsLinkMembers();
+        $link = contactsLinkMembers();
         $msg = $added
             ? "Added {$added} " . ($added === 1 ? 'person' : 'people') . " who had a login but no contact record."
             : 'Every login account already had a contact record.';
-        if ($linked) $msg .= " Linked {$linked} to their account.";
+        if ($link['linked'])  $msg .= " Linked {$link['linked']} to their account.";
+        if ($link['cleared']) $msg .= " Cleared {$link['cleared']} link" .
+                                      ($link['cleared'] === 1 ? '' : 's') .
+                                      " whose addresses no longer match.";
         header('Location: people.php?notice=' . urlencode($msg));
         exit;
     }
@@ -67,6 +70,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $msg .= " {$stillActive} can still log in — deactivate the account separately if that is the intent.";
         }
         header('Location: people.php?notice=' . urlencode($msg));
+        exit;
+    }
+    // Linking only. reconcile_accounts also CREATES a contact for every account
+    // that lacks one, so reusing it here would turn "link 3 records" into
+    // "create 40 people and push them to Mailchimp".
+    if ($act === 'link_accounts') {
+        $link  = contactsLinkMembers();
+        $parts = [];
+        if ($link['linked'])  $parts[] = "linked {$link['linked']} to their login account";
+        if ($link['cleared']) $parts[] = "cleared {$link['cleared']} link" .
+                                         ($link['cleared'] === 1 ? '' : 's') .
+                                         ' whose addresses no longer match';
+        header('Location: people.php?notice=' . urlencode(
+            $parts ? ucfirst(implode(', ', $parts)) . '.' : 'Nothing left to link.'));
         exit;
     }
     if ($act === 'import_roster') {
@@ -393,7 +410,21 @@ function stateBadge(string $s): string {
     Showing <?= count($rows) ?> of <?= (int)$total ?> matching
     &middot; <?= (int)$counts['total'] ?> people<?php
       if ($counts['archived']): ?>, <?= (int)$counts['archived'] ?> archived<?php endif; ?>
-    &middot; <?= (int)$gap['contacts_withaccount'] ?> of <?= (int)$gap['accounts'] ?> login accounts linked
+    <?php if (empty($gap['error']) && $gap['accounts'] > 0): ?>
+      &middot; <?= (int)$gap['contacts_withaccount'] ?> of <?= (int)$gap['accounts'] ?> login accounts linked
+      <?php if (!empty($gap['unlinked'])): ?>
+        <?php // Repairs the link in both directions: adds a missing one, and
+              // clears one whose addresses no longer match. member_id is
+              // derived from the address, so a link that disagrees with it is
+              // wrong by definition. Otherwise this only ran from the reconcile
+              // banner, which appears only when someone has no record at all. ?>
+        <form method="POST" style="display:inline;">
+          <?= csrfField() ?>
+          <input type="hidden" name="action" value="link_accounts">
+          <button class="act-btn" style="padding:.1rem .45rem;font-size:.74rem;">Fix links</button>
+        </form>
+      <?php endif; ?>
+    <?php endif; ?>
   </div>
 
   <?php if (!$rows): ?>
@@ -466,8 +497,11 @@ function stateBadge(string $s): string {
           <?php endif; ?>
         </td>
         <td>
+          <?php list($mcL) = contactMcLabel($c); ?>
           <?= mcBadge($c) ?>
-          <?php if ($c['mailchimp_sync_status'] === 'error'): ?>
+          <?php // Only when the badge is saying something else, or the cell
+                // would read "Sync failed" twice. ?>
+          <?php if ($c['mailchimp_sync_status'] === 'error' && $mcL !== 'Sync failed'): ?>
             <span class="syncerr">&#9888; sync failed</span>
           <?php endif; ?>
         </td>

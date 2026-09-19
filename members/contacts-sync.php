@@ -62,7 +62,7 @@ $webhookUrl = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'bvtu.ca') . '/members/mail
               font-size:.88rem;color:#991b1b;margin:1rem 0; }
     h2.sec { font-size:1rem;font-weight:800;color:var(--gray-800);margin:2rem 0 .75rem;
              padding-bottom:.4rem;border-bottom:2px solid var(--accent); }
-    .card { background:#fff;border:1px solid var(--gray-200);border-radius:12px;padding:1.25rem; }
+    .pcard { background:#fff;border:1px solid var(--gray-200);border-radius:12px;padding:1.25rem; }
     .state { display:flex;gap:1rem;align-items:center;flex-wrap:wrap; }
     .dot { width:10px;height:10px;border-radius:50%;flex-shrink:0; }
     .dot.on{background:#16a34a;} .dot.off{background:#dc2626;} .dot.warn{background:#d97706;}
@@ -95,7 +95,7 @@ $webhookUrl = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'bvtu.ca') . '/members/mail
   <?php if ($error):  ?><div class="error-box">&#x26A0; <?= $error ?></div><?php endif; ?>
 
   <h2 class="sec">Connection</h2>
-  <div class="card">
+  <div class="pcard">
     <?php if (!$configured): ?>
       <div class="state">
         <span class="dot off"></span>
@@ -128,7 +128,7 @@ $webhookUrl = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'bvtu.ca') . '/members/mail
 
   <?php if ($missingFields): ?>
   <h2 class="sec">Merge fields needed</h2>
-  <div class="card" style="border-color:#fde68a;background:#fffbeb;">
+  <div class="pcard" style="border-color:#fde68a;background:#fffbeb;">
     <p style="font-size:.88rem;color:#92400e;margin:0 0 .6rem;line-height:1.7;">
       Mailchimp rejects any update naming a merge field the audience doesn't have, so
       <strong>every sync will fail</strong> until these exist. Add them under
@@ -149,14 +149,14 @@ $webhookUrl = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'bvtu.ca') . '/members/mail
     </p>
   </div>
   <?php elseif ($connOk): ?>
-  <div class="card" style="border-color:#bbf7d0;background:#f0fdf4;margin-top:.6rem;">
+  <div class="pcard" style="border-color:#bbf7d0;background:#f0fdf4;margin-top:.6rem;">
     <span style="font-size:.87rem;color:#166534;">&#x2713; SCHOOL and ROLE merge fields are present.</span>
   </div>
   <?php endif; ?>
 
   <?php if ($configured): ?>
   <h2 class="sec">Webhook</h2>
-  <div class="card">
+  <div class="pcard">
     <p style="font-size:.87rem;color:var(--gray-700);margin:0 0 .5rem;line-height:1.7;">
       Add this in Mailchimp under <em>Audience &rarr; Settings &rarr; Webhooks</em>, replacing
       <code>YOUR_SECRET</code> with the <code>MC_WEBHOOK_SECRET</code> from config.php:
@@ -199,14 +199,14 @@ $webhookUrl = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'bvtu.ca') . '/members/mail
 
   <h2 class="sec">Sync</h2>
   <?php if (!$connOk): ?>
-  <div class="card" style="border-color:#fde68a;background:#fffbeb;">
+  <div class="pcard" style="border-color:#fde68a;background:#fffbeb;">
     <p style="font-size:.88rem;color:#92400e;margin:0;line-height:1.7;">
       Syncing is unavailable until the connection above works. Nothing is lost &mdash;
       contact edits are queued and the first sync will send them.
     </p>
   </div>
   <?php elseif ($missingFields): ?>
-  <div class="card" style="border-color:#fde68a;background:#fffbeb;">
+  <div class="pcard" style="border-color:#fde68a;background:#fffbeb;">
     <p style="font-size:.88rem;color:#92400e;margin:0;line-height:1.7;">
       Syncing is unavailable until the merge fields above exist &mdash; without them
       Mailchimp rejects every contact, so the button is hidden rather than letting you
@@ -214,7 +214,7 @@ $webhookUrl = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'bvtu.ca') . '/members/mail
     </p>
   </div>
   <?php else: ?>
-  <div class="card">
+  <div class="pcard">
     <p style="font-size:.88rem;color:var(--gray-700);margin:0 0 .9rem;line-height:1.7;">
       Sends every contact's name, school and role to Mailchimp and reads back their
       subscription status. Runs in batches because Mailchimp limits how fast we may
@@ -243,6 +243,12 @@ $webhookUrl = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'bvtu.ca') . '/members/mail
   <script>
   var CSRF = <?= json_encode(csrfToken()) ?>;
 
+  // Kept outside runSync so an interrupted run can genuinely be carried on.
+  // As locals these reset to zero on every press, which made the "press Sync
+  // contacts to carry on" message false: a connection that drops every few
+  // batches would re-do the same prefix forever and never reach the end.
+  var syncState = { dir: null, after: 0, since: '', done: 0, failed: 0 };
+
   function runSync(direction) {
     var btn  = document.getElementById('syncBtn');
     var pull = document.getElementById('pullBtn');
@@ -252,15 +258,22 @@ $webhookUrl = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'bvtu.ca') . '/members/mail
 
     btn.disabled = pull.disabled = true;
     bar.style.display = 'block';
+    // Clear the red left by whatever interrupted the previous attempt, or a
+    // healthy resume reads as a continuing failure.
+    msg.style.color = '';
 
-    var since = '';          // set by the first response, fixing the run's scope
-    var done = 0, failed = 0, total = 0;
+    // A different direction is a different run, so start it from the top.
+    if (syncState.dir !== direction) {
+      syncState = { dir: direction, after: 0, since: '', done: 0, failed: 0 };
+    }
+    var total = 0;
 
     function step() {
       var fd = new FormData();
       fd.append('csrf_token', CSRF);
       fd.append('direction', direction);
-      if (since) fd.append('since', since);
+      if (syncState.since) fd.append('since', syncState.since);
+      fd.append('after', syncState.after);
 
       fetch('contacts-sync-run.php', { method: 'POST', body: fd })
         .then(function (r) { return r.json(); })
@@ -271,18 +284,29 @@ $webhookUrl = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'bvtu.ca') . '/members/mail
             btn.disabled = pull.disabled = false;
             return;
           }
-          since  = d.since;
-          done   += d.processed;
-          failed += d.failed;
-          if (!total) total = done + d.remaining;
+          syncState.since   = d.since;
+          syncState.after    = d.after;
+          syncState.done    += d.processed;
+          syncState.failed  += d.failed;
+          var done   = syncState.done;
+          var failed = syncState.failed;
+          // Recomputed each batch from the run's own totals, which persist
+          // across an interruption, so an uninterrupted run counts exactly.
+          // A resume after a batch was lost in flight does not: its successes
+          // are skipped by the `since` predicate and never counted, and its
+          // failures carry no timestamp, so they sit ahead of the stale cursor
+          // and are attempted — and counted — a second time. The contacts
+          // themselves end up correct; only this tally is approximate.
+          total = done + failed + d.remaining;
 
           var pct = total ? Math.round((done + failed) / total * 100) : 100;
-          fill.style.width = pct + '%';
+          fill.style.width = Math.min(100, pct) + '%';
           msg.textContent = d.finished
             ? 'Finished — ' + done + ' synced' + (failed ? ', ' + failed + ' failed' : '') + '.'
-            : done + ' of ' + total + '\u2026';
+            : (done + failed) + ' of ' + total + '\u2026';
 
           if (d.finished) {
+            syncState = { dir: null, after: 0, since: '', done: 0, failed: 0 };
             msg.style.color = failed ? '#b45309' : '#166534';
             btn.disabled = pull.disabled = false;
             // Reload so the failure list and counts reflect the run
@@ -292,7 +316,9 @@ $webhookUrl = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'bvtu.ca') . '/members/mail
           }
         })
         .catch(function () {
-          msg.textContent = 'Connection lost — press Sync contacts to carry on.';
+          msg.textContent = 'Connection lost — press ' +
+            (direction === 'pull' ? 'Check statuses only' : 'Sync contacts') +
+            ' to carry on.';
           msg.style.color = '#991b1b';
           btn.disabled = pull.disabled = false;
         });

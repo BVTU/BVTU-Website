@@ -96,6 +96,10 @@ if (($_POST['action'] ?? '') === 'import_mc' && !$err) {
             'email'      => $e,
             'first_name' => $first,
             'last_name'  => $last,
+            // contactCreate writes every editable column, so an omitted status
+            // becomes '' rather than the column default — invisible to the
+            // Status filter and blank in the edit form.
+            'status'     => 'active',
         ], $member['email']);
 
         if (!empty($res['id'])) {
@@ -152,7 +156,7 @@ if ($apply && !$err) {
               font-size:.88rem;color:#166534;margin:1rem 0; }
     .error-box { background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:.7rem 1rem;
               font-size:.88rem;color:#991b1b;margin:1rem 0; }
-    .card { background:#fff;border:1px solid var(--gray-200);border-radius:12px;padding:1.25rem;margin-bottom:1rem; }
+    .pcard { background:#fff;border:1px solid var(--gray-200);border-radius:12px;padding:1.25rem;margin-bottom:1rem; }
     h2.sec { font-size:1rem;font-weight:800;color:var(--gray-800);margin:1.8rem 0 .6rem;
              padding-bottom:.4rem;border-bottom:2px solid var(--accent); }
     .tiles { display:flex;gap:.6rem;flex-wrap:wrap;margin:1rem 0; }
@@ -187,7 +191,7 @@ if ($apply && !$err) {
   <?php if ($err): ?><div class="error-box">&#x26A0; <?= htmlspecialchars($err) ?></div><?php endif; ?>
 
   <?php if (!$ran): ?>
-  <div class="card">
+  <div class="pcard">
     <p class="muted" style="margin:0 0 .9rem;">
       Reads your whole Mailchimp audience and compares it with the portal, name by
       name. Nothing is written &mdash; you see the differences first and decide

@@ -145,7 +145,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     .back-link { font-size:.85rem;color:var(--primary);text-decoration:none; }
     .error-box { background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:.7rem 1rem;
               font-size:.88rem;color:#991b1b;margin:1rem 0; }
-    .card { background:#fff;border:1px solid var(--gray-200);border-radius:12px;padding:1.5rem;margin-bottom:1.25rem; }
+    .pcard { background:#fff;border:1px solid var(--gray-200);border-radius:12px;padding:1.5rem;margin-bottom:1.25rem; }
     .field label { display:block;font-size:.74rem;font-weight:700;text-transform:uppercase;
                    letter-spacing:.04em;color:var(--gray-500);margin-bottom:.25rem; }
     .hint { font-size:.8rem;color:var(--gray-500);line-height:1.6; }
@@ -175,14 +175,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <div class="wrap">
 
   <div class="page-header">
-    <a class="back-link" href="contacts.php">&#x2190; Contacts</a>
+    <a class="back-link" href="people.php">&#x2190; People</a>
     <h1>Import contacts</h1>
   </div>
 
   <?php if ($error): ?><div class="error-box">&#x26A0; <?= htmlspecialchars($error) ?></div><?php endif; ?>
 
   <?php if (!$preview): ?>
-  <div class="card">
+  <div class="pcard">
     <form method="POST" enctype="multipart/form-data">
       <?= csrfField() ?>
       <input type="hidden" name="action" value="preview">
