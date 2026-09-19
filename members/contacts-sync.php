@@ -87,7 +87,7 @@ $webhookUrl = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'bvtu.ca') . '/members/mail
 <div class="wrap">
 
   <div class="page-header">
-    <a class="back-link" href="contacts.php">&#x2190; Contacts</a>
+    <a class="back-link" href="people.php">&#x2190; People</a>
     <h1>Mailchimp</h1>
   </div>
 

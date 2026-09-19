@@ -165,6 +165,20 @@ function contactSearch(array $f, int $page = 1, int $perPage = 50): array {
     if (!empty($f['mc']))        { $where[] = "mailchimp_status = ?"; $params[] = $f['mc']; }
     if (empty($f['include_archived'])) { $where[] = "status <> 'archived'"; }
 
+    // Restrict to a set of addresses worked out in PHP (account and invite
+    // filters). Done this way because `members` and `member_invitations` can
+    // carry a different collation from `contacts`, so joining them in SQL
+    // risks "Illegal mix of collations". An explicit empty set means no match,
+    // which is different from no filter at all.
+    if (isset($f['email_whitelist'])) {
+        $list = array_values(array_unique(array_map('contactNormalizeEmail', (array)$f['email_whitelist'])));
+        if (!$list) {
+            return [[], 0];
+        }
+        $where[] = 'email_normalized IN (' . implode(',', array_fill(0, count($list), '?')) . ')';
+        foreach ($list as $e) $params[] = $e;
+    }
+
     $sql = $where ? ' WHERE ' . implode(' AND ', $where) : '';
 
     $cnt = getDB()->prepare("SELECT COUNT(*) FROM contacts" . $sql);

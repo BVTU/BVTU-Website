@@ -20,7 +20,7 @@ contactsEnsureTables();
 
 $id      = (int)($_GET['id'] ?? 0);
 $contact = $id ? contactGet($id) : null;
-if ($id && !$contact) { header('Location: contacts.php?error=' . urlencode('Contact not found.')); exit; }
+if ($id && !$contact) { header('Location: people.php?error=' . urlencode('Contact not found.')); exit; }
 
 $error  = '';
 $notice = '';
@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'archive' && $contact) {
         contactArchive($id, $member['email'], true);
-        header('Location: contacts.php?notice=' . urlencode('Contact archived.'));
+        header('Location: people.php?notice=' . urlencode('Contact archived.'));
         exit;
     }
     if ($action === 'restore' && $contact) {
@@ -139,7 +139,7 @@ if ($contact) {
 <div class="wrap">
 
   <div class="page-header">
-    <a class="back-link" href="contacts.php">&#x2190; Contacts</a>
+    <a class="back-link" href="people.php">&#x2190; People</a>
     <h1><?= $contact ? htmlspecialchars(contactDisplayName($contact)) : 'Add contact' ?></h1>
   </div>
 
@@ -210,7 +210,7 @@ if ($contact) {
     <div class="bar">
       <button class="btn btn-primary" style="padding:.55rem 1.2rem;font-size:.92rem;">
         <?= $contact ? 'Save changes' : 'Add contact' ?></button>
-      <a class="act-btn" href="contacts.php">Cancel</a>
+      <a class="act-btn" href="people.php">Cancel</a>
     </div>
   </form>
 

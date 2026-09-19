@@ -122,7 +122,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             unset($_SESSION['contact_import']);
             contactAudit(null, 'import', $member['email'], '', "{$added} added, {$updated} updated");
-            header('Location: contacts.php?notice=' . urlencode(
+            header('Location: people.php?notice=' . urlencode(
                 "Import finished — {$added} added, {$updated} updated. Nobody was subscribed to email."));
             exit;
         }

@@ -24,6 +24,8 @@ $db     = getDB();
 
 // ── POST handlers ─────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Every form on this page and on people.php carries csrfField().
+    csrfCheck();
     $action = $_POST['action'] ?? '';
 
     // Add new member
@@ -302,6 +304,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $notice = 'Removed from the invitation list.';
     }
 
+    // These handlers are the single implementation of every account and invite
+    // action; people.php posts here rather than keeping a second copy.
+    // Whitelisted so the parameter can never become an open redirect.
+    $back = $_POST['redirect'] ?? '';
+    if ($back !== '' && preg_match('#^people\.php(\?[A-Za-z0-9_=&%.+-]*)?$#', $back)) {
+        $sep = strpos($back, '?') === false ? '?' : '&';
+        $qs  = $notice ? 'notice=' . urlencode($notice) : ($error ? 'error=' . urlencode($error) : '');
+        header('Location: ' . $back . ($qs ? $sep . $qs : ''));
+        exit;
+    }
+
     $tab = in_array($action, ['send_invites','send_all_invites','resend_invite','revoke_invite',
                               'send_selected','revoke_selected']) ? '&tab=invitations' : '';
     header('Location: member-manage.php' . ($notice ? '?notice=' . urlencode($notice) . $tab : ($error ? '?error=' . urlencode($error) . $tab : ($tab ? '?'.ltrim($tab,'&') : ''))));
@@ -501,6 +514,7 @@ foreach ($invites as $i) $invCounts[$i['invite_status']]++;
       The member will be asked to set their own password the first time they log in.
     </p>
     <form method="POST" autocomplete="off">
+        <?= csrfField() ?>
       <input type="hidden" name="action" value="add_member">
       <div class="field-row">
         <div class="field">
@@ -586,6 +600,7 @@ foreach ($invites as $i) $invCounts[$i['invite_status']]++;
               <?php if ($isActive): ?>
               <form method="POST" style="display:inline;"
                     onsubmit="return confirm('Deactivate <?= htmlspecialchars(addslashes($m['name'])) ?>? They will not be able to log in.')">
+        <?= csrfField() ?>
                 <input type="hidden" name="action"     value="toggle_active">
                 <input type="hidden" name="member_id"  value="<?= (int)$m['id'] ?>">
                 <input type="hidden" name="set_active" value="0">
@@ -593,6 +608,7 @@ foreach ($invites as $i) $invCounts[$i['invite_status']]++;
               </form>
               <?php else: ?>
               <form method="POST" style="display:inline;">
+        <?= csrfField() ?>
                 <input type="hidden" name="action"     value="toggle_active">
                 <input type="hidden" name="member_id"  value="<?= (int)$m['id'] ?>">
                 <input type="hidden" name="set_active" value="1">
@@ -608,6 +624,7 @@ foreach ($invites as $i) $invCounts[$i['invite_status']]++;
         <tr id="edit-<?= $m['id'] ?>" class="edit-row">
           <td colspan="6">
             <form method="POST" class="edit-inner">
+        <?= csrfField() ?>
               <input type="hidden" name="action"    value="edit_member">
               <input type="hidden" name="member_id" value="<?= (int)$m['id'] ?>">
               <div class="ef">
@@ -626,6 +643,7 @@ foreach ($invites as $i) $invCounts[$i['invite_status']]++;
             <div style="margin-top:.5rem;">
               <form method="POST" class="reset-form"
                     onsubmit="return confirm('Reset password for <?= htmlspecialchars(addslashes($m['name'])) ?>?')">
+        <?= csrfField() ?>
                 <input type="hidden" name="action"    value="reset_password">
                 <input type="hidden" name="member_id" value="<?= (int)$m['id'] ?>">
                 <span style="font-size:.74rem;color:var(--gray-400);margin-right:.25rem;">Reset password:</span>
@@ -664,6 +682,7 @@ foreach ($invites as $i) $invCounts[$i['invite_status']]++;
         You choose when to send in Step 2.
       </p>
       <form method="POST" enctype="multipart/form-data" autocomplete="off">
+        <?= csrfField() ?>
         <input type="hidden" name="action" value="send_invites">
         <div class="field">
           <label>Upload a CSV file</label>
@@ -700,6 +719,7 @@ foreach ($invites as $i) $invCounts[$i['invite_status']]++;
       </p>
       <form method="POST"
             onsubmit="return confirm('Send a registration link to <?= (int)$invCounts['not_sent'] ?> member(s)? This emails them right now.')">
+        <?= csrfField() ?>
         <input type="hidden" name="action" value="send_all_invites">
         <button type="submit" class="btn btn-primary"
                 style="padding:.55rem 1.1rem;font-size:.9rem;<?= $invCounts['not_sent'] ? '' : 'opacity:.5;' ?>"
@@ -715,6 +735,7 @@ foreach ($invites as $i) $invCounts[$i['invite_status']]++;
          its own form, and forms cannot nest. Checkboxes below opt in via the
          HTML5 form="bulkInviteForm" attribute. -->
     <form method="POST" id="bulkInviteForm" class="bulk-bar" onsubmit="return bulkConfirm(event);">
+        <?= csrfField() ?>
       <input type="hidden" name="action" id="bulkAction" value="">
       <span class="bulk-count" id="bulkCount">None selected</span>
       <button type="submit" class="act-btn go"     id="bulkSendBtn"   disabled
@@ -784,6 +805,7 @@ foreach ($invites as $i) $invCounts[$i['invite_status']]++;
               <div style="display:flex;gap:.35rem;">
                 <form method="POST" style="display:inline;"
                       onsubmit="return confirm('Email a registration link to <?= htmlspecialchars(addslashes($inv['email'])) ?> now?')">
+        <?= csrfField() ?>
                   <input type="hidden" name="action"    value="resend_invite">
                   <input type="hidden" name="invite_id" value="<?= (int)$inv['id'] ?>">
                   <button type="submit" class="act-btn<?= $istatus === 'not_sent' ? ' go' : '' ?>">
@@ -792,6 +814,7 @@ foreach ($invites as $i) $invCounts[$i['invite_status']]++;
                 </form>
                 <form method="POST" style="display:inline;"
                       onsubmit="return confirm('Remove <?= htmlspecialchars(addslashes($inv['email'])) ?> from the invitation list?')">
+        <?= csrfField() ?>
                   <input type="hidden" name="action"    value="revoke_invite">
                   <input type="hidden" name="invite_id" value="<?= (int)$inv['id'] ?>">
                   <button type="submit" class="act-btn danger">Remove</button>

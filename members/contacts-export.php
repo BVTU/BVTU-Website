@@ -11,6 +11,7 @@
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/exec-db.php';
 require_once __DIR__ . '/contacts-db.php';
+require_once __DIR__ . '/people-db.php';
 
 requireLogin();
 $member = getMember();
@@ -32,7 +33,14 @@ $filters = [
     'sort'             => $_GET['sort'] ?? 'name',
     'dir'              => $_GET['dir'] ?? 'asc',
 ];
-[$rows] = contactSearch($filters, 1, 100000);
+// The People page can also filter by account and invite state; honour those
+// too, or "export what I'm looking at" would quietly export more than that.
+$xAccount = in_array($_GET['account'] ?? '', ['yes','no'], true) ? $_GET['account'] : '';
+$xState   = isset(PEOPLE_INVITE_LABELS[$_GET['state'] ?? '']) ? $_GET['state'] : '';
+$xList    = peopleFilterEmails($xAccount, $xState);
+if ($xList !== null) $filters['email_whitelist'] = $xList;
+
+list($rows) = contactSearch($filters, 1, 100000);
 
 $schools = [];
 foreach (contactSchools() as $s) $schools[(int)$s['id']] = $s['name'];
