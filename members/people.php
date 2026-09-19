@@ -299,12 +299,19 @@ function stateBadge(string $s): string {
     <a class="chip <?= $fState === 'none' ? 'on' : '' ?>"
        href="?<?= htmlspecialchars(qs(['account'=>'','state'=>'none','page'=>1])) ?>">
        Never invited <b><?= (int)$pc['none'] ?></b></a>
+    <?php if ($counts['archived']): ?>
+    <a class="chip <?= $filters['status'] === 'archived' ? 'on' : '' ?>"
+       href="?<?= htmlspecialchars(qs(['account'=>'','state'=>'','status'=>'archived',
+                                       'include_archived'=>1,'page'=>1])) ?>">
+       Archived <b><?= (int)$counts['archived'] ?></b></a>
+    <?php endif; ?>
   </div>
 
   <form class="filters" method="GET">
     <input type="text" name="q" value="<?= htmlspecialchars($filters['q']) ?>" placeholder="Name or email&hellip;">
     <input type="hidden" name="account" value="<?= htmlspecialchars($fAccount) ?>">
     <input type="hidden" name="state"   value="<?= htmlspecialchars($fState) ?>">
+    <input type="hidden" name="status"  value="<?= htmlspecialchars($filters['status']) ?>">
     <select name="school_id">
       <option value="">All schools</option>
       <?php foreach ($schools as $s): ?>
