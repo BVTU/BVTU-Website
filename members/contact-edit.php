@@ -73,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ? ' Mailchimp updated.'
                 : ' Mailchimp sync failed and can be retried — the contact is saved.';
         }
-        header('Location: contact-edit.php?id=' . $savedId . '&notice=' . urlencode($msg));
+        header('Location: person.php?id=' . $savedId . '&notice=' . urlencode($msg));
         exit;
     }
 }
@@ -139,7 +139,7 @@ if ($contact) {
 <div class="wrap">
 
   <div class="page-header">
-    <a class="back-link" href="people.php">&#x2190; People</a>
+    <a class="back-link" href="<?= $contact ? 'person.php?id=' . (int)$contact['id'] : 'people.php' ?>">&#x2190; <?= $contact ? 'Back to record' : 'People' ?></a>
     <h1><?= $contact ? htmlspecialchars(contactDisplayName($contact)) : 'Add contact' ?></h1>
   </div>
 
@@ -210,7 +210,7 @@ if ($contact) {
     <div class="bar">
       <button class="btn btn-primary" style="padding:.55rem 1.2rem;font-size:.92rem;">
         <?= $contact ? 'Save changes' : 'Add contact' ?></button>
-      <a class="act-btn" href="people.php">Cancel</a>
+      <a class="act-btn" href="<?= $contact ? 'person.php?id=' . (int)$contact['id'] : 'people.php' ?>">Cancel</a>
     </div>
   </form>
 

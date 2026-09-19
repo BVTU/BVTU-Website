@@ -204,6 +204,7 @@ function stateBadge(string $s): string {
     td { padding:.5rem .8rem;border-bottom:1px solid var(--gray-100);vertical-align:top; }
     tr.arch td { opacity:.55; }
     .nm { font-weight:700;color:var(--gray-800); }
+    a.nm:hover { color:var(--primary);text-decoration:underline !important; }
     .em { color:var(--gray-500);font-size:.82rem; }
     .badge { display:inline-block;padding:.12rem .5rem;border-radius:100px;
              font-size:.72rem;font-weight:700;white-space:nowrap; }
@@ -444,7 +445,8 @@ function stateBadge(string $s): string {
       <tr class="<?= $c['status'] === 'archived' ? 'arch' : '' ?>">
         <td><input type="checkbox" class="ppick" value="<?= (int)$c['id'] ?>" onclick="pCount()"></td>
         <td>
-          <span class="nm"><?= htmlspecialchars(contactDisplayName($c)) ?></span>
+          <a class="nm" href="person.php?id=<?= (int)$c['id'] ?>"
+             style="text-decoration:none;"><?= htmlspecialchars(contactDisplayName($c)) ?></a>
           <?php if ($acct && !(int)$acct['active']): ?>
             <span class="badge" style="background:#fef2f2;color:#991b1b;">Deactivated</span>
           <?php endif; ?>
