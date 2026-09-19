@@ -30,7 +30,11 @@ const MC_STATUSES = [
     'pending'       => 'Pending',
     'cleaned'       => 'Cleaned',
     'transactional' => 'Transactional',
-    'unknown'       => 'Not in Mailchimp',
+    // "unknown" means we have not been told otherwise. Whether that is
+    // "never checked" or "checked, and not there" depends on
+    // mailchimp_last_synced_at — see contactMcLabel(), which is what the UI
+    // should use. The bare label must not assert absence.
+    'unknown'       => 'Not checked',
 ];
 
 function contactsEnsureTables(): void {
@@ -590,4 +594,37 @@ function contactEnsureForAccount(int $memberId, string $name, string $email, str
         // Creating an account must never fail because the contact list is
         // unavailable. The reconcile prompt on contacts.php catches the gap.
     }
+}
+
+/**
+ * What we can honestly say about one person's Mailchimp state.
+ * Returns [label, tone, detail] where tone is one of the badge colours.
+ *
+ * The distinction that matters: a contact the sync has never visited is
+ * "Not checked", not "Not in Mailchimp". Reporting the second when we mean the
+ * first is how someone who is plainly in the audience appears to be missing.
+ */
+function contactMcLabel(array $c): array {
+    $status  = $c['mailchimp_status'] ?? 'unknown';
+    $checked = $c['mailchimp_last_synced_at'] ?? null;
+
+    if ($status === 'unknown') {
+        if (!$checked) {
+            return ['Not checked', 'grey', 'This record has never been compared with Mailchimp.'];
+        }
+        return ['Not in Mailchimp', 'red',
+                'Checked ' . date('M j, Y', strtotime($checked)) . ' — Mailchimp had no such address.'];
+    }
+
+    $label  = MC_STATUSES[$status] ?? $status;
+    $detail = $checked ? 'Checked ' . date('M j, Y', strtotime($checked)) : 'Reported by Mailchimp.';
+    $tone   = [
+        'subscribed'    => 'green',
+        'unsubscribed'  => 'slate',
+        'pending'       => 'amber',
+        'cleaned'       => 'red',
+        'transactional' => 'blue',
+    ][$status] ?? 'grey';
+
+    return [$label, $tone, $detail];
 }

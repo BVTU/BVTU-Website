@@ -229,6 +229,12 @@ $webhookUrl = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'bvtu.ca') . '/members/mail
       <span id="syncMsg" style="font-size:.86rem;color:var(--gray-500);"></span>
     </div>
 
+    <p style="font-size:.84rem;color:var(--gray-500);margin:.9rem 0 0;line-height:1.7;">
+      Not sure the stored statuses are right?
+      <a href="contacts-verify.php" style="color:var(--primary);font-weight:600;">Verify against Mailchimp</a>
+      reads the whole audience and shows you every difference before changing anything.
+    </p>
+
     <div id="bar" style="display:none;height:6px;background:#e5e7eb;border-radius:100px;margin-top:.9rem;overflow:hidden;">
       <div id="barFill" style="height:100%;width:0;background:var(--primary);transition:width .25s;"></div>
     </div>

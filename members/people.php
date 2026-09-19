@@ -98,19 +98,24 @@ function sortLink(string $key, string $label, array $f): string {
     return '<a href="?' . htmlspecialchars(qs(['sort' => $key, 'dir' => $dir, 'page' => 1]))
          . '">' . htmlspecialchars($label) . $arr . '</a>';
 }
-function mcBadge(string $s): string {
-    $map = [
-        'subscribed'    => ['#f0fdf4', '#166534'],
-        'unsubscribed'  => ['#f1f5f9', '#475569'],
-        'pending'       => ['#fffbeb', '#b45309'],
-        'cleaned'       => ['#fef2f2', '#991b1b'],
-        'transactional' => ['#eff6ff', '#1e40af'],
-        'unknown'       => ['#f8fafc', '#94a3b8'],
+function mcBadge(array $c): string {
+    // Rendered from contactMcLabel() so the badge can distinguish "we have
+    // never checked" from "we checked and they are not there". The hover text
+    // carries the date, because a status is only as good as its last check.
+    list($label, $tone, $detail) = contactMcLabel($c);
+    $tones = [
+        'green' => ['#f0fdf4', '#166534'],
+        'slate' => ['#f1f5f9', '#475569'],
+        'amber' => ['#fffbeb', '#b45309'],
+        'red'   => ['#fef2f2', '#991b1b'],
+        'blue'  => ['#eff6ff', '#1e40af'],
+        'grey'  => ['#f8fafc', '#94a3b8'],
     ];
-    $c = $map[$s] ?? $map['unknown'];
-    return '<span class="badge" style="background:' . $c[0] . ';color:' . $c[1] . ';">'
-         . htmlspecialchars(MC_STATUSES[$s] ?? $s) . '</span>';
+    $col = $tones[$tone] ?? $tones['grey'];
+    return '<span class="badge" title="' . htmlspecialchars($detail) . '" style="background:'
+         . $col[0] . ';color:' . $col[1] . ';">' . htmlspecialchars($label) . '</span>';
 }
+
 function stateBadge(string $s): string {
     $map = [
         'registered' => ['#f0fdf4', '#166534'],
@@ -211,6 +216,7 @@ function stateBadge(string $s): string {
       <a class="act-btn" href="contacts-export.php?<?= htmlspecialchars(qs(['format'=>'csv'])) ?>">Export CSV</a>
       <a class="act-btn" href="contacts-export.php?<?= htmlspecialchars(qs(['format'=>'xlsx'])) ?>">Export Excel</a>
       <a class="act-btn" href="contacts-sync.php">Mailchimp</a>
+      <a class="act-btn" href="contacts-verify.php">Verify</a>
     </div>
   </div>
 
@@ -401,7 +407,7 @@ function stateBadge(string $s): string {
           <?php endif; ?>
         </td>
         <td>
-          <?= mcBadge($c['mailchimp_status']) ?>
+          <?= mcBadge($c) ?>
           <?php if ($c['mailchimp_sync_status'] === 'error'): ?>
             <span class="syncerr">&#9888; sync failed</span>
           <?php endif; ?>

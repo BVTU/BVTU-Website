@@ -193,3 +193,50 @@ function mcResubscribe(int $contactId, string $actor): array {
     contactMarkSyncFailed($contactId, $msg, $actor);
     return ['ok' => false, 'error' => $msg];
 }
+
+/**
+ * Every address in the audience, keyed by lower-cased email.
+ * Pages through the API because the list endpoint caps at 1000 per call.
+ *
+ * Read-only: this is what a verification pass compares against, so it must not
+ * write anything back on its own.
+ *
+ * Returns ['ok' => bool, 'members' => [email => ['status','id','name']], 'error' => string]
+ */
+function mcFetchAudience(int $max = 5000): array {
+    if (!mcConfigured()) return ['ok' => false, 'members' => [], 'error' => 'Mailchimp is not configured.'];
+
+    $out    = [];
+    $offset = 0;
+    $count  = 500;
+
+    while ($offset < $max) {
+        list($code, $body) = mcRequest('GET',
+            '/lists/' . MC_LIST_ID . '/members'
+            . '?count=' . $count . '&offset=' . $offset
+            . '&fields=members.email_address,members.status,members.id,'
+            . 'members.merge_fields.FNAME,members.merge_fields.LNAME,total_items');
+
+        if ($code < 200 || $code >= 300) {
+            return ['ok' => false, 'members' => $out, 'error' => mcErrorMessage($code, $body)];
+        }
+
+        $batch = $body['members'] ?? [];
+        foreach ($batch as $m) {
+            $email = strtolower(trim($m['email_address'] ?? ''));
+            if ($email === '') continue;
+            $first = $m['merge_fields']['FNAME'] ?? '';
+            $last  = $m['merge_fields']['LNAME'] ?? '';
+            $out[$email] = [
+                'status' => $m['status'] ?? 'unknown',
+                'id'     => $m['id'] ?? null,
+                'name'   => trim($first . ' ' . $last),
+            ];
+        }
+
+        if (count($batch) < $count) break;   // last page
+        $offset += $count;
+    }
+
+    return ['ok' => true, 'members' => $out, 'error' => ''];
+}
