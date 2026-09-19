@@ -77,6 +77,42 @@ if ($ran && !$err) {
     }
 }
 
+// Bring selected Mailchimp-only addresses into the portal. Selected, never all:
+// an address in the audience is not automatically a member, and that judgement
+// is the admin's. Their live status is stored as-is, so the new record starts
+// out verified rather than "not checked".
+if (($_POST['action'] ?? '') === 'import_mc' && !$err) {
+    $wanted = array_filter(array_map('strval', (array)($_POST['emails'] ?? [])));
+    $added = $skipped = 0;
+    foreach ($wanted as $raw) {
+        $e = contactNormalizeEmail($raw);
+        // Only addresses this comparison actually saw — never a value posted
+        // in that we have not just read back from Mailchimp.
+        if (!isset($audience[$e]))   { $skipped++; continue; }
+        if (contactFindByEmail($e))  { $skipped++; continue; }
+
+        list($first, $last) = contactSplitName($audience[$e]['name'] ?? '');
+        $res = contactCreate([
+            'email'      => $e,
+            'first_name' => $first,
+            'last_name'  => $last,
+        ], $member['email']);
+
+        if (!empty($res['id'])) {
+            contactApplyMailchimpStatus((int)$res['id'], $audience[$e]['status'],
+                                        $audience[$e]['id'] ?? null, 'verify');
+            $added++;
+        } else {
+            $skipped++;
+        }
+    }
+    contactAudit(null, 'import', $member['email'], '', "Added {$added} from the Mailchimp audience");
+    header('Location: contacts-verify.php?run=1&notice=' . urlencode(
+        "Added {$added} " . ($added === 1 ? 'person' : 'people') . ' from Mailchimp.'
+        . ($skipped ? " {$skipped} skipped (already here or no longer in the audience)." : '')));
+    exit;
+}
+
 // Write back only the statuses that disagree, and only on request.
 if ($apply && !$err) {
     $n = 0;
@@ -211,18 +247,46 @@ if ($apply && !$err) {
     member list through Import CSV; leave the rest &mdash; an address in your audience
     is not automatically a member.
   </p>
-  <table>
-    <thead><tr><th>Name</th><th>Email</th><th>Mailchimp status</th></tr></thead>
-    <tbody>
-      <?php foreach (array_slice($mcOnly, 0, 200) as $m): ?>
-      <tr>
-        <td><?= htmlspecialchars($m['name'] ?: '—') ?></td>
-        <td class="em"><?= htmlspecialchars($m['email']) ?></td>
-        <td><?= htmlspecialchars(MC_STATUSES[$m['status']] ?? $m['status']) ?></td>
-      </tr>
-      <?php endforeach; ?>
-    </tbody>
-  </table>
+  <form method="POST">
+    <?= csrfField() ?>
+    <input type="hidden" name="action" value="import_mc">
+    <table>
+      <thead><tr>
+        <th style="width:2rem;"><input type="checkbox" id="allmc" onclick="mcAll(this)"></th>
+        <th>Name</th><th>Email</th><th>Mailchimp status</th>
+      </tr></thead>
+      <tbody>
+        <?php foreach (array_slice($mcOnly, 0, 200) as $m): ?>
+        <tr>
+          <td><input type="checkbox" class="mcpick" name="emails[]"
+                     value="<?= htmlspecialchars($m['email']) ?>"></td>
+          <td><?= htmlspecialchars($m['name'] ?: '—') ?></td>
+          <td class="em"><?= htmlspecialchars($m['email']) ?></td>
+          <td><?= htmlspecialchars(MC_STATUSES[$m['status']] ?? $m['status']) ?></td>
+        </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
+    <p style="margin:.8rem 0 0;">
+      <button class="btn btn-primary" style="padding:.45rem 1rem;font-size:.88rem;"
+              onclick="return mcConfirm();">Add selected to the portal</button>
+      <span class="muted" style="margin-left:.6rem;">
+        Creates a record with the name Mailchimp holds. Nothing is emailed, no account
+        is created, and their subscription is untouched &mdash; only read.
+      </span>
+    </p>
+  </form>
+  <script>
+    function mcAll(box) {
+      var list = document.querySelectorAll('.mcpick');
+      for (var i = 0; i < list.length; i++) list[i].checked = box.checked;
+    }
+    function mcConfirm() {
+      var n = document.querySelectorAll('.mcpick:checked').length;
+      if (!n) { alert('Tick the people you want to bring across first.'); return false; }
+      return confirm('Add ' + n + ' ' + (n === 1 ? 'person' : 'people') + ' to the portal?');
+    }
+  </script>
   <?php endif; ?>
 
   <?php if ($portalOnly): ?>
