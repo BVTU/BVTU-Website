@@ -69,12 +69,12 @@ function when($v, string $fmt = 'M j, Y'): string {
     .wrap { max-width:960px; margin:0 auto; padding:2rem 1.5rem 4rem; }
     .back-link { font-size:.85rem;color:var(--primary);text-decoration:none; }
 
-    .hero { background:#fff;border:1px solid var(--gray-200);border-radius:12px;
+    .rec-head { background:#fff;border:1px solid var(--gray-200);border-radius:12px;
             padding:1.25rem 1.4rem;margin:.6rem 0 1.2rem; }
-    .hero .top { display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;align-items:flex-start; }
-    .hero h1 { font-size:1.5rem;font-weight:800;color:var(--gray-800);margin:0;line-height:1.2; }
-    .hero .sub { font-size:.9rem;color:var(--gray-500);margin-top:.25rem; }
-    .hero .sub a { color:var(--primary);text-decoration:none; }
+    .rec-head .top { display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;align-items:flex-start; }
+    .rec-head h1 { font-size:1.5rem;font-weight:800;color:var(--gray-800);margin:0;line-height:1.2; }
+    .rec-head .sub { font-size:.9rem;color:var(--gray-500);margin-top:.25rem; }
+    .rec-head .sub a { color:var(--primary);text-decoration:none; }
     .facts { display:flex;gap:1.6rem;flex-wrap:wrap;margin-top:1rem;
              padding-top:1rem;border-top:1px solid var(--gray-100); }
     .fact .k { font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;
@@ -133,7 +133,7 @@ function when($v, string $fmt = 'M j, Y'): string {
               font-size:.88rem;color:#991b1b;margin-top:.8rem;">&#x26A0; <?= $error ?></div>
   <?php endif; ?>
 
-  <div class="hero">
+  <div class="rec-head">
     <div class="top">
       <div>
         <h1><?= pv(contactDisplayName($c)) ?></h1>

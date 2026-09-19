@@ -13,10 +13,19 @@
   --accent:      #e3f5eb;   /* light warm green   */
   --white:       #ffffff;
   --off-white:   #f6faf7;
+  /* The member portal uses the full 50-800 scale. Only 100/200/500/700 were
+     ever defined, so var(--gray-300) and friends were invalid: colours fell
+     back to inherit and borders to currentColor, which is why a light rule
+     could render as dark text colour. Interpolated on the same warm grey. */
+  --gray-50:     #f8fbf9;
   --gray-100:    #f1f5f2;
   --gray-200:    #e2e8e4;
+  --gray-300:    #c8d5cc;
+  --gray-400:    #8ea396;
   --gray-500:    #5a7060;
+  --gray-600:    #44574c;
   --gray-700:    #2e4039;
+  --gray-800:    #1a2b22;
   --text:        #0d1e14;
   --border:      #aed4be;
 
