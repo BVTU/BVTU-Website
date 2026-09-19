@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/contacts-db.php';
 require_once 'auth.php';
 require_once 'db.php';
 
@@ -55,6 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         "INSERT INTO members (name, email, password_hash, employee_number) VALUES (?, ?, ?, ?)"
                     );
                     $stmt->execute([$name, $email, $hash, $emp_num]);
+                    contactEnsureForAccount((int)$db->lastInsertId(), $name, $email, 'register');
 
                     // Send welcome email
                     $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';

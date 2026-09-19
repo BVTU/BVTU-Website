@@ -86,6 +86,24 @@ function contactsEnsureTables(): void {
         INDEX idx_created (created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+    // --- Link to login accounts -------------------------------------------
+    // A contact is a person; a member account is something a person may have.
+    // The link is nullable on purpose: retirees and outside subscribers are
+    // contacts with no account, and that has to stay expressible.
+    try {
+        $hasMember = $db->query(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+             AND TABLE_NAME = 'contacts' AND COLUMN_NAME = 'member_id'"
+        )->fetchColumn();
+        if (!$hasMember) {
+            $db->exec("ALTER TABLE contacts ADD COLUMN member_id INT DEFAULT NULL");
+            $db->exec("ALTER TABLE contacts ADD INDEX idx_member (member_id)");
+        }
+    } catch (Exception $e) {
+        // Non-fatal — the column may already exist.
+    }
+
     $db->exec("CREATE TABLE IF NOT EXISTS contact_sync_queue (
         contact_id  INT PRIMARY KEY,
         attempts    INT NOT NULL DEFAULT 0,
@@ -385,4 +403,165 @@ function contactsMigrateFromInvitations(string $actor = 'migration'): int {
     }
     if ($moved) contactAudit(null, 'import', $actor, '', "Imported {$moved} from the membership roster");
     return $moved;
+}
+
+/* ---------------------------------------------------------------------------
+ * Reconciling accounts with people
+ *
+ * `members` holds login accounts, `contacts` holds people. They were built at
+ * different times and nothing kept them in step, so an account could exist with
+ * no contact record and never appear in a count, an export or a sync.
+ *
+ * Nothing here joins on members.id — the rest of the portal identifies a person
+ * by email (exec_roles, exp_batches and lp_vouchers all carry user_email), so
+ * the normalised address is the only key needed to put the two back together.
+ * ------------------------------------------------------------------------ */
+
+/**
+ * Split a single "First Last" name into two parts on the LAST space, so
+ * "Mary Jane Wilson" keeps "Mary Jane" as the given name. Returns [first, last].
+ */
+function contactSplitName(string $full): array {
+    $full = trim($full);
+    if ($full === '') return ['', ''];
+    $sp = strrpos($full, ' ');
+    if ($sp === false) return [$full, ''];
+    return [substr($full, 0, $sp), substr($full, $sp + 1)];
+}
+
+/**
+ * Point each contact at its login account, matching on the normalised address.
+ * Safe to re-run: it only ever sets the link, and clears one that has gone
+ * stale because the account was deleted. Returns the number of rows changed.
+ */
+function contactsLinkMembers(): int {
+    contactsEnsureTables();
+    $db = getDB();
+    $changed = 0;
+
+    try {
+        $accounts = $db->query("SELECT id, email FROM members")->fetchAll();
+    } catch (Exception $e) {
+        return 0;   // no members table — nothing to link
+    }
+
+    $byEmail = [];
+    foreach ($accounts as $a) {
+        $byEmail[contactNormalizeEmail($a['email'])] = (int)$a['id'];
+    }
+
+    $rows = $db->query("SELECT id, email_normalized, member_id FROM contacts")->fetchAll();
+    $set  = $db->prepare("UPDATE contacts SET member_id=? WHERE id=?");
+    foreach ($rows as $r) {
+        $want = $byEmail[$r['email_normalized']] ?? null;
+        $have = $r['member_id'] !== null ? (int)$r['member_id'] : null;
+        if ($want !== $have) {
+            $set->execute([$want, (int)$r['id']]);
+            $changed++;
+        }
+    }
+    return $changed;
+}
+
+/**
+ * Create a contact for every login account that has none — the mirror of
+ * contactsMigrateFromInvitations(). An account is proof the person exists, so
+ * there is no judgement call here; the account's own name and email are used.
+ *
+ * Note for the record: a contact created this way will be sent to Mailchimp by
+ * the next sync as a TRANSACTIONAL contact. It does not subscribe anyone to
+ * marketing email, and it cannot resubscribe someone who opted out — see
+ * mcPushContact(), which never sends a status.
+ */
+function contactsMigrateFromMembers(string $actor = 'migration'): int {
+    contactsEnsureTables();
+    $added = 0;
+
+    try {
+        $rows = getDB()->query("SELECT id, name, email, created_at FROM members")->fetchAll();
+    } catch (Exception $e) {
+        return 0;
+    }
+
+    $ins = getDB()->prepare(
+        "INSERT INTO contacts (first_name, last_name, email, email_normalized,
+                               status, member_id, created_by, updated_by, created_at)
+         VALUES (?,?,?,?,'active',?,?,?,?)"
+    );
+
+    foreach ($rows as $r) {
+        $email = trim($r['email'] ?? '');
+        if (!contactValidEmail($email) || contactFindByEmail($email)) continue;
+
+        list($first, $last) = contactSplitName((string)($r['name'] ?? ''));
+        $ins->execute([$first, $last, $email, contactNormalizeEmail($email),
+                       (int)$r['id'], $actor, $actor,
+                       $r['created_at'] ?? date('Y-m-d H:i:s')]);
+        $added++;
+    }
+
+    if ($added) contactAudit(null, 'import', $actor, '', "Added {$added} from member accounts");
+    return $added;
+}
+
+/**
+ * How far apart the two stores are right now, for the reconcile prompt.
+ *   accounts          login accounts that exist
+ *   accounts_nocontact  accounts with no contact record — the drift
+ *   contacts_withaccount  people who can log in
+ */
+function contactsAccountGap(): array {
+    contactsEnsureTables();
+    $db = getDB();
+    try {
+        $accounts = (int)$db->query("SELECT COUNT(*) FROM members")->fetchColumn();
+        $orphans  = (int)$db->query(
+            "SELECT COUNT(*) FROM members m
+             WHERE NOT EXISTS (SELECT 1 FROM contacts c
+                               WHERE c.email_normalized = LOWER(TRIM(m.email)))"
+        )->fetchColumn();
+    } catch (Exception $e) {
+        return ['accounts' => 0, 'accounts_nocontact' => 0, 'contacts_withaccount' => 0];
+    }
+    $linked = (int)$db->query("SELECT COUNT(*) FROM contacts WHERE member_id IS NOT NULL")->fetchColumn();
+
+    return [
+        'accounts'             => $accounts,
+        'accounts_nocontact'   => $orphans,
+        'contacts_withaccount' => $linked,
+    ];
+}
+
+/**
+ * Called immediately after a login account is created, from every place that
+ * creates one. Makes sure the person also exists as a contact and that the two
+ * are linked, so the stores cannot drift apart again the way they did.
+ *
+ * Never overwrites an existing contact's details — someone may already be on
+ * the list with a fuller record than the signup form collected. It only fills
+ * in the account link.
+ */
+function contactEnsureForAccount(int $memberId, string $name, string $email, string $actor = 'signup'): void {
+    if (!contactValidEmail($email)) return;
+    try {
+        contactsEnsureTables();
+        $existing = contactFindByEmail($email);
+        if ($existing) {
+            if ((int)($existing['member_id'] ?? 0) !== $memberId) {
+                getDB()->prepare("UPDATE contacts SET member_id=? WHERE id=?")
+                       ->execute([$memberId, (int)$existing['id']]);
+            }
+            return;
+        }
+        list($first, $last) = contactSplitName($name);
+        getDB()->prepare(
+            "INSERT INTO contacts (first_name, last_name, email, email_normalized,
+                                   status, member_id, created_by, updated_by)
+             VALUES (?,?,?,?,'active',?,?,?)"
+        )->execute([$first, $last, trim($email), contactNormalizeEmail($email),
+                    $memberId, $actor, $actor]);
+    } catch (Exception $e) {
+        // Creating an account must never fail because the contact list is
+        // unavailable. The reconcile prompt on contacts.php catches the gap.
+    }
 }

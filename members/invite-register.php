@@ -2,6 +2,7 @@
 /**
  * invite-register.php — Token-gated member self-registration
  */
+require_once __DIR__ . '/contacts-db.php';
 require_once 'auth.php';
 require_once 'db.php';
 require_once 'invite-db.php';
@@ -54,6 +55,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$tokenError) {
                 "INSERT INTO members (name, email, password_hash) VALUES (?,?,?)"
             )->execute([$name, $email, $hash]);
             $memberId = $db->lastInsertId();
+
+            // Keep the contact list whole: a new account is a new person.
+            contactEnsureForAccount((int)$memberId, $name, $email, 'invite');
 
             inviteAccept($token);
 

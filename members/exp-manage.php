@@ -2,6 +2,7 @@
 /**
  * exp-manage.php — Admin-only expense portal management: accounts
  */
+require_once __DIR__ . '/contacts-db.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/exp-db.php';
 
@@ -40,6 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $hash = password_hash($password, PASSWORD_DEFAULT);
                 getDB()->prepare("INSERT INTO members (name, email, password_hash) VALUES (?,?,?)")
                        ->execute([$name, $email, $hash]);
+                contactEnsureForAccount((int)getDB()->lastInsertId(), $name, $email, $member['email']);
 
                 $notice = "Account created for {$name} ({$email}). Share the temporary password with them.";
             }

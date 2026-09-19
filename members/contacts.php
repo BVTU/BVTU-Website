@@ -31,6 +31,20 @@ if (($_POST['action'] ?? '') === 'import_roster') {
     exit;
 }
 
+// Pull login accounts into the contact list, then link the two by email, so
+// the contact count is the number of people the union actually has.
+if (($_POST['action'] ?? '') === 'reconcile_accounts') {
+    csrfCheck();
+    $added  = contactsMigrateFromMembers($member['email']);
+    $linked = contactsLinkMembers();
+    $msg = $added
+        ? "Added {$added} " . ($added === 1 ? 'person' : 'people') . " who had a login but no contact record."
+        : 'Every login account already had a contact record.';
+    if ($linked) $msg .= " Linked {$linked} to their account.";
+    header('Location: contacts.php?notice=' . urlencode($msg));
+    exit;
+}
+
 $filters = [
     'q'                => trim($_GET['q'] ?? ''),
     'school_id'        => $_GET['school_id'] ?? '',
@@ -47,6 +61,7 @@ $perPage = 50;
 [$rows, $total] = contactSearch($filters, $page, $perPage);
 $pages   = max(1, (int)ceil($total / $perPage));
 $counts  = contactCounts();
+$gap     = contactsAccountGap();
 $schools = contactSchools();
 $roles   = contactDistinctRoles();
 
@@ -160,6 +175,24 @@ function mcBadge(string $s): string {
   <?php if ($notice): ?><div class="notice">&#x2713; <?= $notice ?></div><?php endif; ?>
   <?php if ($error):  ?><div class="error-box">&#x26A0; <?= $error ?></div><?php endif; ?>
 
+  <?php if ($gap['accounts_nocontact'] > 0): ?>
+  <div class="warn-box">
+    <strong><?= (int)$gap['accounts_nocontact'] ?></strong>
+    member<?= $gap['accounts_nocontact'] === 1 ? ' has' : 's have' ?> a login but no contact record,
+    so they are missing from this list, from exports and from Mailchimp.
+    <form method="POST" style="display:inline;">
+      <?= csrfField() ?>
+      <input type="hidden" name="action" value="reconcile_accounts">
+      <button class="act-btn" style="border-color:#92400e;color:#92400e;font-weight:700;">
+        Add them &rarr;</button>
+    </form>
+    <span style="display:block;font-size:.8rem;color:#92400e;margin-top:.4rem;">
+      Uses the name and email on the account. Nobody is subscribed to marketing email
+      &mdash; new contacts reach Mailchimp as transactional only.
+    </span>
+  </div>
+  <?php endif; ?>
+
   <?php if ($counts['errors'] > 0): ?>
   <div class="warn-box">
     <?= (int)$counts['errors'] ?> contact<?= $counts['errors'] === 1 ? '' : 's' ?>
@@ -221,6 +254,7 @@ function mcBadge(string $s): string {
     Showing <?= count($rows) ?> of <?= (int)$total ?> matching
     &middot; <?= (int)$counts['total'] ?> active contacts<?php
       if ($counts['archived']): ?>, <?= (int)$counts['archived'] ?> archived<?php endif; ?>
+    &middot; <?= (int)$gap['contacts_withaccount'] ?> with a login
   </div>
 
   <?php if (!$rows): ?>

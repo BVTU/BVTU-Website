@@ -2,6 +2,7 @@
 /**
  * member-manage.php — Admin: manage accounts (Members tab) + send invitations (Invitations tab)
  */
+require_once __DIR__ . '/contacts-db.php';
 require_once 'auth.php';
 require_once 'db.php';
 require_once 'exec-db.php';
@@ -52,6 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         "INSERT INTO members (name, email, password_hash, must_change_password, employee_number)
                          VALUES (?,?,?,1,?)"
                     )->execute([$name, $email, $hash, $empNum]);
+                    contactEnsureForAccount((int)$db->lastInsertId(), $name, $email, $member['email']);
                     $notice = htmlspecialchars($name) . ' (' . htmlspecialchars($email) . ') added.'
                             . ' They will be prompted to set a new password on first login.';
                 }
