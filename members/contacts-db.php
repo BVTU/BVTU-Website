@@ -513,22 +513,34 @@ function contactsMigrateFromMembers(string $actor = 'migration'): int {
 function contactsAccountGap(): array {
     contactsEnsureTables();
     $db = getDB();
+
+    // Compared in PHP, not SQL. `members.email` and `contacts.email_normalized`
+    // can carry different collations, and comparing them in a query raises
+    // "Illegal mix of collations" — the same failure that broke the email log.
+    // Two small lists; the set difference is cheaper than the risk.
     try {
-        $accounts = (int)$db->query("SELECT COUNT(*) FROM members")->fetchColumn();
-        $orphans  = (int)$db->query(
-            "SELECT COUNT(*) FROM members m
-             WHERE NOT EXISTS (SELECT 1 FROM contacts c
-                               WHERE c.email_normalized = LOWER(TRIM(m.email)))"
-        )->fetchColumn();
+        $memberEmails  = $db->query("SELECT email FROM members")->fetchAll(PDO::FETCH_COLUMN);
+        $contactEmails = $db->query("SELECT email_normalized FROM contacts")->fetchAll(PDO::FETCH_COLUMN);
     } catch (Exception $e) {
-        return ['accounts' => 0, 'accounts_nocontact' => 0, 'contacts_withaccount' => 0];
+        // Report the failure rather than reading as "nothing to reconcile".
+        return ['accounts' => 0, 'accounts_nocontact' => 0,
+                'contacts_withaccount' => 0, 'error' => $e->getMessage()];
     }
-    $linked = (int)$db->query("SELECT COUNT(*) FROM contacts WHERE member_id IS NOT NULL")->fetchColumn();
+
+    $have = array_flip(array_map('contactNormalizeEmail', $contactEmails));
+    $orphans = 0;
+    foreach ($memberEmails as $e) {
+        if (!isset($have[contactNormalizeEmail((string)$e)])) $orphans++;
+    }
+
+    $accounts = count($memberEmails);
+    $linked   = (int)$db->query("SELECT COUNT(*) FROM contacts WHERE member_id IS NOT NULL")->fetchColumn();
 
     return [
         'accounts'             => $accounts,
         'accounts_nocontact'   => $orphans,
         'contacts_withaccount' => $linked,
+        'error'                => '',
     ];
 }
 

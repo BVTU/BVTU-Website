@@ -175,7 +175,12 @@ function mcBadge(string $s): string {
   <?php if ($notice): ?><div class="notice">&#x2713; <?= $notice ?></div><?php endif; ?>
   <?php if ($error):  ?><div class="error-box">&#x26A0; <?= $error ?></div><?php endif; ?>
 
-  <?php if ($gap['accounts_nocontact'] > 0): ?>
+  <?php if (!empty($gap['error'])): ?>
+  <div class="error-box">
+    Could not compare the contact list with login accounts:
+    <?= htmlspecialchars($gap['error']) ?>
+  </div>
+  <?php elseif ($gap['accounts_nocontact'] > 0): ?>
   <div class="warn-box">
     <strong><?= (int)$gap['accounts_nocontact'] ?></strong>
     member<?= $gap['accounts_nocontact'] === 1 ? ' has' : 's have' ?> a login but no contact record,
@@ -254,7 +259,9 @@ function mcBadge(string $s): string {
     Showing <?= count($rows) ?> of <?= (int)$total ?> matching
     &middot; <?= (int)$counts['total'] ?> active contacts<?php
       if ($counts['archived']): ?>, <?= (int)$counts['archived'] ?> archived<?php endif; ?>
-    &middot; <?= (int)$gap['contacts_withaccount'] ?> with a login
+    &middot; <?= (int)$gap['contacts_withaccount'] ?> of <?= (int)$gap['accounts'] ?> login accounts linked<?php
+      if (empty($gap['error']) && $gap['accounts_nocontact'] === 0 && $gap['accounts'] > 0): ?>
+      &middot; every account has a contact record<?php endif; ?>
   </div>
 
   <?php if (!$rows): ?>
