@@ -8,6 +8,16 @@ Run the `code-review` skill over the working diff, fix what it finds, then
 commit. Do not commit and then review. Report the review outcome to Cody along
 with the change — including when it found nothing.
 
+**Use `low` by default.** It returns the few high-confidence findings, which is
+what this rule is for. Reserve `high` for changes to money, authentication,
+permissions, or database schema. Never `ultra` — that is billed and Cody's to
+trigger.
+
+**Review once, not once per fix.** Fix everything a pass reports, then run at
+most one confirming pass. Re-reviewing the whole diff after each individual fix
+multiplies the cost for findings that get smaller every round; when they are
+down to wording and style, stop and commit.
+
 Why: there is no staging site and no test suite. Hostinger deploys from `main`
 on push, so a defective commit is live for the whole membership immediately.
 Bugs that have reached production this way include a CSRF token written into
