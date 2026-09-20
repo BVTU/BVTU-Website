@@ -18,8 +18,8 @@ if (!execIsAdmin($member['email'])) { header('Location: dashboard.php'); exit; }
 sendPrivateHeaders();
 contactsEnsureTables();
 
-$notice = htmlspecialchars($_GET['notice'] ?? '');
-$error  = htmlspecialchars($_GET['error']  ?? '');
+$notice = htmlspecialchars(reqStr('notice'));
+$error  = htmlspecialchars(reqStr('error'));
 
 // One-time move of the imported roster; safe to re-run, skips anyone present.
 if (($_POST['action'] ?? '') === 'import_roster') {
@@ -50,17 +50,22 @@ if (($_POST['action'] ?? '') === 'reconcile_accounts') {
 }
 
 $filters = [
-    'q'                => trim($_GET['q'] ?? ''),
-    'school_id'        => $_GET['school_id'] ?? '',
-    'role'             => $_GET['role'] ?? '',
-    'status'           => $_GET['status'] ?? '',
-    'mc'               => $_GET['mc'] ?? '',
+    'q'                => reqStr('q'),
+    'school_id'        => reqStr('school_id'),
+    'role'             => reqStr('role'),
+    'status'           => reqStr('status'),
+    'mc'               => reqStr('mc'),
     'include_archived' => !empty($_GET['include_archived']),
-    'sort'             => $_GET['sort'] ?? 'name',
-    'dir'              => $_GET['dir'] ?? 'asc',
+    'sort'             => reqStr('sort') ?: 'name',
+    'dir'              => reqStr('dir')  ?: 'asc',
 ];
 $page    = max(1, (int)($_GET['page'] ?? 1));
 $perPage = 50;
+
+// Asking for status=archived without including archived builds
+// "status='archived' AND status<>'archived'" — a permanently empty list.
+// Same guard as people.php and contacts-export.php.
+if (($filters['status'] ?? '') === 'archived') $filters['include_archived'] = true;
 
 [$rows, $total] = contactSearch($filters, $page, $perPage);
 $pages   = max(1, (int)ceil($total / $perPage));
@@ -74,8 +79,19 @@ foreach ($schools as $s) $schoolName[(int)$s['id']] = $s['name'];
 
 /** Keep current filters when building sort links and pagination. */
 function qs(array $over = []): string {
-    $base = array_intersect_key($_GET, array_flip(
-        ['q','school_id','role','status','mc','include_archived','sort','dir','page']));
+    // From the validated filters, not raw $_GET: an array-typed parameter would
+    // otherwise be carried into every sort, pager and export link.
+    global $filters;
+    $base = array_filter([
+        'q'                => $filters['q'],
+        'school_id'        => $filters['school_id'],
+        'role'             => $filters['role'],
+        'status'           => $filters['status'],
+        'mc'               => $filters['mc'],
+        'include_archived' => $filters['include_archived'] ? '1' : '',
+        'sort'             => $filters['sort'],
+        'dir'              => $filters['dir'],
+    ], function ($v) { return $v !== ''; });
     return http_build_query(array_merge($base, $over));
 }
 function sortLink(string $key, string $label, array $f): string {
@@ -253,8 +269,18 @@ function mcBadge(string $s): string {
       <option value="<?= $k ?>" <?= $filters['mc'] === $k ? 'selected' : '' ?>><?= $lbl ?></option>
       <?php endforeach; ?>
     </select>
+    <?php if (($filters['status'] ?? '') === 'archived'): ?>
+      <?php // Filtering TO archived forces this on, so a checkbox would flip
+            // straight back on every Search and read as broken. ?>
+      <span style="font-size:.82rem;color:var(--gray-500);">Showing archived only.</span>
+    <?php else: ?>
     <label><input type="checkbox" name="include_archived" value="1"
                   <?= $filters['include_archived'] ? 'checked' : '' ?>> Show archived</label>
+    <?php endif; ?>
+    <?php // Carried, or a GET submit replaces the whole query string and
+          // silently drops the sort the column links are still advertising. ?>
+    <input type="hidden" name="sort" value="<?= htmlspecialchars($filters['sort']) ?>">
+    <input type="hidden" name="dir"  value="<?= htmlspecialchars($filters['dir']) ?>">
     <button class="btn btn-primary" style="padding:.4rem .9rem;font-size:.85rem;">Search</button>
     <a class="act-btn" href="contacts.php">Reset</a>
   </form>

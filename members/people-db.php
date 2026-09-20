@@ -291,3 +291,135 @@ function personTimeline(int $contactId, string $email, int $limit = 40): array {
     usort($out, function ($a, $b) { return $b['at'] <=> $a['at']; });
     return array_slice($out, 0, $limit);
 }
+
+/* ---------------------------------------------------------------------------
+ * Saved views — a named set of filters.
+ *
+ * Stored as the query string rather than parsed columns, so adding a filter to
+ * the page never needs a migration. Nothing is trusted on the way back in: the
+ * saved string is re-parsed and whitelisted by peopleViewParams() before it
+ * reaches a query.
+ * ------------------------------------------------------------------------ */
+
+/** The only parameters a saved view may carry. */
+const PEOPLE_VIEW_KEYS = ['q','school_id','role','status','mc','account','state',
+                          'include_archived','sort','dir'];
+
+function peopleViewsEnsure(): void {
+    static $done = false;
+    if ($done) return;
+    $done = true;
+    try {
+        getDB()->exec("CREATE TABLE IF NOT EXISTS contact_views (
+            id          INT AUTO_INCREMENT PRIMARY KEY,
+            owner_email VARCHAR(255) NOT NULL,
+            name        VARCHAR(120) NOT NULL,
+            query       VARCHAR(1000) NOT NULL DEFAULT '',
+            created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_owner (owner_email),
+            UNIQUE KEY uniq_owner_name (owner_email, name)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        // Tables created before the unique key existed. Fails harmlessly if
+        // duplicates are already present; saving still works, it just cannot
+        // replace by name until they are cleared.
+        try {
+            $has = getDB()->query(
+                "SELECT COUNT(*) FROM information_schema.STATISTICS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'contact_views'
+                 AND INDEX_NAME = 'uniq_owner_name'"
+            )->fetchColumn();
+            if (!$has) {
+                getDB()->exec("ALTER TABLE contact_views
+                               ADD UNIQUE KEY uniq_owner_name (owner_email, name)");
+            }
+        } catch (Exception $e2) {}
+    } catch (Exception $e) {}
+}
+
+/**
+ * Views belong to whoever saved them. They are a convenience, not a sharing
+ * mechanism, and one officer's working set should not clutter another's.
+ */
+function peopleViewsList(string $owner): array {
+    peopleViewsEnsure();
+    try {
+        $s = getDB()->prepare(
+            "SELECT id, name, query FROM contact_views WHERE owner_email=? ORDER BY name"
+        );
+        $s->execute([contactNormalizeEmail($owner)]);
+        return $s->fetchAll();
+    } catch (Exception $e) {
+        return [];
+    }
+}
+
+/** Keep only the parameters the page understands, with values it recognises. */
+function peopleViewParams(string $query): array {
+    $raw = [];
+    parse_str($query, $raw);
+    $out = [];
+    foreach (PEOPLE_VIEW_KEYS as $k) {
+        if (!isset($raw[$k]) || is_array($raw[$k])) continue;
+        $v = trim((string)$raw[$k]);
+        if ($v === '') continue;
+        $out[$k] = $v;
+    }
+    return $out;
+}
+
+/**
+ * Like peopleViewParams(), plus `page`. A saved view should not pin a page
+ * number, but "take me back where I was" should — archiving someone on page 5
+ * and landing on page 1 is exactly the lost place this is meant to avoid.
+ */
+function peopleBackParams(string $query): array {
+    $out = peopleViewParams($query);
+    $raw = [];
+    parse_str($query, $raw);
+    if (isset($raw['page']) && is_scalar($raw['page']) && (int)$raw['page'] > 1) {
+        $out['page'] = (string)(int)$raw['page'];
+    }
+    return $out;
+}
+
+/** Returns '' on success, or a message saying what actually went wrong. */
+function peopleViewSave(string $owner, string $name, array $params): string {
+    peopleViewsEnsure();
+    $name = trim($name);
+    if ($name === '') return 'Give the view a name.';
+    $query = http_build_query(array_intersect_key($params, array_flip(PEOPLE_VIEW_KEYS)));
+    // Refused, not truncated: a cut query loses its trailing sort/dir or splits
+    // a %XX escape, and the view would reopen as something other than what was
+    // on screen while reporting that it saved fine.
+    if (strlen($query) > 1000) {
+        return 'That view is too complex to save — narrow the search text and try again.';
+    }
+    try {
+        // Re-saving a name updates it. Two views with the same name and
+        // different filters are indistinguishable in the list.
+        getDB()->prepare(
+            "INSERT INTO contact_views (owner_email, name, query) VALUES (?,?,?)
+             ON DUPLICATE KEY UPDATE query=VALUES(query)"
+        )->execute([contactNormalizeEmail($owner), mb_substr($name, 0, 120), $query]);
+        return '';
+    } catch (Exception $e) {
+        // Distinct from the empty-name case, so the admin is not left retyping
+        // against a problem no name can fix — but the driver's own words stay
+        // in the log rather than going into a URL and onto the screen.
+        error_log('peopleViewSave: ' . $e->getMessage());
+        return 'The view could not be saved. The problem has been logged.';
+    }
+}
+
+/** Owner is part of the WHERE, so one admin cannot delete another's view. */
+function peopleViewDelete(int $id, string $owner): bool {
+    peopleViewsEnsure();
+    try {
+        $s = getDB()->prepare("DELETE FROM contact_views WHERE id=? AND owner_email=?");
+        $s->execute([$id, contactNormalizeEmail($owner)]);
+        return $s->rowCount() > 0;
+    } catch (Exception $e) {
+        return false;
+    }
+}

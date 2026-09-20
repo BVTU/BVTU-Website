@@ -24,6 +24,13 @@ if ($id && !$contact) { header('Location: people.php?error=' . urlencode('Contac
 
 $error  = '';
 $notice = '';
+
+// Where the list was, threaded through from People via the record page, so
+// Cancel and the back link return there rather than to an unfiltered list.
+$editBack    = isset($_GET['back']) && is_scalar($_GET['back']) ? (string)$_GET['back'] : '';
+$backToRecord = $contact
+    ? 'person.php?id=' . (int)$contact['id'] . ($editBack ? '&back=' . urlencode($editBack) : '')
+    : 'people.php';
 $form   = $contact ?: array_fill_keys(CONTACT_EDITABLE, '');
 if (!$contact) $form['status'] = 'active';
 
@@ -73,7 +80,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ? ' Mailchimp updated.'
                 : ' Mailchimp sync failed and can be retried — the contact is saved.';
         }
-        header('Location: person.php?id=' . $savedId . '&notice=' . urlencode($msg));
+        header('Location: person.php?id=' . $savedId
+             . ($editBack ? '&back=' . urlencode($editBack) : '')
+             . '&notice=' . urlencode($msg));
         exit;
     }
 }
@@ -139,7 +148,7 @@ if ($contact) {
 <div class="wrap">
 
   <div class="page-header">
-    <a class="back-link" href="<?= $contact ? 'person.php?id=' . (int)$contact['id'] : 'people.php' ?>">&#x2190; <?= $contact ? 'Back to record' : 'People' ?></a>
+    <a class="back-link" href="<?= htmlspecialchars($backToRecord) ?>">&#x2190; <?= $contact ? 'Back to record' : 'People' ?></a>
     <h1><?= $contact ? htmlspecialchars(contactDisplayName($contact)) : 'Add contact' ?></h1>
   </div>
 
@@ -210,7 +219,7 @@ if ($contact) {
     <div class="bar">
       <button class="btn btn-primary" style="padding:.55rem 1.2rem;font-size:.92rem;">
         <?= $contact ? 'Save changes' : 'Add contact' ?></button>
-      <a class="act-btn" href="<?= $contact ? 'person.php?id=' . (int)$contact['id'] : 'people.php' ?>">Cancel</a>
+      <a class="act-btn" href="<?= htmlspecialchars($backToRecord) ?>">Cancel</a>
     </div>
   </form>
 

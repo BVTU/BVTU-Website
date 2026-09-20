@@ -124,6 +124,19 @@ function contactNormalizeEmail(string $email): string {
     return strtolower(trim($email));
 }
 
+/**
+ * A query parameter as a trimmed scalar, or ''.
+ *
+ * ?q[]=x arrives as an array; passing that to trim() is fatal on PHP 8, and
+ * binding it through PDO is worse. Lives here because every page that reads
+ * filters already includes this file — four private copies drifted apart
+ * within a day of being written.
+ */
+function reqStr(string $key): string {
+    $v = $_GET[$key] ?? '';
+    return is_scalar($v) ? trim((string)$v) : '';
+}
+
 function contactValidEmail(string $email): bool {
     return (bool)filter_var(trim($email), FILTER_VALIDATE_EMAIL);
 }
@@ -157,10 +170,15 @@ function contactSearch(array $f, int $page = 1, int $perPage = 50): array {
     $where  = [];
     $params = [];
 
-    if (!empty($f['q'])) {
+    // !== '' rather than !empty(): "0" is a legitimate search term, and the
+    // pill above the list would otherwise claim a filter that never applied.
+    if (($f['q'] ?? '') !== '') {
         $where[] = "(first_name LIKE ? OR last_name LIKE ? OR preferred_name LIKE ?
                      OR email LIKE ? OR secondary_email LIKE ?)";
-        $like = '%' . $f['q'] . '%';
+        // Escape LIKE metacharacters, or searching "100%" matches everything
+        // and "_" matches any single character. The backslash is MySQL's
+        // default LIKE escape, so no ESCAPE clause is needed.
+        $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $f['q']) . '%';
         array_push($params, $like, $like, $like, $like, $like);
     }
     if (!empty($f['school_id'])) { $where[] = "school_id = ?";        $params[] = (int)$f['school_id']; }
@@ -219,6 +237,10 @@ function contactSearch(array $f, int $page = 1, int $perPage = 50): array {
     // heading the list on one click and trailing it on the next.
     if ($key === 'name') $terms[] = $blankLast . ' ASC';
     foreach ($sorts[$key] as $expr) $terms[] = $expr . ' ' . $dir;
+    // id last as a tiebreaker: without a unique final term, rows sharing a
+    // value (every row shares updated_at right after an import) can come back
+    // in a different order per page, repeating some and skipping others.
+    $terms[] = 'id ' . $dir;
     $order = implode(', ', $terms);
 
     // Ceiling is high enough for an export to ask for everything. List pages
@@ -335,8 +357,21 @@ function contactApplyMailchimpStatus(int $id, string $status, ?string $mcId = nu
     $cur = contactGet($id);
     if (!$cur) return;
 
+    // updated_at is ON UPDATE CURRENT_TIMESTAMP and the People list shows it as
+    // "Last activity", so it is pinned for our own housekeeping — a sync or a
+    // verify pass confirming what we already knew would otherwise stamp every
+    // row with today. A status that genuinely CHANGED is activity on their
+    // record whichever way we heard about it — a webhook, or a sync that first
+    // noticed an unsubscribe because the webhook was never configured.
+    // A first check is worth an audit row — the badge goes from "Not checked" to
+    // a real claim — but it must NOT stamp updated_at. On the first verify every
+    // contact is unchecked, so that would restamp the entire roster with today
+    // and make "Last activity" useless on exactly the run that touches everyone.
+    $firstCheck = empty($cur['mailchimp_last_synced_at']);
+    $changed    = ($cur['mailchimp_status'] !== $status);
+    $pin = $changed ? '' : ', updated_at=updated_at';
     $sql = "UPDATE contacts SET mailchimp_status=?, mailchimp_last_synced_at=NOW(),
-                   mailchimp_sync_status='ok', mailchimp_sync_error=NULL";
+                   mailchimp_sync_status='ok', mailchimp_sync_error=NULL{$pin}";
     $params = [$status];
     if ($mcId !== null) { $sql .= ", mailchimp_id=?"; $params[] = $mcId; }
     $sql .= " WHERE id=?";
@@ -348,6 +383,8 @@ function contactApplyMailchimpStatus(int $id, string $status, ?string $mcId = nu
     if ($cur['mailchimp_status'] !== $status) {
         contactAudit($id, 'mailchimp_status', $source, 'mailchimp_status',
                      $cur['mailchimp_status'] . ' → ' . $status);
+    } elseif ($firstCheck) {
+        contactAudit($id, 'mailchimp_checked', $source, '', 'first check: ' . $status);
     }
 }
 
@@ -357,7 +394,8 @@ function contactMarkSyncFailed(int $id, string $error, string $actor = 'sync'): 
     // means "when we last learned their real status". The sync runner walks an
     // id cursor, so it advances past a failing contact without needing one.
     getDB()->prepare(
-        "UPDATE contacts SET mailchimp_sync_status='error', mailchimp_sync_error=? WHERE id=?"
+        "UPDATE contacts SET mailchimp_sync_status='error', mailchimp_sync_error=?,
+                updated_at=updated_at WHERE id=?"
     )->execute([substr($error, 0, 500), $id]);
 
     // Queued so it can be retried; a Mailchimp outage must not lose the edit.
@@ -499,7 +537,10 @@ function contactsLinkMembers(): array {
     }
 
     $rows = $db->query("SELECT id, email_normalized, member_id FROM contacts")->fetchAll();
-    $set  = $db->prepare("UPDATE contacts SET member_id=? WHERE id=?");
+    // updated_at pinned: repairing a link is our bookkeeping, and the People
+    // list shows updated_at as "Last activity". Without this, pressing
+    // "Fix links" restamps everyone it touches with today.
+    $set  = $db->prepare("UPDATE contacts SET member_id=?, updated_at=updated_at WHERE id=?");
     foreach ($rows as $r) {
         // Normalised on both sides. A legacy row whose stored value was never
         // lower-cased would otherwise be counted as unlinked by
@@ -644,6 +685,9 @@ function contactEnsureForAccount(int $memberId, string $name, string $email, str
         $existing = contactFindByEmail($email);
         if ($existing) {
             if ((int)($existing['member_id'] ?? 0) !== $memberId) {
+                // Not pinned: this runs when someone registers or an account is
+                // created for them, which is real activity — unlike
+                // contactsLinkMembers(), which is us repairing bookkeeping.
                 getDB()->prepare("UPDATE contacts SET member_id=? WHERE id=?")
                        ->execute([$memberId, (int)$existing['id']]);
             }

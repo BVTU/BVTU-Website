@@ -23,8 +23,13 @@ if (!execIsAdmin($member['email'])) { header('Location: dashboard.php'); exit; }
 sendPrivateHeaders();
 contactsEnsureTables();
 
-$notice = htmlspecialchars($_GET['notice'] ?? '');
-$error  = htmlspecialchars($_GET['error']  ?? '');
+// Where the list was when they left it, so opening a record and coming back
+// does not discard the filters, sort and page every other action preserves.
+$backQuery = http_build_query(peopleBackParams(reqStr('back')));
+$backUrl   = 'people.php' . ($backQuery ? '?' . $backQuery : '');
+
+$notice = htmlspecialchars(reqStr('notice'));
+$error  = htmlspecialchars(reqStr('error'));
 
 $id = (int)($_GET['id'] ?? 0);
 $c  = $id ? contactGet($id) : null;
@@ -122,7 +127,7 @@ function when($v, string $fmt = 'M j, Y'): string {
 <body>
 <div class="wrap">
 
-  <a class="back-link" href="people.php">&#x2190; People</a>
+  <a class="back-link" href="<?= htmlspecialchars($backUrl) ?>">&#x2190; People</a>
 
   <?php if ($notice): ?>
   <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:.7rem 1rem;
@@ -150,8 +155,8 @@ function when($v, string $fmt = 'M j, Y'): string {
         <?php endif; ?>
       </div>
       <div style="display:flex;gap:.4rem;flex-wrap:wrap;">
-        <a class="act-btn primary" href="contact-edit.php?id=<?= (int)$c['id'] ?>">Edit</a>
-        <a class="act-btn" href="people.php">Back to list</a>
+        <a class="act-btn primary" href="contact-edit.php?id=<?= (int)$c['id'] ?>&amp;back=<?= urlencode($backQuery) ?>">Edit</a>
+        <a class="act-btn" href="<?= htmlspecialchars($backUrl) ?>">Back to list</a>
       </div>
     </div>
 

@@ -20,23 +20,28 @@ if (!execIsAdmin($member['email'])) { http_response_code(403); exit('Access deni
 sendPrivateHeaders();
 contactsEnsureTables();
 
-$format = ($_GET['format'] ?? 'csv') === 'xlsx' ? 'xlsx' : 'csv';
+$format = reqStr('format') === 'xlsx' ? 'xlsx' : 'csv';
 
 // Export honours the filters on screen, so "export what I'm looking at" works.
 $filters = [
-    'q'                => trim($_GET['q'] ?? ''),
-    'school_id'        => $_GET['school_id'] ?? '',
-    'role'             => $_GET['role'] ?? '',
-    'status'           => $_GET['status'] ?? '',
-    'mc'               => $_GET['mc'] ?? '',
+    'q'                => reqStr('q'),
+    'school_id'        => reqStr('school_id'),
+    'role'             => reqStr('role'),
+    'status'           => reqStr('status'),
+    'mc'               => reqStr('mc'),
     'include_archived' => !empty($_GET['include_archived']),
-    'sort'             => $_GET['sort'] ?? 'name',
-    'dir'              => $_GET['dir'] ?? 'asc',
+    'sort'             => reqStr('sort') ?: 'name',
+    'dir'              => reqStr('dir')  ?: 'asc',
 ];
 // The People page can also filter by account and invite state; honour those
 // too, or "export what I'm looking at" would quietly export more than that.
-$xAccount = in_array($_GET['account'] ?? '', ['yes','no'], true) ? $_GET['account'] : '';
-$xState   = isset(PEOPLE_INVITE_LABELS[$_GET['state'] ?? '']) ? $_GET['state'] : '';
+$xAccount = in_array(reqStr('account'), ['yes','no'], true) ? reqStr('account') : '';
+$xState   = isset(PEOPLE_INVITE_LABELS[reqStr('state')]) ? reqStr('state') : '';
+// Same guard as the People page: asking for status=archived without including
+// archived builds "status='archived' AND status<>'archived'" and silently
+// downloads a file with nothing but headers.
+if ($filters['status'] === 'archived') $filters['include_archived'] = true;
+
 $xList    = peopleFilterEmails($xAccount, $xState);
 if ($xList !== null) $filters['email_whitelist'] = $xList;
 
