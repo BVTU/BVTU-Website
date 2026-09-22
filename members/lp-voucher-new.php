@@ -258,7 +258,6 @@ $initRowsJson = json_encode($initRows);
     .qr-panel { display:none; background:#fff; border:1px solid var(--gray-200); border-radius:12px; padding:1.25rem 1.5rem; margin-bottom:1.25rem; }
     .qr-panel.open { display:flex; gap:1.5rem; align-items:flex-start; flex-wrap:wrap; }
     .qr-box { flex-shrink:0; }
-    #qrCanvas { border-radius:8px; }
     .qr-instructions h3 { font-size:.95rem; font-weight:800; color:var(--primary); margin:0 0 .5rem; }
     .qr-instructions p  { font-size:.83rem; color:var(--gray-500); line-height:1.5; margin-bottom:.6rem; }
     .qr-url { font-size:.72rem; color:var(--gray-400); word-break:break-all; background:var(--off-white); padding:.4rem .6rem; border-radius:5px; }
@@ -893,22 +892,42 @@ function openPhoneUpload() {
         return;
     }
 
-    // Create a draft voucher via AJAX
+    // Create a draft voucher via AJAX.
+    //
+    // There is no #qrCanvas element — that id survives only as a CSS rule from
+    // when the code was drawn client-side into a canvas, before this switched to
+    // an <img> from the QR service. Clearing it threw before fetch() ran, so the
+    // panel sat on "Setting up…" for ever with no request and no error.
     document.getElementById('qrLoading').style.display = 'flex';
     document.getElementById('qrInstructions').style.display = 'none';
-    document.getElementById('qrCanvas').innerHTML = '';
 
     fetch('lp-create-draft.php', { method: 'POST' })
         .then(function(r) { return r.json(); })
         .then(function(d) {
-            if (!d.ok) { alert('Could not create upload session. Try again.'); return; }
+            if (!d.ok) { qrFailed(d.error || 'Could not create the upload session.'); return; }
             draftVoucherId = d.voucher_id;
             mobileUrl      = d.mobile_url;
             document.getElementById('draftVoucherId').value = draftVoucherId;
             showQR();
             startPolling();
         })
-        .catch(function() { alert('Network error. Try again.'); });
+        .catch(function() {
+            qrFailed('Could not reach the server.');
+        });
+}
+
+// Every failure path has to clear the spinner. Leaving it running says "still
+// working" when nothing is, which is the bug this panel already had once.
+function qrFailed(why) {
+    document.getElementById('qrLoading').innerHTML =
+        '\u26A0 ' + why + ' <a href="#" onclick="retryPhoneUpload();return false;" ' +
+        'style="color:var(--primary);font-weight:700;">Try again</a>';
+}
+
+function retryPhoneUpload() {
+    var load = document.getElementById('qrLoading');
+    load.innerHTML = '<div class="qr-spinner"></div> Setting up\u2026';
+    openPhoneUpload();
 }
 
 function showQR() {
