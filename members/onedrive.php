@@ -1,6 +1,6 @@
 <?php
 /**
- * onedrive.php — connect OneDrive, then photograph straight into a folder.
+ * onedrive.php — connect OneDrive, then photograph documents straight into a folder.
  *
  * Shows the setup steps until the Azure details are in config.php, and the
  * connection state afterwards. Both credentials behind this expire and fail
@@ -42,7 +42,7 @@ $recent = odRecentUploads();
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OneDrive Photos — BVTU</title>
+  <title>OneDrive Doc Upload — BVTU</title>
   <link rel="stylesheet" href="../css/style.css">
   <link rel="icon" href="../favicon.ico">
   <style>
@@ -82,7 +82,7 @@ $recent = odRecentUploads();
 
   <div class="page-header">
     <a class="back-link" href="dashboard.php">&#x2190; Dashboard</a>
-    <h1>OneDrive Photos</h1>
+    <h1>OneDrive Doc Upload</h1>
   </div>
 
   <?php if ($notice): ?><div class="notice">&#x2713; <?= $notice ?></div><?php endif; ?>
@@ -149,7 +149,7 @@ $recent = odRecentUploads();
         <span class="dot on"></span>
         <div class="txt">
           <strong>Connected<?= $whoami ? ' — ' . htmlspecialchars($whoami) : '' ?></strong>
-          <span>Photos upload straight into the folder you pick.</span>
+          <span>Uploads go straight into the folder you pick.</span>
         </div>
         <a href="onedrive-connect.php?action=disconnect" class="btn btn-outline"
            style="padding:.5rem 1.1rem;font-size:.9rem;"
@@ -159,13 +159,13 @@ $recent = odRecentUploads();
   </div>
 
   <?php if ($live): ?>
-  <h2 class="sec">Take photos</h2>
+  <h2 class="sec">Upload documents</h2>
   <div class="pcard qr-row">
     <img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&color=1a2e1a&bgcolor=ffffff&data=<?= urlencode($mobileUrl) ?>"
          width="160" height="160" alt="QR code to open the camera page on your phone">
     <div class="txt">
       <strong style="color:var(--gray-800);">Scan with your phone</strong><br>
-      Browse to any folder in your OneDrive, then photograph into it. Give a photo a
+      Browse to any folder in your OneDrive, then photograph a document into it. Give it a
       name and it is filed as that plus the date; leave it blank and it is named by
       date and time.
     </div>

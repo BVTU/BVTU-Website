@@ -53,7 +53,7 @@ define('SESSION_SECRET', 'change-this-to-a-long-random-string-xyz');
 // define('SMTP_PASS',      'your-mailbox-password');
 // define('SMTP_FROM_NAME', 'BVTU Member Portal');
 
-// ── OneDrive Photos (optional) ────────────────────────────────────────────────
+// ── OneDrive Doc Upload (optional) ────────────────────────────────────────────
 // From an Azure app registration — see the setup steps on members/onedrive.php.
 // Redirect URI must be exactly: https://<your-host>/members/onedrive-connect.php
 // define('MS_CLIENT_ID',     'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx');

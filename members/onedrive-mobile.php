@@ -13,7 +13,7 @@ $row   = $token ? odValidateUploadToken($token) : null;
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Photo to OneDrive — BVTU</title>
+  <title>Upload to OneDrive — BVTU</title>
   <link rel="icon" href="../favicon.ico">
   <style>
     * { box-sizing:border-box; }
@@ -52,18 +52,18 @@ $row   = $token ? odValidateUploadToken($token) : null;
 
 <?php if (!$row): ?>
   <div class="err"><strong>This link has expired.</strong><br>
-    Open OneDrive Photos on your computer and scan the QR code again.</div>
+    Open OneDrive Doc Upload on your computer and scan the QR code again.</div>
 <?php else: ?>
 
-  <h1>Photo to OneDrive</h1>
-  <div class="sub">Choose a folder, then photograph into it.</div>
+  <h1>Upload to OneDrive</h1>
+  <div class="sub">Choose a folder, then photograph a document into it.</div>
 
   <div class="crumbs" id="crumbs"></div>
   <div id="folders"></div>
 
   <div class="here" id="here"></div>
 
-  <input class="cap" id="caption" placeholder="Name for the photo (optional)">
+  <input class="cap" id="caption" placeholder="Name for the file (optional)">
   <button class="shoot" onclick="document.getElementById('cam').click();">&#x1F4F7; Take a photo</button>
   <input type="file" id="cam" accept="image/*" capture="environment" onchange="send(this)">
 
@@ -88,7 +88,7 @@ $row   = $token ? odValidateUploadToken($token) : null;
       }).join(' / ');
 
     document.getElementById('here').innerHTML =
-      '&#x2713; Photos will go to <strong>' + esc(path()) + '</strong>';
+      '&#x2713; Uploads will go to <strong>' + esc(path()) + '</strong>';
 
     var box = document.getElementById('folders');
     box.innerHTML = '';
