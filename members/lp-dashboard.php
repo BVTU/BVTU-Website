@@ -291,6 +291,7 @@ $grantSumJson      = json_encode(array_values($grantSum));
     <p class="section-title" style="margin:0;">BCTF Grants</p>
     <?php // The editor always edits the CURRENT year. Offering it while a past
           // year is on screen would read as "edit what I am looking at". ?>
+    <a href="lp-archive.php?year=<?= (int)$year ?>" style="font-size:.78rem;font-weight:700;color:var(--gray-600);text-decoration:none;border:1px solid var(--gray-200);border-radius:6px;padding:.3rem .75rem;">Archive &amp; export</a>
     <?php if ($isCurrent): ?>
     <a href="lp-year-end.php" style="font-size:.78rem;font-weight:700;color:var(--gray-600);text-decoration:none;border:1px solid var(--gray-200);border-radius:6px;padding:.3rem .75rem;">Year end</a>
     <a href="lp-grants-manage.php" style="font-size:.78rem;font-weight:700;color:var(--primary);text-decoration:none;background:var(--accent);border:1px solid #b8ddc5;border-radius:6px;padding:.3rem .75rem;">✏ Edit budgets</a>

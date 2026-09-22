@@ -39,6 +39,17 @@ function xlsxSafeText(string $v): string {
 }
 
 /**
+ * The CSV counterpart of xlsxSafeText(). A leading = + - @ makes Excel treat the
+ * cell as a formula, so a name or note starting with one could execute when the
+ * file is opened. Shared rather than copied: this rule must not drift between
+ * the exports that rely on it.
+ */
+function csvSafeText($v): string {
+    $v = (string)$v;
+    return (isset($v[0]) && strpos("=+-@\t\r", $v[0]) !== false) ? "'" . $v : $v;
+}
+
+/**
  * @param string   $path    file to write
  * @param string[] $headers column headings
  * @param array[]  $rows    rows of scalar values

@@ -12,6 +12,7 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/exec-db.php';
 require_once __DIR__ . '/contacts-db.php';
 require_once __DIR__ . '/people-db.php';
+require_once __DIR__ . '/xlsx-writer.php';   // csvSafeText(), shared with the archive export
 
 requireLogin();
 $member = getMember();
@@ -99,19 +100,10 @@ if ($format === 'xlsx') {
     exit;
 }
 
-/**
- * A leading = + - @ makes Excel treat the cell as a formula, so a contact whose
- * name starts with one could execute on open. Prefix a single quote.
- */
-function csvSafe($v): string {
-    $v = (string)$v;
-    return (isset($v[0]) && strpos("=+-@\t\r", $v[0]) !== false) ? "'" . $v : $v;
-}
-
 header('Content-Type: text/csv; charset=utf-8');
 header('Content-Disposition: attachment; filename="contacts-' . $stamp . '.csv"');
 $out = fopen('php://output', 'w');
 fprintf($out, chr(0xEF) . chr(0xBB) . chr(0xBF));   // BOM so Excel reads UTF-8
 fputcsv($out, $headers);
-foreach ($data as $row) fputcsv($out, array_map('csvSafe', $row));
+foreach ($data as $row) fputcsv($out, array_map('csvSafeText', $row));
 fclose($out);
