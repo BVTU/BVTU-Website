@@ -104,6 +104,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    // Email a registration link to the ticked rows. Creating the invitation and
+    // sending it are one step here because the admin has explicitly asked to
+    // send — unlike a roster upload, which must never email anyone.
+    if ($act === 'invite_selected') {
+        $ids  = array_filter(array_map('intval', (array)($_POST['ids'] ?? [])));
+        $sent = $skipped = $failed = 0;
+        $accounts = peopleAccountsByEmail();
+        foreach (array_values($ids) as $n => $cid) {
+            $c = contactGet($cid);
+            if (!$c || $c['status'] === 'archived') { $skipped++; continue; }
+            // Someone who can already log in has nothing to accept.
+            if (isset($accounts[$c['email_normalized']])) { $skipped++; continue; }
+
+            inviteImport($c['email'], contactDisplayName($c), $member['email']);
+            $q = getDB()->prepare(
+                "SELECT id FROM member_invitations
+                 WHERE email=? AND accepted_at IS NULL ORDER BY id DESC LIMIT 1"
+            );
+            $q->execute([contactNormalizeEmail($c['email'])]);
+            $iid = (int)$q->fetchColumn();
+            if (!$iid)                  { $failed++; continue; }
+            if (inviteIssue($iid))      { $sent++; } else { $failed++; }
+
+            // Paced like the send-all path, so Hostinger does not throttle or
+            // spam-flag a burst.
+            if (($n + 1) % 20 === 0) usleep(500000);
+        }
+        $parts = [];
+        if ($sent)    $parts[] = "{$sent} registration link" . ($sent === 1 ? '' : 's') . ' sent';
+        if ($skipped) $parts[] = "{$skipped} skipped (already registered or archived)";
+        if ($failed)  $parts[] = "{$failed} failed — check the Email Log";
+        $back = peopleBackParams((string)($_POST['back'] ?? ''));
+        $back['notice'] = $parts ? ucfirst(implode(', ', $parts)) . '.' : 'Nobody to invite.';
+        header('Location: people.php?' . http_build_query($back));
+        exit;
+    }
+
+    // Set one field on many people at once — the job after a staffing change,
+    // where a dozen contacts move school together.
+    if ($act === 'set_field') {
+        $ids   = array_filter(array_map('intval', (array)($_POST['ids'] ?? [])));
+        $field = (string)($_POST['field'] ?? '');
+        $value = trim((string)($_POST['value'] ?? ''));
+        $allowed = ['school_id', 'role', 'status'];
+        if (!in_array($field, $allowed, true)) {
+            header('Location: people.php?error=' . urlencode('Unknown field.'));
+            exit;
+        }
+        $done = 0;
+        foreach ($ids as $cid) {
+            $r = contactUpdate($cid, [$field => $value], $member['email']);
+            if (empty($r['error'])) $done++;
+        }
+        $label = ['school_id' => 'School', 'role' => 'Role', 'status' => 'Status'][$field];
+        $back = peopleBackParams((string)($_POST['back'] ?? ''));
+        $back['notice'] = "{$label} set on {$done} " . ($done === 1 ? 'person' : 'people') . '.';
+        header('Location: people.php?' . http_build_query($back));
+        exit;
+    }
+
     if ($act === 'save_view') {
         // The view stores the filters; the redirect returns to the screen,
         // page included. They are not the same thing.
@@ -406,6 +466,44 @@ function stateBadge(string $s): string {
                             border:1px solid var(--gray-200);text-decoration:none;color:var(--gray-600); }
     .pager .cur { background:var(--primary);color:#fff;border-color:var(--primary);font-weight:700; }
 
+    /* The header follows a long list down the page. Below the row menu's
+       z-index, so an open menu still sits on top of it. */
+    thead th { position:sticky;top:0;z-index:5; }
+
+    /* Officers open this on a phone. A seven-column table cannot be read at
+       375px, so each row becomes a card and the headings move inline. */
+    @media (max-width: 760px) {
+      .wrap { padding:1.25rem .9rem 3rem; }
+      table, thead, tbody, tr, td { display:block;width:100%; }
+      thead { display:none; }
+      table { border:none;background:none; }
+      tbody tr { background:#fff;border:1px solid var(--gray-200);border-radius:10px;
+                 margin-bottom:.6rem;padding:.6rem .8rem;position:relative; }
+      tbody td { border:none;padding:.2rem 0; }
+      tbody td[data-label]::before {
+          content: attr(data-label) ": ";
+          font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;
+          color:var(--gray-400);font-weight:700; }
+      /* Checkbox and actions to the corners, so the card reads as a card. */
+      tbody td:first-child { position:absolute;top:.6rem;right:2.4rem;width:auto; }
+      tbody td:last-child  { position:absolute;top:.4rem;right:.5rem;width:auto; }
+      tbody td:nth-child(2) { padding-right:4.5rem; }
+      .rowacts { justify-content:flex-end; }
+      .saveview { margin-left:0;flex-basis:100%; }
+      .page-header .tools { width:100%; }
+    }
+
+    /* Jump straight to a person without loading a filtered page first. */
+    .searchwrap { position:relative;flex:1;min-width:220px; }
+    .searchwrap input { width:100%; }
+    #suggest { position:absolute;left:0;right:0;top:100%;z-index:30;background:#fff;
+               border:1px solid var(--gray-200);border-radius:9px;margin-top:2px;
+               box-shadow:0 8px 24px rgba(0,0,0,.12);overflow:hidden;display:none; }
+    #suggest a { display:block;padding:.45rem .7rem;font-size:.85rem;color:var(--gray-700);
+                 text-decoration:none; }
+    #suggest a:hover, #suggest a.on { background:var(--gray-100);color:var(--primary); }
+    #suggest .sem { display:block;font-size:.76rem;color:var(--gray-500); }
+
     /* Ordinary state: readable, but not competing with the exceptions. */
     .plain { color:var(--gray-500);font-size:.8rem; }
     .em2 { display:block;font-size:.8rem;color:var(--gray-500);margin-top:.1rem; }
@@ -551,8 +649,12 @@ function stateBadge(string $s): string {
   </div>
 
   <form class="filters" method="GET" id="filterForm">
-    <input type="text" name="q" value="<?= htmlspecialchars($filters['q']) ?>"
-           placeholder="Search name or email&hellip;" style="flex:1;min-width:220px;">
+    <div class="searchwrap">
+      <input type="text" name="q" id="qbox" autocomplete="off"
+             value="<?= htmlspecialchars($filters['q']) ?>"
+             placeholder="Search name or email&hellip;">
+      <div id="suggest"></div>
+    </div>
     <input type="hidden" name="account" value="<?= htmlspecialchars($fAccount) ?>">
     <input type="hidden" name="state"   value="<?= htmlspecialchars($fState) ?>">
     <input type="hidden" name="status"  value="<?= htmlspecialchars($filters['status']) ?>">
@@ -765,19 +867,56 @@ function stateBadge(string $s): string {
        border-radius:10px;padding:.6rem .9rem;margin-bottom:.6rem;
        align-items:center;gap:.6rem;flex-wrap:wrap;">
     <span id="bulkcount" style="font-size:.85rem;font-weight:700;color:var(--gray-700);"></span>
+
+    <form method="POST" style="display:inline;" onsubmit="return bulkGo(this,'invite');">
+      <?= csrfField() ?>
+      <input type="hidden" name="action" value="invite_selected">
+      <input type="hidden" name="back" value="<?= htmlspecialchars($backQuery) ?>">
+      <button class="act-btn">Send registration link</button>
+    </form>
+
+    <form method="POST" action="contacts-export.php" style="display:inline;"
+          onsubmit="return bulkGo(this,'export');">
+      <?= csrfField() ?>
+      <input type="hidden" name="format" value="csv">
+      <button class="act-btn">Export selected</button>
+    </form>
+
+    <?php // One field across many people: the job after a staffing change,
+          // where a dozen contacts move school on the same day. ?>
+    <form method="POST" style="display:inline;display:inline-flex;gap:.3rem;align-items:center;"
+          onsubmit="return bulkSet(this);">
+      <?= csrfField() ?>
+      <input type="hidden" name="action" value="set_field">
+      <input type="hidden" name="back" value="<?= htmlspecialchars($backQuery) ?>">
+      <select name="field" onchange="bulkField(this)">
+        <option value="school_id">Set school</option>
+        <option value="role">Set role</option>
+        <option value="status">Set status</option>
+      </select>
+      <select name="value" id="bulkValue">
+        <option value="">—</option>
+        <?php foreach ($schools as $sc): ?>
+        <option value="<?= (int)$sc['id'] ?>"><?= htmlspecialchars($sc['name']) ?></option>
+        <?php endforeach; ?>
+      </select>
+      <button class="act-btn">Apply</button>
+    </form>
+
     <form method="POST" style="display:inline;" onsubmit="return bulkGo(this,'archive');">
       <?= csrfField() ?>
       <input type="hidden" name="action" value="archive">
       <input type="hidden" name="back" value="<?= htmlspecialchars($backQuery) ?>">
-      <button class="act-btn warn">Archive selected</button>
+      <button class="act-btn warn">Archive</button>
     </form>
     <form method="POST" style="display:inline;" onsubmit="return bulkGo(this,'restore');">
       <?= csrfField() ?>
       <input type="hidden" name="action" value="restore">
       <input type="hidden" name="back" value="<?= htmlspecialchars($backQuery) ?>">
-      <button class="act-btn">Restore selected</button>
+      <button class="act-btn">Restore</button>
     </form>
-    <span style="font-size:.78rem;color:var(--gray-400);">
+
+    <span style="font-size:.78rem;color:var(--gray-500);flex-basis:100%;">
       Archiving hides someone from this list, exports and Mailchimp sync. Nothing is deleted.
     </span>
   </div>
@@ -815,16 +954,16 @@ function stateBadge(string $s): string {
           <span class="em2"><?= htmlspecialchars($c['email']) ?><?php
             if ($c['role']): ?> &middot; <?= htmlspecialchars($c['role']) ?><?php endif; ?></span>
         </td>
-        <td><?= htmlspecialchars($c['school_id']
+        <td data-label="School"><?= htmlspecialchars($c['school_id']
                   ? ($schoolName[(int)$c['school_id']] ?? '') : $c['school_other']) ?></td>
-        <td>
+        <td data-label="Portal">
           <?= stateBadge($state) ?>
           <?php if ($state === 'sent' && !empty($inv['sent_at'])): ?>
             <span style="display:block;font-size:.74rem;color:var(--gray-400);">
               sent <?= date('M j', strtotime($inv['sent_at'])) ?></span>
           <?php endif; ?>
         </td>
-        <td>
+        <td data-label="Mailchimp">
           <?php $mcInfo = contactMcLabel($c); $mcL = $mcInfo[0]; ?>
           <?= mcBadge($c, $mcInfo) ?>
           <?php // Only when the badge is saying something else, or the cell
@@ -833,7 +972,7 @@ function stateBadge(string $s): string {
             <span class="syncerr">&#9888; sync failed</span>
           <?php endif; ?>
         </td>
-        <td class="em" style="white-space:nowrap;">
+        <td class="em" data-label="Last activity" style="white-space:nowrap;">
           <?= $c['updated_at'] ? date('M j, Y', strtotime($c['updated_at'])) : '' ?>
         </td>
         <td>
@@ -923,6 +1062,75 @@ function stateBadge(string $s): string {
   <?php endif; ?>
 
   <script>
+  // Search suggestions. Enter still submits the normal filtered search; this is
+  // the shortcut for "I know who I want", which is most of the time.
+  (function () {
+    var box = document.getElementById('qbox');
+    var out = document.getElementById('suggest');
+    if (!box || !out) return;
+
+    var timer = null, controller = null, items = [], cursor = -1;
+
+    function hide() { out.style.display = 'none'; items = []; cursor = -1; }
+
+    function draw(list) {
+      if (!list.length) { hide(); return; }
+      out.innerHTML = '';
+      list.forEach(function (p) {
+        var a = document.createElement('a');
+        a.href = 'person.php?id=' + p.id + '&back=' + BACK_QUERY;
+        a.appendChild(document.createTextNode(p.name));
+        var em = document.createElement('span');
+        em.className = 'sem';
+        em.textContent = p.email;
+        a.appendChild(em);
+        out.appendChild(a);
+      });
+      items = out.querySelectorAll('a');
+      cursor = -1;
+      out.style.display = 'block';
+    }
+
+    function look() {
+      var q = box.value.trim();
+      if (q.length < 2) { hide(); return; }
+      // Abort the previous request so a slow one cannot overwrite a newer one.
+      if (controller) controller.abort();
+      controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      fetch('people-suggest.php?q=' + encodeURIComponent(q),
+            controller ? { signal: controller.signal } : {})
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (Array.isArray(d)) draw(d); })
+        .catch(function () { /* aborted or offline: leave the list alone */ });
+    }
+
+    box.addEventListener('input', function () {
+      clearTimeout(timer);
+      timer = setTimeout(look, 180);
+    });
+
+    box.addEventListener('keydown', function (e) {
+      if (out.style.display !== 'block' || !items.length) return;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (cursor >= 0) items[cursor].classList.remove('on');
+        cursor += (e.key === 'ArrowDown' ? 1 : -1);
+        if (cursor < 0) cursor = items.length - 1;
+        if (cursor >= items.length) cursor = 0;
+        items[cursor].classList.add('on');
+      } else if (e.key === 'Enter' && cursor >= 0) {
+        e.preventDefault();
+        window.location = items[cursor].href;
+      } else if (e.key === 'Escape') {
+        hide();
+      }
+    });
+
+    document.addEventListener('click', function (e) {
+      if (!out.contains(e.target) && e.target !== box) hide();
+    });
+  })();
+
   function pBoxes() { return document.querySelectorAll('.ppick'); }
   function pChecked() { return document.querySelectorAll('.ppick:checked'); }
 
@@ -940,15 +1148,63 @@ function stateBadge(string $s): string {
       n + (n === 1 ? ' person selected' : ' people selected');
   }
 
-  // Checkboxes live outside these forms, because each row already contains its
-  // own forms and forms cannot nest. Collect the ids at submit instead.
+  var BACK_QUERY = <?= json_encode(urlencode($backQuery)) ?>;
+
+  // Options for the value dropdown, rendered from the same data as the filters
+  // so a bulk edit can only set a school or status the rest of the page knows.
+  var BULK_OPTIONS = {
+    school_id: <?= json_encode(array_map(function ($sc) {
+                    return ['v' => (string)$sc['id'], 'l' => $sc['name']];
+                  }, $schools)) ?>,
+    role:      <?= json_encode(array_map(function ($r) {
+                    return ['v' => $r, 'l' => $r];
+                  }, $roles)) ?>,
+    status:    <?= json_encode(array_map(function ($k, $l) {
+                    return ['v' => $k, 'l' => $l];
+                  }, array_keys(CONTACT_STATUSES), array_values(CONTACT_STATUSES))) ?>
+  };
+
+  function bulkField(sel) {
+    var box = document.getElementById('bulkValue');
+    var list = BULK_OPTIONS[sel.value] || [];
+    box.innerHTML = '<option value="">\u2014</option>';
+    for (var i = 0; i < list.length; i++) {
+      var o = document.createElement('option');
+      o.value = list[i].v; o.textContent = list[i].l;
+      box.appendChild(o);
+    }
+  }
+
+  function bulkSet(form) {
+    var picked = pChecked();
+    if (!picked.length) return false;
+    var field = form.field.value, value = form.value.value;
+    if (value === '') { alert('Choose a value to set first.'); return false; }
+    var label = form.value.options[form.value.selectedIndex].textContent;
+    if (!confirm('Set ' + field.replace('_id', '') + ' to "' + label + '" on ' +
+                 picked.length + ' ' + (picked.length === 1 ? 'person' : 'people') + '?')) return false;
+    return bulkAttach(form);
+  }
+
   function bulkGo(form, what) {
     var picked = pChecked();
     if (!picked.length) return false;
     if (what === 'archive' &&
         !confirm('Archive ' + picked.length + ' ' + (picked.length === 1 ? 'person' : 'people') +
                  '? They stay in the database and can be restored.')) return false;
+    // Sending email needs saying out loud.
+    if (what === 'invite' &&
+        !confirm('Email a registration link to ' + picked.length + ' ' +
+                 (picked.length === 1 ? 'person' : 'people') +
+                 ' now? Anyone who already has a login is skipped.')) return false;
 
+    return bulkAttach(form);
+  }
+
+  // Checkboxes live outside these forms (rows already contain forms, and forms
+  // cannot nest), so the ids are attached at submit time.
+  function bulkAttach(form) {
+    var picked = pChecked();
     for (var i = 0; i < picked.length; i++) {
       var h = document.createElement('input');
       h.type = 'hidden'; h.name = 'ids[]'; h.value = picked[i].value;

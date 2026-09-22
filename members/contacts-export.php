@@ -42,6 +42,22 @@ $xState   = isset(PEOPLE_INVITE_LABELS[reqStr('state')]) ? reqStr('state') : '';
 // downloads a file with nothing but headers.
 if ($filters['status'] === 'archived') $filters['include_archived'] = true;
 
+// An explicit selection from the People list, posted rather than put in a URL:
+// fifty ids make an unwieldy link, and this is not a bookmarkable view.
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrfCheck();
+    $picked = array_filter(array_map('intval', (array)($_POST['ids'] ?? [])));
+    if ($picked) {
+        $filters['id_in'] = $picked;
+        // An explicit selection means those exact people. Without this an
+        // archived person the admin ticked would be dropped from the file
+        // silently, because the default excludes archived rows.
+        $filters['include_archived'] = true;
+        $filters['status'] = '';
+    }
+    if (($_POST['format'] ?? '') === 'xlsx') $format = 'xlsx';
+}
+
 $xList    = peopleFilterEmails($xAccount, $xState);
 if ($xList !== null) $filters['email_whitelist'] = $xList;
 

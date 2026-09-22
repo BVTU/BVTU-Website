@@ -187,6 +187,15 @@ function contactSearch(array $f, int $page = 1, int $perPage = 50): array {
     if (!empty($f['mc']))        { $where[] = "mailchimp_status = ?"; $params[] = $f['mc']; }
     if (empty($f['include_archived'])) { $where[] = "status <> 'archived'"; }
 
+    // An explicit selection of rows, for "export the ones I ticked". Bound, and
+    // an empty set means no match rather than no filter.
+    if (isset($f['id_in'])) {
+        $ids = array_values(array_filter(array_map('intval', (array)$f['id_in'])));
+        if (!$ids) return [[], 0];
+        $where[] = 'id IN (' . implode(',', array_fill(0, count($ids), '?')) . ')';
+        foreach ($ids as $i) $params[] = $i;
+    }
+
     // Restrict to a set of addresses worked out in PHP (account and invite
     // filters). Done this way because `members` and `member_invitations` can
     // carry a different collation from `contacts`, so joining them in SQL
