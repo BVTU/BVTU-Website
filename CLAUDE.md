@@ -33,9 +33,10 @@ message, a memory file. When in doubt, review.
 
 ## Verification that has caught real defects here
 
-- `python3 /tmp/alt2.py <file>` before committing any template. PHP alternative
-  syntax (`if: … endif;`) is invisible to brace counting, and a bad slice took
-  the dashboard down for every member once.
+- `python3 tools/alt-syntax-check.py <file>` before committing any template. PHP
+  alternative syntax (`if: … endif;`) is invisible to brace counting, and a bad
+  slice took the dashboard down for every member once. (It lived in /tmp and had
+  to be rewritten from memory when that was cleared — hence the repo copy.)
 - `node --check` on JavaScript extracted from a `<script>` block.
 - PHP is **7.4**. `str_starts_with()` and other PHP 8 functions are fatal.
 - Never compare two string columns from different tables in SQL. `members`,
@@ -44,4 +45,8 @@ message, a memory file. When in doubt, review.
 - Never wrap a column in `LOWER()`/`DATE_FORMAT()` and compare it to a bound
   parameter — same collation failure, and it discards the index.
 - Check new CSS class names against `css/style.css` before using them. The
-  public site stylesheet is loaded on every member page.
+  public site stylesheet is loaded on every member page. Page-local panels use
+  `.pcard`, never `.card`.
+- Never rewrite a file with a broad regex that spans lines. One `.*?` across a
+  docblock deleted the entire header — requires, auth gate and POST handlers —
+  from four files at once. Anchor on exact strings instead.
