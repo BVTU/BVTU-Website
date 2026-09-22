@@ -844,3 +844,141 @@ function lpUnfinishedOtherYears(int $currentYear): array {
         return [];
     }
 }
+
+/* ---------------------------------------------------------------------------
+ * Year end
+ *
+ * Closing a year is a flag and a set of copies. Nothing is moved and nothing is
+ * deleted: a rollover that relocates rows is a rollover that can lose them, and
+ * you would only find out twelve months later.
+ * ------------------------------------------------------------------------ */
+
+function lpYearStatusEnsure(): void {
+    static $done = false;
+    if ($done) return;
+    $done = true;
+    try {
+        getDB()->exec("CREATE TABLE IF NOT EXISTS lp_year_status (
+            year       INT PRIMARY KEY,
+            closed_at  DATETIME DEFAULT NULL,
+            closed_by  VARCHAR(255) NOT NULL DEFAULT ''
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch (Exception $e) {}
+}
+
+function lpYearIsClosed(int $year): bool {
+    lpYearStatusEnsure();
+    try {
+        $s = getDB()->prepare("SELECT closed_at FROM lp_year_status WHERE year=?");
+        $s->execute([$year]);
+        return (bool)$s->fetchColumn();
+    } catch (Exception $e) {
+        return false;
+    }
+}
+
+/** Returns false if the close did not stick — the caller must not claim it did. */
+function lpCloseYear(int $year, string $by): bool {
+    lpYearStatusEnsure();
+    try {
+        getDB()->prepare(
+            "INSERT INTO lp_year_status (year, closed_at, closed_by) VALUES (?, NOW(), ?)
+             ON DUPLICATE KEY UPDATE closed_at=NOW(), closed_by=VALUES(closed_by)"
+        )->execute([$year, $by]);
+        return true;
+    } catch (Exception $e) {
+        error_log('lpCloseYear: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/** Closing is reversible on purpose: it is a marker, not a destructive step. */
+function lpReopenYear(int $year): bool {
+    lpYearStatusEnsure();
+    try {
+        getDB()->prepare("UPDATE lp_year_status SET closed_at=NULL WHERE year=?")->execute([$year]);
+        return true;
+    } catch (Exception $e) {
+        error_log('lpReopenYear: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Carry grants and budget lines from one year into another.
+ *
+ * Matches on name and updates the amount, rather than refusing when the target
+ * year already has rows. It always does: lpEnsureTables() seeds a new year from
+ * LP_GRANTS_SEED on the first page load after September, so by the time anyone
+ * opens a year-end page the rows exist and a plain "copy if empty" can never
+ * run. Existing spending is untouched — only names and budgets are involved.
+ *
+ * Returns ['grants' => [added, updated], 'lines' => [added, updated], 'error' => string].
+ * A swallowed failure here would report "nothing to carry forward" — which reads
+ * as success — when in fact nothing could be written at all.
+ */
+function lpCarryForward(int $from, int $to): array {
+    $db  = getDB();
+    $out = ['grants' => [0, 0], 'lines' => [0, 0], 'error' => ''];
+
+    foreach ([['lp_grants', 'grants'], ['lp_budget_lines', 'lines']] as $pair) {
+        list($table, $key) = $pair;
+        try {
+            $src = $db->prepare("SELECT name, budget FROM {$table} WHERE year=? AND active=1 ORDER BY name");
+            $src->execute([$from]);
+            $rows = $src->fetchAll();
+
+            // active is deliberately left alone on update. A line the admin
+            // removed from the new year was removed on purpose; carrying
+            // budgets forward should not quietly bring it back. New rows take
+            // the column default, which is 1.
+            $find = $db->prepare("SELECT id FROM {$table} WHERE year=? AND name=? LIMIT 1");
+            $upd  = $db->prepare("UPDATE {$table} SET budget=? WHERE id=?");
+            $ins  = $db->prepare("INSERT INTO {$table} (name, budget, year) VALUES (?,?,?)");
+
+            foreach ($rows as $r) {
+                $find->execute([$to, $r['name']]);
+                $id = (int)$find->fetchColumn();
+                if ($id) { $upd->execute([$r['budget'], $id]); $out[$key][1]++; }
+                else     { $ins->execute([$r['name'], $r['budget'], $to]); $out[$key][0]++; }
+            }
+        } catch (Exception $e) {
+            error_log('lpCarryForward: ' . $e->getMessage());
+            $out['error'] = 'Some budgets could not be copied. The problem has been logged.';
+        }
+    }
+    return $out;
+}
+
+/** What is still open in a year — the things to settle before closing it. */
+function lpYearOutstanding(int $year): array {
+    $out = ['vouchers' => [], 'claims' => [], 'collab' => 0];
+    try {
+        $s = getDB()->prepare(
+            "SELECT id, voucher_number, name, status FROM lp_vouchers
+             WHERE year=? AND status NOT IN ('paid','rejected','draft')
+             ORDER BY created_at"
+        );
+        $s->execute([$year]);
+        $out['vouchers'] = $s->fetchAll();
+    } catch (Exception $e) {}
+
+    try {
+        require_once __DIR__ . '/exp-db.php';
+        foreach (expBatchGetAll('', $year) as $b) {
+            if (!in_array($b['status'], ['paid', 'rejected', 'draft'], true)) $out['claims'][] = $b;
+        }
+    } catch (Exception $e) {}
+
+    try {
+        require_once __DIR__ . '/collab-grant-db.php';
+        cgEnsureTable();
+        $s = getDB()->prepare(
+            "SELECT COUNT(*) FROM collab_grant_applications WHERE school_year=? AND status='pending'"
+        );
+        $s->execute([$year]);
+        $out['collab'] = (int)$s->fetchColumn();
+    } catch (Exception $e) {}
+
+    return $out;
+}
