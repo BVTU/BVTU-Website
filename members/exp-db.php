@@ -102,6 +102,70 @@ function expEnsureTables(): void {
 }
 
 // ── Payment tracking columns (payment_ref, payment_date) ───────────────────────
+/**
+ * The school year a date belongs to. September starts a new one, matching
+ * lpCurrentYear() — the union's year, not the calendar's.
+ */
+function expSchoolYear(?string $when = null): int {
+    $ts = $when ? strtotime($when) : time();
+    if (!$ts) $ts = time();
+    $m = (int)date('n', $ts);
+    return $m >= 9 ? (int)date('Y', $ts) : (int)date('Y', $ts) - 1;
+}
+
+/**
+ * Member claims had no year at all, so they could not be reported or archived
+ * by school year the way vouchers, grants and budget lines already are.
+ *
+ * Backfilled from created_at rather than left null: a claim's year is knowable
+ * from the day it was raised, and a null would quietly drop every historic
+ * claim out of any year-scoped view.
+ */
+/** Sep–Dec belong to that calendar year; Jan–Aug to the year before. */
+function expBackfillYears(): void {
+    try {
+        getDB()->exec(
+            "UPDATE exp_batches
+             SET year = CASE WHEN MONTH(created_at) >= 9
+                             THEN YEAR(created_at) ELSE YEAR(created_at) - 1 END
+             WHERE year IS NULL AND created_at IS NOT NULL"
+        );
+    } catch (Exception $e) {}
+}
+
+function expEnsureYearColumn(): bool {
+    static $have = null;
+    if ($have !== null) return $have;
+    $have = false;
+    try {
+        $exists = getDB()->query(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='exp_batches' AND COLUMN_NAME='year'"
+        )->fetchColumn();
+        if ($exists) {
+            $have = true;
+            // The backfill used to run only in the branch that creates the
+            // column. Any row inserted while the ALTER was failing — or by an
+            // older deploy — kept a NULL year and was invisible in every
+            // year-filtered view, silently and for ever. Catch those too.
+            $gap = getDB()->query("SELECT 1 FROM exp_batches WHERE year IS NULL LIMIT 1")->fetchColumn();
+            if ($gap) expBackfillYears();
+            return $have;
+        }
+
+        getDB()->exec("ALTER TABLE exp_batches ADD COLUMN year INT DEFAULT NULL");
+        getDB()->exec("ALTER TABLE exp_batches ADD INDEX idx_year (year)");
+        expBackfillYears();
+        $have = true;
+    } catch (Exception $e) {
+        // Non-fatal, and the callers check the return value: without the column
+        // a claim is still raised (just untagged) and the year filters offer
+        // nothing, rather than every member being unable to claim at all.
+        $have = false;
+    }
+    return $have;
+}
+
 function expEnsurePaymentColumns(): void {
     static $done = false;
     if ($done) return;
@@ -196,6 +260,8 @@ function expBatchEnsureTables(): void {
         INDEX idx_status (status)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+    expEnsureYearColumn();
+
     $db->exec("CREATE TABLE IF NOT EXISTS exp_batch_items (
         id                  INT AUTO_INCREMENT PRIMARY KEY,
         batch_id            INT           NOT NULL,
@@ -282,34 +348,69 @@ function expBatchGetOrCreateDraft(string $targetEmail, string $targetName, strin
     if ($batch) return $batch;
 
     $refCode = expBatchGenerateRefCode();
-    $db->prepare(
-        "INSERT INTO exp_batches (ref_code, user_email, user_name, submitted_by_email, submitted_by_name, status)
-         VALUES (?,?,?,?,?,'draft')"
-    )->execute([
+    $hasYear = expEnsureYearColumn();
+
+    $cols = 'ref_code, user_email, user_name, submitted_by_email, submitted_by_name, status';
+    $vals = "?,?,?,?,?,'draft'";
+    $args = [
         $refCode,
         $targetEmail,
         $targetName,
         $submittedByEmail ? strtolower(trim($submittedByEmail)) : null,
         $submittedByName  ?: null,
-    ]);
+    ];
+    if ($hasYear) { $cols .= ', year'; $vals .= ',?'; $args[] = expSchoolYear(); }
+
+    $db->prepare("INSERT INTO exp_batches ({$cols}) VALUES ({$vals})")->execute($args);
 
     return expBatchGet((int)$db->lastInsertId());
 }
 
-function expBatchGetByMember(string $email): array {
-    $s = getDB()->prepare("SELECT * FROM exp_batches WHERE user_email=? ORDER BY created_at DESC");
-    $s->execute([strtolower(trim($email))]);
+/**
+ * $year: 0, the default, is every year — the behaviour before the column
+ * existed, so no caller changes meaning by not passing one. Approvals in
+ * particular must keep showing unfinished work whatever year it was raised in.
+ */
+function expBatchGetByMember(string $email, int $year = 0): array {
+    $sql    = "SELECT * FROM exp_batches WHERE user_email=?";
+    $params = [strtolower(trim($email))];
+    if ($year > 0 && expEnsureYearColumn()) { $sql .= " AND year=?"; $params[] = $year; }
+    $s = getDB()->prepare($sql . " ORDER BY created_at DESC");
+    $s->execute($params);
     return $s->fetchAll();
 }
 
-function expBatchGetAll(string $status = ''): array {
-    if ($status) {
-        $s = getDB()->prepare("SELECT * FROM exp_batches WHERE status=? ORDER BY submitted_at ASC, created_at ASC");
-        $s->execute([$status]);
-    } else {
-        $s = getDB()->query("SELECT * FROM exp_batches ORDER BY created_at DESC");
-    }
+function expBatchGetAll(string $status = '', int $year = 0): array {
+    $sql    = "SELECT * FROM exp_batches";
+    $where  = [];
+    $params = [];
+    if ($status) { $where[] = "status=?"; $params[] = $status; }
+    if ($year > 0 && expEnsureYearColumn()) { $where[] = "year=?"; $params[] = $year; }
+    if ($where) $sql .= " WHERE " . implode(' AND ', $where);
+    // Ordering follows $status exactly as it did before the year parameter
+    // existed: a queue reads oldest-first, a history reads newest-first.
+    $sql .= $status
+        ? " ORDER BY submitted_at ASC, created_at ASC"
+        : " ORDER BY created_at DESC";
+    $s = getDB()->prepare($sql);
+    $s->execute($params);
     return $s->fetchAll();
+}
+
+/** School years that have claims, newest first, always including this one. */
+function expYearsWithClaims(): array {
+    if (!expEnsureYearColumn()) return [expSchoolYear()];
+    $years = [];
+    try {
+        foreach (getDB()->query("SELECT DISTINCT year FROM exp_batches WHERE year IS NOT NULL")
+                        ->fetchAll(PDO::FETCH_COLUMN) as $y) {
+            if ((int)$y > 0) $years[(int)$y] = true;
+        }
+    } catch (Exception $e) {}
+    $years[expSchoolYear()] = true;
+    $years = array_keys($years);
+    rsort($years);
+    return $years;
 }
 
 // ── Batch workflow transitions (mirrors single-item exp workflow) ─────────────

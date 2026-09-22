@@ -11,12 +11,26 @@ expEnsureTables();
 expBatchEnsureTables();
 
 $expenses = expGetByMember($member['email']);
-$claims   = expBatchGetByMember($member['email']);
+// Claims now carry the school year they were raised in, so a member with
+// several years of history can read one year at a time instead of scrolling
+// past everything they have ever claimed.
+$claimYears = expYearsWithClaims();
+$cyWanted   = isset($_GET['cy']) && is_scalar($_GET['cy']) ? (int)$_GET['cy'] : 0;
+$claimYear  = in_array($cyWanted, $claimYears, true) ? $cyWanted : 0;   // 0 = all
+// Fetched once. The tiles speak for the member's whole history — filtering them
+// with the table would quietly redefine "Awaiting President: 0" as "none this
+// year", which is a different statement — so the year narrows only the table.
+$allClaims  = expBatchGetByMember($member['email']);
+$claims     = $claimYear
+    ? array_values(array_filter($allClaims, function ($c) use ($claimYear) {
+          return (int)($c['year'] ?? 0) === $claimYear;
+      }))
+    : $allClaims;
 
 $claimStatusLabels = [
     'draft'             => ['label' => 'Draft — not yet submitted', 'color' => '#6b7280', 'bg' => '#f3f4f6'],
-    'pending'           => ['label' => 'Awaiting Treasurer',        'color' => '#92400e', 'bg' => '#fffbeb'],
-    'signer1_approved'  => ['label' => 'Awaiting 2nd Signature',    'color' => '#1e40af', 'bg' => '#eff6ff'],
+    'pending'           => ['label' => 'Awaiting President',        'color' => '#92400e', 'bg' => '#fffbeb'],
+    'signer1_approved'  => ['label' => 'Awaiting Treasurer',        'color' => '#1e40af', 'bg' => '#eff6ff'],
     'signer2_approved'  => ['label' => 'Payment Authorized',        'color' => '#166534', 'bg' => '#f0fdf4'],
     'paid'              => ['label' => 'Paid',                      'color' => '#166534', 'bg' => '#f0fdf4'],
     'rejected'          => ['label' => 'Rejected',                  'color' => '#991b1b', 'bg' => '#fef2f2'],
@@ -40,7 +54,7 @@ foreach ($expenses as $exp) {
         $counts['rejected']++;
     }
 }
-foreach ($claims as $claim) {
+foreach ($allClaims as $claim) {
     if ($claim['status'] === 'draft') continue;
     if (in_array($claim['status'], ['pending', 'signer1_approved', 'signer2_approved'], true)) {
         if ($claim['status'] === 'pending') {
@@ -58,8 +72,8 @@ foreach ($claims as $claim) {
 
 $statusLabels = [
     'draft'            => ['label' => 'Draft',                   'color' => '#6b7280', 'bg' => '#f3f4f6'],
-    'pending'          => ['label' => 'Awaiting Treasurer',      'color' => '#92400e', 'bg' => '#fffbeb'],
-    'signer1_approved' => ['label' => 'Awaiting 2nd Signature',  'color' => '#1e40af', 'bg' => '#eff6ff'],
+    'pending'          => ['label' => 'Awaiting President',      'color' => '#92400e', 'bg' => '#fffbeb'],
+    'signer1_approved' => ['label' => 'Awaiting Treasurer',      'color' => '#1e40af', 'bg' => '#eff6ff'],
     'signer2_approved' => ['label' => 'Payment Authorized',      'color' => '#166534', 'bg' => '#f0fdf4'],
     'paid'             => ['label' => 'Paid',                    'color' => '#166534', 'bg' => '#f0fdf4'],
     'rejected'         => ['label' => 'Rejected',                'color' => '#991b1b', 'bg' => '#fef2f2'],
@@ -162,6 +176,20 @@ $statusLabels = [
     <div class="table-toolbar">
       <h2>Expense Claims</h2>
       <span style="font-size:.8rem;color:var(--gray-400);">Each claim can bundle several receipts — one approval, one e-transfer.</span>
+      <?php if (count($claimYears) > 1): ?>
+      <form method="GET" style="margin-left:auto;">
+        <select name="cy" onchange="this.form.submit()"
+                style="border:1px solid var(--gray-300);border-radius:7px;padding:.25rem .5rem;
+                       font-size:.82rem;font-family:inherit;">
+          <option value="0">All school years</option>
+          <?php foreach ($claimYears as $cy): ?>
+          <option value="<?= (int)$cy ?>" <?= $claimYear === $cy ? 'selected' : '' ?>>
+            <?= (int)$cy ?>–<?= (int)$cy + 1 ?></option>
+          <?php endforeach; ?>
+        </select>
+        <noscript><button type="submit">Show</button></noscript>
+      </form>
+      <?php endif; ?>
     </div>
     <table>
       <thead>

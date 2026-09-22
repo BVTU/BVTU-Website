@@ -73,8 +73,8 @@ $catLabels = [
 ];
 
 $statusBadges = [
-    'pending'          => ['label' => 'Awaiting Treasurer',     'color' => '#92400e', 'bg' => '#fffbeb'],
-    'signer1_approved' => ['label' => 'Awaiting 2nd Sig.',      'color' => '#1e40af', 'bg' => '#eff6ff'],
+    'pending'          => ['label' => 'Awaiting President',     'color' => '#92400e', 'bg' => '#fffbeb'],
+    'signer1_approved' => ['label' => 'Awaiting Treasurer',     'color' => '#1e40af', 'bg' => '#eff6ff'],
     'signer2_approved' => ['label' => 'Payment Authorized',     'color' => '#166534', 'bg' => '#f0fdf4'],
     'paid'             => ['label' => 'Paid',                   'color' => '#166534', 'bg' => '#f0fdf4'],
     'rejected'         => ['label' => 'Rejected',               'color' => '#991b1b', 'bg' => '#fef2f2'],
@@ -181,7 +181,7 @@ $statusBadges = [
       <select name="status">
         <option value="all" <?= $statusF === '' || $statusF === 'all' ? 'selected' : '' ?>>All statuses</option>
         <option value="pending"          <?= $statusF === 'pending'          ? 'selected' : '' ?>>Pending</option>
-        <option value="signer1_approved" <?= $statusF === 'signer1_approved' ? 'selected' : '' ?>>Awaiting 2nd Sig</option>
+        <option value="signer1_approved" <?= $statusF === 'signer1_approved' ? 'selected' : '' ?>>Awaiting Treasurer</option>
         <option value="signer2_approved" <?= $statusF === 'signer2_approved' ? 'selected' : '' ?>>Ready to Pay</option>
         <option value="paid"             <?= $statusF === 'paid'             ? 'selected' : '' ?>>Paid</option>
         <option value="rejected"         <?= $statusF === 'rejected'         ? 'selected' : '' ?>>Rejected</option>

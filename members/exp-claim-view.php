@@ -306,13 +306,13 @@ function _expClaimStatusBadge(string $status): string {
     <div class="tl-step">
       <div class="tl-dot <?= $batch['signer1_email'] ? 'done' : 'pending' ?>"></div>
       <div>
-        <div class="tl-label">First signature — Treasurer</div>
+        <div class="tl-label">First signature — President</div>
         <div class="tl-meta">
           <?php if ($batch['signer1_email']): ?>
             Approved by <?= htmlspecialchars($batch['signer1_name']) ?>
             on <?= date('M j, Y \a\t g:ia', strtotime($batch['signer1_at'])) ?>
           <?php elseif ($batch['status'] === 'pending'): ?>
-            Awaiting Treasurer review
+            Awaiting the President's approval
           <?php else: ?>
             Not yet reached
           <?php endif; ?>
@@ -324,13 +324,13 @@ function _expClaimStatusBadge(string $status): string {
     <div class="tl-step">
       <div class="tl-dot <?= $batch['signer2_email'] ? 'done' : 'pending' ?>"></div>
       <div>
-        <div class="tl-label">Second signature</div>
+        <div class="tl-label">Second signature — Treasurer</div>
         <div class="tl-meta">
           <?php if ($batch['signer2_email']): ?>
             Approved by <?= htmlspecialchars($batch['signer2_name']) ?>
             on <?= date('M j, Y \a\t g:ia', strtotime($batch['signer2_at'])) ?>
           <?php elseif ($batch['status'] === 'signer1_approved'): ?>
-            Awaiting second signature
+            Awaiting the Treasurer's approval
           <?php else: ?>
             Not yet reached
           <?php endif; ?>
