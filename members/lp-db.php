@@ -434,7 +434,13 @@ function lpGetVouchersByStatuses(array $statuses): array {
     return $s->fetchAll();
 }
 
-function lpGetVouchers(string $email = '', string $status = ''): array {
+/**
+ * $year: -1, the default, is every year — the behaviour before this parameter
+ * existed, so no caller changes meaning by not passing it. A real year scopes
+ * the list; the dashboard passes one because it showed every voucher ever
+ * submitted and kept growing, last year's mixed in with this year's.
+ */
+function lpGetVouchers(string $email = '', string $status = '', int $year = -1): array {
     $db = getDB();
     $sql = "SELECT v.*,
                 COALESCE(SUM(e.travel_amt + e.meals + e.gifts + e.misc + e.office + e.phone), 0) AS total_amount,
@@ -443,6 +449,7 @@ function lpGetVouchers(string $email = '', string $status = ''): array {
             LEFT JOIN lp_expenses e ON e.voucher_id = v.id";
     $params = [];
     $where  = [];
+    if ($year > 0) { $where[] = "v.year=?"; $params[] = $year; }
     if ($email) { $where[] = "v.submitted_by_email=?"; $params[] = $email; }
     if ($status) { $where[] = "v.status=?"; $params[] = $status; }
     if ($where) $sql .= " WHERE " . implode(" AND ", $where);
@@ -786,4 +793,54 @@ function lpBudgetSummary(int $year = 0): array {
         $l['pct']       = $l['budget'] > 0 ? round($l['spent'] / $l['budget'] * 100) : 0;
     }
     return $lines;
+}
+
+/**
+ * Every school year that has anything recorded against it, newest first.
+ * Drawn from vouchers, grants and budget lines together, so a year that was
+ * set up but never spent against still appears.
+ */
+function lpYearsWithData(): array {
+    $years = [];
+    foreach (['SELECT DISTINCT year FROM lp_vouchers',
+              'SELECT DISTINCT year FROM lp_grants',
+              'SELECT DISTINCT year FROM lp_budget_lines'] as $sql) {
+        try {
+            foreach (getDB()->query($sql)->fetchAll(PDO::FETCH_COLUMN) as $y) {
+                $y = (int)$y;
+                if ($y > 0) $years[$y] = true;
+            }
+        } catch (Exception $e) {}
+    }
+    $years[lpCurrentYear()] = true;   // always offer the year we are in
+    $years = array_keys($years);
+    rsort($years);
+    return $years;
+}
+
+/** "2025–2026", matching how lp-grants-manage.php already writes it. */
+function lpYearLabel(int $year): string {
+    return $year . '–' . ($year + 1);
+}
+
+/**
+ * Vouchers from other school years that are still in flight.
+ *
+ * Scoping the dashboard to one year is right for reporting and wrong for
+ * unfinished business: a voucher submitted in August and still unapproved in
+ * October belongs to last school year and would otherwise disappear from the
+ * President's view entirely.
+ */
+function lpUnfinishedOtherYears(int $currentYear): array {
+    try {
+        $s = getDB()->prepare(
+            "SELECT year, COUNT(*) AS n FROM lp_vouchers
+             WHERE year <> ? AND status NOT IN ('paid','rejected','draft')
+             GROUP BY year ORDER BY year DESC"
+        );
+        $s->execute([$currentYear]);
+        return $s->fetchAll();
+    } catch (Exception $e) {
+        return [];
+    }
 }

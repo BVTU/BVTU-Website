@@ -12,9 +12,22 @@ if (!lpCanView($member['email'])) {
 }
 
 $canCreate  = lpCanCreate($member['email']);
-$vouchers   = lpGetVouchers();
-$grantSum   = lpGrantSummary();
-$budgetSum  = lpBudgetSummary();
+
+// Which school year is on screen. Everything below is scoped to it, so a past
+// year can be read back exactly as it stood — the rows were always there, there
+// was simply no way to ask for them.
+$years     = lpYearsWithData();
+$wanted    = isset($_GET['year']) && is_scalar($_GET['year']) ? (int)$_GET['year'] : 0;
+$year      = in_array($wanted, $years, true) ? $wanted : lpCurrentYear();
+$isCurrent = ($year === lpCurrentYear());
+$yearLabel = lpYearLabel($year);
+
+$vouchers   = lpGetVouchers('', '', $year);
+// Always measured against the year we are actually IN, and only shown there:
+// while reading a past year, this year's live vouchers are not strays.
+$strays     = $isCurrent ? lpUnfinishedOtherYears(lpCurrentYear()) : [];
+$grantSum   = lpGrantSummary($year);
+$budgetSum  = lpBudgetSummary($year);
 
 $totalSpent  = array_sum(array_column($grantSum, 'spent'));
 $totalBudget = array_sum(array_column($grantSum, 'budget'));
@@ -73,6 +86,13 @@ $grantSumJson      = json_encode(array_values($grantSum));
     .hero-amount { font-size: 2.5rem; font-weight: 900; line-height: 1; }
     .hero-sub { font-size: .8rem; opacity: .65; margin-top: .25rem; }
     .hero-stats { display: flex; gap: 2rem; flex-wrap: wrap; }
+    .yearbar { display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:1rem;
+               background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:.55rem .9rem; }
+    .yearbar label { font-size:.72rem;font-weight:800;text-transform:uppercase;
+                     letter-spacing:.05em;color:var(--gray-500); }
+    .yearbar select { border:1px solid var(--gray-300);border-radius:7px;padding:.35rem .6rem;
+                      font-size:.88rem;font-family:inherit; }
+    .yearbar .past { font-size:.8rem;color:#b45309;font-weight:600; }
     .hero-stat .lbl { font-size: .73rem; opacity: .7; margin-bottom: .1rem; }
     .hero-stat .val { font-size: 1.2rem; font-weight: 800; }
 
@@ -204,10 +224,27 @@ $grantSumJson      = json_encode(array_values($grantSum));
     </div>
   </div>
 
+  <?php if (count($years) > 1): ?>
+  <form method="GET" class="yearbar">
+    <label for="yearPick">School year</label>
+    <select name="year" id="yearPick" onchange="this.form.submit()">
+      <?php foreach ($years as $y): ?>
+      <option value="<?= (int)$y ?>" <?= $y === $year ? 'selected' : '' ?>>
+        <?= htmlspecialchars(lpYearLabel($y)) ?><?= $y === lpCurrentYear() ? ' (current)' : '' ?>
+      </option>
+      <?php endforeach; ?>
+    </select>
+    <noscript><button type="submit">Show</button></noscript>
+    <?php if (!$isCurrent): ?>
+      <span class="past">Viewing a past year &mdash; figures are as they stand now, not a snapshot.</span>
+    <?php endif; ?>
+  </form>
+  <?php endif; ?>
+
   <!-- Hero -->
   <div class="hero">
     <div>
-      <div class="hero-label">Total BCTF Grant Spending</div>
+      <div class="hero-label">BCTF Grant Spending &middot; <?= htmlspecialchars($yearLabel) ?></div>
       <div class="hero-amount">$<?= number_format($totalSpent, 2) ?></div>
       <div class="hero-sub">of $<?= number_format($totalBudget, 2) ?> total grant budget</div>
     </div>
@@ -222,6 +259,16 @@ $grantSumJson      = json_encode(array_values($grantSum));
       </div>
     </div>
   </div>
+
+  <?php if ($strays): ?>
+  <div class="bctf-banner">
+    <strong>Still in progress from another school year</strong> —
+    <?php foreach ($strays as $st): ?>
+      <a href="?year=<?= (int)$st['year'] ?>"><?= htmlspecialchars(lpYearLabel((int)$st['year'])) ?></a>
+      has <?= (int)$st['n'] ?> voucher<?= (int)$st['n'] === 1 ? '' : 's' ?> not yet paid or rejected.
+    <?php endforeach; ?>
+  </div>
+  <?php endif; ?>
 
   <?php if ($needsSubmission): ?>
   <div class="bctf-banner">
@@ -238,7 +285,13 @@ $grantSumJson      = json_encode(array_values($grantSum));
   <!-- Grant summary -->
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.85rem;flex-wrap:wrap;gap:.5rem;">
     <p class="section-title" style="margin:0;">BCTF Grants</p>
+    <?php // The editor always edits the CURRENT year. Offering it while a past
+          // year is on screen would read as "edit what I am looking at". ?>
+    <?php if ($isCurrent): ?>
     <a href="lp-grants-manage.php" style="font-size:.78rem;font-weight:700;color:var(--primary);text-decoration:none;background:var(--accent);border:1px solid #b8ddc5;border-radius:6px;padding:.3rem .75rem;">✏ Edit budgets</a>
+    <?php else: ?>
+    <span style="font-size:.78rem;color:var(--gray-500);">Past year &mdash; read only</span>
+    <?php endif; ?>
   </div>
   <div class="grant-grid">
     <?php foreach ($grantSum as $g):
