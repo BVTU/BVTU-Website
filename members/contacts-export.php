@@ -94,6 +94,10 @@ if ($format === 'xlsx') {
 
     header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     header('Content-Disposition: attachment; filename="contacts-' . $stamp . '.xlsx"');
+        // tempnam() created this file at 0 bytes and PHP caches that stat, so
+    // filesize() can report 0 after it has been written — the browser then
+    // saves a truncated or empty download.
+    clearstatcache(true, $tmp);
     header('Content-Length: ' . filesize($tmp));
     readfile($tmp);
     unlink($tmp);           // temp file never outlives the request

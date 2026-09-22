@@ -982,3 +982,76 @@ function lpYearOutstanding(int $year): array {
 
     return $out;
 }
+
+/**
+ * Section key => file name stem. Shared by the archive page's per-section
+ * downloads and the year-end bundle: with a map in each, a section added later
+ * would appear in one and be silently absent from the other.
+ */
+const LP_ARCHIVE_SECTIONS = [
+    'grants'   => 'grants',
+    'lines'    => 'budget-lines',
+    'vouchers' => 'vouchers',
+    'claims'   => 'member-claims',
+    'collab'   => 'collaboration-grants',
+];
+
+/**
+ * One school year's records, section by section, as [headers, rows].
+ *
+ * Shared by the archive page, its per-section exports and the year-end
+ * bundle, so all three describe a year identically. A column cannot appear
+ * on screen and go missing from the file someone keeps for seven years.
+ */
+function archiveSection(string $key, array $grants, array $lines, array $vouchers,
+                        array $claims, array $collab): array {
+    switch ($key) {
+        case 'grants':
+            $rows = [];
+            foreach ($grants as $g) {
+                $rows[] = [$g['name'], number_format((float)$g['budget'], 2, '.', ''),
+                           number_format((float)$g['spent'], 2, '.', ''),
+                           number_format((float)$g['remaining'], 2, '.', '')];
+            }
+            return [['Grant', 'Budget', 'Spent', 'Remaining'], $rows];
+
+        case 'lines':
+            $rows = [];
+            foreach ($lines as $l) {
+                $rows[] = [$l['name'], number_format((float)$l['budget'], 2, '.', ''),
+                           number_format((float)$l['spent'], 2, '.', ''),
+                           number_format((float)$l['remaining'], 2, '.', '')];
+            }
+            return [['Budget line', 'Budget', 'Spent', 'Remaining'], $rows];
+
+        case 'vouchers':
+            $rows = [];
+            foreach ($vouchers as $v) {
+                $rows[] = [$v['voucher_number'] ?: ('#' . $v['id']), $v['name'],
+                           $v['submitted_by'], str_replace('_', ' ', $v['status']),
+                           number_format((float)$v['total_amount'], 2, '.', ''),
+                           $v['created_at'] ? date('Y-m-d', strtotime($v['created_at'])) : ''];
+            }
+            return [['Voucher', 'Name', 'Submitted by', 'Status', 'Total', 'Created'], $rows];
+
+        case 'claims':
+            $rows = [];
+            foreach ($claims as $b) {
+                $rows[] = [$b['ref_code'], $b['title'] ?: '', $b['user_name'],
+                           str_replace('_', ' ', $b['status']),
+                           number_format(expBatchTotal((int)$b['id']), 2, '.', ''),
+                           $b['created_at'] ? date('Y-m-d', strtotime($b['created_at'])) : ''];
+            }
+            return [['Ref', 'Claim', 'Member', 'Status', 'Total', 'Created'], $rows];
+
+        case 'collab':
+            $rows = [];
+            foreach ($collab as $a) {
+                $rows[] = [$a['applicant_name'], $a['applicant_email'], $a['school'],
+                           (string)(int)$a['days_requested'], $a['status'],
+                           $a['submitted_at'] ? date('Y-m-d', strtotime($a['submitted_at'])) : ''];
+            }
+            return [['Applicant', 'Email', 'School', 'Days', 'Status', 'Submitted'], $rows];
+    }
+    return [[], []];
+}

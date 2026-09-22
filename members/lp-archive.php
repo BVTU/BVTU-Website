@@ -35,62 +35,7 @@ $vouchers = lpGetVouchers('', '', $year);
 $claims   = expBatchGetAll('', $year);
 $collab   = cgGetApplications($year);
 
-/** Each section as [headers, rows], so the screen and the export cannot drift. */
-function archiveSection(string $key, array $grants, array $lines, array $vouchers,
-                        array $claims, array $collab): array {
-    switch ($key) {
-        case 'grants':
-            $rows = [];
-            foreach ($grants as $g) {
-                $rows[] = [$g['name'], number_format((float)$g['budget'], 2, '.', ''),
-                           number_format((float)$g['spent'], 2, '.', ''),
-                           number_format((float)$g['remaining'], 2, '.', '')];
-            }
-            return [['Grant', 'Budget', 'Spent', 'Remaining'], $rows];
-
-        case 'lines':
-            $rows = [];
-            foreach ($lines as $l) {
-                $rows[] = [$l['name'], number_format((float)$l['budget'], 2, '.', ''),
-                           number_format((float)$l['spent'], 2, '.', ''),
-                           number_format((float)$l['remaining'], 2, '.', '')];
-            }
-            return [['Budget line', 'Budget', 'Spent', 'Remaining'], $rows];
-
-        case 'vouchers':
-            $rows = [];
-            foreach ($vouchers as $v) {
-                $rows[] = [$v['voucher_number'] ?: ('#' . $v['id']), $v['name'],
-                           $v['submitted_by'], str_replace('_', ' ', $v['status']),
-                           number_format((float)$v['total_amount'], 2, '.', ''),
-                           $v['created_at'] ? date('Y-m-d', strtotime($v['created_at'])) : ''];
-            }
-            return [['Voucher', 'Name', 'Submitted by', 'Status', 'Total', 'Created'], $rows];
-
-        case 'claims':
-            $rows = [];
-            foreach ($claims as $b) {
-                $rows[] = [$b['ref_code'], $b['title'] ?: '', $b['user_name'],
-                           str_replace('_', ' ', $b['status']),
-                           number_format(expBatchTotal((int)$b['id']), 2, '.', ''),
-                           $b['created_at'] ? date('Y-m-d', strtotime($b['created_at'])) : ''];
-            }
-            return [['Ref', 'Claim', 'Member', 'Status', 'Total', 'Created'], $rows];
-
-        case 'collab':
-            $rows = [];
-            foreach ($collab as $a) {
-                $rows[] = [$a['applicant_name'], $a['applicant_email'], $a['school'],
-                           (string)(int)$a['days_requested'], $a['status'],
-                           $a['submitted_at'] ? date('Y-m-d', strtotime($a['submitted_at'])) : ''];
-            }
-            return [['Applicant', 'Email', 'School', 'Days', 'Status', 'Submitted'], $rows];
-    }
-    return [[], []];
-}
-
-$exportable = ['grants' => 'grants', 'lines' => 'budget-lines', 'vouchers' => 'vouchers',
-               'claims' => 'member-claims', 'collab' => 'collaboration-grants'];
+$exportable = LP_ARCHIVE_SECTIONS;
 
 $export = isset($_GET['export']) && is_scalar($_GET['export']) ? (string)$_GET['export'] : '';
 if (isset($exportable[$export])) {
@@ -103,6 +48,10 @@ if (isset($exportable[$export])) {
         if (xlsxWrite($tmp, $headers, $rows, ucfirst($export))) {
             header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
             header('Content-Disposition: attachment; filename="' . $file . '.xlsx"');
+                        // tempnam() created this file at 0 bytes and PHP caches that stat, so
+            // filesize() can report 0 after it has been written — the browser then
+            // saves a truncated or empty download.
+            clearstatcache(true, $tmp);
             header('Content-Length: ' . filesize($tmp));
             readfile($tmp);
             unlink($tmp);
@@ -192,7 +141,16 @@ function qsv(string $s): string { return htmlspecialchars($s); }
     <noscript><button type="submit">Show</button></noscript>
     <?php if ($isClosed): ?><span class="tag closed">Closed</span><?php endif; ?>
     <span style="font-size:.8rem;color:var(--gray-500);">Read only &mdash; figures are as they stand now.</span>
+    <a href="lp-archive-bundle.php?year=<?= (int)$year ?>" style="margin-left:auto;font-size:.8rem;
+       font-weight:700;color:#fff;background:var(--primary);border:1px solid var(--primary);
+       border-radius:7px;padding:.35rem .8rem;text-decoration:none;">&#8681; Download whole year (ZIP)</a>
   </form>
+
+  <p style="font-size:.82rem;color:var(--gray-600);line-height:1.7;margin:-.4rem 0 1.1rem;">
+    The ZIP holds every record above <em>and every receipt image behind it</em>, readable
+    without this website. Everything else lives only in the portal's database &mdash; keep
+    a copy of this somewhere that is not the web host.
+  </p>
 
   <div class="tiles">
     <div class="tile"><div class="n">$<?= number_format($totalSpent, 2) ?></div>

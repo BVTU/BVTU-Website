@@ -125,7 +125,10 @@ $openCount   = count($outstanding['vouchers']) + count($outstanding['claims']) +
   <h1>Year End</h1>
   <p class="muted" style="margin:-.6rem 0 1rem;">
     Everything in a closed year stays readable and exportable from the
-    <a href="lp-archive.php?year=<?= (int)$closing ?>" style="color:var(--primary);font-weight:600;">archive</a>.
+    <a href="lp-archive.php?year=<?= (int)$closing ?>" style="color:var(--primary);font-weight:600;">archive</a>,
+    which can also hand you the
+    <a href="lp-archive-bundle.php?year=<?= (int)$closing ?>" style="color:var(--primary);font-weight:600;">whole
+    year as one file</a> &mdash; records and receipt images &mdash; to keep off the web host.
   </p>
 
   <?php if ($notice): ?><div class="notice">&#x2713; <?= $notice ?></div><?php endif; ?>

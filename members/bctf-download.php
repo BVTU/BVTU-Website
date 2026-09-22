@@ -43,6 +43,10 @@ $zipName = 'BCTF-Membership-Forms-' . $stamp . '.zip';
 
 header('Content-Type: application/zip');
 header('Content-Disposition: attachment; filename="' . $zipName . '"');
+// tempnam() created this file at 0 bytes and PHP caches that stat, so
+// filesize() can report 0 after it has been written — the browser then
+// saves a truncated or empty download.
+clearstatcache(true, $tmpZip);
 header('Content-Length: ' . filesize($tmpZip));
 readfile($tmpZip);
 unlink($tmpZip);
