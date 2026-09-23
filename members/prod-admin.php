@@ -28,6 +28,10 @@ $showPhase2 = $isExec || $isTreasurer;
 $notice = null;
 
 // ── Handle POST actions ───────────────────────────────────────────────────────
+// Approve/reject, including the phase-2 financial review. The Pro-D twin of
+// the action handlers hardened alongside it.
+if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfCheck();
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $act   = $_POST['action'] ?? '';
     $id    = (int)($_POST['id'] ?? 0);
@@ -231,6 +235,7 @@ $statusBg    = ['pending' => '#fffbeb', 'approved' => '#f0fdf4', 'rejected' => '
 
     <?php if ($isPending): ?>
     <form method="POST" class="action-row">
+        <?= csrfField() ?>
       <input type="hidden" name="id"    value="<?= $r['id'] ?>">
       <input type="hidden" name="phase" value="1">
       <input type="text" name="note" class="note-input" placeholder="Optional note to teacher…">
@@ -327,6 +332,7 @@ $statusBg    = ['pending' => '#fffbeb', 'approved' => '#f0fdf4', 'rejected' => '
 
     <?php if ($isPending): ?>
     <form method="POST" class="action-row">
+        <?= csrfField() ?>
       <input type="hidden" name="id"    value="<?= $r['id'] ?>">
       <input type="hidden" name="phase" value="2">
       <input type="text" name="note" class="note-input" placeholder="Optional note to teacher…">

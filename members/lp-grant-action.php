@@ -19,6 +19,10 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+// Records that a grant's receipts went to the BCTF — the rest of this workflow
+// now checks, and leaving one handler out is how a sweep ends up half done.
+csrfCheck();
+
 $action  = $_POST['action']   ?? '';
 $grantId = (int)($_POST['grant_id'] ?? 0);
 $note    = trim($_POST['note'] ?? '');

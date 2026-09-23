@@ -364,6 +364,7 @@ $grantSumJson      = json_encode(array_values($grantSum));
       </a>
       <?php if ($v['status'] === 'draft' && $v['submitted_by_email'] === $member['email']): ?>
       <form method="POST" action="lp-voucher-view.php?id=<?= $v['id'] ?>" style="display:inline;flex-shrink:0;" onsubmit="return confirm('Permanently delete this draft voucher and all its expenses? This cannot be undone.')">
+        <?= csrfField() ?>
         <input type="hidden" name="action" value="delete">
         <button type="submit" class="btn btn-outline" style="padding:.35rem .7rem;font-size:.78rem;color:#dc2626;border-color:#dc2626;">🗑 Delete</button>
       </form>
@@ -441,6 +442,7 @@ $grantSumJson      = json_encode(array_values($grantSum));
     <div class="gmodal-submission" id="gmodal-submission">
       <div class="gsub-status" id="gsub-status"></div>
       <form method="POST" action="lp-grant-action.php" id="gsub-form" style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;">
+        <?= csrfField() ?>
         <input type="hidden" name="grant_id" id="gsub-grant-id" value="">
         <input type="hidden" name="action" id="gsub-action" value="mark_submitted">
         <input type="hidden" name="redirect" value="lp-dashboard.php">

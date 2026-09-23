@@ -33,6 +33,10 @@ $saved       = false;
 // Reviewers (treasurer/VP) see the voucher read-only — they approve via approvals.php
 $readOnly = $isReviewer && !$isOwner;
 
+// The voucher form saves expenses and can submit for approval, which
+// emails the Treasurer. Same transition the view page protects.
+if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfCheck();
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $readOnly) {
     header('Location: approvals.php');
     exit;
@@ -349,6 +353,7 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
   <?php endif; ?>
 
   <form method="POST" id="voucherForm">
+    <?= csrfField() ?>
 
   <div class="voucher-header">
     <div class="hfield" style="flex:2;">
@@ -483,6 +488,8 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
 </div>
 
 <script>
+  const LP_CSRF = <?= json_encode(csrfToken()) ?>;
+
 const GRANTS       = <?= $grantsJson ?>;
 const BUDGET_LINES = <?= $budgetLinesJson ?>;
 const MILEAGE_RATE = <?= $mileageRate ?>;
@@ -894,7 +901,25 @@ function addPendingCard(receipt) {
         fillRowFromScan(tid, receipt.scan_data || {});
         var fd = new FormData();
         fd.append('pending_id', receipt.id);
-        fetch('lp-claim-receipt.php', { method: 'POST', body: fd });
+        fd.append('csrf_token', LP_CSRF);
+        fetch('lp-claim-receipt.php', { method: 'POST', body: fd })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                // Say so rather than leaving the tray looking cleared when the
+                // server refused — the receipt is still there on reload.
+                if (!d || !d.ok) {
+                    // Deliberately NOT re-offered: the receipt is already in a
+                    // row, so putting the card back invites a second row against
+                    // the same file. Say what happened and let them reload.
+                    alert((d && d.error) ? d.error
+                        : 'That receipt was attached here but could not be marked as filed. '
+                          + 'Reload before adding more so it is not attached twice.');
+                }
+            })
+            .catch(function () {
+                alert('That receipt could not be filed — the server did not respond. '
+                      + 'Reload before adding more.');
+            });
         var tr = document.getElementById('row-' + tid);
         if (tr) {
             tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1031,7 +1056,25 @@ function claimReceipt(pendingId) {
 function dismissPendingCard(pendingId) {
     var fd = new FormData();
     fd.append('pending_id', pendingId);
-    fetch('lp-claim-receipt.php', { method: 'POST', body: fd });
+    fd.append('csrf_token', LP_CSRF);
+    fetch('lp-claim-receipt.php', { method: 'POST', body: fd })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                // Say so rather than leaving the tray looking cleared when the
+                // server refused — the receipt is still there on reload.
+                if (!d || !d.ok) {
+                    // Not re-offered. Both callers of this have already attached
+                    // the receipt to a row, so putting the card back would let a
+                    // second click create a duplicate line for the same file.
+                    alert((d && d.error) ? d.error
+                        : 'That receipt was attached but could not be marked as filed. '
+                          + 'Reload before adding more so it is not attached twice.');
+                }
+            })
+            .catch(function () {
+                alert('That receipt could not be filed — the server did not respond. '
+                      + 'Reload before adding more.');
+            });
 
     var card = document.getElementById('pc-' + pendingId);
     if (card) card.remove();

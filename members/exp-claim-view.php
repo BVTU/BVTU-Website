@@ -34,6 +34,9 @@ $notice = $_GET['notice'] ?? '';
 $error  = $_GET['error']  ?? '';
 
 // ── Submit for approval (owner / submitter only, draft status) ──────────────
+// Both handlers below change state; the forms carry tokens.
+if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfCheck();
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'submit') {
     if ($batch['status'] === 'draft' && $canManage) {
         try {
@@ -173,11 +176,13 @@ function _expClaimStatusBadge(string $status): string {
         <?php if ($batch['status'] === 'draft' && $canManage): ?>
         <a href="exp-submit.php?id=<?= $id ?>" class="btn btn-outline" style="padding:.5rem .9rem;font-size:.85rem;">&#x270F; Edit Items</a>
         <form method="POST" style="display:inline;" onsubmit="return confirm('Submit this claim for Treasurer review? You can still edit it before they sign.');">
+        <?= csrfField() ?>
           <input type="hidden" name="action" value="submit">
           <button type="submit" class="btn btn-primary" style="padding:.5rem 1rem;font-size:.85rem;">&#x1F4E4; Submit for Approval</button>
         </form>
         <?php if ($isOwner): ?>
         <form method="POST" style="display:inline;" onsubmit="return confirm('Permanently delete this draft claim and its items? This cannot be undone.');">
+        <?= csrfField() ?>
           <input type="hidden" name="action" value="delete">
           <button type="submit" class="btn btn-outline" style="padding:.5rem .9rem;font-size:.85rem;color:#dc2626;border-color:#fecaca;">&#x1F5D1; Delete</button>
         </form>

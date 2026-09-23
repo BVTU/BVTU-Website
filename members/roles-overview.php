@@ -26,6 +26,11 @@ if (!$isAdmin && !prodIsExec($member['email']) && !expIsAdmin($member['email']))
 $notice = null;
 $error  = null;
 
+// Writes exec_roles, which decides who may sign and who may pay. An
+// unchecked write here would hand out the very role the signing guards
+// trust, walking around them rather than tripping them.
+if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfCheck();
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isAdmin) {
     $action = $_POST['action'] ?? '';
 
@@ -333,6 +338,7 @@ ksort($siteReps);
             <form method="POST" id="form-<?= $slug ?>"
                   data-role-label="<?= htmlspecialchars($label) ?>"
                   onsubmit="return confirmAssign(event, '<?= $slug ?>')">
+        <?= csrfField() ?>
               <input type="hidden" name="action"       value="assign_role">
               <input type="hidden" name="role_slug"    value="<?= $slug ?>">
               <input type="hidden" name="member_email" id="sel-email-<?= $slug ?>" value="">
@@ -367,6 +373,7 @@ ksort($siteReps);
               </button>
               <?php if ($row): ?>
               <form method="POST" style="display:inline;" onsubmit="return confirm('Clear <?= htmlspecialchars(addslashes($label)) ?>?')">
+        <?= csrfField() ?>
                 <input type="hidden" name="action"  value="remove_role">
                 <input type="hidden" name="role_id" value="<?= (int)$row['id'] ?>">
                 <button type="submit" class="act-btn danger" title="Clear position">&#x2715;</button>

@@ -20,6 +20,11 @@ if (!$isOwner && !lpCanView($member['email'])) { header('Location: lp-dashboard.
 $expenses = lpGetExpenses($id);
 $notice   = null;
 
+// This page's own handlers (submit, delete, resend) act on POST. They now carry
+// tokens, so check them here — a token that is emitted and never verified is
+// worse than none, because it looks like the page is protected.
+if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfCheck();
+
 // ── Submit to treasurer ───────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'submit') {
     if ($voucher['status'] === 'draft' && ($isOwner || prodIsExec($member['email']))) {
@@ -281,11 +286,13 @@ arsort($blSummary);
           <?php if ($voucher['status'] === 'draft'): ?>
           <a href="lp-voucher-edit.php?id=<?= $id ?>" class="btn btn-outline" style="padding:.45rem .85rem;font-size:.83rem;">✏ Edit</a>
           <form method="POST" style="display:inline;" onsubmit="return confirm('Submit this voucher to the treasurer for review? You can still edit it after.')">
+        <?= csrfField() ?>
             <input type="hidden" name="action" value="submit">
             <button type="submit" class="btn btn-primary" style="padding:.45rem .85rem;font-size:.83rem;background:#166534;">📤 Submit to Treasurer</button>
           </form>
           <?php if ($isOwner): ?>
           <form method="POST" style="display:inline;" onsubmit="return confirm('Permanently delete this draft voucher and all its expenses? This cannot be undone.')">
+        <?= csrfField() ?>
             <input type="hidden" name="action" value="delete">
             <button type="submit" class="btn btn-outline" style="padding:.45rem .85rem;font-size:.83rem;color:#dc2626;border-color:#dc2626;">🗑 Delete</button>
           </form>
@@ -296,11 +303,13 @@ arsort($blSummary);
           <?php if (execIsAdmin($member['email']) && $voucher['status'] !== 'paid'): ?>
           <?php if ($voucher['status'] === 'submitted'): ?>
           <form method="POST" style="display:inline;" onsubmit="return confirm('Re-send the Treasurer notification email for this voucher?')">
+        <?= csrfField() ?>
             <input type="hidden" name="action" value="resend_to_treasurer">
             <button type="submit" class="btn btn-outline" style="padding:.45rem .85rem;font-size:.83rem;">&#x21BA; Resend to Treasurer</button>
           </form>
           <?php endif; ?>
           <form method="POST" style="display:inline;" onsubmit="return confirm('Permanently delete this voucher and all its expenses? This cannot be undone.')">
+        <?= csrfField() ?>
             <input type="hidden" name="action" value="delete">
             <button type="submit" class="btn btn-outline" style="padding:.45rem .85rem;font-size:.83rem;color:#dc2626;border-color:#dc2626;">🗑 Delete</button>
           </form>

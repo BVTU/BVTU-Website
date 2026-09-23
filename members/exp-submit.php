@@ -80,6 +80,10 @@ $catLabels = [
 ];
 
 // ── Handle save / submit ────────────────────────────────────────────────────────
+// Writes the claim's line items and amounts. The page that submits a claim
+// for approval already checks; the page that sets the figures should too.
+if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfCheck();
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $title = trim($_POST['title'] ?? '');
 
@@ -325,6 +329,7 @@ $rows = $items ?: [[
   <?php endif; ?>
 
   <form method="POST" id="claimForm">
+        <?= csrfField() ?>
     <input type="hidden" name="on_behalf_of" value="<?= htmlspecialchars($onBehalfSel) ?>">
 
     <div class="claim-header">

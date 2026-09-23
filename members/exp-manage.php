@@ -19,6 +19,10 @@ $notice = null;
 $error  = null;
 
 // ── Handle POST actions ────────────────────────────────────────────────────────
+// Creates a member account with a password chosen in the request, which is a
+// working session for whoever sent it.
+if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfCheck();
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
@@ -117,6 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <div class="form-card">
     <h2>Create Portal Account</h2>
     <form method="POST" autocomplete="off">
+        <?= csrfField() ?>
       <input type="hidden" name="action" value="create_account">
       <div class="field-row">
         <div class="field">

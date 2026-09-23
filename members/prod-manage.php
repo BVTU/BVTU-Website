@@ -22,6 +22,11 @@ $error  = null;
 $tab    = in_array($_GET['tab'] ?? '', ['roles', 'schools'], true) ? $_GET['tab'] : 'roles';
 
 // ── Handle POST actions ───────────────────────────────────────────────────────
+// Grants and removes prod_roles. 'exec' is the role the receipt endpoints
+// trust, so an unchecked grant here would walk around those gates rather
+// than trip them.
+if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfCheck();
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
@@ -202,6 +207,7 @@ $roleBgs    = ['exec' => '#eff6ff', 'treasurer' => '#f0fdf4', 'site_rep' => '#f5
             <td style="font-size:.83rem;"><?= htmlspecialchars($r['school_name'] ?? '—') ?></td>
             <td>
               <form method="POST" onsubmit="return confirm('Remove this role?')">
+        <?= csrfField() ?>
                 <input type="hidden" name="action"  value="remove_role">
                 <input type="hidden" name="role_id" value="<?= $r['id'] ?>">
                 <button type="submit" class="remove-btn" title="Remove">✕</button>
@@ -217,6 +223,7 @@ $roleBgs    = ['exec' => '#eff6ff', 'treasurer' => '#f0fdf4', 'site_rep' => '#f5
     <div class="form-card">
       <h2>Assign a Role</h2>
       <form method="POST" id="form-prod" onsubmit="return confirmAssign(event, 'prod')">
+        <?= csrfField() ?>
         <input type="hidden" name="action" value="add_role">
         <input type="hidden" name="role_email" id="sel-email-prod" value="">
         <input type="hidden" name="role_name"  id="sel-name-prod"  value="">
@@ -288,6 +295,7 @@ $roleBgs    = ['exec' => '#eff6ff', 'treasurer' => '#f0fdf4', 'site_rep' => '#f5
             <td><strong><?= htmlspecialchars($s['name']) ?></strong></td>
             <td>
               <form method="POST" style="display:flex;gap:.4rem;align-items:center;">
+        <?= csrfField() ?>
                 <input type="hidden" name="action"       value="update_school">
                 <input type="hidden" name="school_id_edit" value="<?= $s['id'] ?>">
                 <input type="number" name="fte_count" value="<?= $s['fte_count'] ?>" min="0" step="0.5"
@@ -316,6 +324,7 @@ $roleBgs    = ['exec' => '#eff6ff', 'treasurer' => '#f0fdf4', 'site_rep' => '#f5
     <div class="form-card">
       <h2>Add a School</h2>
       <form method="POST">
+        <?= csrfField() ?>
         <input type="hidden" name="action" value="add_school">
         <div class="field-row">
           <div class="field">

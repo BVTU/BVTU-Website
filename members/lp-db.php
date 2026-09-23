@@ -226,6 +226,14 @@ function lpGetPendingReceipts(int $voucherId): array {
     return $rows;
 }
 
+/** One pending receipt by its own id — not to be confused with
+ *  lpGetPendingReceipts($voucherId) directly below. */
+function lpGetPendingReceiptById(int $id): ?array {
+    $s = getDB()->prepare("SELECT * FROM lp_pending_receipts WHERE id=?");
+    $s->execute([$id]);
+    return $s->fetch() ?: null;
+}
+
 function lpClaimPendingReceipt(int $id): void {
     getDB()->prepare("UPDATE lp_pending_receipts SET claimed=1 WHERE id=?")->execute([$id]);
 }

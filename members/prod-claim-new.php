@@ -11,6 +11,9 @@ $bal    = prodGetBalance($member['email']);
 $errors = [];
 $saved  = false;
 
+// Creates a Pro-D claim, with amounts.
+if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfCheck();
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $date     = trim($_POST['expense_date']  ?? '');
     $category = trim($_POST['category']      ?? '');
@@ -185,6 +188,7 @@ $catLabels = ['conference' => 'Conference / Workshop', 'course' => 'Course / Tra
 
   <!-- Claim form -->
   <form method="POST" id="claimForm">
+        <?= csrfField() ?>
     <input type="hidden" name="receipt_path"     id="hiddenReceiptPath">
     <input type="hidden" name="receipt_filename" id="hiddenReceiptFilename">
     <input type="hidden" name="extracted_vendor"   id="hiddenVendor">

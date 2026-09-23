@@ -6,6 +6,7 @@
  */
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/lp-db.php';
+require_once __DIR__ . '/prod-db.php';   // prodIsExec(), matching the editor's gate
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -15,6 +16,21 @@ $voucherId = (int)($_GET['voucher_id'] ?? 0);
 if (!$voucherId) { http_response_code(400); echo json_encode(['error' => 'Missing voucher_id']); exit; }
 
 lpEnsureTables();
+
+$member  = getMember();
+$voucher = lpGetVoucher($voucherId);
+if (!$voucher) { http_response_code(404); echo json_encode(['error' => 'Voucher not found']); exit; }
+
+$isOwner = strtolower(trim($voucher['submitted_by_email'] ?? '')) === strtolower(trim($member['email']));
+// Mirrors lp-voucher-edit.php's gate exactly — owner, a Pro-D exec, or a
+// signer reviewing it, plus the President via lpCanView. A narrower gate
+// here means a reviewer's tray silently never fills.
+if (!$isOwner && !lpCanView($member['email']) && !prodIsExec($member['email'])
+             && !lpCanReview($member['email'])) {
+    http_response_code(403);
+    echo json_encode(['error' => 'Not your voucher']);
+    exit;
+}
 
 $rows = lpGetPendingReceipts($voucherId);
 

@@ -17,6 +17,16 @@ if (!lpCanCreate($member['email'])) {
     http_response_code(403); echo json_encode(['ok' => false, 'error' => 'Access denied']); exit;
 }
 
+// Creates a voucher row and mints an upload token, so it is a state change like
+// the rest of this workflow rather than a read. Fails as JSON rather than with
+// csrfCheck()'s plain-text exit, which the caller's r.json() would choke on and
+// report as "could not reach the server".
+if (!csrfValid()) {
+    http_response_code(400);
+    echo json_encode(['ok' => false, 'error' => 'Could not verify the request. Reload the page.']);
+    exit;
+}
+
 lpEnsureTables();
 
 // Clean up abandoned drafts older than 24 hours (belt-and-suspenders hygiene)

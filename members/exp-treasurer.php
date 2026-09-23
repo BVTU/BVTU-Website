@@ -173,6 +173,7 @@ $catLabels = [
       <!-- Approve -->
       <div class="approve-area">
         <form method="POST" action="exp-action.php" id="form-approve-<?= $exp['id'] ?>">
+        <?= csrfField() ?>
           <input type="hidden" name="action"     value="signer1_approve">
           <input type="hidden" name="expense_id" value="<?= (int)$exp['id'] ?>">
           <input type="hidden" name="redirect"   value="exp-treasurer.php">
@@ -192,6 +193,7 @@ $catLabels = [
       <!-- Reject -->
       <div class="reject-area">
         <form method="POST" action="exp-action.php" id="form-reject-<?= $exp['id'] ?>">
+        <?= csrfField() ?>
           <input type="hidden" name="action"     value="signer1_reject">
           <input type="hidden" name="expense_id" value="<?= (int)$exp['id'] ?>">
           <input type="hidden" name="redirect"   value="exp-treasurer.php">
@@ -212,6 +214,7 @@ $catLabels = [
 
       <!-- Resend notification -->
       <form method="POST" action="exp-action.php" style="align-self:flex-start;padding-top:.5rem;">
+        <?= csrfField() ?>
         <input type="hidden" name="action"     value="resend_notification">
         <input type="hidden" name="expense_id" value="<?= (int)$exp['id'] ?>">
         <input type="hidden" name="redirect"   value="exp-treasurer.php">
@@ -258,6 +261,7 @@ $catLabels = [
     <?php endif; ?>
 
     <form method="POST" action="exp-action.php">
+        <?= csrfField() ?>
       <input type="hidden" name="action"     value="mark_paid">
       <input type="hidden" name="expense_id" value="<?= (int)$exp['id'] ?>">
       <input type="hidden" name="redirect"   value="exp-treasurer.php">

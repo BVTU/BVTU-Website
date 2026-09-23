@@ -1025,6 +1025,13 @@ function expGetPendingReceipt(int $expenseId): ?array {
     return $r;
 }
 
+/** One pending receipt by its own id, so a caller can check whose it is. */
+function expGetPendingReceiptById(int $id): ?array {
+    $s = getDB()->prepare("SELECT * FROM exp_pending_receipts WHERE id=?");
+    $s->execute([$id]);
+    return $s->fetch() ?: null;
+}
+
 function expClaimPendingReceipt(int $id): void {
     getDB()->prepare("UPDATE exp_pending_receipts SET claimed=1 WHERE id=?")->execute([$id]);
 }

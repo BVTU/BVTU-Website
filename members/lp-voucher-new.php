@@ -18,6 +18,10 @@ $errors      = [];
 $saved       = false;
 $voucherId   = null;
 
+// The voucher form saves expenses and can submit for approval, which
+// emails the Treasurer. Same transition the view page protects.
+if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfCheck();
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $voucherName = trim($_POST['voucher_name'] ?? '');
     $voucherNum  = trim($_POST['voucher_number'] ?? '');
@@ -326,6 +330,7 @@ $initRowsJson = json_encode($initRows);
   <?php endif; ?>
 
   <form method="POST" id="voucherForm">
+    <?= csrfField() ?>
   <input type="hidden" name="draft_voucher_id" id="draftVoucherId" value="<?= (int)($_POST['draft_voucher_id'] ?? 0) ?>">
 
   <!-- Voucher header -->
@@ -872,6 +877,7 @@ if (INIT_ROWS.length > 0) {
 }
 
 // ── Phone upload / QR panel ───────────────────────────────────────────────────
+const LP_CSRF = <?= json_encode(csrfToken()) ?>;
 let draftVoucherId  = parseInt(document.getElementById('draftVoucherId').value) || 0;
 let mobileUrl       = '';
 let qrGenerated     = false;
@@ -901,7 +907,9 @@ function openPhoneUpload() {
     document.getElementById('qrLoading').style.display = 'flex';
     document.getElementById('qrInstructions').style.display = 'none';
 
-    fetch('lp-create-draft.php', { method: 'POST' })
+    var draftFd = new FormData();
+    draftFd.append('csrf_token', LP_CSRF);
+    fetch('lp-create-draft.php', { method: 'POST', body: draftFd })
         .then(function(r) { return r.json(); })
         .then(function(d) {
             if (!d.ok) { qrFailed(d.error || 'Could not create the upload session.'); return; }
@@ -1019,7 +1027,25 @@ function addPendingCard(receipt) {
         fillRowFromScan(tid, receipt.scan_data || {});
         var fd = new FormData();
         fd.append('pending_id', receipt.id);
-        fetch('lp-claim-receipt.php', { method: 'POST', body: fd });
+        fd.append('csrf_token', LP_CSRF);
+        fetch('lp-claim-receipt.php', { method: 'POST', body: fd })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                // Say so rather than leaving the tray looking cleared when the
+                // server refused — the receipt is still there on reload.
+                if (!d || !d.ok) {
+                    // Deliberately NOT re-offered: the receipt is already in a
+                    // row, so putting the card back invites a second row against
+                    // the same file. Say what happened and let them reload.
+                    alert((d && d.error) ? d.error
+                        : 'That receipt was attached here but could not be marked as filed. '
+                          + 'Reload before adding more so it is not attached twice.');
+                }
+            })
+            .catch(function () {
+                alert('That receipt could not be filed — the server did not respond. '
+                      + 'Reload before adding more.');
+            });
         var tr = document.getElementById('row-' + tid);
         if (tr) {
             tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1143,7 +1169,25 @@ function claimReceipt(pendingId) {
 function dismissPendingCard(pendingId) {
     var fd = new FormData();
     fd.append('pending_id', pendingId);
-    fetch('lp-claim-receipt.php', { method: 'POST', body: fd });
+    fd.append('csrf_token', LP_CSRF);
+    fetch('lp-claim-receipt.php', { method: 'POST', body: fd })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                // Say so rather than leaving the tray looking cleared when the
+                // server refused — the receipt is still there on reload.
+                if (!d || !d.ok) {
+                    // Not re-offered. Both callers of this have already attached
+                    // the receipt to a row, so putting the card back would let a
+                    // second click create a duplicate line for the same file.
+                    alert((d && d.error) ? d.error
+                        : 'That receipt was attached but could not be marked as filed. '
+                          + 'Reload before adding more so it is not attached twice.');
+                }
+            })
+            .catch(function () {
+                alert('That receipt could not be filed — the server did not respond. '
+                      + 'Reload before adding more.');
+            });
     var card = document.getElementById('pc-' + pendingId);
     if (card) card.remove();
     var remaining = document.getElementById('pendingCards').children.length;

@@ -18,6 +18,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+// Same exposure as lp-action.php: these transitions authorise payments.
+csrfCheck();
+
 $action      = $_POST['action']        ?? '';
 $batchId     = (int)($_POST['batch_id'] ?? 0);
 $note        = trim($_POST['note']         ?? '');

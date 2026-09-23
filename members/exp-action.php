@@ -14,6 +14,12 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+// The single-expense twin of exp-claim-action.php, and still reachable: the
+// workflow emails link to exp-treasurer.php and exp-signer2.php. Same
+// transitions, including admin_override, which can force a row straight to
+// paid — leaving it out would have made the sweep look complete and not be.
+csrfCheck();
+
 $action      = $_POST['action']        ?? '';
 $expId       = (int)($_POST['expense_id'] ?? 0);
 $note        = trim($_POST['note']         ?? '');

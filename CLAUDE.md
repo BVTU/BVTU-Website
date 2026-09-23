@@ -8,9 +8,12 @@ Run the `code-review` skill over the working diff, fix what it finds, then
 commit. Do not commit and then review. Report the review outcome to Cody along
 with the change — including when it found nothing.
 
-**Use `low` by default.** It returns the few high-confidence findings, which is
-what this rule is for. Reserve `high` for changes to money, authentication,
-permissions, or database schema. Never `ultra` — that is billed and Cody's to
+**Use `low` by default, `medium` at the most.** Low returns the few
+high-confidence findings, which is what this rule is for. `medium` is the
+ceiling — reach for it only on money, authentication, permissions or schema, and
+never go above it. Do not use `high`, `xhigh` or `max`: Cody capped this on
+2026-09-23 because the cost is his and the extra findings at high were mostly
+comment wording by the end. Never `ultra` — that is billed and Cody's to
 trigger.
 
 **Review once, not once per fix.** Fix everything a pass reports, then run at

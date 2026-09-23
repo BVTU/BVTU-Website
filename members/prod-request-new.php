@@ -20,6 +20,10 @@ $catLabels = [
     'other'      => 'Other',
 ];
 
+// Creates a Pro-D request. Its downstream admin and receipt handlers are
+// gated; the page that creates the record should be too.
+if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfCheck();
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $dates    = array_filter(array_map('trim', explode(',', $_POST['request_dates'] ?? '')));
     $numDays  = (float)($_POST['num_days']   ?? 0);
@@ -156,6 +160,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   <div class="form-card">
     <form method="POST" id="reqForm">
+        <?= csrfField() ?>
 
       <p class="section-label">Activity Details</p>
 

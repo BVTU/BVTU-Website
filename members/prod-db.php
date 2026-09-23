@@ -222,6 +222,13 @@ function prodGetPendingReceipt(int $requestId): ?array {
     return $r;
 }
 
+/** One pending receipt by its own id, so a caller can check whose it is. */
+function prodGetPendingReceiptById(int $id): ?array {
+    $s = getDB()->prepare("SELECT * FROM prod_pending_receipts WHERE id=?");
+    $s->execute([$id]);
+    return $s->fetch() ?: null;
+}
+
 function prodClaimPendingReceipt(int $id): void {
     getDB()->prepare("UPDATE prod_pending_receipts SET claimed=1 WHERE id=?")->execute([$id]);
 }

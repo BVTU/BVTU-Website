@@ -13,6 +13,12 @@ $forced  = mustChangePassword();
 $error   = '';
 $success = false;
 
+// The forced path deliberately skips the current-password check, so the token
+// is the only thing standing between a cross-site POST and taking over an
+// account that is sitting in must_change_password — which is every account an
+// admin has just created.
+if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfCheck();
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $current  = $_POST['current_password'] ?? '';
     $new      = $_POST['new_password']     ?? '';
@@ -119,6 +125,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <div class="success-msg">&#x2713; Password updated! Redirecting to dashboard&hellip;</div>
       <?php else: ?>
       <form method="POST">
+        <?= csrfField() ?>
         <?php if (!$forced): ?>
         <div class="field">
           <label for="current_password">Current Password</label>

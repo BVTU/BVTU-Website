@@ -16,6 +16,11 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+// Approve, reject and mark-paid move union money and had no token check at all,
+// so any page the signer visited could have driven them. Every form that posts
+// here now carries csrfField().
+csrfCheck();
+
 $action    = $_POST['action']     ?? '';
 $voucherId   = (int)($_POST['voucher_id'] ?? 0);
 $note        = trim($_POST['note']         ?? '');

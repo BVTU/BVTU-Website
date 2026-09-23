@@ -10,6 +10,9 @@ $errors  = [];
 $saved   = false;
 $schools = prodGetSchools();
 
+// Creates a Pro-D day request.
+if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfCheck();
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $dates     = array_filter(array_map('trim', explode(',', $_POST['request_dates'] ?? '')));
     $numDay    = (float)($_POST['num_days'] ?? 0);
@@ -117,6 +120,7 @@ $statusBg    = ['pending' => '#fffbeb', 'approved' => '#f0fdf4', 'rejected' => '
   <!-- Request form -->
   <div class="form-card">
     <form method="POST" id="dayForm">
+        <?= csrfField() ?>
 
       <div class="field">
         <label>Dates Requested</label>

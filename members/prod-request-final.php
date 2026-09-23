@@ -29,6 +29,10 @@ $catLabels = [
 $errors = [];
 $saved  = false;
 
+// The page mints a token for its receipt fetch; its own claim submit must check
+// one too. A token that is emitted and never verified only looks like a guard.
+if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfCheck();
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $finalAmount = trim($_POST['final_amount']   ?? '');
     $finalDesc   = trim($_POST['final_description'] ?? '');
@@ -235,6 +239,7 @@ $mobileUrl   = "{$protocol}://{$host}/members/prod-mobile-receipt.php?token={$up
 
   <div class="form-card">
     <form method="POST" id="finalForm">
+      <?= csrfField() ?>
 
       <p class="section-label">Receipt Upload</p>
 
@@ -333,6 +338,8 @@ $mobileUrl   = "{$protocol}://{$host}/members/prod-mobile-receipt.php?token={$up
 <div id="receiptToast"></div>
 
 <script>
+  const PROD_CSRF = <?= json_encode(csrfToken()) ?>;
+
 const REQUEST_ID = <?= $id ?>;
 const MOBILE_URL = <?= json_encode($mobileUrl) ?>;
 var qrGenerated  = false;
@@ -367,7 +374,21 @@ function pollReceipt() {
             // Mark as claimed
             var fd = new FormData();
             fd.append('pending_id', d.receipt.id);
-            fetch('prod-claim-receipt.php', { method: 'POST', body: fd });
+            fd.append('csrf_token', PROD_CSRF);
+            fetch('prod-claim-receipt.php', { method: 'POST', body: fd })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    // The receipt is already applied to the form, so a refusal
+                    // means it will be offered again on the next page load.
+                    if (!res || !res.ok) {
+                        alert((res && res.error) ? res.error
+                            : 'That receipt was applied but could not be marked as filed. '
+                              + 'Reload before submitting so it is not applied twice.');
+                    }
+                })
+                .catch(function () {
+                    alert('That receipt could not be marked as filed — the server did not respond.');
+                });
         })
         .catch(function() {});
 }

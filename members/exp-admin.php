@@ -262,6 +262,7 @@ $statusBadges = [
     <h2>Override Status</h2>
     <p style="font-size:.85rem;color:var(--gray-500);margin:0 0 1rem;" id="overrideRef"></p>
     <form method="POST" action="exp-action.php">
+        <?= csrfField() ?>
       <input type="hidden" name="action"     value="admin_override">
       <input type="hidden" name="expense_id" id="overrideId" value="">
       <input type="hidden" name="redirect"   value="exp-admin.php">

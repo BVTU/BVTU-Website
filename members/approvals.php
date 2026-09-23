@@ -220,6 +220,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
     <div class="acts">
       <?php if ($b['status'] === 'pending' && $canSign1): ?>
         <form method="POST" action="exp-claim-action.php" style="display:inline;">
+        <?= csrfField() ?>
           <input type="hidden" name="action" value="signer1_approve">
           <input type="hidden" name="batch_id" value="<?= (int)$b['id'] ?>">
           <input type="hidden" name="redirect" value="approvals.php">
@@ -227,6 +228,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
         </form>
       <?php elseif ($b['status'] === 'signer1_approved' && $canSign2): ?>
         <form method="POST" action="exp-claim-action.php" style="display:inline;">
+        <?= csrfField() ?>
           <input type="hidden" name="action" value="signer2_approve">
           <input type="hidden" name="batch_id" value="<?= (int)$b['id'] ?>">
           <input type="hidden" name="redirect" value="approvals.php">
@@ -241,6 +243,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
     <details class="more">
       <summary>&#x25B8; Record e-transfer</summary>
       <form method="POST" action="exp-claim-action.php" class="form-inline">
+        <?= csrfField() ?>
         <input type="hidden" name="action" value="mark_paid">
         <input type="hidden" name="batch_id" value="<?= (int)$b['id'] ?>">
         <input type="hidden" name="redirect" value="approvals.php">
@@ -256,6 +259,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
     <details class="more">
       <summary>&#x25B8; Reject</summary>
       <form method="POST" action="exp-claim-action.php" class="form-inline">
+        <?= csrfField() ?>
         <input type="hidden" name="action" value="reject">
         <input type="hidden" name="batch_id" value="<?= (int)$b['id'] ?>">
         <input type="hidden" name="redirect" value="approvals.php">
@@ -313,6 +317,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
     <div class="acts">
       <?php if ($v['status'] === 'submitted' && $isTreasurer): ?>
         <form method="POST" action="lp-action.php" style="display:inline;">
+        <?= csrfField() ?>
           <input type="hidden" name="action" value="treasurer_approve">
           <input type="hidden" name="voucher_id" value="<?= (int)$v['id'] ?>">
           <input type="hidden" name="redirect" value="approvals.php">
@@ -320,6 +325,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
         </form>
       <?php elseif ($v['status'] === 'treasurer_approved' && $isVP): ?>
         <form method="POST" action="lp-action.php" style="display:inline;">
+        <?= csrfField() ?>
           <input type="hidden" name="action" value="vp_approve">
           <input type="hidden" name="voucher_id" value="<?= (int)$v['id'] ?>">
           <input type="hidden" name="redirect" value="approvals.php">
@@ -334,6 +340,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
     <details class="more">
       <summary>&#x25B8; Record e-transfer</summary>
       <form method="POST" action="lp-action.php" class="form-inline">
+        <?= csrfField() ?>
         <input type="hidden" name="action" value="mark_paid">
         <input type="hidden" name="voucher_id" value="<?= (int)$v['id'] ?>">
         <input type="hidden" name="redirect" value="approvals.php">
@@ -349,6 +356,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
     <details class="more">
       <summary>&#x25B8; Reject</summary>
       <form method="POST" action="lp-action.php" class="form-inline">
+        <?= csrfField() ?>
         <input type="hidden" name="action" value="reject">
         <input type="hidden" name="voucher_id" value="<?= (int)$v['id'] ?>">
         <input type="hidden" name="redirect" value="approvals.php">

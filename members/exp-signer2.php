@@ -158,6 +158,7 @@ $catLabels = [
       <!-- Approve -->
       <div class="approve-area">
         <form method="POST" action="exp-action.php">
+        <?= csrfField() ?>
           <input type="hidden" name="action"     value="signer2_approve">
           <input type="hidden" name="expense_id" value="<?= (int)$exp['id'] ?>">
           <input type="hidden" name="redirect"   value="exp-signer2.php">
@@ -177,6 +178,7 @@ $catLabels = [
       <!-- Reject -->
       <div class="reject-area">
         <form method="POST" action="exp-action.php">
+        <?= csrfField() ?>
           <input type="hidden" name="action"     value="signer2_reject">
           <input type="hidden" name="expense_id" value="<?= (int)$exp['id'] ?>">
           <input type="hidden" name="redirect"   value="exp-signer2.php">
