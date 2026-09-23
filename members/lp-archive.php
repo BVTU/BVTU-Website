@@ -190,7 +190,7 @@ function qsv(string $s): string { return htmlspecialchars($s); }
     <table>
       <thead><tr>
         <?php foreach ($headers as $i => $h): ?>
-        <th class="<?= $i > 0 && in_array($h, ['Budget','Spent','Remaining','Total','Days'], true) ? 'num' : '' ?>">
+        <th class="<?= $i > 0 && in_array($h, ['Budget','Spent','Remaining','Total','Days','Release cost'], true) ? 'num' : '' ?>">
           <?= qsv($h) ?></th>
         <?php endforeach; ?>
       </tr></thead>
@@ -198,7 +198,7 @@ function qsv(string $s): string { return htmlspecialchars($s); }
         <?php foreach ($rows as $r): ?>
         <tr>
           <?php foreach ($r as $i => $cell): ?>
-          <td class="<?= in_array($headers[$i] ?? '', ['Budget','Spent','Remaining','Total','Days'], true) ? 'num' : '' ?>">
+          <td class="<?= in_array($headers[$i] ?? '', ['Budget','Spent','Remaining','Total','Days','Release cost'], true) ? 'num' : '' ?>">
             <?= qsv((string)$cell) ?></td>
           <?php endforeach; ?>
         </tr>

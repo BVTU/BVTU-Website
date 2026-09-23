@@ -50,6 +50,11 @@ function cgEnsureTable(): void {
         'atrieve_confirmed_at' => 'DATETIME DEFAULT NULL',
         'atrieve_confirmed_by' => "VARCHAR(255) NOT NULL DEFAULT ''",
         'invoice_number'       => "VARCHAR(100) NOT NULL DEFAULT ''",
+        // Nullable on purpose: NULL is "not recorded yet" and 0.00 is a real
+        // figure someone entered. A NOT NULL default of 0 cannot tell those
+        // apart, and would leave a genuinely free release permanently counted
+        // as outstanding.
+        'release_cost'         => 'DECIMAL(10,2) DEFAULT NULL',
     ] as $col => $type) {
         try {
             $has = $db->query(
@@ -204,8 +209,11 @@ function cgSendSubmissionConfirmation(array $app): void {
  * The confirmation stamps who and when, because "somebody said it was done" is
  * not much of a record a year later when the district queries an invoice.
  * Unticking clears the stamp, so the two can never disagree.
+ *
+ * $cost is the district's charge for the release time: a number to record one,
+ * '' to clear it back to "not recorded", or null to leave it untouched.
  */
-function cgSetFulfilment(int $id, bool $atrieve, string $invoice, string $actor): bool {
+function cgSetFulfilment(int $id, bool $atrieve, string $invoice, string $actor, $cost = null): bool {
     cgEnsureTable();
     try {
         $cur = cgGetApplication($id);
@@ -228,9 +236,50 @@ function cgSetFulfilment(int $id, bool $atrieve, string $invoice, string $actor)
             $args = [mb_substr(trim($invoice), 0, 100), $id];
         }
         getDB()->prepare($sql)->execute($args);
+
+        if ($cost !== null) {
+            // '' stores NULL — an emptied box means the figure is unknown
+            // again, not that the release was free.
+            $val = (trim((string)$cost) === '') ? null : round((float)$cost, 2);
+            getDB()->prepare("UPDATE collab_grant_applications SET release_cost=? WHERE id=?")
+                   ->execute([$val, $id]);
+        }
         return true;
     } catch (Exception $e) {
         error_log('cgSetFulfilment: ' . $e->getMessage());
         return false;
     }
+}
+
+/**
+ * What the year's release time has cost, and how much of that is actually known.
+ *
+ * Both numbers, always: a total that quietly omits the approved grants nobody
+ * has costed yet looks like a complete figure and is not one. "$4,200 across 6
+ * of 9" is an answer; "$4,200" on its own invites a budget decision on a third
+ * of the picture.
+ */
+function cgYearReleaseCost(int $year): array {
+    cgEnsureTable();
+    $out = ['total' => 0.0, 'costed' => 0, 'approved' => 0, 'error' => false];
+    try {
+        $s = getDB()->prepare(
+            "SELECT COALESCE(SUM(release_cost),0) AS total,
+                    SUM(CASE WHEN release_cost IS NOT NULL THEN 1 ELSE 0 END) AS costed,
+                    COUNT(*) AS approved
+             FROM collab_grant_applications
+             WHERE school_year=? AND status='approved'"
+        );
+        $s->execute([$year]);
+        $r = $s->fetch() ?: [];
+        $out['total']    = (float)($r['total'] ?? 0);
+        $out['costed']   = (int)($r['costed'] ?? 0);
+        $out['approved'] = (int)($r['approved'] ?? 0);
+    } catch (Exception $e) {
+        // Flagged, not swallowed: zeros here would render a confident "$0.00"
+        // that is indistinguishable from a year in which nothing was spent.
+        error_log('cgYearReleaseCost: ' . $e->getMessage());
+        $out['error'] = true;
+    }
+    return $out;
 }

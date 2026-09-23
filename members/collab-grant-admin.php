@@ -38,6 +38,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
         'Collaboration Description', 'Goals',
         'Admin Notes', 'Reviewed By', 'Reviewed At',
         'Atrieve Logged', 'Atrieve Confirmed', 'Atrieve Confirmed By', 'Invoice Number',
+        'Release Cost',
     ]);
     foreach ($apps as $a) {
         $pdArr = json_decode($a['proposed_dates'] ?? '[]', true);
@@ -68,6 +69,8 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
             !empty($a['atrieve_confirmed_at']) ? date('Y-m-d', strtotime($a['atrieve_confirmed_at'])) : '',
             $a['atrieve_confirmed_by'] ?? '',
             $a['invoice_number'] ?? '',
+            ($a['release_cost'] ?? null) !== null
+                ? number_format((float)$a['release_cost'], 2, '.', '') : '',
         ]));
     }
     fclose($out);
@@ -100,8 +103,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['app
 // ── Follow-through: Atrieve and the district invoice ──────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'fulfilment') {
     $id = (int)($_POST['app_id'] ?? 0);
+    // The box is always submitted, so its contents are always applied: a figure
+    // records one, an emptied box clears it back to "not recorded".
     $ok = cgSetFulfilment($id, !empty($_POST['atrieve']),
-                          (string)($_POST['invoice_number'] ?? ''), $member['email']);
+                          (string)($_POST['invoice_number'] ?? ''), $member['email'],
+                          (string)($_POST['release_cost'] ?? ''));
     $notice = $ok ? 'Saved.' : 'Could not save. The problem has been logged.';
     $apps   = cgGetApplications($year);
 }
@@ -477,7 +483,30 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
         <div class="val"><?= count(array_filter($apps, fn($a) => $a['status'] === 'approved')) ?></div>
         <div class="lbl">Approved</div>
       </div>
+      <?php $rc = cgYearReleaseCost($year); ?>
+      <div class="summary-card">
+        <?php if (!empty($rc['error'])): ?>
+          <div class="val" style="color:#991b1b;font-size:1rem;">unavailable</div>
+          <div class="lbl">Release cost could not be worked out</div>
+        <?php else: ?>
+          <div class="val">$<?= number_format($rc['total'], 2) ?></div>
+          <div class="lbl">
+            Release cost<?php if ($rc['approved'] > 0): ?>
+              &middot; <?= (int)$rc['costed'] ?> of <?= (int)$rc['approved'] ?> costed
+            <?php endif; ?>
+          </div>
+        <?php endif; ?>
+      </div>
     </div>
+
+    <?php if (empty($rc['error']) && $rc['approved'] > $rc['costed']): ?>
+    <p style="font-size:.82rem;color:#92400e;background:#fffbeb;border:1px solid #fde68a;
+              border-radius:8px;padding:.6rem .9rem;margin:-.4rem 0 1.2rem;line-height:1.7;">
+      <?= (int)($rc['approved'] - $rc['costed']) ?>
+      approved grant<?= ($rc['approved'] - $rc['costed']) === 1 ? ' has' : 's have' ?>
+      no release cost recorded, so the total above is what is known so far, not the year's full cost.
+    </p>
+    <?php endif; ?>
 
     <?php if (empty($apps)): ?>
       <div class="empty-state">No applications yet for this school year.</div>
@@ -676,6 +705,16 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
                 <input type="text" name="invoice_number" maxlength="100"
                        placeholder="e.g. 45219"
                        value="<?= htmlspecialchars($app['invoice_number'] ?? '') ?>"
+                       style="width:100%;border:1px solid var(--border);border-radius:7px;
+                              padding:.45rem .6rem;font-size:.9rem;font-family:inherit;
+                              box-sizing:border-box;margin-top:.25rem;">
+              </label>
+              <label style="font-size:.85rem;font-weight:600;color:var(--gray-600);display:block;margin-top:.6rem;">
+                Cost of release time
+                <input type="number" name="release_cost" step="0.01" min="0"
+                       placeholder="not recorded yet"
+                       value="<?= ($app['release_cost'] ?? null) !== null
+                                  ? number_format((float)$app['release_cost'], 2, '.', '') : '' ?>"
                        style="width:100%;border:1px solid var(--border);border-radius:7px;
                               padding:.45rem .6rem;font-size:.9rem;font-family:inherit;
                               box-sizing:border-box;margin-top:.25rem;">

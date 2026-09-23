@@ -1054,10 +1054,14 @@ function archiveSection(string $key, array $grants, array $lines, array $voucher
                            // reconciled against the district without going back
                            // into the admin screen one application at a time.
                            !empty($a['atrieve_confirmed']) ? 'Yes' : 'No',
-                           $a['invoice_number'] ?? ''];
+                           $a['invoice_number'] ?? '',
+                           // NULL means nobody has costed it; 0.00 is a real
+                           // figure and must export as 0.00, not as blank.
+                           ($a['release_cost'] ?? null) !== null
+                               ? number_format((float)$a['release_cost'], 2, '.', '') : ''];
             }
             return [['Applicant', 'Email', 'School', 'Days', 'Status', 'Submitted',
-                     'Atrieve logged', 'Invoice number'], $rows];
+                     'Atrieve logged', 'Invoice number', 'Release cost'], $rows];
     }
     return [[], []];
 }
