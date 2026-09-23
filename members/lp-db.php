@@ -1049,9 +1049,15 @@ function archiveSection(string $key, array $grants, array $lines, array $voucher
             foreach ($collab as $a) {
                 $rows[] = [$a['applicant_name'], $a['applicant_email'], $a['school'],
                            (string)(int)$a['days_requested'], $a['status'],
-                           $a['submitted_at'] ? date('Y-m-d', strtotime($a['submitted_at'])) : ''];
+                           $a['submitted_at'] ? date('Y-m-d', strtotime($a['submitted_at'])) : '',
+                           // The follow-through, so a year's record can be
+                           // reconciled against the district without going back
+                           // into the admin screen one application at a time.
+                           !empty($a['atrieve_confirmed']) ? 'Yes' : 'No',
+                           $a['invoice_number'] ?? ''];
             }
-            return [['Applicant', 'Email', 'School', 'Days', 'Status', 'Submitted'], $rows];
+            return [['Applicant', 'Email', 'School', 'Days', 'Status', 'Submitted',
+                     'Atrieve logged', 'Invoice number'], $rows];
     }
     return [[], []];
 }

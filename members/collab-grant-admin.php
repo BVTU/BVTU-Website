@@ -28,6 +28,7 @@ $apps = cgGetApplications($year);
 if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     header('Content-Type: text/csv; charset=UTF-8');
     header('Content-Disposition: attachment; filename="collab-grant-' . $year . '-' . ($year+1) . '.csv"');
+    require_once __DIR__ . '/xlsx-writer.php';   // csvSafeText(), shared guard
     $out = fopen('php://output', 'w');
     fputcsv($out, [
         'ID', 'Status', 'Submitted',
@@ -36,13 +37,14 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
         'Days Requested', 'Proposed Dates',
         'Collaboration Description', 'Goals',
         'Admin Notes', 'Reviewed By', 'Reviewed At',
+        'Atrieve Logged', 'Atrieve Confirmed', 'Atrieve Confirmed By', 'Invoice Number',
     ]);
     foreach ($apps as $a) {
         $pdArr = json_decode($a['proposed_dates'] ?? '[]', true);
         $pdStr = is_array($pdArr)
             ? implode(', ', array_map(fn($d) => date('D M j Y', strtotime($d)), $pdArr))
             : '';
-        fputcsv($out, [
+        fputcsv($out, array_map('csvSafeText', [
             $a['id'],
             ucfirst($a['status']),
             date('Y-m-d', strtotime($a['submitted_at'])),
@@ -62,7 +64,11 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
             $a['admin_notes'],
             $a['reviewed_by'],
             $a['reviewed_at'] ? date('Y-m-d', strtotime($a['reviewed_at'])) : '',
-        ]);
+            !empty($a['atrieve_confirmed']) ? 'Yes' : 'No',
+            !empty($a['atrieve_confirmed_at']) ? date('Y-m-d', strtotime($a['atrieve_confirmed_at'])) : '',
+            $a['atrieve_confirmed_by'] ?? '',
+            $a['invoice_number'] ?? '',
+        ]));
     }
     fclose($out);
     exit;
@@ -89,6 +95,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['app
     }
     // Refresh apps after update
     $apps = cgGetApplications($year);
+}
+
+// ── Follow-through: Atrieve and the district invoice ──────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'fulfilment') {
+    $id = (int)($_POST['app_id'] ?? 0);
+    $ok = cgSetFulfilment($id, !empty($_POST['atrieve']),
+                          (string)($_POST['invoice_number'] ?? ''), $member['email']);
+    $notice = $ok ? 'Saved.' : 'Could not save. The problem has been logged.';
+    $apps   = cgGetApplications($year);
 }
 
 $view = ($_GET['view'] ?? 'review'); // 'review' or 'read'
@@ -633,6 +648,43 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
                 <?php endif; ?>
               </div>
             </form>
+
+            <?php // Only once approved: before that there is no absence to log
+                  // and no invoice to record, and an empty box invites guessing. ?>
+            <?php if ($app['status'] === 'approved'): ?>
+            <form class="app-action-form fulfil" method="post" style="margin-top:.6rem;">
+              <input type="hidden" name="app_id" value="<?= $app['id'] ?>">
+              <input type="hidden" name="action" value="fulfilment">
+              <div style="font-size:.78rem;font-weight:800;text-transform:uppercase;
+                          letter-spacing:.05em;color:var(--gray-500);margin-bottom:.5rem;">
+                Follow-through
+              </div>
+              <label style="display:flex;align-items:center;gap:.45rem;font-size:.88rem;
+                            color:var(--gray-700);margin-bottom:.6rem;">
+                <input type="checkbox" name="atrieve" value="1"
+                       <?= !empty($app['atrieve_confirmed']) ? 'checked' : '' ?>>
+                Absence logged in Atrieve
+              </label>
+              <?php if (!empty($app['atrieve_confirmed']) && !empty($app['atrieve_confirmed_at'])): ?>
+                <div style="font-size:.78rem;color:var(--gray-500);margin:-.35rem 0 .6rem 1.6rem;">
+                  Confirmed <?= date('M j, Y', strtotime($app['atrieve_confirmed_at'])) ?>
+                  <?= $app['atrieve_confirmed_by'] ? 'by ' . htmlspecialchars($app['atrieve_confirmed_by']) : '' ?>
+                </div>
+              <?php endif; ?>
+              <label style="font-size:.85rem;font-weight:600;color:var(--gray-600);">
+                District invoice number
+                <input type="text" name="invoice_number" maxlength="100"
+                       placeholder="e.g. 45219"
+                       value="<?= htmlspecialchars($app['invoice_number'] ?? '') ?>"
+                       style="width:100%;border:1px solid var(--border);border-radius:7px;
+                              padding:.45rem .6rem;font-size:.9rem;font-family:inherit;
+                              box-sizing:border-box;margin-top:.25rem;">
+              </label>
+              <div class="app-action-btns" style="margin-top:.6rem;">
+                <button type="submit" class="btn" style="border:1px solid var(--border);background:#fff;color:var(--gray-700);">Save follow-through</button>
+              </div>
+            </form>
+            <?php endif; ?>
           </div>
         </div>
         <?php endforeach; ?>

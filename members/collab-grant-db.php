@@ -41,6 +41,28 @@ function cgEnsureTable(): void {
         INDEX idx_year   (school_year)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+    // Follow-through, recorded after approval: the absence actually reaching
+    // Atrieve and the district's invoice number. Approving a grant is a
+    // decision; these are what tell you it was carried out and paid for, and
+    // without them the year's record cannot be reconciled against the district.
+    foreach ([
+        'atrieve_confirmed'    => 'TINYINT(1) NOT NULL DEFAULT 0',
+        'atrieve_confirmed_at' => 'DATETIME DEFAULT NULL',
+        'atrieve_confirmed_by' => "VARCHAR(255) NOT NULL DEFAULT ''",
+        'invoice_number'       => "VARCHAR(100) NOT NULL DEFAULT ''",
+    ] as $col => $type) {
+        try {
+            $has = $db->query(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='collab_grant_applications'
+                 AND COLUMN_NAME='{$col}'"
+            )->fetchColumn();
+            if (!$has) $db->exec("ALTER TABLE collab_grant_applications ADD COLUMN {$col} {$type}");
+        } catch (Exception $e) {
+            // Non-fatal: applications keep working, the fields just do not appear.
+        }
+    }
+
     // Migration: add proposed_dates if upgrading an existing table
     try {
         $db->exec("ALTER TABLE collab_grant_applications ADD COLUMN proposed_dates TEXT DEFAULT NULL");
@@ -173,4 +195,42 @@ function cgSendSubmissionConfirmation(array $app): void {
     $body    = emailTplBlock('collab_received', 'body', $tv);
 
     siteMail($email, $subject, $body);
+}
+
+/**
+ * Record the follow-through on an approved grant: whether the absence has been
+ * logged in Atrieve, and the district's invoice number.
+ *
+ * The confirmation stamps who and when, because "somebody said it was done" is
+ * not much of a record a year later when the district queries an invoice.
+ * Unticking clears the stamp, so the two can never disagree.
+ */
+function cgSetFulfilment(int $id, bool $atrieve, string $invoice, string $actor): bool {
+    cgEnsureTable();
+    try {
+        $cur = cgGetApplication($id);
+        if (!$cur) return false;
+
+        $was = !empty($cur['atrieve_confirmed']);
+        if ($atrieve && !$was) {
+            $sql = "UPDATE collab_grant_applications
+                    SET atrieve_confirmed=1, atrieve_confirmed_at=NOW(), atrieve_confirmed_by=?,
+                        invoice_number=? WHERE id=?";
+            $args = [$actor, mb_substr(trim($invoice), 0, 100), $id];
+        } elseif (!$atrieve) {
+            $sql = "UPDATE collab_grant_applications
+                    SET atrieve_confirmed=0, atrieve_confirmed_at=NULL, atrieve_confirmed_by='',
+                        invoice_number=? WHERE id=?";
+            $args = [mb_substr(trim($invoice), 0, 100), $id];
+        } else {
+            // Already confirmed: keep the original stamp, just update the invoice.
+            $sql  = "UPDATE collab_grant_applications SET invoice_number=? WHERE id=?";
+            $args = [mb_substr(trim($invoice), 0, 100), $id];
+        }
+        getDB()->prepare($sql)->execute($args);
+        return true;
+    } catch (Exception $e) {
+        error_log('cgSetFulfilment: ' . $e->getMessage());
+        return false;
+    }
 }
