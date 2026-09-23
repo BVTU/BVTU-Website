@@ -3,6 +3,8 @@
  * collab-grant-db.php — Collaboration Grant database helpers
  */
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/email-templates-db.php';
+require_once __DIR__ . '/smtp.php';
 date_default_timezone_set('America/Vancouver');
 
 // School year: Sep 1 = new year (matches lp-db.php)
@@ -106,28 +108,16 @@ function cgSendApprovalEmail(array $app): void {
         ? "Please also give {$collab} a heads-up so they can submit their own absence in Atrieve for the days you'll be working together."
         : '';
 
-    $subject = "Your Collaboration Grant Application is Approved — BVTU";
-    $body    = <<<TEXT
-Hi {$name},
+    $tv = ['{{name}}' => $name, '{{days}}' => (string)$days,
+           '{{day_word}}' => $dayWord, '{{collab_line}}' => $collabLine];
 
-Great news — your BVTU Collaboration Grant application has been approved! You've been granted {$days} release {$dayWord} to use this school year.
+    $subject = emailTplSubject('collab_approved', $tv);
+    $body = emailTplBlock('collab_approved', 'intro', $tv) . "\n\n"
+          . "─── NEXT STEP: BOOKING YOUR ABSENCE IN ATRIEVE ────────────────────\n\n"
+          . emailTplBlock('collab_approved', 'booking', $tv) . "\n\n"
+          . "─────────────────────────────────────────────────────────────────────\n\n"
+          . emailTplBlock('collab_approved', 'signoff', $tv) . "\n";
 
-─── NEXT STEP: BOOKING YOUR ABSENCE IN ATRIEVE ────────────────────
-
-Once you have your date(s) confirmed, please submit your absence in Atrieve using "BVTU business" as the absence reason. {$collabLine}
-
-We really appreciate it when members book with plenty of notice — please aim for at least two weeks ahead of your planned date(s). This gives the district time to arrange TTOC coverage and avoids any last-minute scrambling. The earlier, the better!
-
-─────────────────────────────────────────────────────────────────────
-
-If you have any questions or run into anything, don't hesitate to reach out — we're happy to help.
-
-Cody Lind
-President, Bulkley Valley Teachers' Union
-lp54@bctf.ca
-TEXT;
-
-    require_once __DIR__ . '/smtp.php';
     siteMail($email, $subject, $body);
 }
 
@@ -171,7 +161,6 @@ Review applications at:
 https://bvtu.ca/members/collab-grant-admin.php
 TEXT;
 
-    require_once __DIR__ . '/smtp.php';
     siteMail('lp54@bctf.ca', $subject, $body);
 }
 
@@ -179,17 +168,9 @@ TEXT;
 function cgSendSubmissionConfirmation(array $app): void {
     $name    = $app['applicant_name'];
     $email   = $app['applicant_email'];
-    $subject = "We received your Collaboration Grant application — BVTU";
-    $body    = <<<TEXT
-Hi {$name},
+    $tv      = ['{{name}}' => $name];
+    $subject = emailTplSubject('collab_received', $tv);
+    $body    = emailTplBlock('collab_received', 'body', $tv);
 
-Thank you for submitting your BVTU Collaboration Grant application! We've received it and it will be reviewed at the next monthly Executive Meeting. You'll hear back from us by the 15th of the month.
-
-If you have any questions in the meantime, feel free to reach out at lp54@bctf.ca.
-
-Bulkley Valley Teachers' Union
-TEXT;
-
-    require_once __DIR__ . '/smtp.php';
     siteMail($email, $subject, $body);
 }

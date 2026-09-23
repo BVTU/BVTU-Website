@@ -2,6 +2,7 @@
 /**
  * forgot-password.php — Request a password reset link
  */
+require_once __DIR__ . '/email-templates-db.php';
 require_once 'auth.php';
 require_once 'db.php';
 
@@ -42,13 +43,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // Send email
             $name    = htmlspecialchars($member['name']);
-            $subject = 'BVTU — Password Reset Request';
-            $body    = "Hi {$name},\n\n"
-                     . "We received a request to reset your BVTU member portal password.\n\n"
-                     . "Click the link below to set a new password. This link expires in 1 hour.\n\n"
-                     . "{$resetUrl}\n\n"
-                     . "If you did not request a password reset, you can safely ignore this email — your password has not changed.\n\n"
-                     . "— Bulkley Valley Teachers' Union";
+            $vars    = ['{{name}}' => $name, '{{link}}' => $resetUrl];
+            $subject = emailTplSubject('password_reset', $vars);
+            $body    = emailTplBlock('password_reset', 'body', $vars);
 
             require_once __DIR__ . '/smtp.php';
             siteMail($email, $subject, $body);

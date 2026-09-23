@@ -2,6 +2,7 @@
 /**
  * invite-register.php — Token-gated member self-registration
  */
+require_once __DIR__ . '/email-templates-db.php';
 require_once __DIR__ . '/contacts-db.php';
 require_once 'auth.php';
 require_once 'db.php';
@@ -63,12 +64,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$tokenError) {
 
             // Welcome email (plain text)
             require_once __DIR__ . '/smtp.php';
-            $subject = 'Welcome to the BVTU Member Portal';
-            $body    = "Hi {$name},\n\n"
-                     . "Your BVTU member account is set up. You can log in any time at:\n"
-                     . "https://bvtu.ca/members/dashboard.php\n\n"
-                     . "If you have questions, reach out at lp54@bctf.ca.\n\n"
-                     . "— Bulkley Valley Teachers' Union";
+            $vars    = ['{{name}}' => $name,
+                        '{{portal_url}}' => (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/members/dashboard.php'];
+            $subject = emailTplSubject('invite_welcome', $vars);
+            $body    = emailTplBlock('invite_welcome', 'body', $vars);
             siteMail($email, $subject, $body);
 
             loginMember(['id' => $memberId, 'name' => $name, 'email' => $email, 'must_change_password' => 0]);

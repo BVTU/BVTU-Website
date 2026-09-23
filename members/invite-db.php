@@ -2,6 +2,7 @@
 /**
  * invite-db.php — Invite token helpers for member self-registration
  */
+require_once __DIR__ . '/email-templates-db.php';
 require_once __DIR__ . '/db.php';
 
 function inviteEnsureTable(): void {
@@ -280,14 +281,11 @@ function inviteSendEmail(string $email, string $name, string $token): bool {
     $host    = 'bvtu.ca';
     $url     = "https://{$host}/members/invite-register.php?token={$token}";
     $to      = $name ? "{$name}" : $email;
-    $subject = 'Set up your BVTU member account';
-    $body    = "Hi {$to},\n\n"
-             . "The Bulkley Valley Teachers' Union has created a member portal where you can access union resources, submit expense claims, and more.\n\n"
-             . "Use the link below to set up your account. It's one-time use and expires in 72 hours.\n\n"
+    $vars    = ['{{email}}' => $to, '{{link}}' => $url];
+    $subject = emailTplSubject('invite_link', $vars);
+    $body    = emailTplBlock('invite_link', 'intro', $vars) . "\n\n"
              . "Create your account:\n{$url}\n\n"
-             . "If you weren't expecting this email, you can ignore it — no account will be created unless you click the link and set a password.\n\n"
-             . "Questions? Reply to lp54@bctf.ca\n\n"
-             . "— Bulkley Valley Teachers' Union";
+             . emailTplBlock('invite_link', 'outro', $vars);
 
     require_once __DIR__ . '/smtp.php';
     return siteMail($email, $subject, $body);

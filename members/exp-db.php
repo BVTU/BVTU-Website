@@ -4,6 +4,7 @@
  * Include this in every Expense portal page.
  */
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/email-templates-db.php';
 
 // The single mileage rate for the whole site — member claims and LP vouchers
 // both read this, so it changes in one place each year.
@@ -541,16 +542,16 @@ function expBatchEmailSubmitted(array $b, float $total, int $itemCount): void {
     $onBehalf = !empty($b['submitted_by_email'])
              && strtolower($b['submitted_by_email']) !== strtolower($b['user_email']);
 
-    $intro = $onBehalf
-        ? '<p>An expense claim was submitted on your behalf by <strong>' . htmlspecialchars($b['submitted_by_name'] ?: $b['submitted_by_email']) . '</strong> and is awaiting approval by the BVTU President.</p>'
-        : '<p>Your expense claim has been submitted and is awaiting approval by the BVTU President.</p>';
+    $tv    = ['{{ref}}' => $b['ref_code'],
+              '{{submitter}}' => ($b['submitted_by_name'] ?? '') ?: ($b['submitted_by_email'] ?? '')];
+    $intro = emailTplBlock('claim_submitted', $onBehalf ? 'on_behalf' : 'intro', $tv);
     $body = $intro
           . _expBatchDetailBox($b, $total, $itemCount)
-          . '<p>You will receive an email when it has been reviewed.</p>'
+          . emailTplBlock('claim_submitted', 'outro', $tv)
           . '<p><a class="btn" href="' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/members/exp-claim-view.php?id=' . (int)$b['id'] . '">View Your Claim</a></p>';
     expNotify(
         $b['user_email'],
-        'Expense Claim Submitted — ' . $b['ref_code'],
+        emailTplSubject('claim_submitted', $tv),
         _expHtmlWrap('Expense Claim Submitted', $body)
     );
 
@@ -584,13 +585,14 @@ function expBatchEmailSigner1Approved(array $b, float $total, int $itemCount): v
 }
 
 function expBatchEmailSigner2Approved(array $b, float $total, int $itemCount): void {
-    $memberBody = '<p>Your expense claim has been approved by both the Local President and the Treasurer.</p>'
+    $tv = ['{{ref}}' => $b['ref_code'], '{{email}}' => $b['user_email']];
+    $memberBody = emailTplBlock('claim_authorized', 'intro', $tv)
                 . _expBatchDetailBox($b, $total, $itemCount)
-                . '<p>An <strong>e-transfer</strong> for the full amount will be sent to <strong>' . htmlspecialchars($b['user_email']) . '</strong> within <strong>3 business days</strong>. Use <code>' . htmlspecialchars($b['ref_code']) . '</code> as the security question answer if prompted.</p>'
+                . emailTplBlock('claim_authorized', 'payment', $tv)
                 . '<p><a class="btn" href="' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/members/exp-claim-view.php?id=' . (int)$b['id'] . '">View Your Claim</a></p>';
     expNotify(
         $b['user_email'],
-        'Expense Approved — ' . $b['ref_code'] . ' — E-transfer within 3 business days',
+        emailTplSubject('claim_authorized', $tv),
         _expHtmlWrap('Expense Claim Authorized — Payment Coming', $memberBody)
     );
 
@@ -612,34 +614,36 @@ function expBatchEmailSigner2Approved(array $b, float $total, int $itemCount): v
 }
 
 function expBatchEmailRejected(array $b): void {
-    $body = '<p>Your expense claim has been rejected.</p>'
+    $tv   = ['{{ref}}' => $b['ref_code']];
+    $body = emailTplBlock('claim_rejected', 'intro', $tv)
           . '<div class="detail-box">'
           . '<div class="row"><span class="lbl">Reference</span><span class="val">' . htmlspecialchars($b['ref_code']) . '</span></div>'
           . '<div class="row"><span class="lbl">Rejected by</span><span class="val">' . htmlspecialchars($b['rejected_by_name'] ?? '—') . '</span></div>'
           . '<div class="row"><span class="lbl">Reason</span><span class="val">' . htmlspecialchars($b['rejection_note'] ?? '—') . '</span></div>'
           . '</div>'
-          . '<p>If you have questions, please contact the BVTU Treasurer.</p>'
+          . emailTplBlock('claim_rejected', 'outro', $tv)
           . '<p><a class="btn" href="' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/members/exp-claim-view.php?id=' . (int)$b['id'] . '">View Your Claim</a></p>';
     expNotify(
         $b['user_email'],
-        'Expense Claim Rejected — ' . $b['ref_code'],
+        emailTplSubject('claim_rejected', $tv),
         _expHtmlWrap('Expense Claim Rejected', $body)
     );
 }
 
 function expBatchEmailPaid(array $b, float $total): void {
-    $body = '<p>Your expense claim payment has been sent!</p>'
+    $tv   = ['{{ref}}' => $b['ref_code']];
+    $body = emailTplBlock('claim_paid', 'intro', $tv)
           . '<div class="detail-box">'
           . '<div class="row"><span class="lbl">Reference</span><span class="val">' . htmlspecialchars($b['ref_code']) . '</span></div>'
           . '<div class="row"><span class="lbl">Amount</span><span class="val">$' . number_format($total, 2) . '</span></div>'
           . '<div class="row"><span class="lbl">Paid by</span><span class="val">' . htmlspecialchars($b['paid_by_name'] ?? '—') . '</span></div>'
           . '<div class="row"><span class="lbl">Date</span><span class="val">' . ($b['paid_at'] ? date('F j, Y', strtotime($b['paid_at'])) : '—') . '</span></div>'
           . '</div>'
-          . '<p>Watch for an Interac e-transfer for the full amount. Use <code>' . htmlspecialchars($b['ref_code']) . '</code> as the reference if asked.</p>'
+          . emailTplBlock('claim_paid', 'outro', $tv)
           . '<p><a class="btn" href="' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/members/exp-claim-view.php?id=' . (int)$b['id'] . '">View Your Claim</a></p>';
     expNotify(
         $b['user_email'],
-        'Expense Claim Paid — ' . $b['ref_code'],
+        emailTplSubject('claim_paid', $tv),
         _expHtmlWrap('Payment Sent', $body)
     );
 }
