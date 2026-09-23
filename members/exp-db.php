@@ -542,8 +542,8 @@ function expBatchEmailSubmitted(array $b, float $total, int $itemCount): void {
              && strtolower($b['submitted_by_email']) !== strtolower($b['user_email']);
 
     $intro = $onBehalf
-        ? '<p>An expense claim was submitted on your behalf by <strong>' . htmlspecialchars($b['submitted_by_name'] ?: $b['submitted_by_email']) . '</strong> and is awaiting review by the BVTU Treasurer.</p>'
-        : '<p>Your expense claim has been submitted and is awaiting review by the BVTU Treasurer.</p>';
+        ? '<p>An expense claim was submitted on your behalf by <strong>' . htmlspecialchars($b['submitted_by_name'] ?: $b['submitted_by_email']) . '</strong> and is awaiting approval by the BVTU President.</p>'
+        : '<p>Your expense claim has been submitted and is awaiting approval by the BVTU President.</p>';
     $body = $intro
           . _expBatchDetailBox($b, $total, $itemCount)
           . '<p>You will receive an email when it has been reviewed.</p>'
@@ -571,7 +571,7 @@ function expBatchEmailSubmitted(array $b, float $total, int $itemCount): void {
 }
 
 function expBatchEmailSigner1Approved(array $b, float $total, int $itemCount): void {
-    $body = '<p>The following expense claim has been approved by the BVTU Treasurer (<strong>' . htmlspecialchars($b['signer1_name']) . '</strong>) and now requires a second signature.</p>'
+    $body = '<p>The following expense claim has been approved by the BVTU President (<strong>' . htmlspecialchars($b['signer1_name']) . '</strong>) and now requires a second signature.</p>'
           . _expBatchDetailBox($b, $total, $itemCount)
           . '<p><a class="btn" href="' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/members/approvals.php">Review &amp; Sign in Expense Portal</a></p>';
     foreach (expGetSigner2Emails() as $email) {
@@ -584,7 +584,7 @@ function expBatchEmailSigner1Approved(array $b, float $total, int $itemCount): v
 }
 
 function expBatchEmailSigner2Approved(array $b, float $total, int $itemCount): void {
-    $memberBody = '<p>Your expense claim has been approved by both the Treasurer and Local President.</p>'
+    $memberBody = '<p>Your expense claim has been approved by both the Local President and the Treasurer.</p>'
                 . _expBatchDetailBox($b, $total, $itemCount)
                 . '<p>An <strong>e-transfer</strong> for the full amount will be sent to <strong>' . htmlspecialchars($b['user_email']) . '</strong> within <strong>3 business days</strong>. Use <code>' . htmlspecialchars($b['ref_code']) . '</code> as the security question answer if prompted.</p>'
                 . '<p><a class="btn" href="' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/members/exp-claim-view.php?id=' . (int)$b['id'] . '">View Your Claim</a></p>';
