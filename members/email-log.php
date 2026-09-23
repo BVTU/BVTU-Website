@@ -4,11 +4,17 @@
  */
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/exp-db.php';
+require_once __DIR__ . '/exec-db.php';   // execIsAdmin() for the gate below
 require_once __DIR__ . '/email-admin-nav.php';
 
 requireLogin();
 $member = getMember();
-if (!expIsAdmin($member['email'])) {
+// The President can read this as well as the expense-portal admin. "What did
+// the site actually send, and did it arrive" is a question the President has to
+// answer for the membership, and they can already edit the wording of those
+// same emails — being unable to see whether one went out made no sense.
+// Read-only either way: this page has no actions.
+if (!expIsAdmin($member['email']) && !execIsAdmin($member['email'])) {
     header('Location: dashboard.php');
     exit;
 }

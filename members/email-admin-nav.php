@@ -7,9 +7,12 @@
  * so adding a page later means editing one list.
  *
  * The three pages do not share a gate — wording is President-level
- * (execIsAdmin), the log and the test are expense-portal admin (expIsAdmin) —
- * so a tab is only shown to someone who can actually open it. A visible tab
- * that bounces you to the dashboard reads as a broken page.
+ * (execIsAdmin), the sent log is either, and the test send is expense-portal
+ * admin (expIsAdmin) — so a tab is only shown to someone who can actually open
+ * it. A visible tab that bounces you to the dashboard reads as a broken page.
+ *
+ * These conditions must match the gate on each page. A tab shown to someone the
+ * page then redirects is the bug this arrangement exists to avoid.
  */
 require_once __DIR__ . '/exec-db.php';
 require_once __DIR__ . '/exp-db.php';
@@ -17,7 +20,7 @@ require_once __DIR__ . '/exp-db.php';
 function emailAdminNav(string $current, string $email): string {
     $tabs = [
         'wording' => ['email-templates.php', 'Wording',     execIsAdmin($email)],
-        'log'     => ['email-log.php',       'Sent log',    expIsAdmin($email)],
+        'log'     => ['email-log.php',       'Sent log',    expIsAdmin($email) || execIsAdmin($email)],
         'test'    => ['test-email.php',      'Send a test', expIsAdmin($email)],
     ];
 
