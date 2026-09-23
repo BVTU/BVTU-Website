@@ -124,19 +124,6 @@ function contactNormalizeEmail(string $email): string {
     return strtolower(trim($email));
 }
 
-/**
- * A query parameter as a trimmed scalar, or ''.
- *
- * ?q[]=x arrives as an array; passing that to trim() is fatal on PHP 8, and
- * binding it through PDO is worse. Lives here because every page that reads
- * filters already includes this file — four private copies drifted apart
- * within a day of being written.
- */
-function reqStr(string $key): string {
-    $v = $_GET[$key] ?? '';
-    return is_scalar($v) ? trim((string)$v) : '';
-}
-
 function contactValidEmail(string $email): bool {
     return (bool)filter_var(trim($email), FILTER_VALIDATE_EMAIL);
 }

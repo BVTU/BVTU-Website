@@ -4,6 +4,7 @@
  */
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/exp-db.php';
+require_once __DIR__ . '/email-admin-nav.php';
 
 requireLogin();
 $member = getMember();
@@ -98,17 +99,18 @@ $pages = max(1, (int)ceil($total / $perPage));
     .chip.ok   strong { color: #166534; }
     .chip.fail strong { color: #991b1b; }
   </style>
+  <?= emailAdminNavStyles() ?>
 </head>
 <body>
 <div class="wrap">
 
   <div class="page-header">
-    <h1>Email Log</h1>
-    <div style="display:flex;gap:.85rem;flex-wrap:wrap;align-items:center;">
-      <a href="test-email.php" class="back-link">← Test Email</a>
-      <a href="dashboard.php" class="back-link">Dashboard</a>
-    </div>
+    <h1>Email</h1>
+    <a href="dashboard.php" class="back-link">&#x2190; Dashboard</a>
   </div>
+
+  <?= emailAdminNav('log', $member['email']) ?>
+  <h2 style="font-size:1rem;font-weight:800;color:var(--gray-800);margin:0 0 .6rem;">Sent log</h2>
 
   <?php
   // Summary chips

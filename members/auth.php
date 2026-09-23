@@ -51,6 +51,20 @@ function csrfCheck(): void {
 }
 
 /**
+ * A query parameter as a trimmed scalar, or ''.
+ *
+ * ?q[]=x arrives as an array; passing that to trim() is fatal on PHP 8, and
+ * binding it through PDO is worse. Lives in auth.php because every member page
+ * includes it: four private copies had drifted apart within a day of being
+ * written, and then it sat in contacts-db.php where a page that reads request
+ * parameters but not contacts could not see it at all.
+ */
+function reqStr(string $key): string {
+    $v = $_GET[$key] ?? '';
+    return is_scalar($v) ? trim((string)$v) : '';
+}
+
+/**
  * Headers for pages showing personal data: keep them out of caches and out of
  * search results. Authentication is the actual protection; this is hygiene.
  */

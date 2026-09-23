@@ -9,6 +9,7 @@
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/exec-db.php';
 require_once __DIR__ . '/email-templates-db.php';
+require_once __DIR__ . '/email-admin-nav.php';
 
 requireLogin();
 $member = getMember();
@@ -110,12 +111,15 @@ function tplSample(string $key): array {
     .btn-reset { background:none;border:1px solid var(--gray-200);border-radius:7px;padding:.45rem .9rem;
                  font-size:.84rem;color:var(--gray-600);cursor:pointer;font-family:inherit; }
   </style>
+  <?= emailAdminNavStyles() ?>
 </head>
 <body>
 <div class="wrap">
 
   <a class="back-link" href="dashboard.php">&#x2190; Dashboard</a>
-  <h1>Email Wording</h1>
+  <h1>Email</h1>
+  <?= emailAdminNav('wording', $member['email']) ?>
+  <h2 style="font-size:1rem;font-weight:800;color:var(--gray-800);margin:0 0 .6rem;">Wording</h2>
   <p class="lede">
     The wording of the emails the site sends on its own. Everything else in each
     email &mdash; claim details, amounts, reference codes, and the links people need
