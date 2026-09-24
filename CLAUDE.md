@@ -40,6 +40,11 @@ message, a memory file. When in doubt, review.
   alternative syntax (`if: … endif;`) is invisible to brace counting, and a bad
   slice took the dashboard down for every member once. (It lived in /tmp and had
   to be rewritten from memory when that was cleared — hence the repo copy.)
+- `python3 tools/php-string-check.py <file>` before committing any PHP. There
+  is no `php` binary on this machine, so a parse error is only discovered by
+  the live site. A double quote inside a double-quoted SQL string closed it
+  early and fatalled the Link Shortener page for real users; bracket counting
+  cannot see it, because the stray quotes pair up with each other.
 - `node --check` on JavaScript extracted from a `<script>` block.
 - PHP is **7.4**. `str_starts_with()` and other PHP 8 functions are fatal.
 - Never compare two string columns from different tables in SQL. `members`,
