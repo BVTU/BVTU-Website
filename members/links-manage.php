@@ -7,6 +7,7 @@ require_once 'auth.php';
 require_once 'db.php';
 require_once 'exec-db.php';
 require_once 'links-db.php';
+require_once 'qr-db.php';
 
 requireLogin();
 $member = getMember();
@@ -17,11 +18,15 @@ if (!execIsAdmin($member['email'])) {
 }
 
 linksEnsureTable();
+qrEnsureTable();
 
 $notice = '';
 $error  = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Every form on this page creates, edits or deletes something. The page
+    // had no token at all; qr-save.php checks one, so these should too.
+    csrfCheck();
     $action = $_POST['action'] ?? '';
 
     if ($action === 'create') {
@@ -67,6 +72,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    if ($action === 'qr_delete') {
+        $qid = (int)($_POST['qr_id'] ?? 0);
+        if ($qid) { qrDelete($qid); $notice = 'Saved QR code removed.'; }
+    }
+
     if ($action === 'toggle') {
         $id     = (int)($_POST['link_id']    ?? 0);
         $active = (int)($_POST['set_active'] ?? 1);
@@ -85,6 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $notice = $notice ?: htmlspecialchars($_GET['notice'] ?? '');
 $error  = $error  ?: htmlspecialchars($_GET['error']  ?? '');
 $links  = linksGetAll();
+$qrCodes = qrGetAll();
 $totalClicks = array_sum(array_column($links, 'click_count'));
 ?>
 <!DOCTYPE html>
@@ -179,6 +190,9 @@ $totalClicks = array_sum(array_column($links, 'click_count'));
     /* display:flex outranks the hidden attribute's UA rule, so state it here. */
     .qr-dl[hidden] { display: none; }
     .qr-note  { font-size: .74rem; color: var(--gray-400); margin-top: .6rem; line-height: 1.5; }
+    .qr-status { font-size: .76rem; margin-top: .5rem; min-height: 1.1em; }
+    .qr-status.ok  { color: #166534; }
+    .qr-status.bad { color: #991b1b; }
     .field select { width: 100%; border: 1px solid var(--gray-300); border-radius: 7px;
                     padding: .5rem .75rem; font-size: .9rem; font-family: inherit;
                     box-sizing: border-box; background: #fff; }
@@ -214,6 +228,7 @@ $totalClicks = array_sum(array_column($links, 'click_count'));
   <div class="pcard">
     <h2>Create a link</h2>
     <form method="POST" autocomplete="off">
+      <?= csrfField() ?>
       <input type="hidden" name="action" value="create">
       <div class="field-row">
         <div class="field">
@@ -245,6 +260,11 @@ $totalClicks = array_sum(array_column($links, 'click_count'));
     <h2>Make a QR code</h2>
     <div class="qr-grid">
       <div>
+        <div class="field">
+          <label for="qr-label">Label <span style="font-weight:400;color:var(--gray-400);">(optional)</span></label>
+          <input type="text" id="qr-label" placeholder="e.g. AGM poster">
+          <div class="field-hint">A friendly name for the saved list below.</div>
+        </div>
         <div class="field">
           <label for="qr-text">Text or URL</label>
           <textarea id="qr-text" placeholder="https://bvtu.ca/go/..."></textarea>
@@ -285,10 +305,69 @@ $totalClicks = array_sum(array_column($links, 'click_count'));
         <div class="qr-dl" id="qr-actions" hidden>
           <button type="button" class="act-btn" onclick="qrDownload('png')">&#x2193; PNG</button>
           <button type="button" class="act-btn" onclick="qrDownload('svg')">&#x2193; SVG</button>
+          <button type="button" class="act-btn" onclick="qrSave(true)">&#9733; Save</button>
         </div>
-        <div class="qr-note">SVG stays sharp at any size &mdash; use it for print.</div>
+        <div class="qr-status" id="qr-status" role="status"></div>
+        <input type="hidden" id="qr-csrf" value="<?= htmlspecialchars(csrfToken()) ?>">
+        <div class="qr-note">SVG stays sharp at any size &mdash; use it for print.
+          Downloading also saves the code to the list below.</div>
       </div>
     </div>
+  </div>
+
+  <!-- Saved QR codes -->
+  <div class="sec-head">Saved QR Codes (<?= count($qrCodes) ?>)</div>
+  <div class="table-wrap" style="margin-bottom:1.75rem;">
+    <table>
+      <thead>
+        <tr>
+          <th>Label</th>
+          <th>Encodes</th>
+          <th>Settings</th>
+          <th>Saved by</th>
+          <th>Last used</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php if (!$qrCodes): ?>
+        <tr class="empty-row"><td colspan="6">No saved QR codes yet. Make one above and download or save it.</td></tr>
+        <?php endif; ?>
+        <?php foreach ($qrCodes as $q): ?>
+        <tr>
+          <td style="font-size:.82rem;"><?= htmlspecialchars($q['label'] !== '' ? $q['label'] : '—') ?></td>
+          <td class="dest-cell" title="<?= htmlspecialchars($q['content']) ?>">
+            <?= htmlspecialchars($q['content']) ?>
+          </td>
+          <td style="font-size:.78rem;color:var(--gray-500);white-space:nowrap;">
+            <?= $q['ec'] === 'H' ? 'High' : 'Standard' ?>,
+            <?= (int)$q['margin'] === 4 ? 'normal' : 'tight' ?> border
+          </td>
+          <td style="font-size:.78rem;color:var(--gray-500);">
+            <?= htmlspecialchars($q['created_by']) ?>
+          </td>
+          <td style="font-size:.78rem;color:var(--gray-400);white-space:nowrap;">
+            <?= date('M j, Y', strtotime($q['last_used_at'])) ?>
+          </td>
+          <td>
+            <div class="acts">
+              <button class="act-btn" onclick="qrLoad(this)"
+                      data-content="<?= htmlspecialchars($q['content'], ENT_QUOTES) ?>"
+                      data-label="<?= htmlspecialchars($q['label'], ENT_QUOTES) ?>"
+                      data-ec="<?= htmlspecialchars($q['ec'], ENT_QUOTES) ?>"
+                      data-margin="<?= (int)$q['margin'] ?>">&#8593; Open</button>
+              <form method="POST" style="display:inline;"
+                    onsubmit="return confirm('Remove this saved QR code? Codes already printed keep working — this only removes it from the list.')"><?= csrfField() ?>
+                <input type="hidden" name="action" value="qr_delete">
+                <input type="hidden" name="qr_id"  value="<?= (int)$q['id'] ?>">
+                <button type="submit" class="act-btn danger">&#128465; Remove</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
   </div>
 
   <!-- Link list -->
@@ -330,14 +409,14 @@ $totalClicks = array_sum(array_column($links, 'click_count'));
               <button class="act-btn" onclick="qrFor('<?= htmlspecialchars($lnk['slug'], ENT_QUOTES) ?>')">&#9632; QR</button>
               <button class="act-btn" onclick="toggleEdit(<?= $lnk['id'] ?>)">✏ Edit</button>
               <?php if ($lnk['active']): ?>
-              <form method="POST" style="display:inline;">
+              <form method="POST" style="display:inline;"><?= csrfField() ?>
                 <input type="hidden" name="action"    value="toggle">
                 <input type="hidden" name="link_id"   value="<?= $lnk['id'] ?>">
                 <input type="hidden" name="set_active" value="0">
                 <button type="submit" class="act-btn">⊘ Disable</button>
               </form>
               <?php else: ?>
-              <form method="POST" style="display:inline;">
+              <form method="POST" style="display:inline;"><?= csrfField() ?>
                 <input type="hidden" name="action"    value="toggle">
                 <input type="hidden" name="link_id"   value="<?= $lnk['id'] ?>">
                 <input type="hidden" name="set_active" value="1">
@@ -345,7 +424,7 @@ $totalClicks = array_sum(array_column($links, 'click_count'));
               </form>
               <?php endif; ?>
               <form method="POST" style="display:inline;"
-                    onsubmit="return confirm('Delete bvtu.ca/go/<?= htmlspecialchars(addslashes($lnk['slug'])) ?>? This cannot be undone.')">
+                    onsubmit="return confirm('Delete bvtu.ca/go/<?= htmlspecialchars(addslashes($lnk['slug'])) ?>? This cannot be undone.')"><?= csrfField() ?>
                 <input type="hidden" name="action"  value="delete">
                 <input type="hidden" name="link_id" value="<?= $lnk['id'] ?>">
                 <button type="submit" class="act-btn danger">Delete</button>
@@ -357,6 +436,7 @@ $totalClicks = array_sum(array_column($links, 'click_count'));
         <tr id="edit-<?= $lnk['id'] ?>" class="edit-row">
           <td colspan="6">
             <form method="POST" class="edit-inner">
+              <?= csrfField() ?>
               <input type="hidden" name="action"  value="update">
               <input type="hidden" name="link_id" value="<?= $lnk['id'] ?>">
               <span class="slug-prefix">bvtu.ca/go/</span>
@@ -396,8 +476,9 @@ function toggleEdit(id) {
 }
 
 /* ── QR code maker ─────────────────────────────────────────────────────────
-   Drawn in the browser from the vendored encoder, so nothing typed here is
-   sent anywhere — no third-party QR service sees our links. */
+   The image is drawn in the browser from the vendored encoder, so no
+   third-party QR service ever sees our links. Saving does post the text to
+   qr-save.php on this site, where other exec admins can read it. */
 (function () {
     var txt  = document.getElementById('qr-text'),
         out  = document.getElementById('qr-out'),
@@ -413,7 +494,11 @@ function toggleEdit(id) {
         qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
     }
 
-    var state = { qr: null, name: 'qr-code' };
+    var lbl    = document.getElementById('qr-label'),
+        status = document.getElementById('qr-status'),
+        csrf   = document.getElementById('qr-csrf');
+
+    var state = { qr: null, name: 'qr-code', text: '' };
 
     function fileName(s) {
         var m = s.match(/\/go\/([a-z0-9\-]+)/i);
@@ -427,6 +512,7 @@ function toggleEdit(id) {
         var v = txt.value.trim();
         acts.hidden = true;
         state.qr = null;
+        status.textContent = '';
         if (!v) {
             out.innerHTML = '<div class="qr-empty">Enter a link to see its QR code.</div>';
             return;
@@ -443,6 +529,7 @@ function toggleEdit(id) {
         }
         state.qr   = qr;
         state.name = fileName(v);
+        state.text = v;
 
         var count  = qr.getModuleCount(),
             margin = parseInt(mrg.value, 10),
@@ -469,6 +556,54 @@ function toggleEdit(id) {
         acts.hidden = false;
     }
 
+    function say(msg, ok) {
+        status.textContent = msg;
+        status.className = 'qr-status ' + (ok ? 'ok' : 'bad');
+    }
+
+    /*
+     * Remembers the code. Called on download as well as from Save, so a code
+     * that actually got used is in the list without anyone having to think
+     * about it. The result is always shown: a save that failed silently would
+     * look exactly like a save that worked until someone went looking for it.
+     */
+    window.qrSave = function (explicit) {
+        if (!state.qr || !state.text) return;
+        var body = new URLSearchParams();
+        body.set('content', state.text);
+        body.set('label', lbl.value.trim());
+        body.set('ec', ec.value);
+        body.set('margin', mrg.value);
+        body.set('csrf_token', csrf.value);
+        say('Saving…', true);
+        fetch('qr-save.php', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body.toString()
+        }).then(function (r) {
+            return r.json().catch(function () { throw new Error('Unexpected reply from the server.'); });
+        }).then(function (d) {
+            if (d && d.ok) {
+                say(explicit ? 'Saved. Reload to see it in the list below.'
+                             : 'Downloaded and saved. Reload to see it in the list below.', true);
+            } else {
+                say('Not saved: ' + ((d && d.error) || 'unknown error'), false);
+            }
+        }).catch(function (e) {
+            say('Not saved: ' + e.message, false);
+        });
+    };
+
+    window.qrLoad = function (btn) {
+        txt.value = btn.getAttribute('data-content');
+        lbl.value = btn.getAttribute('data-label') || '';
+        ec.value  = btn.getAttribute('data-ec') || 'M';
+        mrg.value = btn.getAttribute('data-margin') || '4';
+        draw();
+        txt.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
+
     window.qrDownload = function (kind) {
         if (!state.qr) return;
         var a = document.createElement('a'), url;
@@ -485,10 +620,14 @@ function toggleEdit(id) {
         a.click();
         document.body.removeChild(a);
         if (url) setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+        window.qrSave(false);
     };
 
     window.qrFor = function (slug) {
         txt.value = 'https://bvtu.ca/go/' + slug;
+        // Clear the previous code's label, or the next save files this code
+        // under someone else's name — and renames theirs.
+        lbl.value = '';
         draw();
         txt.scrollIntoView({ behavior: 'smooth', block: 'center' });
     };
