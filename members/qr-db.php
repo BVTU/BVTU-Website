@@ -42,14 +42,14 @@ function qrSave(string $content, string $label, string $ec, int $margin, string 
     $content = trim($content);
     $ec      = in_array($ec, ['L', 'M', 'Q', 'H'], true) ? $ec : 'M';
     $margin  = ($margin >= 0 && $margin <= 16) ? $margin : 4;
+    // Two guards on the label below. An empty box means no label was supplied,
+    // not that the one set last time should be cleared. And because the key is
+    // the code itself, two people can land on the same row — so someone else
+    // re-saving an identical code must not rename yours.
     getDB()->prepare(
         "INSERT INTO qr_codes (content_hash, content, label, ec, margin, created_by)
          VALUES (?,?,?,?,?,?)
          ON DUPLICATE KEY UPDATE
-             -- Two guards on the label. An empty box means "none supplied",
-             -- not "clear the one I set last time". And because the key is the
-             -- code itself, two people can land on the same row — so someone
-             -- else re-saving an identical code must not rename yours.
              label = IF(VALUES(label) = '' OR created_by <> VALUES(created_by),
                         label, VALUES(label)),
              last_used_at = NOW()"
