@@ -1,6 +1,7 @@
 <?php
 /**
- * links-manage.php — Local President: manage bvtu.ca/go/ short links
+ * links-manage.php — Local President: manage bvtu.ca/go/ short links and
+ *                    make QR codes from them (or from any URL or text).
  */
 require_once 'auth.php';
 require_once 'db.php';
@@ -91,7 +92,7 @@ $totalClicks = array_sum(array_column($links, 'click_count'));
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Short Links — BVTU</title>
+  <title>Link Shortener &amp; QR Codes — BVTU</title>
   <link rel="stylesheet" href="../css/style.css">
   <link rel="icon" href="../favicon.ico">
   <style>
@@ -194,7 +195,7 @@ $totalClicks = array_sum(array_column($links, 'click_count'));
   <div class="page-header">
     <div>
       <a class="back-link" href="dashboard.php">&#x2190; Dashboard</a>
-      <h1 style="margin-top:.3rem;">Short Links</h1>
+      <h1 style="margin-top:.3rem;">Link Shortener &amp; QR Codes</h1>
     </div>
   </div>
 
