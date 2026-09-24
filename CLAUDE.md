@@ -36,15 +36,22 @@ message, a memory file. When in doubt, review.
 
 ## Verification that has caught real defects here
 
-- `python3 tools/alt-syntax-check.py <file>` before committing any template. PHP
-  alternative syntax (`if: … endif;`) is invisible to brace counting, and a bad
-  slice took the dashboard down for every member once. (It lived in /tmp and had
-  to be rewritten from memory when that was cleared — hence the repo copy.)
-- `python3 tools/php-string-check.py <file>` before committing any PHP. There
-  is no `php` binary on this machine, so a parse error is only discovered by
-  the live site. A double quote inside a double-quoted SQL string closed it
-  early and fatalled the Link Shortener page for real users; bracket counting
-  cannot see it, because the stray quotes pair up with each other.
+- **`python3 tools/php-check.py <file>` before committing any PHP.** This is the
+  one that matters. It runs `php -l`, a PHP 7.4 guard, and the alt-syntax check
+  together. A double quote inside a double-quoted SQL string once closed it
+  early and fatalled the Link Shortener page for real users — no amount of
+  bracket counting sees that, only a parser does.
+  - `php` is a standalone **8.0.30** build at `~/.local/bin/php`, put on PATH by
+    `~/.zprofile`. Homebrew could not install one (its directories need a `sudo
+    chown`), and 7.4 is not available prebuilt for this Mac.
+  - **The host runs 7.4, the local php is 8.0**, so `php -l` alone would accept
+    syntax that fatals in production. That is what the guard in php-check.py is
+    for: `?->`, `match()`, `str_starts_with()`, attributes, promoted
+    constructor properties, `catch` with no variable. It reads PHP regions only,
+    so JavaScript in a `<script>` block is not mistaken for PHP.
+  - The alt-syntax check it wraps exists because PHP alternative syntax
+    (`if: … endif;`) is invisible to brace counting, and a bad slice once took
+    the dashboard down for every member.
 - `node --check` on JavaScript extracted from a `<script>` block.
 - PHP is **7.4**. `str_starts_with()` and other PHP 8 functions are fatal.
 - Never compare two string columns from different tables in SQL. `members`,
