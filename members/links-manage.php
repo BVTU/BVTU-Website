@@ -165,6 +165,27 @@ $totalClicks = array_sum(array_column($links, 'click_count'));
 
     .empty-row td { text-align: center; color: var(--gray-400); padding: 2.5rem; }
     .badge-inactive { display:inline-block;background:#fee2e2;color:#991b1b;font-size:.68rem;font-weight:700;border-radius:100px;padding:.1rem .45rem;margin-left:.3rem; }
+
+    /* QR code maker */
+    .qr-grid { display: grid; grid-template-columns: 1fr 260px; gap: 1.5rem; align-items: start; }
+    @media(max-width:720px) { .qr-grid { grid-template-columns: 1fr; } }
+    .qr-preview { border: 1px solid var(--gray-200); border-radius: 10px; padding: 1rem;
+                  background: #fff; text-align: center; }
+    .qr-preview canvas { width: 100%; max-width: 220px; height: auto; image-rendering: pixelated; }
+    .qr-empty { color: var(--gray-400); font-size: .82rem; padding: 3.2rem 0; }
+    .qr-err   { color: #991b1b; font-size: .82rem; padding: 3.2rem .5rem; }
+    .qr-dl    { display: flex; gap: .4rem; justify-content: center; margin-top: .85rem; flex-wrap: wrap; }
+    /* display:flex outranks the hidden attribute's UA rule, so state it here. */
+    .qr-dl[hidden] { display: none; }
+    .qr-note  { font-size: .74rem; color: var(--gray-400); margin-top: .6rem; line-height: 1.5; }
+    .field select { width: 100%; border: 1px solid var(--gray-300); border-radius: 7px;
+                    padding: .5rem .75rem; font-size: .9rem; font-family: inherit;
+                    box-sizing: border-box; background: #fff; }
+    .field textarea { width: 100%; border: 1px solid var(--gray-300); border-radius: 7px;
+                      padding: .5rem .75rem; font-size: .9rem; font-family: inherit;
+                      box-sizing: border-box; resize: vertical; min-height: 74px; }
+    .field textarea:focus, .field select:focus { outline: none; border-color: var(--primary);
+                      box-shadow: 0 0 0 3px rgba(26,107,53,.1); }
   </style>
 </head>
 <body>
@@ -217,6 +238,58 @@ $totalClicks = array_sum(array_column($links, 'click_count'));
     </form>
   </div>
 
+  <!-- QR code maker -->
+  <div class="sec-head">QR Code</div>
+  <div class="pcard">
+    <h2>Make a QR code</h2>
+    <div class="qr-grid">
+      <div>
+        <div class="field">
+          <label for="qr-text">Text or URL</label>
+          <textarea id="qr-text" placeholder="https://bvtu.ca/go/..."></textarea>
+          <div class="field-hint">Any link or plain text. Use <strong>QR</strong> on a row below to
+            load that short link &mdash; a short link is the better thing to encode, because you can
+            repoint it later without reprinting the code.</div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="qr-size">Image size</label>
+            <select id="qr-size">
+              <option value="512">Medium &mdash; 512px (web, email)</option>
+              <option value="1024" selected>Large &mdash; 1024px (print, posters)</option>
+              <option value="2048">Extra large &mdash; 2048px</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="qr-ec">Error correction</label>
+            <select id="qr-ec">
+              <option value="M" selected>Standard</option>
+              <option value="H">High &mdash; survives smudges</option>
+            </select>
+            <div class="field-hint">Higher correction still scans when the code is damaged or covered.</div>
+          </div>
+          <div class="field">
+            <label for="qr-margin">Quiet zone</label>
+            <select id="qr-margin">
+              <option value="4" selected>Normal (recommended)</option>
+              <option value="2">Tight</option>
+            </select>
+            <div class="field-hint">The white border scanners need. Do not crop it off.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="qr-preview">
+        <div id="qr-out"><div class="qr-empty">Enter a link to see its QR code.</div></div>
+        <div class="qr-dl" id="qr-actions" hidden>
+          <button type="button" class="act-btn" onclick="qrDownload('png')">&#x2193; PNG</button>
+          <button type="button" class="act-btn" onclick="qrDownload('svg')">&#x2193; SVG</button>
+        </div>
+        <div class="qr-note">SVG stays sharp at any size &mdash; use it for print.</div>
+      </div>
+    </div>
+  </div>
+
   <!-- Link list -->
   <div class="sec-head">All Links (<?= count($links) ?>)</div>
   <div class="table-wrap">
@@ -253,6 +326,7 @@ $totalClicks = array_sum(array_column($links, 'click_count'));
           </td>
           <td>
             <div class="acts">
+              <button class="act-btn" onclick="qrFor('<?= htmlspecialchars($lnk['slug'], ENT_QUOTES) ?>')">&#9632; QR</button>
               <button class="act-btn" onclick="toggleEdit(<?= $lnk['id'] ?>)">✏ Edit</button>
               <?php if ($lnk['active']): ?>
               <form method="POST" style="display:inline;">
@@ -312,12 +386,115 @@ $totalClicks = array_sum(array_column($links, 'click_count'));
   </div>
 
 </div>
+<script src="../js/qrcode.js"></script>
 <script>
 function toggleEdit(id) {
     var row = document.getElementById('edit-' + id);
     var open = row.classList.toggle('open');
     if (open) row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
+
+/* ── QR code maker ─────────────────────────────────────────────────────────
+   Drawn in the browser from the vendored encoder, so nothing typed here is
+   sent anywhere — no third-party QR service sees our links. */
+(function () {
+    var txt  = document.getElementById('qr-text'),
+        out  = document.getElementById('qr-out'),
+        acts = document.getElementById('qr-actions'),
+        size = document.getElementById('qr-size'),
+        ec   = document.getElementById('qr-ec'),
+        mrg  = document.getElementById('qr-margin');
+
+    // The encoder defaults to one byte per JS char, which silently mangles any
+    // non-ASCII text (an em dash or a curly apostrophe decodes as garbage).
+    // URLs are unaffected, but the box also takes plain text.
+    if (qrcode.stringToBytesFuncs && qrcode.stringToBytesFuncs['UTF-8']) {
+        qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
+    }
+
+    var state = { qr: null, name: 'qr-code' };
+
+    function fileName(s) {
+        var m = s.match(/\/go\/([a-z0-9\-]+)/i);
+        if (m) return 'qr-' + m[1].toLowerCase();
+        var t = s.replace(/^https?:\/\//i, '').replace(/[^a-z0-9]+/gi, '-')
+                 .replace(/^-+|-+$/g, '').toLowerCase();
+        return 'qr-' + (t ? t.slice(0, 40) : 'code');
+    }
+
+    function draw() {
+        var v = txt.value.trim();
+        acts.hidden = true;
+        state.qr = null;
+        if (!v) {
+            out.innerHTML = '<div class="qr-empty">Enter a link to see its QR code.</div>';
+            return;
+        }
+        var qr;
+        try {
+            qr = qrcode(0, ec.value);   // 0 = smallest version the data fits
+            qr.addData(v);
+            qr.make();
+        } catch (e) {
+            out.innerHTML = '<div class="qr-err">That is too long to fit in a QR code. ' +
+                            'Shorten it \u2014 a bvtu.ca/go/ link is ideal.</div>';
+            return;
+        }
+        state.qr   = qr;
+        state.name = fileName(v);
+
+        var count  = qr.getModuleCount(),
+            margin = parseInt(mrg.value, 10),
+            total  = count + margin * 2,
+            target = parseInt(size.value, 10),
+            cell   = Math.max(1, Math.floor(target / total)),
+            px     = total * cell;
+
+        var cv = document.createElement('canvas');
+        cv.width = cv.height = px;
+        var g = cv.getContext('2d');
+        g.fillStyle = '#ffffff';
+        g.fillRect(0, 0, px, px);
+        g.fillStyle = '#000000';
+        for (var r = 0; r < count; r++) {
+            for (var c = 0; c < count; c++) {
+                if (qr.isDark(r, c)) {
+                    g.fillRect((c + margin) * cell, (r + margin) * cell, cell, cell);
+                }
+            }
+        }
+        out.innerHTML = '';
+        out.appendChild(cv);
+        acts.hidden = false;
+    }
+
+    window.qrDownload = function (kind) {
+        if (!state.qr) return;
+        var a = document.createElement('a'), url;
+        if (kind === 'svg') {
+            var svg = state.qr.createSvgTag({ cellSize: 8, margin: 8 * parseInt(mrg.value, 10) });
+            url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+            a.href = url;
+            a.download = state.name + '.svg';
+        } else {
+            a.href = out.querySelector('canvas').toDataURL('image/png');
+            a.download = state.name + '.png';
+        }
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        if (url) setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    };
+
+    window.qrFor = function (slug) {
+        txt.value = 'https://bvtu.ca/go/' + slug;
+        draw();
+        txt.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
+
+    txt.addEventListener('input', draw);
+    [size, ec, mrg].forEach(function (el) { el.addEventListener('change', draw); });
+})();
 </script>
 </body>
 </html>
