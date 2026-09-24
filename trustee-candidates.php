@@ -205,7 +205,11 @@ function tcDate(string $d): string { return $d !== '' ? date('F j, Y', strtotime
     .tc-grp { font-size: .75rem; font-weight: 600; color: var(--gray-500); text-transform: uppercase;
               letter-spacing: .04em; }
     .tc-ans p { line-height: 1.75; margin: .55rem 0; }
-    .tc-ans ul { margin: .55rem 0 .55rem 1.2rem; line-height: 1.75; }
+    /* The global stylesheet resets ul to list-style:none; padding-left:0, which
+       silently flattened candidates' bulleted answers into bare lines. */
+    .tc-ans ul { margin: .55rem 0; padding-left: 1.4rem; line-height: 1.75;
+                 list-style: disc outside; }
+    .tc-ans li { margin: .25rem 0; }
     .tc-none { color: var(--gray-500); font-style: italic; }
     .tc-upd { font-size: .78rem; color: var(--gray-500); margin-top: .5rem; }
     .tc-prompt { background: var(--off-white, #f6faf7); border-left: 3px solid var(--border);
