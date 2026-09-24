@@ -162,8 +162,8 @@ function tcDate(string $d): string { return $d !== '' ? date('F j, Y', strtotime
   <link rel="stylesheet" href="css/style.css">
   <link rel="icon" href="favicon.ico">
   <style>
-    .tc-wrap { max-width: 900px; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
-    .tc-lede { font-size: 1rem; line-height: 1.8; color: var(--gray-700); max-width: 68ch; }
+    .tc-wrap { max-width: var(--max-w, 1120px); margin: 0 auto; padding: 2.25rem 1.5rem 4rem; }
+    .tc-lede { font-size: 1rem; line-height: 1.8; color: var(--gray-700); max-width: 78ch; }
     .tc-meta { font-size: .85rem; color: var(--gray-500); margin: .6rem 0 1.5rem; }
     .tc-pdf { display: inline-flex; align-items: center; gap: .5rem; background: var(--primary);
               color: #fff; font-weight: 700; border-radius: 8px; padding: .65rem 1.1rem;
@@ -268,15 +268,19 @@ function tcDate(string $d): string { return $d !== '' ? date('F j, Y', strtotime
       </nav>
     </div>
   </header>
+  <section class="page-hero">
+    <div class="container">
+      <h1>School Trustee Candidate Responses</h1>
+      <p>Ahead of the School District 54 trustee election, the BVTU sent a short survey to
+         candidates. Their responses are published here as submitted.</p>
+    </div>
+  </section>
+
   <main class="tc-wrap">
     <a class="tc-skip" href="#tc-content">Skip to responses</a>
 
-    <h1>School Trustee Candidate Responses</h1>
-
     <p class="tc-lede">
-      Ahead of the School District 54 trustee election, the Bulkley Valley Teachers' Union
-      sent a short survey to candidates. Their responses are published here <strong>as
-      submitted</strong> &mdash; we have not corrected or edited them.
+      Responses appear <strong>as submitted</strong> &mdash; we have not corrected or edited them.
     </p>
     <p class="tc-lede">
       New candidates and incumbent trustees received slightly different questions, so their
