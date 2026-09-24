@@ -149,6 +149,18 @@ function tcStatusNote(array $c): string {
     return 'No response received as of ' . $when . '.';
 }
 
+/**
+ * Short status tag for the candidate dropdown. Every candidate is listed there,
+ * so the list has to say which ones have nothing to read — otherwise picking a
+ * name that turns up no answers looks like the filter is broken.
+ */
+function tcStatusTag(array $c): string {
+    $st = $c['status'] ?? '';
+    if ($st === 'declined')    return ' — declined';
+    if ($st !== 'responded')   return ' — no response';
+    return '';
+}
+
 function tcDate(string $d): string { return $d !== '' ? date('F j, Y', strtotime($d)) : ''; }
 ?>
 <!DOCTYPE html>
@@ -335,7 +347,7 @@ function tcDate(string $d): string { return $d !== '' ? date('F j, Y', strtotime
                 <?php foreach (['new' => 'New candidate', 'incumbent' => 'Incumbent'] as $g => $gl): ?>
                   <?php foreach ($byGroup[$g] as $c): ?>
                   <option value="<?= htmlspecialchars($c['slug']) ?>">
-                    <?= htmlspecialchars($c['name']) ?> (<?= $gl ?>)</option>
+                    <?= htmlspecialchars($c['name']) ?> (<?= $gl ?><?= htmlspecialchars(tcStatusTag($c)) ?>)</option>
                   <?php endforeach; ?>
                 <?php endforeach; ?>
               </select>
