@@ -94,19 +94,29 @@ function tcQuestionsFor(array $c): array {
 function tcAnswersTo(string $qid, array $candidates): array {
     $rows = [];
     foreach ($candidates as $c) {
-        if (($c['status'] ?? '') !== 'responded') continue;
+        $st = $c['status'] ?? '';
+        // A candidate who replied to us but declined the questions is listed
+        // under every question, so the record of who was asked is complete.
+        // Silence is different: someone who has not replied yet may still do
+        // so, and naming them under each question would read as a refusal.
+        if ($st === 'declined') {
+            $rows[] = ['candidate' => $c, 'q' => null, 'seeAbove' => null,
+                       'note' => tcStatusNote($c)];
+            continue;
+        }
+        if ($st !== 'responded') continue;
         foreach (tcQuestionsFor($c) as $q) {
             if ($q['id'] === $qid) {
-                $rows[] = ['candidate' => $c, 'q' => $q, 'seeAbove' => null];
+                $rows[] = ['candidate' => $c, 'q' => $q, 'seeAbove' => null, 'note' => null];
                 break;
             }
             if (array_key_exists($q['id'], TC_COMBINED)
                 && in_array($qid, TC_COMBINED[$q['id']], true)) {
                 $first = TC_COMBINED[$q['id']][0];
                 if ($first === $qid) {
-                    $rows[] = ['candidate' => $c, 'q' => $q, 'seeAbove' => null];
+                    $rows[] = ['candidate' => $c, 'q' => $q, 'seeAbove' => null, 'note' => null];
                 } else {
-                    $rows[] = ['candidate' => $c, 'q' => $q, 'seeAbove' => $first];
+                    $rows[] = ['candidate' => $c, 'q' => $q, 'seeAbove' => $first, 'note' => null];
                 }
                 break;
             }
@@ -140,7 +150,7 @@ function tcRender(string $text): string {
 /** What we can say about a candidate who has not answered. */
 function tcStatusNote(array $c): string {
     if (($c['status'] ?? '') === 'declined') {
-        return 'Candidate declined to provide responses to the survey questions.';
+        return 'Chose not to provide responses to the survey questions.';
     }
     if (TC_RECHECKED_AFTER_DEADLINE) {
         return 'No response received by the ' . date('F j', strtotime(TC_DEADLINE)) . ' deadline.';
@@ -156,7 +166,7 @@ function tcStatusNote(array $c): string {
  */
 function tcStatusTag(array $c): string {
     $st = $c['status'] ?? '';
-    if ($st === 'declined')    return ' — declined';
+    if ($st === 'declined')    return ' — chose not to respond';
     if ($st !== 'responded')   return ' — no response';
     return '';
 }
@@ -390,7 +400,9 @@ function tcDate(string $d): string { return $d !== '' ? date('F j, Y', strtotime
                     <p class="tc-who">
                       <a href="#candidate-<?= htmlspecialchars($c['slug']) ?>"><?= htmlspecialchars($c['name']) ?></a>
                     </p>
-                    <?php if ($r['seeAbove']): ?>
+                    <?php if (!empty($r['note'])): ?>
+                      <p class="tc-none"><?= htmlspecialchars($r['note']) ?></p>
+                    <?php elseif ($r['seeAbove']): ?>
                       <?php // Their words stay where they wrote them: one answer, shown once. ?>
                       <p class="tc-none">This candidate answered this question together with the
                         previous one. <a href="#q-<?= htmlspecialchars($r['seeAbove']) ?>">Read their

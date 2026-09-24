@@ -201,7 +201,9 @@ const TC_CANDIDATES = [
         'slug'    => 'jennifer-smith',
         'name'    => 'Jennifer Smith',
         'group'   => 'incumbent',
-        'status'  => 'no_response',
+        // Replied to BVTU but chose not to answer the questions — which is a
+        // different thing from not replying, and is shown differently.
+        'status'  => 'declined',
     ],
 
     /* ── PASTE CANDIDATES BELOW. Template: ───────────────────────────────────
