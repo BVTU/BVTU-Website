@@ -188,6 +188,64 @@ $member   = $loggedIn ? getMember() : null;
         <p>These documents, together with the <a href="collective-agreement.php">Local Collective Agreement</a>, form the complete contract between BVTU members and School District 54. Letters of Understanding, settlement agreements, and arbitration awards are all legally binding components of the contract.</p>
       </div>
 
+      <!-- 2026 -->
+      <div class="lou-year-group">
+        <div class="lou-year-heading">2026</div>
+        <div class="lou-list">
+          <a href="documents/settlements/2026-2027-thursday-early-dismissal-signed.pdf" class="lou-card" target="_blank" rel="noopener">
+            <div class="lou-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+            <div class="lou-card-body">
+              <div class="lou-card-title">Thursday Afternoon Early Dismissal 2026-2027</div>
+              <div class="lou-card-meta">
+                <span class="lou-type-badge badge-lou">LOU</span>
+                <span>Signed June 25, 2026 · Cody Lind &amp; Michael McDiarmid</span>
+              </div>
+            </div>
+          </a>
+          <a href="documents/settlements/2026-2027-temporary-small-fte-increases-signed.pdf" class="lou-card" target="_blank" rel="noopener">
+            <div class="lou-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+            <div class="lou-card-body">
+              <div class="lou-card-title">Temporary and Small FTE Increases to Existing Contracts 2026-2027</div>
+              <div class="lou-card-meta">
+                <span class="lou-type-badge badge-lou">LOU</span>
+                <span>Signed June 25, 2026 · Cody Lind &amp; Michael McDiarmid</span>
+              </div>
+            </div>
+          </a>
+          <a href="documents/settlements/2026-2027-prod-alternate-remedy-signed.pdf" class="lou-card" target="_blank" rel="noopener">
+            <div class="lou-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+            <div class="lou-card-body">
+              <div class="lou-card-title">Professional Development as Alternate Remedy Options 2026-2027</div>
+              <div class="lou-card-meta">
+                <span class="lou-type-badge badge-lou">LOU</span>
+                <span>Signed June 25, 2026 · Cody Lind &amp; Michael McDiarmid</span>
+              </div>
+            </div>
+          </a>
+          <a href="documents/settlements/2026-2027-school-psychologists-signed.pdf" class="lou-card" target="_blank" rel="noopener">
+            <div class="lou-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+            <div class="lou-card-body">
+              <div class="lou-card-title">School Psychologists 2026-2027</div>
+              <div class="lou-card-meta">
+                <span class="lou-type-badge badge-lou">LOU</span>
+                <span>Fully executed · in effect until June 30, 2027</span>
+              </div>
+            </div>
+          </a>
+          <a href="documents/settlements/2026-non-sexist-environment-joint-letter.pdf" class="lou-card" target="_blank" rel="noopener">
+            <div class="lou-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+            <div class="lou-card-body">
+              <div class="lou-card-title">Non-Sexist Environment — Joint Letter to All Teachers, Principals and Vice-Principals</div>
+              <div class="lou-card-meta">
+                <span class="lou-type-badge badge-guidelines">Joint Letter</span>
+                <span class="lou-articles">Art. E.1</span>
+                <span>September 16, 2026 · Mike McDiarmid &amp; Cody Lind</span>
+              </div>
+            </div>
+          </a>
+        </div>
+      </div>
+
       <!-- 2025 -->
       <div class="lou-year-group">
         <div class="lou-year-heading">2025</div>
