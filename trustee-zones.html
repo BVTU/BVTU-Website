@@ -138,7 +138,10 @@ h1{font-family:var(--fd);font-size:24px;font-weight:400;line-height:1.12;text-wr
   /* Sidebar becomes a slide-up bottom sheet */
   .side{
     position:fixed;bottom:0;left:0;right:0;
-    width:100%;height:72vh;
+    /* vh ignores the browser's collapsing address bar, so a vh-sized sheet
+       and map run underneath it. dvh tracks the visible viewport; the vh line
+       stays first as the fallback for browsers without dvh. */
+    width:100%;height:72vh;height:72dvh;
     border-right:none;border-top:1px solid var(--line);
     border-radius:16px 16px 0 0;
     transform:translateY(100%);
@@ -162,7 +165,7 @@ h1{font-family:var(--fd);font-size:24px;font-weight:400;line-height:1.12;text-wr
   .drag-handle:hover::after,.drag-handle:active::after{background:var(--ink3)}
 
   /* Map fills full screen */
-  .mapwrap{flex:1;height:100vh}
+  .mapwrap{flex:1;height:100vh;height:100dvh}
 
   /* Backdrop */
   .backdrop{
@@ -205,6 +208,15 @@ h1{font-family:var(--fd);font-size:24px;font-weight:400;line-height:1.12;text-wr
 
   /* Hide hint on mobile — result card replaces it */
   .hint{display:none}
+
+  /* iOS Safari zooms the whole page when a focused input is under 16px, and
+     does not zoom back out afterwards. 16px is the fix; suppressing zoom with
+     maximum-scale would break pinch-zoom for everyone else. */
+  .addr input{font-size:16px}
+
+  /* Keep the bottom controls clear of the iPhone home indicator. */
+  .side-foot{padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))}
+  .mob-toggle{bottom:calc(20px + env(safe-area-inset-bottom,0px))}
 }
 
 /* Desktop: hide mobile-only elements */
@@ -369,7 +381,11 @@ const bases={
  'OpenStreetMap':L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap contributors · boundaries: BC Data Catalogue',maxZoom:19})
 };
 bases['Topographic'].addTo(map);
-L.control.layers(bases,null,{position:'topright',collapsed:false}).addTo(map);
+/* Expanded, the layer list takes about 117x100px — a large bite out of a
+   375px-wide screen, in the corner the map can least spare. On a phone it
+   collapses to a single icon and opens on tap. */
+L.control.layers(bases,null,{position:'topright',
+  collapsed:window.matchMedia('(max-width:640px)').matches}).addTo(map);
 
 const sdLayer=L.polygon(SD,{color:CSS('--accent'),weight:2,dashArray:'7 5',fill:false,opacity:.7}).addTo(map);
 
@@ -510,6 +526,26 @@ const GEOCODER='https://geocoder.api.gov.bc.ca/addresses.json';
 let addrSeq=0;
 
 function addrSay(msg,kind){addrMsg.textContent=msg;addrMsg.className='addr-msg'+(kind?' '+kind:'');}
+
+/* Bring a result to the top of the sheet's visible area.
+
+   On a phone with the keyboard up the sheet shows only a couple of hundred
+   pixels: measured at a 420px-tall viewport, the candidate list sat 185px
+   below the fold with nothing to suggest it existed.
+
+   It aligns the top rather than scrolling the minimum distance, because the
+   minimum scroll lands on the END of a list taller than the opening — the
+   reader arrives at the least likely candidate having never seen the warning
+   above the first. Scrolls the panel itself, not scrollIntoView, which would
+   also move the page behind it. */
+function revealInSheet(el){
+  const body=document.querySelector('.side-body');
+  if(!body||!el||el.hidden)return;
+  requestAnimationFrame(function(){
+    const b=body.getBoundingClientRect(), e=el.getBoundingClientRect();
+    body.scrollTop+=(e.top-b.top)-8;
+  });
+}
 function esc(t){const d=document.createElement('div');d.textContent=t;return d.innerHTML;}
 
 /* A new search must not leave the last one's zone on screen: a failed lookup
@@ -554,6 +590,7 @@ function goTo(f){
      cancels a flight already in progress — which left the map at the
      district-wide zoom instead of on the address. */
   identify({lat:lat,lng:lng},p.fullAddress||addrIn.value.trim(),!!note);
+  if(note)revealInSheet(ansEl);
   goView(lat,lng,note?11:13);
 }
 
@@ -648,6 +685,7 @@ function offerChoices(features,town){
     msg='That was not an exact match. Pick the closest one:'; kind='';
   }
   addrSay(msg,kind);
+  revealInSheet(addrMsg);
 }
 
 addrForm.addEventListener('submit',ev=>{
