@@ -41,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $reason = trim($_POST['reason'] ?? '');
         if ($date === '' || $name === '') {
             $error = 'A date and a name are required.';
-        } elseif (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || !strtotime($date)) {
+        } elseif (!rtIsoDate($date)) {
             $error = 'That date could not be read. Use the date picker.';
         } elseif ($days <= 0 || $days > 20) {
             $error = 'Days must be more than 0 and no more than 20.';
@@ -105,6 +105,91 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    if ($action === 'add_invoice' || $action === 'update_invoice') {
+        $id     = (int)($_POST['invoice_id'] ?? 0);
+        $number = trim($_POST['invoice_number'] ?? '');
+        $idate  = trim($_POST['invoice_date'] ?? '');
+        $cost   = trim($_POST['total_cost'] ?? '');
+        $notes  = trim($_POST['notes'] ?? '');
+
+        // Same test as the entry path: a real ISO date. strtotime alone accepts
+        // "12/5" and hands MySQL something it stores as 0000-00-00, and its
+        // return of 0 for 1970-01-01 is falsy, so a valid date would fail too.
+        if ($idate !== '' && !rtIsoDate($idate)) {
+            $error = 'That invoice date could not be read. Use the date picker.';
+        } elseif ($cost !== '' && (!is_numeric($cost) || (float)$cost < 0)) {
+            $error = 'The cost must be a number, or left blank until you know it.';
+        } elseif ($number === '') {
+            $error = 'The invoice number is what the BCTF matches against — it is required.';
+        } else {
+            if ($action === 'add_invoice') {
+                $id = lpRtAddInvoice($year, $number, $idate, $cost === '' ? null : $cost,
+                                     $notes, $member['email']);
+                $notice = 'Invoice ' . $number . ' added.';
+            } else {
+                $inv = $id ? lpRtInvoice($id) : null;
+                if (!$inv || (int)$inv['year'] !== $year) {
+                    $error = 'That invoice could not be found.';
+                    $id = 0;
+                } else {
+                    lpRtUpdateInvoice($id, $number, $idate, $cost === '' ? null : $cost, $notes);
+                    $notice = 'Invoice updated.';
+                }
+            }
+
+            // The file is optional on both paths: the invoice number and total
+            // are often known before the PDF has been scanned.
+            if ($id && !empty($_FILES['invoice_file']['name'])) {
+                $up = rtStoreUpload($_FILES['invoice_file']);
+                if ($up['error'] !== '') {
+                    // Keep the notice: the invoice row exists either way, and
+                    // showing only the file error reads as "nothing happened",
+                    // which gets the same invoice added a second time.
+                    $error = $up['error'] . ' The invoice itself was saved — use Edit to attach the file.';
+                } else {
+                    $old = lpRtInvoice($id);
+                    lpRtSetInvoiceFile($id, $up['path'], $up['name']);
+                    if ($old && $old['file_path'] !== '' && $old['file_path'] !== $up['path']) {
+                        $f = LP_RT_DIR . basename($old['file_path']);
+                        if (is_file($f)) @unlink($f);
+                    }
+                    $notice = trim($notice . ' File attached.');
+                }
+            }
+        }
+    }
+
+    if ($action === 'delete_invoice') {
+        $id  = (int)($_POST['invoice_id'] ?? 0);
+        $inv = $id ? lpRtInvoice($id) : null;
+        if ($inv && (int)$inv['year'] === $year) {
+            lpRtDeleteInvoice($id);
+            $notice = 'Invoice removed. Its release days are back in the log, unattached.';
+        } else {
+            $error = 'That invoice could not be found.';
+        }
+    }
+
+    if ($action === 'attach') {
+        $id  = (int)($_POST['invoice_id'] ?? 0);
+        $inv = $id ? lpRtInvoice($id) : null;
+        if (!$inv || (int)$inv['year'] !== $year) {
+            $error = 'That invoice could not be found.';
+        } else {
+            $want = array_values(array_unique(array_filter(array_map('intval', (array)($_POST['entry_ids'] ?? [])))));
+            $got  = lpRtAttachEntries($id, $year, $want);
+            $label = $inv['invoice_number'] !== '' ? $inv['invoice_number'] : ('#' . $id);
+            $notice = 'Days on invoice ' . $label . ' updated.';
+            if ($got < count($want)) {
+                // Only possible from a stale page, and silence would leave the
+                // invoice quietly short of the days it was meant to carry.
+                $error  = (count($want) - $got) . ' of those days are now on another invoice and '
+                        . 'were left there. Reload and check this invoice.';
+                $notice = '';
+            }
+        }
+    }
+
     if ($action === 'save_year') {
         $fte    = trim($_POST['fte'] ?? '');
         $capRaw = trim($_POST['day_cap'] ?? '');
@@ -127,8 +212,9 @@ $notice = $notice ?: (string)($_GET['notice'] ?? '');
 $error  = $error  ?: (string)($_GET['error']  ?? '');
 
 $yr      = lpRtYear($year);
-$entries = lpRtEntries($year);
-$totals  = lpRtTotals($year);
+$entries  = lpRtEntries($year);
+$invoices = lpRtInvoices($year);
+$totals   = lpRtTotals($year);
 $cap     = (int)$yr['day_cap'];
 $suggest = $yr['fte'] !== null ? lpRtCapForFte((float)$yr['fte']) : 0;
 
@@ -139,7 +225,69 @@ if (!in_array($year, $years, true))            $years[] = $year;
 if (!in_array(lpCurrentYear(), $years, true))  $years[] = lpCurrentYear();
 rsort($years);
 
+/**
+ * Store an uploaded invoice. Returns ['path','name','error'].
+ *
+ * Same file rules as the receipt uploads: images or PDF, 15 MB. The type is
+ * read from the file rather than trusted from the name, with an extension
+ * fallback because iPhone HEIC often arrives as octet-stream.
+ */
+function rtStoreUpload(array $file): array {
+    $out = ['path' => '', 'name' => '', 'error' => ''];
+    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        $out['error'] = ($file['error'] === UPLOAD_ERR_INI_SIZE || $file['error'] === UPLOAD_ERR_FORM_SIZE)
+            ? 'That file is too large for the server to accept.'
+            : 'The file did not upload. Try again.';
+        return $out;
+    }
+    if (!is_uploaded_file($file['tmp_name'])) { $out['error'] = 'Unexpected upload.'; return $out; }
+    if ($file['size'] > 15 * 1024 * 1024)     { $out['error'] = 'File too large. Maximum 15 MB.'; return $out; }
+
+    $origName = basename($file['name']);
+    $mime     = function_exists('mime_content_type') ? mime_content_type($file['tmp_name']) : '';
+    $byMime   = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp',
+                 'image/gif' => 'gif', 'image/heic' => 'heic', 'image/heif' => 'heif',
+                 'application/pdf' => 'pdf'];
+    $okExt    = ['jpg','jpeg','png','webp','gif','heic','heif','pdf'];
+    $ext      = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+
+    /*
+     * The extension that gets SAVED is chosen here, never carried over from the
+     * name the browser sent. A real JPEG called "shell.php" passes a check on
+     * content alone, and writing it back as .php would drop an executable file
+     * into the web root with only an .htaccess between it and being run — and
+     * .htaccess is inert under nginx or with AllowOverride off.
+     *
+     * Content decides when it can. Extension is the fallback only for the case
+     * that made a fallback necessary: iPhone HEIC often arrives as
+     * application/octet-stream.
+     */
+    if (isset($byMime[$mime])) {
+        $ext = $byMime[$mime];
+    } elseif (!in_array($ext, $okExt, true)) {
+        $out['error'] = 'Unsupported file type. Upload a PDF or a photo.';
+        return $out;
+    }
+
+    lpEnsureReceiptsDir();   // invoices share the receipts directory and its deny rule
+    $saved = 'rt-' . date('Ymd-His') . '-' . bin2hex(random_bytes(4)) . '.' . $ext;
+    if (!move_uploaded_file($file['tmp_name'], LP_RT_DIR . $saved)) {
+        $out['error'] = 'Could not save the file. Check server write permissions.';
+        return $out;
+    }
+    $out['path'] = $saved;
+    $out['name'] = $origName;
+    return $out;
+}
+
+/** A real calendar date in YYYY-MM-DD — not merely something strtotime parses. */
+function rtIsoDate(string $d): bool {
+    if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $d, $m)) return false;
+    return checkdate((int)$m[2], (int)$m[3], (int)$m[1]);
+}
+
 function rtDate(string $d): string { return $d ? date('M j, Y', strtotime($d)) : ''; }
+function rtMoney($v): string { return $v === null ? '' : '$' . number_format((float)$v, 2); }
 function rtDays(float $d): string  { return rtrim(rtrim(number_format($d, 1), '0'), '.'); }
 ?>
 <!DOCTYPE html>
@@ -220,10 +368,10 @@ function rtDays(float $d): string  { return rtrim(rtrim(number_format($d, 1), '0
   <?php if ($error):  ?><div class="error-box">&#x26A0; <?= htmlspecialchars($error) ?></div><?php endif; ?>
 
   <div class="stage-note">
-    Log each release day as it happens. When the district invoice arrives you will attach it and
-    tick off the days it covers, and the BCTF reimbursement table builds itself from that — one row
-    per invoice, dates and names grouped, totals added up. Invoices and the export package are the
-    next stage, so every day below currently reads <strong>not invoiced</strong>.
+    Log each release day as it happens. When the district invoice arrives, add it below, attach the
+    PDF, and tick the days it covers — the BCTF reimbursement table is then built from that, one row
+    per invoice with dates and names grouped and totals added up. The export package is the next
+    stage; until then the table below is the thing you copy from.
   </div>
 
   <div class="stat-row">
@@ -245,6 +393,17 @@ function rtDays(float $d): string  { return rtrim(rtrim(number_format($d, 1), '0
       <div class="n"><?= rtDays($totals['logged'] - $totals['claimable']) ?></div>
       <div class="l">Not claimed</div>
       <div class="s">Set aside on purpose</div>
+    </div>
+    <div class="stat<?= $totals['cost_missing'] > 0 ? ' warn' : '' ?>">
+      <div class="n" style="font-size:1.25rem;"><?= htmlspecialchars(rtMoney($totals['cost'])) ?></div>
+      <div class="l">Invoiced cost</div>
+      <div class="s">
+        <?php if ($totals['cost_missing'] > 0): ?>
+          <?= (int)$totals['cost_missing'] ?> invoice<?= $totals['cost_missing'] === 1 ? '' : 's' ?> with no cost yet
+        <?php else: ?>
+          All invoices costed
+        <?php endif; ?>
+      </div>
     </div>
   </div>
 
@@ -373,6 +532,173 @@ function rtDays(float $d): string  { return rtrim(rtrim(number_format($d, 1), '0
                 regularly released officer, or release another BCTF grant already pays for. The day
                 stays in the log either way — this records that you considered it.
               </div>
+            </form>
+          </td>
+        </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Invoices -->
+  <div class="pcard">
+    <h2>Add a district invoice</h2>
+    <form method="POST" class="f" enctype="multipart/form-data">
+      <?= csrfField() ?>
+      <input type="hidden" name="action" value="add_invoice">
+      <input type="hidden" name="year"   value="<?= $year ?>">
+      <div style="display:grid;grid-template-columns:140px 150px 140px 1fr auto;gap:.6rem;align-items:end;">
+        <div><label for="inum">Invoice number</label><input type="text" id="inum" name="invoice_number" required placeholder="e.g. 556"></div>
+        <div><label for="idate">Invoice date</label><input type="date" id="idate" name="invoice_date"></div>
+        <div><label for="icost">Total cost</label><input type="number" id="icost" name="total_cost" step="0.01" min="0" placeholder="leave blank"></div>
+        <div><label for="ifile">Invoice PDF or photo</label><input type="file" id="ifile" name="invoice_file" accept=".pdf,image/*"></div>
+        <div><button type="submit" class="btn btn-primary" style="padding:.5rem 1.1rem;font-size:.9rem;">Add</button></div>
+      </div>
+      <div class="hintline">
+        Leave the cost blank until the district tells you — blank reads as
+        <em>not known yet</em>, where 0 would read as free.
+      </div>
+    </form>
+  </div>
+
+  <div class="table-wrap" style="margin-bottom:1.5rem;">
+    <table>
+      <thead>
+        <tr>
+          <th>Invoice</th>
+          <th>Dates released</th>
+          <th>Members</th>
+          <th style="text-align:right;">Days</th>
+          <th style="text-align:right;">Cost</th>
+          <th>File</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php if (!$invoices): ?>
+        <tr class="empty-row"><td colspan="7">No invoices yet. Add one above when the district bills you.</td></tr>
+        <?php endif; ?>
+        <?php foreach ($invoices as $inv): $iid = (int)$inv['id']; ?>
+        <tr>
+          <td style="white-space:nowrap;">
+            <strong><?= htmlspecialchars($inv['invoice_number'] !== '' ? $inv['invoice_number'] : '#' . $iid) ?></strong>
+            <?php if ($inv['invoice_date']): ?>
+              <div class="why"><?= htmlspecialchars(rtDate($inv['invoice_date'])) ?></div>
+            <?php endif; ?>
+          </td>
+          <td><?= htmlspecialchars($inv['dates_text'] !== '' ? $inv['dates_text'] : '—') ?></td>
+          <td><?= htmlspecialchars($inv['names_text'] !== '' ? $inv['names_text'] : '—') ?></td>
+          <td class="num"><?= rtDays((float)$inv['days']) ?></td>
+          <td class="num">
+            <?php if ($inv['total_cost'] === null): ?>
+              <span class="pill none">not known</span>
+            <?php else: ?>
+              <?= htmlspecialchars(rtMoney($inv['total_cost'])) ?>
+            <?php endif; ?>
+          </td>
+          <td>
+            <?php if ($inv['file_path'] !== ''): ?>
+              <a href="lp-releasetime-file.php?f=<?= urlencode($inv['file_path']) ?>" target="_blank"
+                 style="font-size:.78rem;color:var(--primary);">View</a>
+            <?php else: ?>
+              <span class="pill none">none</span>
+            <?php endif; ?>
+          </td>
+          <td>
+            <div class="acts">
+              <button class="act-btn" onclick="tog('a<?= $iid ?>')">&#9745; Days (<?= count($inv['entries']) ?>)</button>
+              <button class="act-btn" onclick="tog('i<?= $iid ?>')">&#x270F; Edit</button>
+              <form method="POST" style="display:inline;"
+                    onsubmit="return confirm('Remove this invoice? Its release days stay in the log and go back to not invoiced.')">
+                <?= csrfField() ?>
+                <input type="hidden" name="action"     value="delete_invoice">
+                <input type="hidden" name="year"       value="<?= $year ?>">
+                <input type="hidden" name="invoice_id" value="<?= $iid ?>">
+                <button type="submit" class="act-btn danger">&#128465;</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+
+        <!-- attach days -->
+        <tr class="edit-row" id="row-a<?= $iid ?>">
+          <td colspan="7">
+            <form method="POST" class="f">
+              <?= csrfField() ?>
+              <input type="hidden" name="action"     value="attach">
+              <input type="hidden" name="year"       value="<?= $year ?>">
+              <input type="hidden" name="invoice_id" value="<?= $iid ?>">
+              <label>Which release days does this invoice cover?</label>
+              <?php
+                // Days already on this invoice, plus every day not on any other —
+                // a day can only belong to one invoice, so the rest are not offered.
+                $choices = array_filter($entries, function ($e) use ($iid) {
+                    return (int)$e['invoice_id'] === $iid || $e['invoice_id'] === null;
+                });
+              ?>
+              <?php if (!$choices): ?>
+                <p class="hintline">Every logged day is already on another invoice.</p>
+              <?php else: ?>
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:.35rem;margin:.5rem 0 .75rem;">
+                <?php foreach ($choices as $e): ?>
+                <label style="display:flex;gap:.5rem;align-items:flex-start;font-size:.84rem;
+                              border:1px solid var(--gray-200);border-radius:7px;padding:.45rem .6rem;">
+                  <input type="checkbox" name="entry_ids[]" value="<?= (int)$e['id'] ?>"
+                         <?= (int)$e['invoice_id'] === $iid ? 'checked' : '' ?> style="margin-top:.15rem;">
+                  <span>
+                    <?= htmlspecialchars(rtDate($e['release_date'])) ?> &middot;
+                    <?= htmlspecialchars($e['member_name']) ?>
+                    &middot; <?= rtDays((float)$e['days']) ?>d
+                    <?php if ((int)$e['excluded']): ?>
+                      <span class="pill no" style="margin-left:.2rem;">not claimed</span>
+                    <?php endif; ?>
+                  </span>
+                </label>
+                <?php endforeach; ?>
+              </div>
+              <button type="submit" class="btn btn-primary" style="padding:.45rem .9rem;font-size:.85rem;">Save days</button>
+              <button type="button" class="act-btn" onclick="tog('a<?= $iid ?>')">Cancel</button>
+              <div class="hintline">
+                Unticking is as real as ticking — a day removed here goes back to
+                <em>not invoiced</em> rather than staying attached. A day marked not claimed can sit
+                on the invoice without being billed to the BCTF.
+              </div>
+              <?php endif; ?>
+            </form>
+          </td>
+        </tr>
+
+        <!-- edit invoice -->
+        <tr class="edit-row" id="row-i<?= $iid ?>">
+          <td colspan="7">
+            <form method="POST" class="f" enctype="multipart/form-data">
+              <?= csrfField() ?>
+              <input type="hidden" name="action"     value="update_invoice">
+              <input type="hidden" name="year"       value="<?= $year ?>">
+              <input type="hidden" name="invoice_id" value="<?= $iid ?>">
+              <div style="display:grid;grid-template-columns:140px 150px 140px 1fr auto;gap:.6rem;align-items:end;">
+                <div><label>Invoice number</label><input type="text" name="invoice_number" value="<?= htmlspecialchars($inv['invoice_number']) ?>" required></div>
+                <div><label>Invoice date</label><input type="date" name="invoice_date" value="<?= htmlspecialchars((string)$inv['invoice_date']) ?>"></div>
+                <div><label>Total cost</label><input type="number" name="total_cost" step="0.01" min="0" value="<?= $inv['total_cost'] === null ? '' : htmlspecialchars($inv['total_cost']) ?>"></div>
+                <div>
+                  <label><?= $inv['file_path'] !== '' ? 'Replace file' : 'Attach file' ?></label>
+                  <input type="file" name="invoice_file" accept=".pdf,image/*">
+                </div>
+                <div style="display:flex;gap:.35rem;">
+                  <button type="submit" class="btn btn-primary" style="padding:.45rem .9rem;font-size:.85rem;">Save</button>
+                  <button type="button" class="act-btn" onclick="tog('i<?= $iid ?>')">Cancel</button>
+                </div>
+              </div>
+              <div style="margin-top:.6rem;">
+                <label>Notes</label>
+                <input type="text" name="notes" value="<?= htmlspecialchars((string)$inv['notes']) ?>" placeholder="optional">
+              </div>
+              <?php if ($inv['file_path'] !== ''): ?>
+                <div class="hintline">
+                  Attached: <?= htmlspecialchars($inv['original_name'] ?: $inv['file_path']) ?>.
+                  Uploading another replaces it.
+                </div>
+              <?php endif; ?>
             </form>
           </td>
         </tr>

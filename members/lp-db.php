@@ -183,7 +183,17 @@ function lpEnsureTables(): void {
         INDEX idx_voucher (voucher_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-    // Receipts directory
+    lpEnsureReceiptsDir();
+}
+
+/**
+ * The receipts directory and its deny rule.
+ *
+ * Its own function because it has two callers now — lpEnsureTables() and the
+ * release time invoice upload, which writes to the same directory. Two copies
+ * of the rule on one path would drift.
+ */
+function lpEnsureReceiptsDir(): void {
     if (!is_dir(LP_RECEIPTS_DIR)) mkdir(LP_RECEIPTS_DIR, 0750, true);
     $htaccess = LP_RECEIPTS_DIR . '.htaccess';
     if (!file_exists($htaccess)) file_put_contents($htaccess, "Require all denied\n");
