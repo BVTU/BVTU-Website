@@ -42,20 +42,35 @@ $tmpPath  = $file['tmp_name'];
 $origName = basename($file['name']);
 $mimeType = mime_content_type($tmpPath);
 
-$allowedMimes = ['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif','application/pdf'];
-if (!in_array($mimeType, $allowedMimes)) {
-    $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
-    if (!in_array($ext, ['jpg','jpeg','png','webp','gif','heic','heif','pdf'])) {
-        echo json_encode(['ok' => false, 'error' => 'Unsupported file type. Please upload a photo or PDF.']); exit;
-    }
+$byMime = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp',
+           'image/gif' => 'gif', 'image/heic' => 'heic', 'image/heif' => 'heif',
+           'application/pdf' => 'pdf'];
+$okExt  = ['jpg','jpeg','png','webp','gif','heic','heif','pdf'];
+$ext    = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+
+/*
+ * The extension that gets SAVED is chosen here, never carried over from the
+ * name the browser sent. A real JPEG called "shell.php" passes a check on
+ * content alone, and writing it back as .php would drop an executable file
+ * into the web root with only an .htaccess between it and being run — and
+ * .htaccess is inert under nginx or with AllowOverride off.
+ *
+ * Content decides when it can. Extension is the fallback only for the case
+ * that made a fallback necessary: iPhone HEIC often arrives as
+ * application/octet-stream.
+ */
+if (isset($byMime[$mimeType])) {
+    $ext = $byMime[$mimeType];
+} elseif (in_array($ext, $okExt, true)) {
     $mimeType = 'image/jpeg';
+} else {
+    echo json_encode(['ok' => false, 'error' => 'Unsupported file type. Please upload a photo or PDF.']); exit;
 }
 if ($file['size'] > 15 * 1024 * 1024) {
     echo json_encode(['ok' => false, 'error' => 'File too large (max 15 MB).']); exit;
 }
 
 // Save file
-$ext       = strtolower(pathinfo($origName, PATHINFO_EXTENSION)) ?: 'jpg';
 $savedName = date('Ymd-His') . '-mob-' . bin2hex(random_bytes(4)) . '.' . $ext;
 $savedPath = LP_RECEIPTS_DIR . $savedName;
 
