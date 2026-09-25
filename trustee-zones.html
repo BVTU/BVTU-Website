@@ -77,6 +77,26 @@ h1{font-family:var(--fd);font-size:24px;font-weight:400;line-height:1.12;text-wr
 
 /* community chips */
 .chips{display:flex;flex-wrap:wrap;gap:5px}
+.addr{display:flex;gap:6px;margin-bottom:8px}
+.addr input{flex:1;min-width:0;font-family:var(--fb);font-size:13px;color:var(--ink);
+ background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:7px 9px}
+.addr input:focus{outline:none;border-color:var(--accent)}
+.addr button{font-family:var(--fb);font-size:12px;font-weight:700;color:#fff;background:var(--accent);
+ border:none;border-radius:var(--r);padding:0 13px;cursor:pointer;white-space:nowrap}
+.addr button:disabled{opacity:.55;cursor:default}
+.addr-msg{font-size:11.5px;line-height:1.5;color:var(--ink2);margin:-2px 0 9px}
+.addr-msg:empty{display:none}
+.addr-msg.warn{color:var(--z4)}
+.addr-msg.bad{color:#C0392B}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .addr-msg.bad{color:#F1948A}}
+:root[data-theme="dark"] .addr-msg.bad{color:#F1948A}
+.addr-pick{display:flex;flex-direction:column;gap:4px;margin:-2px 0 9px}
+/* display:flex outranks the UA rule for [hidden], so say it explicitly. */
+.addr-pick[hidden]{display:none}
+.addr-pick button{text-align:left;font-family:var(--fb);font-size:12px;color:var(--ink);
+ background:var(--surface2);border:1px solid var(--line);border-radius:var(--r);padding:6px 8px;cursor:pointer}
+.addr-pick button:hover{border-color:var(--accent);color:var(--accent)}
+.addr-pick button span{display:block;font-size:10.5px;color:var(--ink3)}
 .chip{background:var(--surface2);border:1px solid var(--line);border-left:3px solid var(--cc);
  border-radius:20px;padding:4px 11px;font-family:var(--fb);font-size:12px;font-weight:500;
  color:var(--ink2);cursor:pointer}
@@ -208,7 +228,14 @@ h1{font-family:var(--fd);font-size:24px;font-weight:400;line-height:1.12;text-wr
 
     <div class="sec">
       <div class="sec-l"><span>Your zone</span></div>
-      <div class="ans empty" id="ans"><div class="ans-p">Click anywhere on the map to see which zone it falls in and how many trustees are elected there.</div></div>
+      <form class="addr" id="addrForm" autocomplete="off">
+        <input type="text" id="addrIn" aria-label="Your address"
+               placeholder="Your address, e.g. 3861 Broadway Ave, Smithers">
+        <button type="submit" id="addrGo">Find</button>
+      </form>
+      <div class="addr-msg" id="addrMsg" role="status"></div>
+      <div class="addr-pick" id="addrPick" hidden></div>
+      <div class="ans empty" id="ans"><div class="ans-p">Enter your address above, or click anywhere on the map, to see which zone it falls in and how many trustees are elected there.</div></div>
     </div>
 
     <div class="sec">
@@ -235,7 +262,9 @@ h1{font-family:var(--fd);font-size:24px;font-weight:400;line-height:1.12;text-wr
     </div>
 
     <div class="sec">
-      <p class="src">Zone boundaries follow Policy 1.100 (Trustee Representation), amended 23 February 2022, drawn against surveyed parcel, road and river data from the BC Data Catalogue. The policy's "Eckman Road" is locally the same road as Babine Lake Road. Boundaries are accurate to within a few hundred metres and are shown for orientation. If you live close to a line, confirm your zone with the district office before voting.</p>
+      <p class="src">Zone boundaries follow Policy 1.100 (Trustee Representation), amended 23 February 2022, drawn against surveyed parcel, road and river data from the BC Data Catalogue. The policy's "Eckman Road" is locally the same road as Babine Lake Road. Boundaries are accurate to within a few hundred metres and are shown for orientation. If you live close to a line, confirm your zone with the district office before voting.
+        Address lookup uses the Province of BC's public address geocoder; addresses are sent to that
+        service to be located and are not stored by us.</p>
     </div>
   </div>
   <div class="side-foot">
@@ -245,7 +274,7 @@ h1{font-family:var(--fd);font-size:24px;font-weight:400;line-height:1.12;text-wr
 </aside>
 <div class="mapwrap">
   <div id="map"></div>
-  <div class="hint" id="hint">Click the map to find a zone</div>
+  <div class="hint" id="hint">Enter an address or click the map</div>
   <!-- Mobile floating result card -->
   <div class="mob-result" id="mobResult">
     <div class="ans-z" id="mobZ"></div>
@@ -391,21 +420,51 @@ function pip(pt,poly){let c=false;for(let i=0,j=poly.length-1;i<poly.length;j=i+
 function zoneAt(lat,lng){for(const id of ORDER){const z=ZONES.find(x=>x.id===id);
  if(pip([lat,lng],z.ring))return z;} return null;}
 
+/* Move the map, and make sure it moved.
+
+   flyTo is an animation, and it can quietly do nothing: on a container with no
+   size it produces NaN and throws, and where the animation is suppressed or
+   throttled it simply never arrives. Either way the panel names a zone while
+   the map still shows somewhere else, with the pin off screen. So: skip the
+   glide where it is unreliable, and if the flight has not landed by the time
+   it should have, put the view there outright. */
+let goViewTimer=null;
+/* Anything that moves the map on purpose cancels a pending fallback first —
+   otherwise a Reset view, or a click somewhere else, is silently undone a
+   moment later when the old timer fires. */
+function cancelGoView(){if(goViewTimer){clearTimeout(goViewTimer);goViewTimer=null;}}
+function goView(lat,lng,z){
+  const t=[lat,lng];
+  cancelGoView();
+  if(map.getSize().x===0||map.getSize().y===0||window.innerWidth<=640){map.setView(t,z);return;}
+  map.flyTo(t,z,{duration:.7});
+  goViewTimer=setTimeout(function(){
+    goViewTimer=null;
+    if(Math.abs(map.getZoom()-z)>0.01||map.getCenter().distanceTo(L.latLng(t))>250)map.setView(t,z);
+  },1000);
+}
+
 let pin=null;
 const ansEl=document.getElementById('ans'), hintEl=document.getElementById('hint');
-function identify(ll,name){
+function identify(ll,name,keepPanel){
   const z=zoneAt(ll.lat,ll.lng);
   if(pin)map.removeLayer(pin);
   if(!z){
     ansEl.className='ans empty';
     ansEl.innerHTML='<div class="ans-p">That point is outside School District 54.</div>';
     hintEl.textContent='Outside the district';
+    // Without this the mobile card kept showing the last zone found, so an
+    // address outside the district still looked like an answer.
+    const mr0=document.getElementById('mobResult'); if(mr0)mr0.classList.remove('show');
     return;
   }
   const c=CSS(z.v);
   pin=L.circleMarker(ll,{radius:8,fillColor:c,color:'#fff',weight:3,fillOpacity:1}).addTo(map);
   ansEl.className='ans'; ansEl.style.setProperty('--ac',c);
-  const trustees=`${name?name+' elects ':'Voters here elect '}<b>${z.t}</b> of the 7 trustees`;
+  // name is a geocoder result or whatever was typed in the address box, so it
+  // is escaped before going anywhere near innerHTML.
+  const who=name?esc(name)+' elects ':'Voters here elect ';
+  const trustees=`${who}<b>${z.t}</b> of the 7 trustees`;
   ansEl.innerHTML=`<div class="ans-z">${z.n}</div><div class="ans-s">${z.sub}</div>
    <div class="ans-t">${trustees}</div>`;
   hintEl.textContent=(name||'Selected point')+' — '+z.n;
@@ -416,9 +475,247 @@ function identify(ll,name){
    document.getElementById('mobS').textContent=z.sub;
    document.getElementById('mobT').innerHTML=trustees;}
   // Auto-close panel on mobile after community chip tap
-  if(name&&window.innerWidth<=640)closeSide();
+  // Closing the panel hides the message above the result. When that message
+  // is a caveat about how rough the match was, the reader needs it more than
+  // they need the map.
+  if(name&&!keepPanel&&window.innerWidth<=640)closeSide();
 }
-map.on('click',e=>identify(e.latlng));
+map.on('click',e=>{
+  // The panel above belongs to the last address searched. Leaving its warning
+  // and candidate list beside a fresh map-click answer reads as if they go
+  // together.
+  cancelGoView();
+  addrMsg.textContent=''; addrMsg.className='addr-msg';
+  addrPick.hidden=true;  addrPick.innerHTML='';
+  identify(e.latlng);
+});
+
+/* ── Address lookup ───────────────────────────────────────────────────────
+   Geocoding is the only part this page could not already do: zoneAt() has
+   always been able to answer "which zone is this point in". So the address
+   box just turns text into a latitude and longitude and hands it to the same
+   identify() the map click uses.
+
+   The geocoder is the Province of BC's own public one (no key, CORS open,
+   BC addresses only), which beats a general-purpose service here: it knows
+   rural BC civic addresses, and it reports how precise the match was. That
+   last part matters. A match on the town rather than the address lands on
+   the town centre, which can sit in a different zone from the address the
+   person typed — so a coarse match has to say so rather than answer
+   confidently with a guess. */
+const addrForm=document.getElementById('addrForm'), addrIn=document.getElementById('addrIn'),
+      addrGo=document.getElementById('addrGo'), addrMsg=document.getElementById('addrMsg'),
+      addrPick=document.getElementById('addrPick');
+const GEOCODER='https://geocoder.api.gov.bc.ca/addresses.json';
+let addrSeq=0;
+
+function addrSay(msg,kind){addrMsg.textContent=msg;addrMsg.className='addr-msg'+(kind?' '+kind:'');}
+function esc(t){const d=document.createElement('div');d.textContent=t;return d.innerHTML;}
+
+/* A new search must not leave the last one's zone on screen: a failed lookup
+   showing the previous address's answer reads as the answer to what was just
+   typed. */
+function clearResult(){
+  if(pin){map.removeLayer(pin);pin=null;}
+  ansEl.className='ans empty';
+  ansEl.innerHTML='<div class="ans-p">Looking\u2026</div>';
+  const mr=document.getElementById('mobResult'); if(mr)mr.classList.remove('show');
+}
+
+/* Resting state — never leave "Looking…" or a stale zone behind when a lookup
+   ends with no answer. */
+function noAnswer(){
+  if(pin){map.removeLayer(pin);pin=null;}
+  ansEl.className='ans empty';
+  ansEl.innerHTML='<div class="ans-p">Enter your address above, or click anywhere on the map, to see which zone it falls in and how many trustees are elected there.</div>';
+  hintEl.textContent='Enter an address or click the map';
+  const mr=document.getElementById('mobResult'); if(mr)mr.classList.remove('show');
+}
+
+/* How much to trust a hit. The geocoder's matchPrecision says what it
+   actually matched, which is more honest than its score alone. */
+function precisionNote(p){
+  if(p==='LOCALITY'||p==='PROVINCE')
+    return 'Only the community was found, not that address — this is the centre of town, '+
+           'which may be in a different zone than your home. Try adding a street number, '+
+           'or click your location on the map.';
+  if(p==='STREET'||p==='INTERSECTION')
+    return 'Matched the street but not a specific number, so this is approximate. '+
+           'If you live near a zone line, check with the district office.';
+  return '';
+}
+
+function goTo(f){
+  const [lng,lat]=f.geometry.coordinates, p=f.properties||{};
+  addrPick.hidden=true; addrPick.innerHTML='';
+  const note=precisionNote(p.matchPrecision);
+  addrSay(note||('Found '+(p.fullAddress||'that address')+'.'), note?'warn':'');
+  /* identify() first: on a phone it closes the side panel, and that resize
+     cancels a flight already in progress — which left the map at the
+     district-wide zoom instead of on the address. */
+  identify({lat:lat,lng:lng},p.fullAddress||addrIn.value.trim(),!!note);
+  goView(lat,lng,note?11:13);
+}
+
+function show(f){
+  try{goTo(f);}
+  catch(e){addrSay('Found that address, but could not show it on the map ('+e.message+'). '+
+                   'Reload the page and try again.','bad');}
+}
+
+/* Each candidate is labelled with the zone it lands in, or that it is outside
+   the district. When an address does not exist the geocoder offers the nearest
+   things it can find anywhere in BC — Kelowna, Port Moody — and presenting
+   those as equal choices would invite someone to pick a wrong answer. */
+/* Lowercased, punctuation stripped, so "Telkwa," and "telkwa" compare equal. */
+function norm(t){return (t||'').toLowerCase().replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim();}
+
+/*
+ * Did the answer come back for the town that was asked for?
+ *
+ * Four outcomes, and they need different words. 'agrees' is the only one safe
+ * to answer confidently on.
+ *
+ * The town is read from the last comma-separated piece of the query, not from
+ * the whole string: "1425 Telkwa High Road, Smithers" contains "Telkwa" as a
+ * street name, and a whole-string test would read that as agreement with a
+ * Telkwa result — the wrong-zone answer this check exists to stop.
+ *
+ * A trailing "BC" is dropped first, since people type it and it is not the
+ * town. What is left after a comma, with no digits in it, is taken to be the
+ * town the person meant — so when the geocoder answers with a different town
+ * we can say which one they asked for. Without a comma there is no reliable
+ * way to tell a town from the rest of an address, so we say what we found and
+ * let them judge it rather than telling them what they typed.
+ */
+function townCheck(query,features){
+  const got=(features[0].properties||{}).localityName||'';
+  if(!got)return {state:'unstated',town:'',asked:''};
+
+  let parts=query.split(',').map(function(x){return x.trim();}).filter(function(x){return x!=='';});
+  // Compared after norm(), so "B.C." and "BC" are both recognised as the
+  // province rather than mistaken for the town.
+  while(parts.length>1&&/^(bc|b c|british columbia|canada|[a-z]\d[a-z] ?\d[a-z]\d)$/.test(norm(parts[parts.length-1])))
+    parts.pop();
+
+  const wanted=norm(got);
+  if(parts.length>1){
+    const tailRaw=parts[parts.length-1], tail=norm(tailRaw);
+    if(tail.indexOf(wanted)>=0)return {state:'agrees',town:got,asked:tailRaw};
+    if(tail!==''&&!/\d/.test(tail))return {state:'differs',town:got,asked:tailRaw};
+    return {state:'unknown',town:got,asked:''};
+  }
+
+  /* No comma. A town, if given, sits at the END of an address, so match there
+     rather than anywhere in the string: "1425 Telkwa High Road Smithers"
+     contains "Telkwa" but does not end with it, and reading that as agreement
+     would confidently answer Zone 3 for a Smithers address. */
+  const all=norm(query);
+  if(wanted!==''&&(all===wanted||all.slice(-(wanted.length+1))===' '+wanted))
+    return {state:'agrees',town:got,asked:got};
+  return {state:'unknown',town:got,asked:''};
+}
+
+function offerChoices(features,town){
+  addrPick.innerHTML='';
+  let anyInside=false;
+  features.slice(0,5).forEach(f=>{
+    const p=f.properties||{}, co=f.geometry.coordinates;
+    const z=zoneAt(co[1],co[0]); if(z)anyInside=true;
+    const b=document.createElement('button');
+    b.type='button';
+    b.innerHTML=esc(p.fullAddress||'Unnamed location')+
+                '<span>'+(z?esc(z.n):'outside School District 54')+'</span>';
+    b.onclick=()=>show(f);
+    addrPick.appendChild(b);
+  });
+  addrPick.hidden=false;
+  noAnswer();
+  /* Ordered by what matters most to the reader. "All of these are outside the
+     district" outranks any detail about which town was matched, because it
+     means none of the choices below is their answer. */
+  const st=(town&&town.state)||'', tn=(town&&town.town)||'', asked=(town&&town.asked)||'';
+  let msg, kind='warn';
+  if(!anyInside){
+    msg='No exact match, and the nearest ones the address service found are all outside '+
+        'the district. Check the spelling, or click your location on the map.';
+  }else if(st==='differs'){
+    msg='The closest match is in '+tn+', not '+asked+' — the address service could not '+
+        'find that street in '+asked+'. Check the list before trusting it:';
+  }else if(tn&&(st==='unknown'||st==='unstated')){
+    msg='The closest match is in '+tn+'. Check this is the right one:';
+  }else{
+    msg='That was not an exact match. Pick the closest one:'; kind='';
+  }
+  addrSay(msg,kind);
+}
+
+addrForm.addEventListener('submit',ev=>{
+  ev.preventDefault();
+  const q=addrIn.value.trim();
+  addrPick.hidden=true; addrPick.innerHTML='';
+  if(!q){addrSay('Type an address first.','bad');return;}
+
+  const seq=++addrSeq;           // ignore a slow reply from an earlier search
+  clearResult();
+  addrGo.disabled=true; addrSay('Looking up that address…','');
+
+  const url=GEOCODER+'?addressString='+encodeURIComponent(/\bbc\b/i.test(q)?q:q+', BC')+
+            '&maxResults=5&outputSRS=4326&minScore=50&provinceCode=BC';
+
+
+  /* Reading and presenting the reply is separate from fetching it, so that a
+     bug in here is not reported as "could not reach the address service" and
+     does not send somebody off to check their wifi. */
+  function handle(d){
+    const fs=(d&&d.features)||[];
+    if(!fs.length){
+      noAnswer();
+      addrSay('No match for that address in BC. Check the spelling, or click your '+
+              'location on the map instead.','bad');
+      return;
+    }
+    /* Go straight there only for a confident hit on an actual address, in the
+       town that was actually asked for.
+
+       All three tests earn their place. Coarse precision (STREET, LOCALITY) or
+       a close runner-up means the service was guessing. And the town test is
+       the sharpest: "1425 Main St, Telkwa" comes back as "1425 Main St,
+       Smithers" at score 96 and CIVIC_NUMBER precision, because the geocoder
+       quietly drops a town it cannot match the street in. That is a confident
+       wrong answer about where somebody votes — Telkwa is Zone 3, Smithers is
+       Zone 2 — so it goes to the chooser instead. */
+    const top=fs[0], second=fs[1], tp=top.properties||{};
+    const topScore=tp.score||0, secondScore=second?((second.properties||{}).score||0):0;
+    // The geocoder's matchPrecision vocabulary, most precise first: OCCUPANT,
+    // SITE, UNIT, CIVIC_NUMBER, BLOCK, STREET, LOCALITY, PROVINCE. BLOCK and up
+    // name a specific place; STREET and coarser do not.
+    const exact=['OCCUPANT','SITE','UNIT','CIVIC_NUMBER','BLOCK'].indexOf(tp.matchPrecision)>=0;
+    const town=townCheck(q,fs);
+    if(exact&&town.state==='agrees'&&topScore>=80&&(!second||topScore-secondScore>=10)){show(top);return;}
+    offerChoices(fs,town);
+  }
+
+  fetch(url,{headers:{'Accept':'application/json'}})
+    .then(r=>{if(!r.ok)throw new Error('The address service returned an error.');return r.json();})
+    .then(d=>{
+      if(seq!==addrSeq)return;
+      try{ handle(d); }
+      catch(e){
+        noAnswer();
+        addrSay('The address service replied, but the result could not be read ('+
+                e.message+'). Click your location on the map instead.','bad');
+      }
+    })
+
+    .catch(e=>{
+      if(seq!==addrSeq)return;
+      noAnswer();
+      addrSay('Could not reach the address service ('+e.message+'). '+
+              'You can still click your location on the map.','bad');
+    })
+    .then(()=>{if(seq===addrSeq)addrGo.disabled=false;});
+});
 
 const chipHost=document.getElementById('chips');
 COMMUNITIES.forEach(([n,la,lo])=>{
@@ -426,7 +723,7 @@ COMMUNITIES.forEach(([n,la,lo])=>{
   const b=document.createElement('button');
   b.className='chip'; b.textContent=n;
   b.style.setProperty('--cc',z?CSS(z.v):CSS('--line'));
-  b.onclick=()=>{map.flyTo([la,lo],11,{duration:.7});identify({lat:la,lng:lo},n);};
+  b.onclick=()=>{identify({lat:la,lng:lo},n);goView(la,lo,11);};
   chipHost.appendChild(b);
 });
 
@@ -451,11 +748,13 @@ const bind=(id,layer)=>document.getElementById(id).addEventListener('change',e=>
  if(e.target.checked)layer.addTo(map);else map.removeLayer(layer);});
 bind('tSchools',schoolGrp); bind('tRoads',roadGrp); bind('tSD',sdLayer);
 
-function fitAll(){map.fitBounds(L.polygon(SD).getBounds(),{padding:[24,24]});
+function fitAll(){cancelGoView();map.fitBounds(L.polygon(SD).getBounds(),{padding:[24,24]});
  if(pin){map.removeLayer(pin);pin=null;}
  ansEl.className='ans empty';
- ansEl.innerHTML='<div class="ans-p">Click anywhere on the map to see which zone it falls in and how many trustees are elected there.</div>';
- hintEl.textContent='Click the map to find a zone';}
+ ansEl.innerHTML='<div class="ans-p">Enter your address above, or click anywhere on the map, to see which zone it falls in and how many trustees are elected there.</div>';
+ hintEl.textContent='Enter an address or click the map';
+ addrMsg.textContent=''; addrMsg.className='addr-msg';
+ addrPick.hidden=true; addrPick.innerHTML='';}
 fitAll();
 </script>
 </body>
