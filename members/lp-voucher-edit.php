@@ -321,7 +321,7 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
       <?php endif; ?>
       <!-- Reviewers can't open lp-dashboard.php either — send them to their queue -->
       <a class="back-link" href="<?= $readOnly ? 'approvals.php' : 'lp-dashboard.php' ?>">
-        ← <?= $readOnly ? 'Review queue' : 'LP Expenses' ?>
+        ← <?= $readOnly ? 'Review queue' : 'Expenses &amp; Grants' ?>
       </a>
     </div>
   </div>

@@ -309,7 +309,7 @@ $initRowsJson = json_encode($initRows);
 
   <div class="portal-header">
     <h1>New Expense Voucher</h1>
-    <a class="back-link" href="lp-dashboard.php">← LP Expenses</a>
+    <a class="back-link" href="lp-dashboard.php">← Expenses &amp; Grants</a>
   </div>
 
   <?php if ($saved): ?>

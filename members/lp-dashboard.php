@@ -68,7 +68,7 @@ $grantSumJson      = json_encode(array_values($grantSum));
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LP Expenses — BVTU</title>
+  <title>Expenses &amp; Grants — BVTU</title>
   <link rel="stylesheet" href="../css/style.css">
   <link rel="icon" href="../favicon.ico">
   <style>
@@ -211,7 +211,7 @@ $grantSumJson      = json_encode(array_values($grantSum));
 
   <div class="portal-header">
     <div>
-      <h1>LP Expense Tracker</h1>
+      <h1>Expenses &amp; Grants</h1>
       <div style="font-size:.82rem;color:var(--gray-500);">
         <?= date('Y') ?>–<?= date('y', strtotime('+1 year')) ?> school year
       </div>

@@ -319,7 +319,7 @@ arsort($blSummary);
         <a href="?id=<?= $id ?>&export=csv" class="btn btn-outline" style="padding:.45rem .85rem;font-size:.83rem;">⬇ CSV</a>
         <button onclick="window.print()" class="btn btn-outline" style="padding:.45rem .85rem;font-size:.83rem;">🖨 Print</button>
       </div>
-      <a class="back-link no-print" href="lp-dashboard.php">← LP Expenses</a>
+      <a class="back-link no-print" href="lp-dashboard.php">← Expenses &amp; Grants</a>
     </div>
   </div>
 

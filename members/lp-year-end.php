@@ -121,7 +121,7 @@ $openCount   = count($outstanding['vouchers']) + count($outstanding['claims']) +
 <body>
 <div class="wrap">
 
-  <a class="back-link" href="lp-dashboard.php">&#x2190; Expense Tracker</a>
+  <a class="back-link" href="lp-dashboard.php">&#x2190; Expenses &amp; Grants</a>
   <h1>Year End</h1>
   <p class="muted" style="margin:-.6rem 0 1rem;">
     Everything in a closed year stays readable and exportable from the

@@ -126,7 +126,7 @@ function qsv(string $s): string { return htmlspecialchars($s); }
 <body>
 <div class="wrap">
 
-  <a class="back-link" href="lp-dashboard.php">&#x2190; Expense Tracker</a>
+  <a class="back-link" href="lp-dashboard.php">&#x2190; Expenses &amp; Grants</a>
   <h1>Archive &mdash; <?= qsv($label) ?></h1>
 
   <form method="GET" class="yearbar">

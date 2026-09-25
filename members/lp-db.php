@@ -1,6 +1,6 @@
 <?php
 /**
- * lp-db.php — Local President Expense Tracker database helpers
+ * lp-db.php — Expenses & Grants (Local President) database helpers
  */
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/exec-db.php';

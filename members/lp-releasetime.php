@@ -351,7 +351,7 @@ function rtDays(float $d): string  { return rtrim(rtrim(number_format($d, 1), '0
 
   <div class="page-header">
     <div>
-      <a class="back-link" href="lp-dashboard.php">&#x2190; LP Dashboard</a>
+      <a class="back-link" href="lp-dashboard.php">&#x2190; Expenses &amp; Grants</a>
       <h1>Release Time Grant</h1>
     </div>
     <form method="GET" class="f" style="display:flex;gap:.5rem;align-items:center;">
