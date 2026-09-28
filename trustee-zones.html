@@ -77,6 +77,16 @@ h1{font-family:var(--fd);font-size:24px;font-weight:400;line-height:1.12;text-wr
 
 /* community chips */
 .chips{display:flex;flex-wrap:wrap;gap:5px}
+.endo{margin-top:10px;padding-top:9px;border-top:1px solid var(--line-soft)}
+.endo-l{font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);margin-bottom:5px}
+.endo-n{font-size:13.5px;font-weight:600;color:var(--ink);line-height:1.55}
+.endo-s{font-size:11.5px;color:var(--ink2);margin-top:3px}
+.ez{display:flex;gap:9px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--line-soft)}
+.ez:last-child{border-bottom:0}
+.ez-t{flex:0 0 74px;font-size:11px;font-weight:700;color:var(--ez,var(--ink2))}
+.ez-t span{display:block;font-weight:500;font-size:10px;color:var(--ink3)}
+.ez-n{flex:1;font-size:12.5px;color:var(--ink);line-height:1.6}
+.ez-note{font-size:11px;color:var(--ez,var(--ink2));font-weight:600;margin-top:2px}
 .addr{display:flex;gap:6px;margin-bottom:8px}
 .addr input{flex:1;min-width:0;font-family:var(--fb);font-size:13px;color:var(--ink);
  background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:7px 9px}
@@ -261,6 +271,16 @@ h1{font-family:var(--fd);font-size:24px;font-weight:400;line-height:1.12;text-wr
     </div>
 
     <div class="sec">
+      <div class="sec-l"><span>BVTU-endorsed candidates</span></div>
+      <div id="endorsed"></div>
+      <p class="src" style="margin-top:9px;">
+        Mark no more names than there are seats in your zone — a ballot with too many marks is
+        spoiled. Candidates' own answers to the BVTU survey are at
+        <a href="trustee-candidates.php">bvtu.ca/trustee-candidates.php</a>.
+      </p>
+    </div>
+
+    <div class="sec">
       <div class="board"><span>Trustees on the Board of Education</span><b>7</b></div>
     </div>
 
@@ -370,6 +390,22 @@ const ZONES=[
  {id:'z4',n:'Zone 4',sub:'Houston',t:2,ring:Z4,v:'--z4',at:[54.05,-127.30]},
  {id:'z2',n:'Zone 2',sub:'Smithers / Glentanna / Driftwood',t:3,ring:Z2,v:'--z2',at:[54.86,-126.95]}
 ];
+
+/* Who the BVTU is asking members to vote for, by zone.
+
+   Seats come from ZONES[].t above — 1 + 3 + 1 + 2 = the 7 board seats — so the
+   two cannot drift apart.
+
+   Zone 4 deliberately lists three names for two seats: the BVTU supports any
+   of them and the voter picks two. That has to be said out loud wherever the
+   names appear, because a Houston voter who marks all three spoils the ballot
+   — hence voteLine() rather than a fixed "vote for up to N". */
+const ENDORSED={
+ z1:['Jessica Michell'],
+ z2:['Phil Brienesse','Diane Mackay','Casda Thomas'],
+ z3:['Kim Unger'],
+ z4:['Matt Williamson','Sharon Redford','Kellie Dondale']
+};
 const ORDER=['z1','z2','z3','z4'];
 
 const map=L.map('map',{center:[54.35,-127.1],zoom:8,zoomControl:true});
@@ -481,15 +517,23 @@ function identify(ll,name,keepPanel){
   // is escaped before going anywhere near innerHTML.
   const who=name?esc(name)+' elects ':'Voters here elect ';
   const trustees=`${who}<b>${z.t}</b> of the 7 trustees`;
+  // The endorsement is the useful part once someone knows their zone: these are
+  // the names on their ballot, not a list they have to cross-reference.
+  const picks=ENDORSED[z.id]||[];
+  const endo=picks.length?`<div class="endo">
+      <div class="endo-l">BVTU endorses in ${esc(z.n)}</div>
+      <div class="endo-n">${picks.map(esc).join('<br>')}</div>
+      <div class="endo-s">${esc(voteLine(z.t,picks.length))}</div>
+    </div>`:'';
   ansEl.innerHTML=`<div class="ans-z">${z.n}</div><div class="ans-s">${z.sub}</div>
-   <div class="ans-t">${trustees}</div>`;
+   <div class="ans-t">${trustees}</div>${endo}`;
   hintEl.textContent=(name||'Selected point')+' — '+z.n;
   // Mobile result card
   const mr=document.getElementById('mobResult');
   if(mr){mr.style.setProperty('--ac',c);mr.classList.add('show');
    document.getElementById('mobZ').textContent=z.n;
    document.getElementById('mobS').textContent=z.sub;
-   document.getElementById('mobT').innerHTML=trustees;}
+   document.getElementById('mobT').innerHTML=trustees+endo;}
   // Auto-close panel on mobile after community chip tap
   // Closing the panel hides the message above the result. When that message
   // is a caveat about how rough the match was, the reader needs it more than
@@ -764,6 +808,36 @@ COMMUNITIES.forEach(([n,la,lo])=>{
   b.onclick=()=>{identify({lat:la,lng:lo},n);goView(la,lo,11);};
   chipHost.appendChild(b);
 });
+
+/* The endorsement list, in zone order, with the seat count taken from the same
+   ZONES entry the map is drawn from. */
+(function(){
+  const host=document.getElementById('endorsed');
+  if(!host)return;
+  ORDER.forEach(function(id){
+    const z=ZONES.find(x=>x.id===id), names=ENDORSED[id]||[];
+    if(!names.length)return;
+    const row=document.createElement('div');
+    row.className='ez';
+    row.style.setProperty('--ez',CSS(z.v));
+    row.innerHTML='<div class="ez-t">'+esc(z.n)+'<span>'+z.t+' seat'+(z.t>1?'s':'')+'</span></div>'+
+                  '<div class="ez-n">'+names.map(esc).join('<br>')+
+                  (names.length>z.t?'<div class="ez-note">'+esc(voteLine(z.t,names.length))+'</div>':'')+
+                  '</div>';
+    host.appendChild(row);
+  });
+})();
+
+/* What to tell someone about how many of these names to mark.
+
+   When more names are endorsed than there are seats, "vote for up to 2" under
+   three names is an invitation to over-vote. Saying "any two of these three"
+   is the same fact stated so it cannot be misread. */
+function voteLine(seats,count){
+  return count>seats
+    ? 'Vote for any '+seats+' of these '+count
+    : 'Vote for up to '+seats;
+}
 
 const zoneHost=document.getElementById('zones');
 ORDER.forEach(id=>{
