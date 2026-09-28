@@ -287,20 +287,16 @@ const TC_CANDIDATES = [
         ],
     ],
     [
-        // STATUS CONFLICT — worth resolving.
-        // The September 28 document says she did not provide answers by the
-        // deadline, and that is what is published here, because the website has
-        // to say what the handout says. But on September 24 Cody said she had
-        // replied and declined to answer the questions, and the page carried
-        // 'declined' ("Chose not to provide responses to the survey questions")
-        // until now. The earlier record also had her surname as Smith.
-        // If she did decline, change status to 'declined' and the wording
-        // follows automatically.
+        // Declined, not silent: she emailed Cody but did not answer the survey
+        // questions (confirmed 28 September 2026). The printed September 28
+        // document lists her under "no response received", which is the less
+        // precise of the two — silence and a reply that declines are different
+        // things, and only one of them is a choice she actually made.
         'slug'    => 'jennifer-williams',
         'name'    => 'Jennifer Williams',
         'zone'    => 4,
         'group'   => 'incumbent',
-        'status'  => 'no_response',
+        'status'  => 'declined',
     ],
     [
         'slug'    => 'matt-williamson',
