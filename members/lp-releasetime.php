@@ -196,7 +196,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $yr     = lpRtYear($year);
         // Blank or silly keeps the stored cap; lpRtSaveYear enforces the range.
         $cap    = $capRaw === '' ? (int)$yr['day_cap'] : (int)$capRaw;
-        lpRtSaveYear($year, $fte === '' ? null : $fte, $cap, (string)($yr['report'] ?? ''));
+        // The form always posts the report, so a missing key means it was not
+        // this form — keep what is stored rather than wiping it.
+        $report = array_key_exists('report', $_POST)
+                ? trim((string)$_POST['report'])
+                : (string)($yr['report'] ?? '');
+        lpRtSaveYear($year, $fte === '' ? null : $fte, $cap, $report);
         $saved  = lpRtYear($year);
         $notice = ((int)$saved['day_cap'] === $cap)
                 ? 'Year settings saved.'
@@ -288,7 +293,6 @@ function rtIsoDate(string $d): bool {
 
 function rtDate(string $d): string { return $d ? date('M j, Y', strtotime($d)) : ''; }
 function rtMoney($v): string { return $v === null ? '' : '$' . number_format((float)$v, 2); }
-function rtDays(float $d): string  { return rtrim(rtrim(number_format($d, 1), '0'), '.'); }
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -354,6 +358,9 @@ function rtDays(float $d): string  { return rtrim(rtrim(number_format($d, 1), '0
       <a class="back-link" href="lp-dashboard.php">&#x2190; Expenses &amp; Grants</a>
       <h1>Release Time Grant</h1>
     </div>
+    <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;">
+    <a href="lp-releasetime-export.php?year=<?= $year ?>" class="btn btn-primary"
+       style="padding:.5rem 1.1rem;font-size:.9rem;text-decoration:none;">&#x2193; Export for BCTF</a>
     <form method="GET" class="f" style="display:flex;gap:.5rem;align-items:center;">
       <label for="year" style="margin:0;">School year</label>
       <select id="year" name="year" onchange="this.form.submit()">
@@ -362,6 +369,7 @@ function rtDays(float $d): string  { return rtrim(rtrim(number_format($d, 1), '0
         <?php endforeach; ?>
       </select>
     </form>
+    </div>
   </div>
 
   <?php if ($notice): ?><div class="notice">&#x2713; <?= htmlspecialchars($notice) ?></div><?php endif; ?>
@@ -376,21 +384,21 @@ function rtDays(float $d): string  { return rtrim(rtrim(number_format($d, 1), '0
 
   <div class="stat-row">
     <div class="stat">
-      <div class="n"><?= rtDays($totals['claimable']) ?></div>
+      <div class="n"><?= lpRtDays($totals['claimable']) ?></div>
       <div class="l">Days to claim</div>
       <div class="s">of <?= $cap ?> allowed</div>
     </div>
     <div class="stat">
-      <div class="n"><?= rtDays($totals['invoiced']) ?></div>
+      <div class="n"><?= lpRtDays($totals['invoiced']) ?></div>
       <div class="l">On an invoice</div>
     </div>
     <div class="stat<?= $totals['unbilled'] > 0 ? ' warn' : '' ?>">
-      <div class="n"><?= rtDays($totals['unbilled']) ?></div>
+      <div class="n"><?= lpRtDays($totals['unbilled']) ?></div>
       <div class="l">Not yet invoiced</div>
       <div class="s"><?= $totals['unbilled'] > 0 ? 'Still owed to you' : 'Nothing outstanding' ?></div>
     </div>
     <div class="stat">
-      <div class="n"><?= rtDays($totals['logged'] - $totals['claimable']) ?></div>
+      <div class="n"><?= lpRtDays($totals['logged'] - $totals['claimable']) ?></div>
       <div class="l">Not claimed</div>
       <div class="s">Set aside on purpose</div>
     </div>
@@ -449,7 +457,7 @@ function rtDays(float $d): string  { return rtrim(rtrim(number_format($d, 1), '0
         <tr class="<?= (int)$e['excluded'] ? 'excluded' : '' ?>">
           <td style="white-space:nowrap;"><?= htmlspecialchars(rtDate($e['release_date'])) ?></td>
           <td><?= htmlspecialchars($e['member_name']) ?></td>
-          <td class="num"><?= rtDays((float)$e['days']) ?></td>
+          <td class="num"><?= lpRtDays((float)$e['days']) ?></td>
           <td>
             <?= htmlspecialchars($e['reason']) ?>
             <?php if ((int)$e['excluded']): ?>
@@ -502,7 +510,7 @@ function rtDays(float $d): string  { return rtrim(rtrim(number_format($d, 1), '0
               <div class="f-row">
                 <div><label>Date</label><input type="date" name="release_date" value="<?= htmlspecialchars($e['release_date']) ?>" required></div>
                 <div><label>Member released</label><input type="text" name="member_name" value="<?= htmlspecialchars($e['member_name']) ?>" required></div>
-                <div><label>Days</label><input type="number" name="days" value="<?= htmlspecialchars(rtDays((float)$e['days'])) ?>" step="0.5" min="0.5" max="20" required></div>
+                <div><label>Days</label><input type="number" name="days" value="<?= htmlspecialchars(lpRtDays((float)$e['days'])) ?>" step="0.5" min="0.5" max="20" required></div>
                 <div><label>Reason</label><input type="text" name="reason" value="<?= htmlspecialchars($e['reason']) ?>"></div>
                 <div style="display:flex;gap:.35rem;">
                   <button type="submit" class="btn btn-primary" style="padding:.45rem .9rem;font-size:.85rem;">Save</button>
@@ -588,7 +596,7 @@ function rtDays(float $d): string  { return rtrim(rtrim(number_format($d, 1), '0
           </td>
           <td><?= htmlspecialchars($inv['dates_text'] !== '' ? $inv['dates_text'] : '—') ?></td>
           <td><?= htmlspecialchars($inv['names_text'] !== '' ? $inv['names_text'] : '—') ?></td>
-          <td class="num"><?= rtDays((float)$inv['days']) ?></td>
+          <td class="num"><?= lpRtDays((float)$inv['days']) ?></td>
           <td class="num">
             <?php if ($inv['total_cost'] === null): ?>
               <span class="pill none">not known</span>
@@ -648,7 +656,7 @@ function rtDays(float $d): string  { return rtrim(rtrim(number_format($d, 1), '0
                   <span>
                     <?= htmlspecialchars(rtDate($e['release_date'])) ?> &middot;
                     <?= htmlspecialchars($e['member_name']) ?>
-                    &middot; <?= rtDays((float)$e['days']) ?>d
+                    &middot; <?= lpRtDays((float)$e['days']) ?>d
                     <?php if ((int)$e['excluded']): ?>
                       <span class="pill no" style="margin-left:.2rem;">not claimed</span>
                     <?php endif; ?>
@@ -725,6 +733,15 @@ function rtDays(float $d): string  { return rtrim(rtrim(number_format($d, 1), '0
           <input type="number" id="cap" name="day_cap" min="0" max="200" value="<?= $cap ?>">
         </div>
         <div><button type="submit" class="btn btn-primary" style="padding:.5rem 1.1rem;font-size:.9rem;">Save</button></div>
+      </div>
+      <div style="margin-top:.9rem;">
+        <label for="report">Summary report for the BCTF</label>
+        <textarea id="report" name="report" rows="5"
+                  style="width:100%;border:1px solid var(--gray-300);border-radius:7px;padding:.5rem .7rem;font-size:.9rem;font-family:inherit;box-sizing:border-box;"><?= htmlspecialchars((string)($yr['report'] ?? '')) ?></textarea>
+        <div class="hintline">
+          Sent with the reimbursement — the BCTF asks for a short account of what the released
+          members did and what came of it. It goes into the export package.
+        </div>
       </div>
       <div class="hintline">
         The BCTF sets the cap by local FTE — up to 175 FTE is 40 days, 176–510 is 60, and so on.

@@ -113,6 +113,9 @@ function lpRtEnsureTables(): void {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 }
 
+/** Days without trailing zeros: 1, 0.5, 2.5 — never "1.0". */
+function lpRtDays(float $d): string { return rtrim(rtrim(number_format($d, 1), '0'), '.'); }
+
 /** The year row, created on first use so the page never has a missing record. */
 function lpRtYear(int $year): array {
     lpRtEnsureTables();

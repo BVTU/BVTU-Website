@@ -22,13 +22,59 @@ def php_regions(src):
         yield m.start(1), m.group(1)
 
 def scrub(code):
-    """Blank out comments and string literals inside one PHP region."""
-    code = re.sub(r'/\*.*?\*/', ' ', code, flags=re.S)
-    code = re.sub(r'(?m)//[^\n]*$', ' ', code)
-    code = re.sub(r'#[^\n]*', ' ', code)
-    code = re.sub(r'"(?:[^"\\]|\\.)*"', '""', code)
-    code = re.sub(r"'(?:[^'\\]|\\.)*'", "''", code)
-    return code
+    """
+    Blank out comments and string literals inside one PHP region.
+
+    One pass, not a sequence of regexes. Blanking comments first breaks on a
+    string holding a '#' or a '//' — a literal '#' used to build an invoice
+    label blanked the rest of its line, which threw off every quote after it
+    and let prose inside a later string be read as code. "for invoice(s):" then
+    counted as an alternative-syntax for(...): and the file was reported
+    unbalanced. Blanking strings first breaks the mirror case, a comment
+    containing an apostrophe. Only tracking both together is correct.
+
+    Newlines are preserved so offsets, and therefore reported line numbers,
+    stay right.
+    """
+    out = list(code)
+    i, n = 0, len(code)
+
+    def blank(a, b):
+        for k in range(a, min(b, n)):
+            if out[k] != '\n':
+                out[k] = ' '
+
+    while i < n:
+        c = code[i]
+        if c == '/' and i + 1 < n and code[i + 1] == '*':
+            j = code.find('*/', i + 2)
+            j = n if j == -1 else j + 2
+            blank(i, j); i = j; continue
+        if (c == '/' and i + 1 < n and code[i + 1] == '/') or c == '#':
+            j = code.find('\n', i)
+            j = n if j == -1 else j
+            blank(i, j); i = j; continue
+        if c == '<' and code[i:i + 3] == '<<<':
+            m = re.match(r"<<<[ \t]*(['\"]?)([A-Za-z_]\w*)\1\r?\n", code[i:])
+            if m:
+                tag = m.group(2)
+                end = re.search(r'^[ \t]*' + tag + r'\b', code[i + m.end():], re.M)
+                j = n if not end else i + m.end() + end.end()
+                blank(i, j); i = j; continue
+        if c in '"\'':
+            q, j = c, i + 1
+            while j < n:
+                if code[j] == '\\':
+                    j += 2; continue
+                if code[j] == q:
+                    j += 1; break
+                j += 1
+            # Blank the whole literal, quotes included. On an unterminated
+            # string j lands at n, and trimming the ends there left the final
+            # character live — enough for a stray '(' or ':' to be counted.
+            blank(i, j); i = j; continue
+        i += 1
+    return ''.join(out)
 
 def check(path):
     src = open(path, encoding='utf-8').read()
