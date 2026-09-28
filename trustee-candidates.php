@@ -171,6 +171,14 @@ function tcStatusTag(array $c): string {
     return '';
 }
 
+/** "Zone 2 · Smithers / Glentanna / Driftwood", or '' if no zone is recorded. */
+function tcZoneLabel(array $c): string {
+    $z = (int)($c['zone'] ?? 0);
+    if (!$z || !array_key_exists($z, TC_ZONES)) return '';
+    // Double-quoted so the escape is a real middle dot, not five characters.
+    return 'Zone ' . $z . " \u{00B7} " . TC_ZONES[$z];
+}
+
 function tcDate(string $d): string { return $d !== '' ? date('F j, Y', strtotime($d)) : ''; }
 ?>
 <!DOCTYPE html>
@@ -369,6 +377,16 @@ function tcDate(string $d): string { return $d !== '' ? date('F j, Y', strtotime
                 <option value="incumbent">Incumbent trustees</option>
               </select>
             </label>
+            <label>Zone
+              <?php // Only your zone's candidates are on your ballot, so this is
+                    // the filter most readers actually want. ?>
+              <select id="f-zone">
+                <option value="">All zones</option>
+                <?php foreach (TC_ZONES as $zn => $zlabel): ?>
+                <option value="<?= (int)$zn ?>">Zone <?= (int)$zn ?> — <?= htmlspecialchars($zlabel) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </label>
             <label>Search name
               <input type="search" id="f-name" placeholder="Type a name&hellip;" autocomplete="off">
             </label>
@@ -396,9 +414,14 @@ function tcDate(string $d): string { return $d !== '' ? date('F j, Y', strtotime
                   <?php endif; ?>
                   <?php foreach ($rows as $r): $c = $r['candidate']; ?>
                   <div class="tc-ans" data-cand="<?= htmlspecialchars($c['slug']) ?>"
-                       data-group="<?= $gkey ?>" data-name="<?= htmlspecialchars(mb_strtolower($c['name'])) ?>">
+                       data-group="<?= $gkey ?>" data-zone="<?= (int)($c['zone'] ?? 0) ?>"
+                       data-name="<?= htmlspecialchars(mb_strtolower($c['name'])) ?>">
                     <p class="tc-who">
                       <a href="#candidate-<?= htmlspecialchars($c['slug']) ?>"><?= htmlspecialchars($c['name']) ?></a>
+                      <?php if (tcZoneLabel($c) !== ''): ?>
+                        <span style="font-weight:400;color:var(--gray-500);font-size:.85em;">
+                          &middot; Zone <?= (int)$c['zone'] ?></span>
+                      <?php endif; ?>
                     </p>
                     <?php if (!empty($r['note'])): ?>
                       <p class="tc-none"><?= htmlspecialchars($r['note']) ?></p>
@@ -436,9 +459,15 @@ function tcDate(string $d): string { return $d !== '' ? date('F j, Y', strtotime
             <?php foreach ($byGroup[$gkey] as $c): ?>
             <article class="tc-cand" id="candidate-<?= htmlspecialchars($c['slug']) ?>"
                      data-cand="<?= htmlspecialchars($c['slug']) ?>" data-group="<?= $gkey ?>"
+                     data-zone="<?= (int)($c['zone'] ?? 0) ?>"
                      data-name="<?= htmlspecialchars(mb_strtolower($c['name'])) ?>">
               <h3><?= htmlspecialchars($c['name']) ?></h3>
-              <p class="tc-grp"><?= $gkey === 'incumbent' ? 'Incumbent trustee' : 'New candidate' ?></p>
+              <p class="tc-grp">
+                <?= $gkey === 'incumbent' ? 'Incumbent trustee' : 'New candidate' ?>
+                <?php if (tcZoneLabel($c) !== ''): ?>
+                  &middot; <?= htmlspecialchars(tcZoneLabel($c)) ?>
+                <?php endif; ?>
+              </p>
 
               <?php if (($c['status'] ?? '') !== 'responded'): ?>
                 <p class="tc-none" style="margin-top:.8rem;"><?= htmlspecialchars(tcStatusNote($c)) ?></p>
@@ -529,19 +558,27 @@ function tcDate(string $d): string { return $d !== '' ? date('F j, Y', strtotime
     });
 
     var fc = document.getElementById('f-cand'), fg = document.getElementById('f-group'),
-        fn = document.getElementById('f-name');
+        fz = document.getElementById('f-zone'), fn = document.getElementById('f-name');
 
     function apply() {
-      var cand = fc.value, grp = fg.value, name = fn.value.trim().toLowerCase();
+      var cand = fc.value, grp = fg.value, zone = fz.value, name = fn.value.trim().toLowerCase();
       document.querySelectorAll('[data-cand]').forEach(function (el) {
         var ok = (!cand || el.dataset.cand === cand)
               && (!grp  || el.dataset.group === grp)
+              && (!zone || el.dataset.zone === zone)
               && (!name || (el.dataset.name || '').indexOf(name) !== -1);
         el.hidden = !ok;
       });
-      // A group heading with nothing left under it is noise.
       document.querySelectorAll('.tc-group').forEach(function (sec) {
-        sec.hidden = !!grp && sec.dataset.group !== grp;
+        if (!!grp && sec.dataset.group !== grp) { sec.hidden = true; return; }
+        // In the by-question panel the headings stay: each question underneath
+        // carries its own "no answers match" note, and hiding the group would
+        // remove the explanation along with the content.
+        //
+        // The by-candidate panel has no such note, so a group emptied by the
+        // zone filter — no incumbent runs in Zone 3 — would leave a bare
+        // heading over blank space.
+        sec.hidden = sec.closest('#panel-c') ? !sec.querySelector('.tc-cand:not([hidden])') : false;
       });
       // Say so when a question has nothing left to show, rather than looking broken.
       document.querySelectorAll('#panel-q .tc-q').forEach(function (d) {
@@ -556,16 +593,27 @@ function tcDate(string $d): string { return $d !== '' ? date('F j, Y', strtotime
         if (msg) msg.hidden = !!any;
       });
     }
-    [fc, fg].forEach(function (el) { el.addEventListener('change', apply); });
+    [fc, fg, fz].forEach(function (el) { el.addEventListener('change', apply); });
     fn.addEventListener('input', apply);
     document.getElementById('f-reset').addEventListener('click', function () {
-      fc.value = ''; fg.value = ''; fn.value = ''; apply();
+      fc.value = ''; fg.value = ''; fz.value = ''; fn.value = ''; apply();
     });
 
     // A shared link should land on the thing it names, open and in the right view.
+    // Two names on the ballot were spelled wrong before 28 September, so their
+    // anchors changed. A stale link should land on the person, not do nothing.
+    var SLUG_ALIASES = <?= json_encode(TC_SLUG_ALIASES) ?>;
+
     function openTarget() {
       var h = location.hash;
       if (!h || h.length < 2) return;
+      if (h.indexOf('#candidate-') === 0) {
+        var old = h.slice('#candidate-'.length);
+        if (Object.prototype.hasOwnProperty.call(SLUG_ALIASES, old)) {
+          h = '#candidate-' + SLUG_ALIASES[old];
+          history.replaceState(null, '', h);
+        }
+      }
       var el = document.querySelector(h);
       if (!el) return;
       if (h.indexOf('#candidate-') === 0) show('c');

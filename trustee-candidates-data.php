@@ -19,14 +19,14 @@
 // ── Page-level settings ──────────────────────────────────────────────────────
 
 /** Shown as "Last updated" at the top of the page. Update when you change anything. */
-const TC_LAST_UPDATED = '2026-09-24';  // working draft of this date
+const TC_LAST_UPDATED = '2026-09-28';
 
 /** The candidate-organised PDF. Leave '' to hide the download button entirely. */
 const TC_PDF_URL      = '';          // e.g. 'documents/BVTU-Trustee-Candidate-Responses-2026.pdf'
 
 /** Survey deadline, and the date we last checked for late responses. */
 const TC_DEADLINE     = '2026-09-26';
-const TC_LAST_CHECKED = '2026-09-24';
+const TC_LAST_CHECKED = '2026-09-28';
 
 /**
  * Set true ONLY after the deadline has passed AND you have checked again.
@@ -34,7 +34,7 @@ const TC_LAST_CHECKED = '2026-09-24';
  * <last checked>", which is a statement about what we know rather than about
  * what they did.
  */
-const TC_RECHECKED_AFTER_DEADLINE = false;
+const TC_RECHECKED_AFTER_DEADLINE = true;
 
 // ── Survey questions ─────────────────────────────────────────────────────────
 //
@@ -69,6 +69,7 @@ const TC_SURVEYS = [
             ['id' => 'i3',  'label' => 'Education partners',     'prompt' => "Who would you describe as \"key education partners\" in SD54, and do you think engaging with these partners regularly is important to the work of a school trustee?", 'follow' => null],
             ['id' => 'i3a', 'label' => 'Community voices',       'prompt' => "The BC School Trustees Association describes the role of trustees this way: trustees \"listen to their communities, guide the work of their school district\" (BCSTA, Trustee Responsibilities, bcsta.org/trustee-responsibilities). Do you agree that community voices should guide the work of the district, and how have you regularly engaged with community voices to inform your work?", 'follow' => null],
             ['id' => 'i4',  'label' => 'Live streaming',         'prompt' => "Would you vote in favour of live streaming board meetings? Why or why not?", 'follow' => null],
+            ['id' => 'i5',  'label' => 'Memory of an educator',  'prompt' => "Bonus: Please share a positive memory of when an educator made a difference in your life", 'follow' => null],
         ],
     ],
 ];
@@ -88,10 +89,40 @@ const TC_COMBINED = [
     'i3+i3a' => ['i3', 'i3a'],
 ];
 
+/**
+ * Slugs that changed, so links shared before 28 September still land.
+ *
+ * The file's own rule is that a slug never changes once shared, and these
+ * broke it — but they were wrong: "Ungers" and "Christina" were misspellings
+ * of the names on the ballot. Redirecting is better than a link that silently
+ * does nothing.
+ */
+const TC_SLUG_ALIASES = [
+    'kim-ungers'       => 'kim-unger',
+    'christina-graham' => 'kristina-graham',
+    // The September 28 document names the Zone 4 incumbent Jennifer Williams.
+    // The earlier draft called her Jennifer Smith. Aliased so old links land;
+    // see the note on her record below.
+    'jennifer-smith'   => 'jennifer-williams',
+];
+
+/**
+ * The four voting zones, as School District 54 draws them. A candidate runs in
+ * one zone and only its voters elect them, so it is the first thing a reader
+ * needs — hence the map at trustee-zones.html, which answers it from an address.
+ */
+const TC_ZONES = [
+    1 => 'Lake Kathlyn / Evelyn / Witset',
+    2 => 'Smithers / Glentanna / Driftwood',
+    3 => 'Telkwa / Quick',
+    4 => 'Houston',
+];
+
 // ── Candidates ───────────────────────────────────────────────────────────────
 //
 // 'slug'   used in the URL (#candidate-jane-smith). Never change it once shared.
 // 'name'   as it appears on the ballot.
+// 'zone'   1–4, the voting zone they are running in. See TC_ZONES.
 // 'group'  'new' or 'incumbent' — decides which survey they are shown against.
 // 'status' 'responded' | 'no_response' | 'declined'
 // 'answers' keyed by question id. Omit a question, or leave it '', and the page
@@ -105,8 +136,72 @@ const TC_COMBINED = [
 const TC_CANDIDATES = [
 
     [
+        'slug'    => 'jessica-michell',
+        'name'    => 'Jessica Michell',
+        'zone'    => 1,
+        'group'   => 'new',
+        'status'  => 'responded',
+        'answers' => [
+            'n1'       => "I am running for school board trustee as I believe my passion for education as a parent will bring my passion to the table. As a formally educated teacher and college instructor, I also feel passionate to help advocate for our teachers as the governance level. My passion for education will assist in the foundation of our community and out future generation. As a Witsuwit’en matriarch I feel the need to ensure a passionate voice and diverse perspectives are fairly represented. I truly hope for transparency between the school district and our local families and a well-planned out strategic plan.",
+            'n2'       => "When I think of Key Education Partners in SD54 I think of the “stakeholders” within the community, including our BV Teachers Union, BCTF, Local rights holders (Witset First Nation, Lake Babine Nation and surrounding communities that have children in our schools). Including the First Nations Educations Council. Parent Advisory councils are also apart of the equation, as involving the parents of the children is very important. Lastly, I think the municipal government can be included for collaboration, community representation and common goals.",
+            'n2a'      => "As a community member and a leader within the Witset community, I feel I am very approachable when it comes to advocacy. As a parent of Smithers Secondary School and Walnut I feel I have a lot of connection to other parents at those schools. Having regular communication and open dialogue will allow for me to fulfil that responsibility. I also feel my experience as a teacher will assist me in understanding teacher concerns and allow me to advocate for those voices as required. As a Witsuwit’en matriarch I also feel it is important to have a voice for one of the most vulnerable populations within the school district being Indigenous students. As a Smithers Secondary graduate and previous student, I feel the urgency to be the voice that this population needs.",
+            'n3'       => "I believe in using my voice at the table when advocacy is needed. Having my governance experience within my community as Witset council, has allowed for me to be an advocate and having difficult conversations while also being respectful.",
+            'n4'       => "Yes I would be open to having board meetings livestreamed, as that gives opportunity for trustees to be accountable and for transparency for community.",
+            'n5'       => "I have a vivid memory of my final year of high school at smithers secondary. A teacher was walking by and saw me sitting in Communications 12, she walked in and pulled me from the course. Marched me down to the counsellor’s office and asked that they move me to English Literature. (Which at the time there were 3 streams of English: Communications, English and English Literature). That advocacy allowed for me to go straight from High School into Post Secondary. I can positiuvly name a few teachers in my K-12 experience that advocated hard for me and I am thankful to share those stories now. Awitzah!",
+        ],
+    ],
+    [
+        'slug'    => 'priscilla-michell',
+        'name'    => 'Priscilla Michell',
+        'zone'    => 1,
+        'group'   => 'incumbent',
+        'status'  => 'no_response',
+    ],
+    [
+        'slug'    => 'phil-brienesse',
+        'name'    => 'Phil Brienesse',
+        'zone'    => 2,
+        'group'   => 'new',
+        'status'  => 'responded',
+        'answers' => [
+            'n1'       => "I am running for school trustee because I have heard from parents, teachers and community user groups who feel disconnected from the Board and have had difficulty getting information, having their concerns heard, or navigating the district. I believe we can do better.\n\nI want to help build a culture of greater transparency, accountability and collaboration. In particular, I am concerned about the relationship between the Board, administration and teachers. These should be partners working toward the same goal: providing the best possible education for our students.\n\nI also believe we need to look creatively at how we support students in the early grades. K–3 is a critical period for establishing the foundation for lifelong learning, yet teachers are often trying to meet increasingly diverse needs without adequate classroom support. I want to explore how SD54 can better direct its resources toward early intervention and meaningful classroom supports.\n\nAfter seven years on Smithers Council, I understand both the responsibility of elected representatives and the importance of listening before making decisions. I want to bring that experience to the Board and help make SD54 more open, collaborative and responsive to the community it serves.",
+            'n2+n2a'   => "Our key education partners include students and families, teachers and support staff, school administrators, PACs, the BVTU, Indigenous education partners, community organizations, user groups and the broader community. Each brings a different perspective, and all have a role to play in building a strong public education system.\n\nI absolutely agree that community voices should help guide the work of the district. BCSTA describes trustees as people who listen to their communities and guide the work of their school district, and I believe meaningful listening has to be an ongoing process, not something that happens only when a major decision is being made.\n\nAs a trustee, I would make a point of regularly meeting with education partners and creating opportunities for people to raise concerns before decisions are made. Just as importantly, information needs to flow back to the community. People cannot provide meaningful input if they do not know what is being considered or where to find the relevant information.\n\nMy goal would be to help make community engagement a normal part of how the Board operates rather than something that depends on individual trustees. If existing processes are not providing meaningful opportunities for engagement, I would work to improve them and, where necessary, seek out those conversations myself.",
+            'n3'       => "I think disagreement is an important part of good decision-making. If everyone around the table always agrees, we are probably not hearing enough different perspectives.\n\nIf I disagreed with district staff or another trustee, I would raise my concerns respectfully, ask questions, listen carefully to the information being presented, and explain the reasons for my position. My experience on Smithers Council taught me that I can strongly disagree with someone while still respecting them and working with them toward a better solution.\n\nI also recognize that I may not have all the information. There have been times when I went into a Council meeting intending to vote one way and, through discussion and new information, changed my mind. That is not a weakness in decision-making; it is part of the reason we have a board.\n\nUltimately, trustees are elected to participate in the collective governance of the district. I would stand up for my convictions and for concerns raised by the community, but once the Board has made a decision, I would respect that decision and work constructively with the other trustees to implement it.",
+            'n4'       => "Yes. I would support live-streaming Board meetings and making recordings available afterward.\n\nFor many parents, teachers and community members, attending a Board meeting in person simply isn't practical. Livestreaming would make it much easier for people to understand how decisions are discussed and made, and recorded meetings would allow people to go back and review a particular discussion.\n\nMeeting minutes are important, but they generally record decisions rather than the full discussion that led to them. Public access to the actual conversation provides a much clearer picture of the questions being asked, the information being considered and the different perspectives around the table.\n\nI also think transparency needs to extend to meeting materials. Agenda packages, reports and the policies being considered should be easy for the public to find in one place. If the Board has access to information in preparing for a decision, the public should have access to the appropriate public portions of that same information. Making the process easier to follow would strengthen both public participation and accountability.",
+            'n5'       => "Many educators have made a difference in my life, but the one who comes to mind first is my high school English teacher. He taught me perhaps the most important lesson I took from school: how to think critically, form my own opinions, and support those opinions with evidence and facts. He was also the person who first got me interested in politics and community involvement.\n\nWhile I was in high school, the school board was considering cuts to Educational Assistant funding. Many students felt that this was the wrong place to make cuts. The Board held an open house, and my English teacher encouraged me to speak about how those cuts would affect students.\n\nI was one of only a few students who spoke that evening. I remember feeling that my voice actually mattered and that I could have an impact on decisions affecting my school.\n\nThat experience stayed with me. It helped inspire my involvement in local government and community organizations, and it is one of the reasons I believe so strongly that students, parents, teachers and community members should feel that their voices are heard. I want young people in SD54 to have that same sense that they can participate in their community and make a difference.",
+        ],
+    ],
+    [
+        'slug'    => 'frank-farrell',
+        'name'    => 'Frank Farrell',
+        'zone'    => 2,
+        'group'   => 'incumbent',
+        'status'  => 'responded',
+        'answers' => [
+            'i1'       => "Thank you for the opportunity to answer these important questions that your membership can see.\n\nI have served 2 - 3 year terms and 3-4 year terms. My reasons for running for another term is to offer an experienced voice during a very important juncture in education in this province and district. There are serious concerns about funding and the cost to educate our students with our increasing inflationary times.Moreover, it seems that advocacy in ensuring students, all students , are in access to a safe inclusive and relevant education experience that includes the core competencies . Finally, with such emerging technologies as AI I offer my name as an experienced voice to lobby and steward an education system that is supportive of students' need to adapt to a future working world that may be far different that is existing today.",
+            'i2'       => "(a) Normally, I don't visit while in session. I feel that infringes on student learning of the curriculum of the class. I visited a classroom to read a book to an elementary school class as a part of a special event.Moreover , I have had numerous visits to schools by invitation during special events like Pie night at Walnut Park, Breakfast and Books at Muheim, along with Pride day at Smithers Secondary. I also attend regular PAC meetings at Muheim and Walnut Park.\n\n(b) Firstly, I would like to say that there have been numerous times where Trustees have offered me insight that I have never envisioned. That is a great part of a well balanced board of education. Different backgrounds representing the community as a whole. Specifically, I have been amazed by the insight that has attained through Indigenous learning gained through listening to Trustee Michell.\n\n(c) one particular time I voted against a motion is when I forwarded a motion to refuse a percentage hike in the Trustee Stipend. My thought was that no pay raise should be accepted unless all employees at the District have received a comparable or higher raise",
+            'i3'       => "Firstly, our union partners BVTU and CUPE. Our Principals and Vice-Principals , and our exempt staff. In addition our stakeholder groups the community including parents through public consultation and participation at PAC meetings. Moreover, Provincially, we engage organizations as the BC School Trustees Association BCPublic School Employers Association. Employers. Finally we engage with students by attending invited events .",
+            'i4'       => "Yes if it is cost effective and doesn't take money away from student learning.",
+            'i5'       => "There have been numerous instances when an educator made a difference in my life both as a student and as a parent. From my time as a student perhaps my most inspirational moment was as a grade 6. student of Helen Tulk Elementary School Bishops Falls , Newfoundland and Labrador,when the staff helped to organize a visit from an unknown man by the name of Terry Fox as he was on the early stages of his Marathon of Hope. Terry ran up the main street with students and proceeded to Inglis Memorial High School across the street. Terry spoke to the hundreds of students, staff and onlookers. What I got from the experience was anything is possible.\n\nFrom the parent perspective the work of all educators that taught my kids have been immeasurable. One instance was when I was a newer Trustee I had the honor of hosting an Education Forum where the topic was reading comprehension of elementary students of Walnut Park. Mrs Hooper and Rutley gave the presentation and insisted you will like this. I certainly did as the video portion of the presentation included students showing their reading comprehension. The last student was my son. I will remember both moments the rest of my life.",
+        ],
+    ],
+    [
+        'slug'    => 'kristina-graham',
+        'name'    => 'Kristina Graham',
+        'zone'    => 2,
+        'group'   => 'incumbent',
+        'status'  => 'responded',
+        'answers' => [
+            'i1'       => "One - 4 year term. This is an important job and I feel there is still a lot of work to be done.",
+            'i3'       => "I believe community engagement is an important role and not just within the district, but the town itself.",
+            'i3a'      => "Being a face in our community, I have had members reach out with both compliments and complaints. I have taken concerns back to the board office and directed community members to who is best to field their needs.",
+            'i4'       => "I don't see a problem with this.",
+        ],
+    ],
+    [
         'slug'    => 'diane-mackay',
         'name'    => 'Diane Mackay',
+        'zone'    => 2,
         'group'   => 'new',
         'status'  => 'responded',
         'answers' => [
@@ -119,22 +214,9 @@ const TC_CANDIDATES = [
         ],
     ],
     [
-        'slug'    => 'rod-taylor',
-        'name'    => 'Rod Taylor',
-        'group'   => 'new',
-        'status'  => 'responded',
-        'answers' => [
-            'n1'       => "The education of our young people is one of the most important responsibilities we have as a society. Young people today—who will be the pillars of society in only a few short years—deserve the best tools and training with which to succeed. I want to see them properly equipped to understand their world and to take their places in it.",
-            'n2'       => "Students and their parents are at the centre of the education partnership. Teachers, of course, are the trusted partners with whom parents and students should have a positive relationship. Teachers, in turn, need a supportive administration team and that ultimately involves the board of trustees and other members of the community. Of course, many students are also instructed and influenced in their local churches / spiritual communities and in the clubs or teams to which they may belong.",
-            'n2a'      => "Yes, I intend to be available to hear from the community and especially from parents. Nobody has a higher stake in the success and wellbeing of the children than their own parents.",
-            'n3'       => "It’s likely that there will be differences of opinion. That’s why we elect boards or groups of representatives rather than just one person. We learn from each other and the goal is to find good solutions through the sharing of ideas and perspectives. It is my goal to communicate my thoughts and perspectives in a respectful manner.",
-            'n4'       => "I think so; I’d want to listen to the views of other board members first. I do believe in transparency so I don’t see any reason not to make the meetings accessible to the public.",
-            'n5'       => "I’ve been privileged to have a number of good educators / mentors in my life. I still do. My first educators, of course, were my Mom and Dad who both had a lasting and positive impact on my life. I also remember particularly my grade 2 teacher, my grade 6 teacher and my grade 7 teacher. My grade 6 teacher really boosted my confidence and encouraged me. There’s no doubt that a teacher can inspire, motivate and encourage a young person to learn and to achieve great things.",
-        ],
-    ],
-    [
         'slug'    => 'casda-thomas',
         'name'    => 'Casda Thomas',
+        'zone'    => 2,
         'group'   => 'new',
         'status'  => 'responded',
         'answers' => [
@@ -147,8 +229,24 @@ const TC_CANDIDATES = [
         ],
     ],
     [
-        'slug'    => 'kim-ungers',
-        'name'    => 'Kim Ungers',
+        'slug'    => 'rod-taylor',
+        'name'    => 'Rod Taylor',
+        'zone'    => 3,
+        'group'   => 'new',
+        'status'  => 'responded',
+        'answers' => [
+            'n1'       => "The education of our young people is one of the most important responsibilities we have as a society. Young people today—who will be the pillars of society in only a few short years—deserve the best tools and training with which to succeed. I want to see them properly equipped to understand their world and to take their places in it.",
+            'n2'       => "Students and their parents are at the centre of the education partnership. Teachers, of course, are the trusted partners with whom parents and students should have a positive relationship. Teachers, in turn, need a supportive administration team and that ultimately involves the board of trustees and other members of the community. Of course, many students are also instructed and influenced in their local churches / spiritual communities and in the clubs or teams to which they may belong.",
+            'n2a'      => "Yes, I intend to be available to hear from the community and especially from parents. Nobody has a higher stake in the success and wellbeing of the children than their own parents.",
+            'n3'       => "It’s likely that there will be differences of opinion. That’s why we elect boards or groups of representatives rather than just one person. We learn from each other and the goal is to find good solutions through the sharing of ideas and perspectives. It is my goal to communicate my thoughts and perspectives in a respectful manner.",
+            'n4'       => "I think so; I’d want to listen to the views of other board members first. I do believe in transparency so I don’t see any reason not to make the meetings accessible to the public.",
+            'n5'       => "I’ve been privileged to have a number of good educators / mentors in my life. I still do. My first educators, of course, were my Mom and Dad who both had a lasting and positive impact on my life. I also remember particularly my grade 2 teacher, my grade 6 teacher and my grade 7 teacher. My grade 6 teacher really boosted my confidence and encouraged me. There’s no doubt that a teacher can inspire, motivate and encourage a young person to learn and to achieve great things.",
+        ],
+    ],
+    [
+        'slug'    => 'kim-unger',
+        'name'    => 'Kim Unger',
+        'zone'    => 3,
         'group'   => 'new',
         'status'  => 'responded',
         'answers' => [
@@ -160,8 +258,54 @@ const TC_CANDIDATES = [
         ],
     ],
     [
+        'slug'    => 'kellie-dondale',
+        'name'    => 'Kellie Dondale',
+        'zone'    => 4,
+        'group'   => 'new',
+        'status'  => 'responded',
+        'answers' => [
+            'n1'       => "I want to make a change, let kids be heard. What they need to succeed, thrive, find their passion. Some kids need more help then others I also believe that these days more kids need help with their mental health, which leads me to bullying. It's a big problem in schools. I want to get kids the help they need.",
+            'n2+n2a'   => "not only are the teachers, EAs, substitutes in this school and other schools important but also the community. Everyone has either went to school in district 54, had a child in district 54 or has a child in district 54. Everyone should be heard. Some opinions might not be suitable but at least we would know how or what some people think. In order to know these answers/ideas I think discussing it with people directly will make a difference, knowing your community will make a difference.",
+            'n3'       => "Bring up my opinions or thoughts at the monthly meetings, nothing will get heard or done if someone keeps quiet. You can voice your opinion in a kind manor and not disrespect people while doing it.",
+            'n4'       => "I would definitely vote for live streaming, with the busy lifestyle now adays sometimes it hard to get away, at least with the live stream you can take care of family obligations while completing meetings.",
+            'n5'       => "Two people made a difference in my life, Terry kluss and Paul Batley. I went though some rough health issues in high-school and she was there for me every step of the way. Paul Batley always had a good sense of humor and when he would laugh or smile it would make me forget about what I was going through in the background. Im very fortunate to have went to school with them and to this day still talk with them or talk about them.",
+        ],
+    ],
+    [
+        'slug'    => 'sharon-redford',
+        'name'    => 'Sharon Redford',
+        'zone'    => 4,
+        'group'   => 'new',
+        'status'  => 'responded',
+        'answers' => [
+            'n1'       => "They're are many reason I'm running for school trustee:\n\n- gives me the opportunity to listen, strengthen & support my community\n\n- look at my community needs and set goals\n\n- support indigenous student graduation successes\n\n- create more opportunities for students to learn, grow & succeed\n\n- as a trustee help develop strategic plans, set goals, guide decisions & to be fair",
+            'n2'       => "There are many \"key education partners\" I've talked to many of them while I worked as an indigenous support worker for SD 54.\n\n- Witset representatives\n\n- Indigenous Ed council representatives\n\n- Wit'suwit'en Nation representatives\n\n- Coast Mountain College representatives",
+            'n2a'      => "I agree that community voices guide the work of the district. I have the privilege of sitting on the board of directors on the Houston Lhc'et'dli Preservation Society. We meet with community regularly at our bi- monthly luncheon & always look forward to visiting with them",
+            'n3'       => "If I hold a different opinion I would respectfully voice my concerns",
+            'n4'       => "Live streaming SD54 board meetings makes sense. I lived in Houston BC for 38 years, worked for SD54 for 25 years, the meetings are always in Smithers. My families face many barriers that many people take for granted.\n\n- meetings are held at 7pm\n\n- have to travel in the dark\n\n- no vehicle or no fuel\n\n- no babysitter for parents to attend\n\nCommunity needs to be heard & seen",
+            'n5'       => "I never knew that both my parents went to residential school. My 4 brothers and I all quit when we were in highschool. My parents didn't care. I quit when I was in grade 11 at PGSS in Prince George. Got married at 19 had 2 kids. By the time I turned 31 years old, I was living in Houston, I wanted my kids to know that education was important. I wanted to get a job and realized that I needed my grade 12 diploma. Bill Arkinstall was the principal at HSS in 1994 and he encouraged me to enroll in the Adult Graduation program to get my Dogwood diploma. I did and started highschool the next day. I sat in classes everyday with all the teenagers. By June of 1995 I walked up for grad with my daughter who was in grade 4 and my son who was in grade 1. All the teachers working there at that time were all encouraging and supportive. Then 3 years later I got the job at Twain Sullivan Elementary as the aboriginal support worker.",
+        ],
+    ],
+    [
+        // STATUS CONFLICT — worth resolving.
+        // The September 28 document says she did not provide answers by the
+        // deadline, and that is what is published here, because the website has
+        // to say what the handout says. But on September 24 Cody said she had
+        // replied and declined to answer the questions, and the page carried
+        // 'declined' ("Chose not to provide responses to the survey questions")
+        // until now. The earlier record also had her surname as Smith.
+        // If she did decline, change status to 'declined' and the wording
+        // follows automatically.
+        'slug'    => 'jennifer-williams',
+        'name'    => 'Jennifer Williams',
+        'zone'    => 4,
+        'group'   => 'incumbent',
+        'status'  => 'no_response',
+    ],
+    [
         'slug'    => 'matt-williamson',
         'name'    => 'Matt Williamson',
+        'zone'    => 4,
         'group'   => 'new',
         'status'  => 'responded',
         'answers' => [
@@ -172,38 +316,6 @@ const TC_CANDIDATES = [
             'n4'       => "Yes, I think that in this day and age people shouldn’t have to drive to the board meeting to observe it. Parents could then more conveniently stay up to date with what the board is doing, which should lead to more engagement. This would also allow people who may not have the means to attend in person the ability to observe. It would also overcome weather related travel concerns between communities. Coincidentally, this could also have a beneficial environmental impact as well if more people watched from home.",
             'n5'       => "There have been so many wonderful educators in my life, each contributing their particular block in the foundation on which I’ve built my life. One of many experiences that I could share would be the time that I was introduced to computers and programming by my math teacher Mrs. Meutzner. This was in a time before the internet (gasp!). Coding was not taught in school at the time, but she encouraged me to learn how to write programs in a couple of different programming languages and provided me with some resources that weren’t available in schools yet. My 12 year old brain could hardly fathom the vast universe of possibilities that lay before me with the new found skills to command a computer! While we take these sorts of things for granted these days, back then it lit a spark that turned into a lifelong interest in computers and electronics. This in turn guided my choices in post secondary education and led me to amateur radio which was the basis of all the emergency communication volunteerism that I continue to pursue to this day!",
         ],
-    ],
-    [
-        'slug'    => 'frank-farrell',
-        'name'    => 'Frank Farrell',
-        'group'   => 'incumbent',
-        'status'  => 'responded',
-        'answers' => [
-            'i1'       => "Thank you for the opportunity to answer these important questions that your membership can see.\n\nI have served 2 - 3 year terms and 3-4 year terms. My reasons for running for another term is to offer an experienced voice during a very important juncture in education in this province and district. There are serious concerns about funding and the cost to educate our students with our increasing inflationary times.Moreover, it seems that advocacy in ensuring students, all students , are in access to a safe inclusive and relevant education experience that includes the core competencies . Finally, with such emerging technologies as AI I offer my name as an experienced voice to lobby and steward an education system that is supportive of students' need to adapt to a future working world that may be far different that is existing today.",
-            'i2'       => "(a) Normally, I don't visit while in session. I feel that infringes on student learning of the curriculum of the class. I visited a classroom to read a book to an elementary school class as a part of a special event.Moreover , I have had numerous visits to schools by invitation during special events like Pie night at Walnut Park, Breakfast and Books at Muheim, along with Pride day at Smithers Secondary. I also attend regular PAC meetings at Muheim and Walnut Park.\n\n(b) Firstly, I would like to say that there have been numerous times where Trustees have offered me insight that I have never envisioned. That is a great part of a well balanced board of education. Different backgrounds representing the community as a whole. Specifically, I have been amazed by the insight that has attained through Indigenous learning gained through listening to Trustee Michell.\n\n(c) one particular time I voted against a motion is when I forwarded a motion to refuse a percentage hike in the Trustee Stipend. My thought was that no pay raise should be accepted unless all employees at the District have received a comparable or higher raise",
-            'i3'       => "Firstly, our union partners BVTU and CUPE. Our Principals and Vice-Principals , and our exempt staff. In addition our stakeholder groups the community including parents through public consultation and participation at PAC meetings. Moreover, Provincially, we engage organizations as the BC School Trustees Association BCPublic School Employers Association. Employers. Finally we engage with students by attending invited events .",
-            'i4'       => "Yes if it is cost effective and doesn't take money away from student learning.",
-        ],
-    ],
-    [
-        'slug'    => 'christina-graham',
-        'name'    => 'Christina Graham',
-        'group'   => 'incumbent',
-        'status'  => 'no_response',
-    ],
-    [
-        'slug'    => 'priscilla-michell',
-        'name'    => 'Priscilla Michell',
-        'group'   => 'incumbent',
-        'status'  => 'no_response',
-    ],
-    [
-        'slug'    => 'jennifer-smith',
-        'name'    => 'Jennifer Smith',
-        'group'   => 'incumbent',
-        // Replied to BVTU but chose not to answer the questions — which is a
-        // different thing from not replying, and is shown differently.
-        'status'  => 'declined',
     ],
 
     /* ── PASTE CANDIDATES BELOW. Template: ───────────────────────────────────
