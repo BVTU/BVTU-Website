@@ -32,12 +32,24 @@ $tmpPath  = $file['tmp_name'];
 $origName = basename($file['name']);
 $mimeType = mime_content_type($tmpPath);
 
-// Validate file type
-$allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
-if (!in_array($mimeType, $allowedMimes)) {
+// Validate file type.
+/*
+ * The extension that gets SAVED comes from the sniffed MIME, never from the
+ * name the browser sent. A real JPEG called "shell.php" passes a check on
+ * content alone, and writing it back as .php would drop an executable file
+ * into the web root with only an .htaccess between it and being run — and
+ * .htaccess is inert under nginx or with AllowOverride off.
+ *
+ * Same shape as exp-scan.php: no extension fallback here, because this
+ * endpoint never accepted HEIC, which is the only reason a fallback exists.
+ */
+$byMime = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp',
+           'image/gif' => 'gif', 'application/pdf' => 'pdf'];
+if (!isset($byMime[$mimeType])) {
     echo json_encode(['error' => 'Unsupported file type. Please upload a JPG, PNG, WebP, or PDF.']);
     exit;
 }
+$ext = $byMime[$mimeType];
 
 // Validate file size (10MB max)
 if ($file['size'] > 10 * 1024 * 1024) {
@@ -47,8 +59,7 @@ if ($file['size'] > 10 * 1024 * 1024) {
 
 // Save to receipts directory
 prodEnsureTables(); // ensures directory exists
-$ext      = pathinfo($origName, PATHINFO_EXTENSION) ?: 'bin';
-$savedName = date('Ymd-His') . '-' . bin2hex(random_bytes(4)) . '.' . strtolower($ext);
+$savedName = date('Ymd-His') . '-' . bin2hex(random_bytes(4)) . '.' . $ext;
 $savedPath = PROD_RECEIPTS_DIR . $savedName;
 
 if (!move_uploaded_file($tmpPath, $savedPath)) {
