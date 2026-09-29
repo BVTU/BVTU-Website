@@ -117,7 +117,27 @@ document.querySelectorAll('.has-dropdown > a').forEach(link => {
     build();
   }
 
+  /*
+   * css/style.css is served with max-age=604800, so a visitor who came by in
+   * the last week still holds a copy from before these rules existed. They get
+   * fresh HTML and stale CSS, and an unstyled bar would drop as plain text at
+   * the foot of the page — worse than no bar at all. So the bar only appears
+   * once its styles have actually arrived. Each visitor picks it up when their
+   * cached copy expires; the homepage block is not affected, because index.php
+   * asks for the stylesheet by a versioned URL.
+   */
+  function stylesReady() {
+    var probe = document.createElement('div');
+    probe.className = 'vote-bar';
+    probe.style.cssText = 'visibility:hidden';
+    document.body.appendChild(probe);
+    var fixed = getComputedStyle(probe).position === 'fixed';
+    probe.remove();
+    return fixed;
+  }
+
   function build() {
+    if (!stylesReady()) return;
     var bar = document.createElement('div');
     bar.className = 'vote-bar';
     bar.innerHTML =
