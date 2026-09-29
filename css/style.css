@@ -919,3 +919,64 @@ body.so-lock { overflow: hidden; }
   }
   .search-fab::before { display: none; }
 }
+
+/* ── Trustee election promotion ───────────────────────────────────────────────
+   Two pieces, both time-limited: the homepage block (.vote-promo) and the slim
+   strip injected on every page by js/site.js (.vote-bar). Both stop showing
+   themselves after voting day — see index.php and js/site.js — so neither has
+   to be remembered and removed by hand. Deleting these rules plus those two
+   blocks takes the whole thing out.
+   ------------------------------------------------------------------------- */
+.vote-promo { background: var(--off-white, #f6faf7); border-top: 1px solid var(--border);
+              border-bottom: 1px solid var(--border); padding: 2.75rem 0; }
+.vote-promo .container { display: grid; grid-template-columns: 300px 1fr; gap: 2.25rem; align-items: center; }
+.vote-promo-map { display: block; border: 1px solid var(--border); border-radius: 12px;
+                  overflow: hidden; background: #fff; line-height: 0; }
+.vote-promo-map img { width: 100%; height: auto; display: block; }
+.vote-promo-when { display: inline-block; font-size: .72rem; font-weight: 800; letter-spacing: .09em;
+                   text-transform: uppercase; color: var(--primary); background: var(--accent);
+                   border-radius: 100px; padding: .25rem .7rem; margin-bottom: .7rem; }
+.vote-promo h2 { font-size: 1.5rem; margin: 0 0 .6rem; color: var(--gray-800); }
+.vote-promo p  { margin: 0 0 .7rem; line-height: 1.75; color: var(--gray-700); max-width: 62ch; }
+.vote-promo .names { font-weight: 700; color: var(--gray-800); }
+.vote-promo-btns { display: flex; gap: .7rem; flex-wrap: wrap; margin-top: 1.1rem; }
+@media (max-width: 760px) {
+  .vote-promo { padding: 2rem 0; }
+  .vote-promo .container { grid-template-columns: 1fr; gap: 1.4rem; }
+  /* The map is tall and portrait. Cropping it to save vertical space cut Zone 4
+     off the bottom entirely, which is the whole of Houston — so it is shown in
+     full and the block is simply taller on a phone. */
+}
+
+/* A strip pinned to the bottom of the window, not inserted under the header.
+   .site-header is position:fixed and every page pads its own content by
+   calc(var(--hdr-h) + …), so a bar placed in the flow lands underneath the
+   header — and pushing the content down would mean editing all 31 pages,
+   which is the thing this approach exists to avoid. js/site.js adds matching
+   bottom padding to the body so the bar never covers the end of the page. */
+.vote-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 810;
+            background: var(--primary); color: #fff; font-size: .88rem;
+            box-shadow: 0 -2px 14px rgba(0,0,0,.18); }
+.vote-bar .container { display: flex; align-items: center; gap: .9rem;
+                       padding-top: .6rem; padding-bottom: .6rem; flex-wrap: wrap; }
+.vote-bar strong { font-weight: 700; }
+.vote-bar a { color: #fff; text-decoration: underline; text-underline-offset: 2px; font-weight: 600; }
+.vote-bar a:hover { text-decoration: none; }
+.vote-bar .sep { opacity: .5; }
+.vote-bar .close { margin-left: auto; background: none; border: 0; color: #fff; opacity: .75;
+                   font-size: 1.15rem; line-height: 1; cursor: pointer; padding: .1rem .35rem; }
+.vote-bar .close:hover { opacity: 1; }
+/* The search button floats bottom-right at z-index 800; lift it clear so the
+   bar does not sit on top of it. */
+body.has-vote-bar .search-fab { bottom: calc(1.75rem + var(--vote-bar-h, 3rem)); }
+@media (max-width: 620px) {
+  .vote-bar .container { gap: .5rem .7rem; font-size: .84rem; }
+}
+.vote-promo-list { list-style: none; margin: .2rem 0 .9rem; padding: 0; }
+.vote-promo-list li { display: flex; gap: .6rem; align-items: baseline; flex-wrap: wrap;
+                      padding: .3rem 0; border-bottom: 1px solid var(--border); }
+.vote-promo-list li:last-child { border-bottom: 0; }
+.vote-promo-list .z { flex: 0 0 4.2rem; font-size: .76rem; font-weight: 800; text-transform: uppercase;
+                      letter-spacing: .05em; color: var(--gray-500); }
+.vote-promo-list .names { font-weight: 700; color: var(--gray-800); }
+.vote-promo-list .how { font-size: .8rem; color: var(--gray-600); }

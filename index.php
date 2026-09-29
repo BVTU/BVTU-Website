@@ -68,6 +68,79 @@ $member   = $loggedIn ? getMember() : null;
     </div>
   </section>
 
+  <?php
+  /*
+   * Trustee election promotion — takes itself down.
+   *
+   * General voting day is Saturday 17 October 2026. This block stops rendering
+   * the day after, so nobody has to remember to remove it: a "vote on the 17th"
+   * banner still up in November is worse than never having run one. The pages
+   * it points at stay where they are as a record of what was said.
+   *
+   * The matching strip on every other page is injected by js/site.js, which
+   * carries the same date. Styles for both are at the end of css/style.css.
+   */
+  // Explicit timezone: an anonymous homepage request never loads members/db.php,
+  // which is where this site sets one. On a UTC server the block would vanish
+  // at 5pm on voting day, which is while people are still voting.
+  $tz = new DateTimeZone('America/Vancouver');
+  if ((new DateTime('now', $tz))->format('Y-m-d') <= '2026-10-17'):
+  ?>
+  <section class="vote-promo">
+    <div class="container">
+      <a class="vote-promo-map" href="trustee-zones.html"
+         aria-label="Open the interactive trustee zone map">
+        <img src="images/trustee-zones-map.svg"
+             alt="Map of the four School District 54 trustee voting zones" width="760" height="943">
+      </a>
+      <div>
+        <span class="vote-promo-when">General voting day &middot; Saturday 17 October</span>
+        <h2>School trustee election</h2>
+        <p>
+          Seven trustees govern School District 54, and you vote only for the ones in your zone.
+          Enter your address on the map and it will tell you which zone you are in and how many
+          trustees you elect there.
+        </p>
+        <p>The BVTU endorses:</p>
+        <?php
+        /*
+         * By zone, with the seat count, because that is how the ballot works —
+         * and because Zone 4 endorses three candidates for two seats. The rule
+         * set on trustee-zones.html is that the "any two of these three" caveat
+         * appears wherever the names appear: three names above a two-seat zone
+         * invites a Houston voter to mark all three and spoil their ballot.
+         */
+        $endorsed = [
+            1 => ['seats' => 1, 'names' => ['Jessica Michell']],
+            2 => ['seats' => 3, 'names' => ['Phil Brienesse', 'Diane Mackay', 'Casda Thomas']],
+            3 => ['seats' => 1, 'names' => ['Kim Unger']],
+            4 => ['seats' => 2, 'names' => ['Matt Williamson', 'Sharon Redford', 'Kellie Dondale']],
+        ];
+        ?>
+        <ul class="vote-promo-list">
+          <?php foreach ($endorsed as $z => $e): ?>
+          <li>
+            <span class="z">Zone <?= $z ?></span>
+            <span class="names"><?= htmlspecialchars(implode(', ', $e['names'])) ?></span>
+            <span class="how"><?= count($e['names']) > $e['seats']
+                ? 'vote for any ' . $e['seats'] . ' of these ' . count($e['names'])
+                : 'vote for up to ' . $e['seats'] ?></span>
+          </li>
+          <?php endforeach; ?>
+        </ul>
+        <p>
+          Thirteen candidates were invited to answer a BVTU survey. Eleven answered, one replied
+          declining to answer, and one did not reply. Every answer is published as it was written.
+        </p>
+        <div class="vote-promo-btns">
+          <a href="trustee-zones.html" class="btn btn-primary">Find your zone &amp; who we endorse</a>
+          <a href="trustee-candidates.php" class="btn btn-outline">Read candidate responses</a>
+        </div>
+      </div>
+    </div>
+  </section>
+  <?php endif; ?>
+
   <!-- Quick Access Cards -->
   <section class="cards-section">
     <div class="container">
