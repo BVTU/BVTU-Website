@@ -107,7 +107,17 @@ document.querySelectorAll('.has-dropdown > a').forEach(link => {
   if (here === '' || here === 'index.php' ||
       here === 'trustee-zones.html' || here === 'trustee-candidates.php') return;
 
-  document.addEventListener('DOMContentLoaded', function () {
+  // Run now if the document is already parsed. This file is loaded at the end
+  // of <body> today, so DOMContentLoaded has not fired yet — but waiting on an
+  // event that has already passed is a silent no-op, and that is a bad way to
+  // find out someone added defer or moved the tag.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', build);
+  } else {
+    build();
+  }
+
+  function build() {
     var bar = document.createElement('div');
     bar.className = 'vote-bar';
     bar.innerHTML =
@@ -144,5 +154,5 @@ document.querySelectorAll('.has-dropdown > a').forEach(link => {
     bar.addEventListener('vote-bar-closed', function () {
       window.removeEventListener('resize', fit);
     });
-  });
+  }
 })();
