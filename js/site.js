@@ -176,3 +176,63 @@ document.querySelectorAll('.has-dropdown > a').forEach(link => {
     });
   }
 })();
+
+/* ── Page-view beacon ─────────────────────────────────────────────────────────
+ * Tells track.php which page was opened. One file reaches all 31 public pages,
+ * which is why this lives here rather than in markup.
+ *
+ * It sends no identifier of any kind. The server derives a day-scoped visitor
+ * hash from the request itself and stores neither the IP nor the user-agent —
+ * see members/analytics-db.php for what is and is not kept.
+ *
+ * It declines to send at all when the visitor has asked not to be tracked, and
+ * it never runs inside members/: what a logged-in member reads is not counted.
+ * ------------------------------------------------------------------------- */
+(function () {
+  // Do Not Track and Global Privacy Control. Honoured because a request not to
+  // be counted is easy to respect and the numbers are fine without those few.
+  var n = navigator;
+  if (n.globalPrivacyControl === true) return;
+  var dnt = n.doNotTrack || window.doNotTrack || n.msDoNotTrack;
+  if (dnt === '1' || dnt === 'yes') return;
+
+  if (location.pathname.indexOf('/members/') !== -1) return;
+  if (location.protocol !== 'http:' && location.protocol !== 'https:') return;
+
+  function send() {
+    try {
+      var body = new URLSearchParams();
+      body.set('p', location.pathname);
+      // Only the referring host leaves the browser, never the full URL. The
+      // server keeps a category and a hostname and nothing else, and a search
+      // referrer's query string — which is the personal part — has no reason to
+      // travel at all.
+      var ref = '';
+      try { ref = document.referrer ? new URL(document.referrer).hostname : ''; }
+      catch (e) { ref = ''; }
+      body.set('r', ref);
+
+      /*
+       * fetch first, with credentials omitted.
+       *
+       * sendBeacon always sends same-origin cookies, so on a page where someone
+       * is signed in their session cookie would ride along with the beacon —
+       * which flatly contradicts "sends no identifier of any kind". fetch with
+       * keepalive survives the page being closed just as beacon does; beacon is
+       * kept only as a fallback for browsers that lack keepalive, where the
+       * alternative is no measurement at all.
+       */
+      if (window.fetch && 'keepalive' in new Request('')) {
+        fetch('/track.php', { method: 'POST', body: body, keepalive: true,
+                              credentials: 'omit', mode: 'same-origin' })
+          .catch(function () {});
+      } else if (n.sendBeacon) {
+        n.sendBeacon('/track.php', body);
+      }
+    } catch (e) { /* analytics never breaks a page */ }
+  }
+
+  // After load, so measuring never competes with rendering.
+  if (document.readyState === 'complete') send();
+  else window.addEventListener('load', send);
+})();
