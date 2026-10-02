@@ -189,7 +189,7 @@ $bookmarks = libGetBookmarks($member['email']);
   <footer class="site-footer">
     <div class="footer-bottom" style="border-top: none;">
       <div class="container">
-        <p style="padding: 1.5rem 0; color: rgba(255,255,255,.5);">© 2026 Bulkley Valley Teachers' Union</p>
+        <p style="padding: 1.5rem 0; color: rgba(255,255,255,.5);">© 2026 Bulkley Valley Teachers' Union · <a href="privacy.php" style="color:inherit;text-decoration:underline;">Privacy</a></p>
       </div>
     </div>
   </footer>

@@ -1098,7 +1098,7 @@ $member   = $loggedIn ? getMember() : null;
     </div>
     <div class="footer-bottom">
       <div class="container">
-        <p>&copy; 2026 Bulkley Valley Teachers&#39; Union &middot; Local of the BC Teachers&#39; Federation</p>
+        <p>&copy; 2026 Bulkley Valley Teachers&#39; Union &middot; Local of the BC Teachers&#39; Federation &middot; <a href="privacy.php" style="color:inherit;text-decoration:underline;">Privacy</a></p>
       </div>
     </div>
   </footer>

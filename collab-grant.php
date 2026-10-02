@@ -995,7 +995,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
     </div>
     <div class="footer-bottom">
       <div class="container">
-        <p>© 2026 Bulkley Valley Teachers' Union · Smithers, BC</p>
+        <p>© 2026 Bulkley Valley Teachers' Union · Smithers, BC · <a href="privacy.php" style="color:inherit;text-decoration:underline;">Privacy</a></p>
       </div>
     </div>
   </footer>

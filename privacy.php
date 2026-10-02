@@ -9,8 +9,8 @@ $member   = $loggedIn ? getMember() : null;
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="site-root" content="">
-  <title>BCTF — Bulkley Valley Teachers' Union</title>
-  <meta name="description" content="BC Teachers' Federation resources — provincial agreements, member discounts, and bargaining updates.">
+  <title>Privacy — Bulkley Valley Teachers' Union</title>
+  <meta name="description" content="What the BVTU website records about visits, what it deliberately does not, and how long anything is kept.">
   <link rel="stylesheet" href="css/style.css">
   <link rel="icon" href="favicon.ico">
 </head>
@@ -33,7 +33,7 @@ $member   = $loggedIn ? getMember() : null;
       </button>
       <nav class="main-nav" id="main-nav">
         <ul>
-          
+          <li><a href="about.php" class="active">About</a></li>
           <li class="has-dropdown"><a href="documents.php">Documents</a><ul class="dropdown"><li><a href="documents.php">All Documents</a></li><li><a href="collective-agreement.php">Collective Agreement</a></li><li><a href="lous.php">Letters of Understanding</a></li><li><a href="ca-assistant.php">Contract Assistant</a></li><li><a href="documents/BVTU-Constitution-and-Bylaws-2026.pdf" target="_blank">Constitution &amp; Bylaws</a></li><li><a href="calendars.php">School Calendars</a></li><li><a href="trustee-zones.html">Trustee Zone Map</a></li><li><a href="trustee-candidates.php">Trustee Candidate Responses</a></li></ul></li>
 <li class="has-dropdown">
             <a href="members.php">Members</a>
@@ -45,7 +45,8 @@ $member   = $loggedIn ? getMember() : null;
           </li>
           <li><a href="prod.php">PRO-D</a></li>
           <li class="has-dropdown"><a href="health-safety.php">Health &amp; Safety</a><ul class="dropdown"><li><a href="health-safety.php">H&amp;S Resources</a></li><li><a href="https://www.worksafebc.com" target="_blank" rel="noopener">WorkSafe BC</a></li><li><a href="https://sd54.lifeworks.com/" target="_blank" rel="noopener">EFAP</a></li></ul></li>
-          <li class="has-dropdown"><a href="library.php">Resources</a><ul class="dropdown"><li><a href="library.php">Resource Library</a></li><li><a href="curated.php">Curated Resources</a></li></ul></li><li><a href="newsletter-archive.php">Newsletters</a></li><li class="has-dropdown active"><a href="bctf.php" class="active">BCTF</a><ul class="dropdown"><li><a href="bctf.php">BCTF Resources</a></li><li><a href="https://bctf.ca" target="_blank" rel="noopener">BCTF Website</a></li><li><a href="https://www.bctf.ca/topics/services-information/benefits/view-member-discounts-bctf-advantage" target="_blank" rel="noopener">Benefits &amp; Discounts</a></li></ul></li>
+          <li class="has-dropdown"><a href="bctf.php">BCTF</a><ul class="dropdown"><li><a href="bctf.php">BCTF Resources</a></li><li><a href="https://bctf.ca" target="_blank" rel="noopener">BCTF Website</a></li><li><a href="https://www.bctf.ca/topics/services-information/benefits/view-member-discounts-bctf-advantage" target="_blank" rel="noopener">Benefits &amp; Discounts</a></li></ul></li>
+          <li class="has-dropdown"><a href="library.php">Resources</a><ul class="dropdown"><li><a href="library.php">Resource Library</a></li><li><a href="curated.php">Curated Resources</a></li></ul></li><li><a href="newsletter-archive.php">Newsletters</a></li>
           <li><a href="<?= $loggedIn ? '/members/dashboard.php' : 'members/login.php' ?>"
               class="btn btn-primary"
               style="padding:.4rem .9rem;font-size:.88rem;margin-left:.5rem;<?= $loggedIn ? 'background:#1a6b35;border-color:#1a6b35;' : '' ?>">
@@ -58,75 +59,86 @@ $member   = $loggedIn ? getMember() : null;
 
   <section class="page-hero">
     <div class="container">
-      <h1>BC Teachers' Federation</h1>
-      <p>BVTU is a proud local of the BCTF — the provincial union representing all BC public school teachers.</p>
+      <h1>Privacy</h1>
+      <p>What this website records, what it deliberately does not, and how long anything is kept.</p>
     </div>
   </section>
 
-  <main class="page-content">
-    <div class="container">
+  <main class="container" style="max-width:800px;padding:2.5rem 1.5rem 4rem;">
 
-      <!-- QUICK-ACCESS CARDS -->
-      <style>
-        .member-page-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1rem; margin-bottom: 2.5rem; }
-        .member-page-card { display: flex; flex-direction: column; background: var(--white); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 1.4rem 1.25rem 1.2rem; text-decoration: none; color: var(--text); transition: border-color .15s, box-shadow .15s, transform .12s; }
-        .member-page-card:hover { border-color: var(--primary); box-shadow: 0 4px 18px rgba(27,107,66,.1); transform: translateY(-2px); color: var(--text); }
-        .member-page-card-icon { width: 40px; height: 40px; background: var(--accent); border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-bottom: .9rem; flex-shrink: 0; }
-        .member-page-card-icon svg { width: 20px; height: 20px; stroke: var(--primary); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-        .member-page-card h3 { font-size: 1rem; font-weight: 800; color: var(--primary); margin: 0 0 .35rem; }
-        .member-page-card p { font-size: .85rem; color: var(--gray-500); margin: 0; line-height: 1.55; flex: 1; }
-        .member-page-card-arrow { font-size: .82rem; font-weight: 700; color: var(--primary); margin-top: .9rem; }
-      </style>
-      <div class="member-page-grid">
+    <p style="font-size:1.05rem;line-height:1.8;color:var(--gray-700);">
+      We count how the public pages of this site are used, so we know which
+      information people actually come here for. We do it ourselves, on our own
+      server, and we have built it to answer that question and no other.
+    </p>
 
-        <a href="https://bctf.ca" target="_blank" rel="noopener" class="member-page-card">
-          <div class="member-page-card-icon">
-            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-          </div>
-          <h3>BCTF Website</h3>
-          <p>The official BC Teachers' Federation site — news, resources, and member services.</p>
-          <div class="member-page-card-arrow">Visit bctf.ca →</div>
-        </a>
+    <h2 style="font-size:1.1rem;margin:2rem 0 .7rem;">What is recorded</h2>
+    <ul style="line-height:1.85;color:var(--gray-700);">
+      <li>The address of the page that was opened.</li>
+      <li>Whether you arrived from a search engine, from social media, from another
+          page on this site, or by typing the address &mdash; and the name of the
+          website you came from, never the search you typed.</li>
+      <li>Whether the device is a phone, a tablet or a computer.</li>
+      <li>Which links are followed from a page &mdash; documents opened, short links
+          used, and links leaving the site.</li>
+      <li>The date and the hour, not the minute.</li>
+    </ul>
 
-        <a href="documents/provincial-collective-agreement-2025-2029.pdf" target="_blank" rel="noopener" class="member-page-card">
-          <div class="member-page-card-icon">
-            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-          </div>
-          <h3>Provincial Collective Agreement</h3>
-          <p>The 2025–2029 provincial CA setting terms and conditions for all BC public school teachers.</p>
-          <div class="member-page-card-arrow">Read the PCA (PDF) →</div>
-        </a>
+    <h2 style="font-size:1.1rem;margin:2rem 0 .7rem;">What is not recorded</h2>
+    <ul style="line-height:1.85;color:var(--gray-700);">
+      <li><strong>No IP addresses.</strong> Your address is used for a moment to
+          work out a visitor count and is never written down.</li>
+      <li><strong>No names, accounts or member records.</strong> Nothing recorded
+          here is connected to who you are.</li>
+      <li><strong>Nothing from the members-only area.</strong> What a signed-in
+          member reads is not counted at all.</li>
+      <li><strong>No advertising or third-party trackers.</strong> Nothing on this
+          site reports to Google, Meta or anyone else. No tracking cookies.</li>
+    </ul>
 
-        <a href="https://www.bctf.ca/topics/services-information/benefits/view-member-discounts-bctf-advantage" target="_blank" rel="noopener" class="member-page-card">
-          <div class="member-page-card-icon">
-            <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-          </div>
-          <h3>Benefits &amp; Discounts</h3>
-          <p>Member discounts and BCTF Advantage benefits available to all BCTF members.</p>
-          <div class="member-page-card-arrow">View discounts →</div>
-        </a>
+    <h2 style="font-size:1.1rem;margin:2rem 0 .7rem;">How visitors are counted</h2>
+    <p style="line-height:1.8;color:var(--gray-700);">
+      To tell twenty visits by one person from one visit by twenty people, each
+      visit is given a code worked out from your connection. That code is built
+      with a secret that is thrown away and replaced every day, so the same
+      person tomorrow produces a different code and there is no way to work
+      backwards from a code to a person. It tells us how many people came. It
+      cannot tell us who, or follow anyone from one day to the next.
+    </p>
 
-        <a href="https://bctf.ca/pro-d" target="_blank" rel="noopener" class="member-page-card">
-          <div class="member-page-card-icon">
-            <svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-          </div>
-          <h3>Professional Development</h3>
-          <p>BCTF PRO-D resources, learning opportunities, and provincial programs for educators.</p>
-          <div class="member-page-card-arrow">Explore PRO-D →</div>
-        </a>
+    <h2 style="font-size:1.1rem;margin:2rem 0 .7rem;">How long it is kept</h2>
+    <p style="line-height:1.8;color:var(--gray-700);">
+      Individual records are deleted after 90 days. What remains is a daily count
+      of views per page &mdash; no visitor codes, nothing about any single visit.
+    </p>
 
-        <a href="https://bctf.ca/social-justice" target="_blank" rel="noopener" class="member-page-card">
-          <div class="member-page-card-icon">
-            <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          </div>
-          <h3>Social Justice &amp; Equity</h3>
-          <p>BCTF programs and resources supporting equity, inclusion, and social justice in education.</p>
-          <div class="member-page-card-arrow">Learn more →</div>
-        </a>
+    <h2 style="font-size:1.1rem;margin:2rem 0 .7rem;">Asking not to be counted</h2>
+    <p style="line-height:1.8;color:var(--gray-700);">
+      If your browser sends a &ldquo;Do Not Track&rdquo; or
+      &ldquo;Global Privacy Control&rdquo; signal, this site records nothing about
+      your visit. Both are settings in your browser&rsquo;s privacy preferences.
+    </p>
 
-      </div>
+    <h2 style="font-size:1.1rem;margin:2rem 0 .7rem;">Who can see it</h2>
+    <p style="line-height:1.8;color:var(--gray-700);">
+      Only the Local President, through the members area. The figures are counts
+      of pages and links &mdash; there is no per-person view to look at, because
+      the data to build one is not collected.
+    </p>
 
-    </div>
+    <h2 style="font-size:1.1rem;margin:2rem 0 .7rem;">Other information you give us</h2>
+    <p style="line-height:1.8;color:var(--gray-700);">
+      This note covers visit counting. Information you deliberately send us &mdash;
+      a contact form, a grant application, a member account &mdash; is held because
+      the union needs it to do its work, is seen only by the officers who need it,
+      and is not part of anything described above.
+    </p>
+
+    <p style="line-height:1.8;color:var(--gray-600);margin-top:2rem;font-size:.92rem;">
+      Questions about any of this go to the Local President &mdash;
+      <a href="contact.php">contact us</a>.
+    </p>
+
   </main>
 
   <footer class="site-footer">
@@ -145,18 +157,13 @@ $member   = $loggedIn ? getMember() : null;
       <div>
         <h3>Navigate</h3>
         <ul class="footer-nav-list">
-          
+          <li><a href="about.php">About</a></li>
           <li class="has-dropdown"><a href="documents.php">Documents</a><ul class="dropdown"><li><a href="documents.php">All Documents</a></li><li><a href="collective-agreement.php">Collective Agreement</a></li><li><a href="lous.php">Letters of Understanding</a></li><li><a href="ca-assistant.php">Contract Assistant</a></li><li><a href="documents/BVTU-Constitution-and-Bylaws-2026.pdf" target="_blank">Constitution &amp; Bylaws</a></li><li><a href="calendars.php">School Calendars</a></li><li><a href="trustee-zones.html">Trustee Zone Map</a></li><li><a href="trustee-candidates.php">Trustee Candidate Responses</a></li></ul></li>
           <li><a href="members.php">Members</a></li>
           <li><a href="prod.php">PRO-D</a></li>
           <li class="has-dropdown"><a href="health-safety.php">Health &amp; Safety</a><ul class="dropdown"><li><a href="health-safety.php">H&amp;S Resources</a></li><li><a href="https://www.worksafebc.com" target="_blank" rel="noopener">WorkSafe BC</a></li><li><a href="https://sd54.lifeworks.com/" target="_blank" rel="noopener">EFAP</a></li></ul></li>
           <li class="has-dropdown"><a href="bctf.php">BCTF</a><ul class="dropdown"><li><a href="bctf.php">BCTF Resources</a></li><li><a href="https://bctf.ca" target="_blank" rel="noopener">BCTF Website</a></li><li><a href="https://www.bctf.ca/topics/services-information/benefits/view-member-discounts-bctf-advantage" target="_blank" rel="noopener">Benefits &amp; Discounts</a></li></ul></li>
           <li class="has-dropdown"><a href="library.php">Resources</a><ul class="dropdown"><li><a href="library.php">Resource Library</a></li><li><a href="curated.php">Curated Resources</a></li></ul></li><li><a href="newsletter-archive.php">Newsletters</a></li>
-          <li><a href="<?= $loggedIn ? '/members/dashboard.php' : 'members/login.php' ?>"
-              class="btn btn-primary"
-              style="padding:.4rem .9rem;font-size:.88rem;margin-left:.5rem;<?= $loggedIn ? 'background:#1a6b35;border-color:#1a6b35;' : '' ?>">
-            <?= $loggedIn ? 'My Dashboard' : 'Member Login' ?>
-          </a></li>
         </ul>
       </div>
       <div>

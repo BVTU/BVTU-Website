@@ -199,6 +199,82 @@ document.querySelectorAll('.has-dropdown > a').forEach(link => {
   if (location.pathname.indexOf('/members/') !== -1) return;
   if (location.protocol !== 'http:' && location.protocol !== 'https:') return;
 
+  /*
+   * fetch first, with credentials omitted.
+   *
+   * sendBeacon always sends same-origin cookies, so on a page where someone is
+   * signed in their session cookie would ride along — which contradicts
+   * "sends no identifier of any kind". fetch with keepalive survives the page
+   * being closed just as beacon does; beacon is the fallback for browsers
+   * without keepalive, where the alternative is no measurement at all.
+   */
+  function post(body) {
+    try {
+      if (window.fetch && 'keepalive' in new Request('')) {
+        fetch('/track.php', { method: 'POST', body: body, keepalive: true,
+                              credentials: 'omit', mode: 'same-origin' })
+          .catch(function () {});
+      } else if (n.sendBeacon) {
+        // As a Blob with an explicit type: sendBeacon posts URLSearchParams as
+        // text/plain, and PHP only fills $_POST for form encodings, so the hit
+        // would arrive and be thrown away.
+        n.sendBeacon('/track.php',
+          new Blob([body.toString()], { type: 'application/x-www-form-urlencoded' }));
+      }
+    } catch (e) { /* analytics never breaks a page */ }
+  }
+
+  /*
+   * Which links people actually use.
+   *
+   * Four kinds, because they answer different questions: 'doc' is a document
+   * being downloaded, 'out' is somebody leaving for another site, 'go' is a
+   * bvtu.ca/go/ short link, and 'int' is movement around this site. Only a
+   * path, or a host and path, is ever sent — never a query string, which on an
+   * outbound search or a form link is where personal detail would sit.
+   */
+  var DOC = /\.(pdf|docx?|pptx?|xlsx?|csv)$/i;
+
+  document.addEventListener('click', function (ev) {
+    // Bubble phase, after the page's own handlers, and only for clicks that
+    // were allowed to proceed. The mobile nav cancels taps on its dropdown
+    // parents; in capture phase those were counted as visits to pages nobody
+    // opened.
+    if (ev.defaultPrevented) return;
+    if (ev.button !== undefined && ev.button !== 0) return;   // not a left click
+
+    var a = ev.target && ev.target.closest ? ev.target.closest('a[href]') : null;
+    if (!a) return;
+
+    var href = a.getAttribute('href') || '';
+    if (!href || href.charAt(0) === '#' || /^(mailto|tel|javascript):/i.test(href)) return;
+
+    var url;
+    try { url = new URL(href, location.href); } catch (e) { return; }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+
+    var kind, target;
+    if (url.host !== location.host) {
+      kind = 'out';
+      target = url.host + url.pathname;          // no query string
+    } else if (/^\/go\//.test(url.pathname)) {
+      kind = 'go';
+      target = url.pathname;
+    } else if (DOC.test(url.pathname)) {
+      kind = 'doc';
+      target = url.pathname;
+    } else {
+      kind = 'int';
+      target = url.pathname;
+    }
+
+    var body = new URLSearchParams();
+    body.set('p', location.pathname);
+    body.set('k', kind);
+    body.set('t', target.slice(0, 255));
+    post(body);
+  });
+
   function send() {
     try {
       var body = new URLSearchParams();
@@ -211,24 +287,7 @@ document.querySelectorAll('.has-dropdown > a').forEach(link => {
       try { ref = document.referrer ? new URL(document.referrer).hostname : ''; }
       catch (e) { ref = ''; }
       body.set('r', ref);
-
-      /*
-       * fetch first, with credentials omitted.
-       *
-       * sendBeacon always sends same-origin cookies, so on a page where someone
-       * is signed in their session cookie would ride along with the beacon —
-       * which flatly contradicts "sends no identifier of any kind". fetch with
-       * keepalive survives the page being closed just as beacon does; beacon is
-       * kept only as a fallback for browsers that lack keepalive, where the
-       * alternative is no measurement at all.
-       */
-      if (window.fetch && 'keepalive' in new Request('')) {
-        fetch('/track.php', { method: 'POST', body: body, keepalive: true,
-                              credentials: 'omit', mode: 'same-origin' })
-          .catch(function () {});
-      } else if (n.sendBeacon) {
-        n.sendBeacon('/track.php', body);
-      }
+      post(body);
     } catch (e) { /* analytics never breaks a page */ }
   }
 

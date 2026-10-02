@@ -526,7 +526,8 @@ function tcDate(string $d): string { return $d !== '' ? date('F j, Y', strtotime
     </div>
     <div class="footer-bottom">
       <div class="container">
-        <p>© 2026 Bulkley Valley Teachers' Union · Local of the BC Teachers' Federation</p>
+        <p>© 2026 Bulkley Valley Teachers' Union · Local of the BC Teachers' Federation
+           · <a href="privacy.php" style="color:inherit;text-decoration:underline;">Privacy</a></p>
       </div>
     </div>
   </footer>

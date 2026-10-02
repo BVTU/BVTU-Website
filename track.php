@@ -69,12 +69,57 @@ if ($clean === '/') {
 if (strpos($file, 'members/') === 0 || !is_file(__DIR__ . '/' . $file)) anDone();
 $path = $clean;
 
+$ua = (string)($_SERVER['HTTP_USER_AGENT'] ?? '');
+
+// A click posts the same page path plus what was clicked. The path has already
+// been checked against a real file above, so both shapes share that guarantee.
+$kind   = (string)($_POST['k'] ?? '');
+$target = (string)($_POST['t'] ?? '');
+if ($kind !== '' || $target !== '') {
+    /*
+     * The target needs the same treatment the page path got. Without it the
+     * is_file() check above protects only half the endpoint: a loop could still
+     * post invented click targets until the table is full and every link figure
+     * is meaningless.
+     *
+     * Internal targets must name a real file, exactly as a page view must.
+     * Outbound targets cannot be checked that way — the whole point is that
+     * they are elsewhere — so they are held to a hostname shape instead.
+     */
+    $ok = strlen($target) <= 300 && preg_match('~^[A-Za-z0-9._/\-]{1,255}$~', $target)
+          && strpos($target, '..') === false;
+
+    if ($ok && ($kind === 'int' || $kind === 'doc')) {
+        $f = ltrim((string)parse_url('/' . ltrim($target, '/'), PHP_URL_PATH), '/');
+        // "/" is the home page, the same mapping the page-view path uses above.
+        // Without it every click on the logo or a Home link was thrown away —
+        // which would have quietly removed the site's most-clicked link from
+        // the figures.
+        if ($f === '') $f = 'index.php';
+        $ok = strpos($f, 'members/') !== 0 && is_file(__DIR__ . '/' . $f);
+    } elseif ($ok && $kind === 'go') {
+        $ok = (bool)preg_match('~^/go/[A-Za-z0-9-]{1,100}$~', '/' . ltrim($target, '/'));
+    } elseif ($ok && $kind === 'out') {
+        // host, then optionally a path: "bctf.ca" or "bctf.ca/some/page"
+        $ok = (bool)preg_match('~^[a-z0-9.-]+\.[a-z]{2,24}(/[A-Za-z0-9._/\-]*)?$~i', $target);
+    }
+
+    if ($ok) {
+        try {
+            anRecordClick($path, $kind, $target, $ua);
+        } catch (\Throwable $e) {
+            error_log('track click: ' . $e->getMessage());
+        }
+    }
+    anDone();
+}
+
 try {
     anRecordView(
         $path,
         (string)($_POST['r'] ?? ''),
         (string)($_SERVER['REMOTE_ADDR'] ?? ''),
-        (string)($_SERVER['HTTP_USER_AGENT'] ?? ''),
+        $ua,
         $selfHost
     );
     // Roughly once in 500 hits, tidy up. Cheap on average, and it means the

@@ -38,6 +38,7 @@ function anEnsureTables(): void {
         $db->query("SELECT 1 FROM site_views LIMIT 1");
         $db->query("SELECT 1 FROM site_salt LIMIT 1");
         $db->query("SELECT 1 FROM site_daily LIMIT 1");
+        $db->query("SELECT 1 FROM site_clicks LIMIT 1");
         return;
     } catch (\PDOException $e) {
         // A table is missing; fall through and create them.
@@ -64,6 +65,21 @@ function anEnsureTables(): void {
         views    INT NOT NULL DEFAULT 0,
         visitors INT NOT NULL DEFAULT 0,
         PRIMARY KEY (day, path)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    /*
+     * Clicks. No visitor column at all: the question a click answers is "which
+     * links do people use", which is a count, and a per-person trail of what
+     * someone clicked is both more than is needed and more than should be kept.
+     */
+    $db->exec("CREATE TABLE IF NOT EXISTS site_clicks (
+        id         INT AUTO_INCREMENT PRIMARY KEY,
+        path       VARCHAR(255) NOT NULL,
+        kind       VARCHAR(8)   NOT NULL DEFAULT 'int',
+        target     VARCHAR(255) NOT NULL,
+        clicked_at DATETIME     NOT NULL,
+        INDEX idx_clicked (clicked_at),
+        INDEX idx_kind (kind)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
     // The daily salt. Yesterday's is overwritten, so yesterday's hashes can no
@@ -189,6 +205,35 @@ function anRecordView(string $path, string $ref, string $ip, string $ua, string 
     return true;
 }
 
+/** Allowed click kinds. Anything else is dropped rather than stored as junk. */
+const AN_CLICK_KINDS = ['int', 'out', 'doc', 'go'];
+
+/**
+ * One click. $target is already reduced by the browser to a path or a
+ * host + path — never a full URL with a query string.
+ */
+function anRecordClick(string $path, string $kind, string $target, string $ua): bool {
+    if (anIsBot($ua)) return false;
+    if (!in_array($kind, AN_CLICK_KINDS, true)) return false;
+
+    $target = trim($target);
+    if ($target === '') return false;
+    // Same reasoning as the page path: the column is utf8mb4, so cut by
+    // characters, and strip anything that has no business in a link target.
+    $target = preg_replace('/[^\x20-\x7E]/', '', $target);
+    if (mb_strlen($target) > 255) $target = mb_substr($target, 0, 255);
+
+    $path = '/' . ltrim(trim($path), '/');
+    if (strpos($path, '/members/') === 0) return false;
+    if (mb_strlen($path) > 255) $path = mb_substr($path, 0, 255);
+
+    anEnsureTables();
+    getDB()->prepare(
+        "INSERT INTO site_clicks (path, kind, target, clicked_at) VALUES (?,?,?,?)"
+    )->execute([$path, $kind, $target, date('Y-m-d H:00:00')]);
+    return true;
+}
+
 /**
  * Roll days older than the retention window into site_daily and delete the raw
  * rows. Called opportunistically rather than from cron, which shared hosting
@@ -235,5 +280,116 @@ function anCull(): void {
         $del->execute([$dayStart, $dayEnd]);
     }
 
+    // Clicks are counts already, with nothing to roll up, so they are simply
+    // dropped past the same window rather than aggregated.
+    $db->prepare("DELETE FROM site_clicks WHERE clicked_at < ? LIMIT 5000")
+       ->execute([$cutoff . ' 00:00:00']);
+
     $db->prepare("DELETE FROM site_salt WHERE day < ?")->execute([date('Y-m-d')]);
+}
+
+// ── Reporting ────────────────────────────────────────────────────────────────
+//
+// Every query here reads site_views, which only covers the retention window.
+// Days older than that live in site_daily with page totals only, so the
+// dashboard says plainly which figures a long range can and cannot include
+// rather than quietly reporting a smaller number.
+
+/** Views and visitors per day, oldest first. */
+function anDaily(int $days): array {
+    anEnsureTables();
+    $from = date('Y-m-d 00:00:00', strtotime('-' . ($days - 1) . ' days'));
+    $q = getDB()->prepare(
+        "SELECT DATE(viewed_at) AS day, COUNT(*) AS views, COUNT(DISTINCT visitor) AS visitors
+           FROM site_views WHERE viewed_at >= ?
+          GROUP BY DATE(viewed_at) ORDER BY day"
+    );
+    $q->execute([$from]);
+    return $q->fetchAll();
+}
+
+/** Totals for the window: views, people, and the busiest hour of the day. */
+function anTotals(int $days): array {
+    anEnsureTables();
+    $from = date('Y-m-d 00:00:00', strtotime('-' . ($days - 1) . ' days'));
+    $q = getDB()->prepare(
+        "SELECT COUNT(*) AS views, COUNT(DISTINCT visitor) AS visitors FROM site_views WHERE viewed_at >= ?"
+    );
+    $q->execute([$from]);
+    $t = $q->fetch() ?: ['views' => 0, 'visitors' => 0];
+
+    $h = getDB()->prepare(
+        "SELECT HOUR(viewed_at) AS hr, COUNT(*) AS n FROM site_views WHERE viewed_at >= ?
+          GROUP BY HOUR(viewed_at) ORDER BY n DESC LIMIT 1"
+    );
+    $h->execute([$from]);
+    $row = $h->fetch();
+    $t['busiest_hour'] = $row ? (int)$row['hr'] : null;
+    return $t;
+}
+
+function anTopPages(int $days, int $limit = 15): array {
+    anEnsureTables();
+    $from = date('Y-m-d 00:00:00', strtotime('-' . ($days - 1) . ' days'));
+    $q = getDB()->prepare(
+        "SELECT path, COUNT(*) AS views, COUNT(DISTINCT visitor) AS visitors
+           FROM site_views WHERE viewed_at >= ?
+          GROUP BY path ORDER BY views DESC LIMIT " . (int)$limit
+    );
+    $q->execute([$from]);
+    return $q->fetchAll();
+}
+
+/** Grouped by how someone arrived, with the hosts inside each group. */
+function anReferrers(int $days): array {
+    anEnsureTables();
+    $from = date('Y-m-d 00:00:00', strtotime('-' . ($days - 1) . ' days'));
+    $q = getDB()->prepare(
+        "SELECT ref_kind, ref_host, COUNT(*) AS n FROM site_views WHERE viewed_at >= ?
+          GROUP BY ref_kind, ref_host ORDER BY n DESC"
+    );
+    $q->execute([$from]);
+    $out = [];
+    foreach ($q->fetchAll() as $r) {
+        $k = $r['ref_kind'];
+        if (!isset($out[$k])) $out[$k] = ['total' => 0, 'hosts' => []];
+        $out[$k]['total'] += (int)$r['n'];
+        if ($r['ref_host'] !== '') $out[$k]['hosts'][$r['ref_host']] = (int)$r['n'];
+    }
+    uasort($out, function ($a, $b) { return $b['total'] <=> $a['total']; });
+    return $out;
+}
+
+function anDevices(int $days): array {
+    anEnsureTables();
+    $from = date('Y-m-d 00:00:00', strtotime('-' . ($days - 1) . ' days'));
+    $q = getDB()->prepare(
+        "SELECT device, COUNT(*) AS n FROM site_views WHERE viewed_at >= ?
+          GROUP BY device ORDER BY n DESC"
+    );
+    $q->execute([$from]);
+    $out = [];
+    foreach ($q->fetchAll() as $r) $out[$r['device'] ?: 'unknown'] = (int)$r['n'];
+    return $out;
+}
+
+/** Most-used links of one kind: 'doc', 'out', 'go' or 'int'. */
+function anTopClicks(int $days, string $kind, int $limit = 12): array {
+    anEnsureTables();
+    if (!in_array($kind, AN_CLICK_KINDS, true)) return [];
+    $from = date('Y-m-d 00:00:00', strtotime('-' . ($days - 1) . ' days'));
+    $q = getDB()->prepare(
+        "SELECT target, COUNT(*) AS n FROM site_clicks
+          WHERE clicked_at >= ? AND kind = ?
+          GROUP BY target ORDER BY n DESC LIMIT " . (int)$limit
+    );
+    $q->execute([$from, $kind]);
+    return $q->fetchAll();
+}
+
+/** The oldest view still held, so the dashboard can say how far back it sees. */
+function anOldestView(): ?string {
+    anEnsureTables();
+    $r = getDB()->query("SELECT MIN(viewed_at) AS m FROM site_views")->fetch();
+    return ($r && $r['m']) ? $r['m'] : null;
 }
