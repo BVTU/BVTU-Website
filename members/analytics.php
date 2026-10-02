@@ -21,6 +21,20 @@ $days = (int)($_GET['days'] ?? 30);
 if (!in_array($days, [7, 30, 90], true)) $days = 30;
 
 anEnsureTables();
+
+/*
+ * Tidy up here as well as on the 1-in-500 roll in track.php.
+ *
+ * privacy.php tells the public that individual records are deleted after 90
+ * days. Left to that roll alone the promise is only approximately kept: at
+ * thirty views a day the cleanup runs about every seventeen days, so a record
+ * can outlive its 90 by a fortnight — and if the site goes quiet over a summer,
+ * by much longer. A published privacy commitment should not depend on how busy
+ * the site happens to be. Running it whenever this page is opened costs
+ * nothing, since anCull() stops after three days' worth of rows.
+ */
+anCull();
+
 $totals  = anTotals($days);
 $daily   = anDaily($days);
 $pages   = anTopPages($days);
