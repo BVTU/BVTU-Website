@@ -332,7 +332,7 @@ function tcDate(string $d): string { return $d !== '' ? date('F j, Y', strtotime
 
     <?php if (TC_PDF_URL !== ''): ?>
     <a class="tc-pdf" href="<?= htmlspecialchars(TC_PDF_URL) ?>" target="_blank" rel="noopener">
-      &#11015; Download all responses (PDF, by candidate)
+      &#11015; Read as PDF &mdash; all responses, by candidate (18 pages)
     </a>
     <?php endif; ?>
 

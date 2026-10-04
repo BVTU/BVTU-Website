@@ -22,7 +22,11 @@
 const TC_LAST_UPDATED = '2026-09-28';
 
 /** The candidate-organised PDF. Leave '' to hide the download button entirely. */
-const TC_PDF_URL      = '';          // e.g. 'documents/BVTU-Trustee-Candidate-Responses-2026.pdf'
+const TC_PDF_URL      = 'documents/BVTU-Trustee-Candidate-Responses-2026-09-28.pdf';
+// Dated in the filename because the answers are as of that day. If a late
+// response is ever added, publish a new dated file and point this at it
+// rather than overwriting — a link someone shared should not quietly change
+// into a different document.
 
 /** Survey deadline, and the date we last checked for late responses. */
 const TC_DEADLINE     = '2026-09-26';
