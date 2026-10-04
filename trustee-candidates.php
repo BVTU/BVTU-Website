@@ -159,18 +159,6 @@ function tcStatusNote(array $c): string {
     return 'No response received as of ' . $when . '.';
 }
 
-/**
- * Short status tag for the candidate dropdown. Every candidate is listed there,
- * so the list has to say which ones have nothing to read — otherwise picking a
- * name that turns up no answers looks like the filter is broken.
- */
-function tcStatusTag(array $c): string {
-    $st = $c['status'] ?? '';
-    if ($st === 'declined')    return ' — chose not to respond';
-    if ($st !== 'responded')   return ' — no response';
-    return '';
-}
-
 /** "Zone 2 · Smithers / Glentanna / Driftwood", or '' if no zone is recorded. */
 function tcZoneLabel(array $c): string {
     $z = (int)($c['zone'] ?? 0);
@@ -365,7 +353,7 @@ function tcDate(string $d): string { return $d !== '' ? date('F j, Y', strtotime
                 <?php foreach (['new' => 'New candidate', 'incumbent' => 'Incumbent'] as $g => $gl): ?>
                   <?php foreach ($byGroup[$g] as $c): ?>
                   <option value="<?= htmlspecialchars($c['slug']) ?>">
-                    <?= htmlspecialchars($c['name']) ?> (<?= $gl ?><?= htmlspecialchars(tcStatusTag($c)) ?>)</option>
+                    <?= htmlspecialchars($c['name']) ?> (<?= $gl ?>)</option>
                   <?php endforeach; ?>
                 <?php endforeach; ?>
               </select>
