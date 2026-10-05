@@ -18,3 +18,7 @@ members/protected-docs/
 # one and could hide or wrongly advertise the forum recording.
 members/forum-state.json
 members/forum-state.json.tmp
+
+# Video posters copied from YouTube by members/forum-state.php. Server state,
+# like forum-state.json — committing one would pin a stale picture.
+images/forum-thumb-*

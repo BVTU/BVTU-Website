@@ -117,6 +117,9 @@ $chapters = forumChapters($vid);
  * repairs itself the next time this screen is opened.
  */
 $liveNow = forumLatest();
+// Fetch the poster here too, or the homepage band shows a plain circle until
+// somebody happens to open the public forum page.
+if ($liveNow) forumEnsureThumb((string)$liveNow['youtube_id']);
 forumWriteState($liveNow ?: ['published' => 0, 'youtube_id' => ''],
                 $liveNow ? count(forumChapters((int)$liveNow['id'])) : 0);
 ?>

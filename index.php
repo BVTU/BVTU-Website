@@ -164,7 +164,20 @@ $member   = $loggedIn ? getMember() : null;
   ?>
   <section class="forum-promo">
     <div class="container">
-      <div class="forum-promo-play" aria-hidden="true"><span></span></div>
+      <?php
+      // Same 2 KB floor forumThumbUrl() uses: a truncated file passes is_file()
+      // and then renders as a broken image instead of falling back cleanly.
+      $thumbFile = __DIR__ . '/' . $fs['thumb'];
+      if ($fs['thumb'] !== '' && is_file($thumbFile) && filesize($thumbFile) > 2048): ?>
+        <?php // Served from this site, not from Google — nothing here contacts
+              // YouTube until someone presses play on the forum page. ?>
+        <a class="forum-promo-thumb" href="forum.php" aria-hidden="true" tabindex="-1">
+          <img src="<?= htmlspecialchars($fs['thumb']) ?>" alt="" width="320" height="180" loading="lazy">
+          <span class="forum-promo-play-sm"><span></span></span>
+        </a>
+      <?php else: ?>
+        <div class="forum-promo-play" aria-hidden="true"><span></span></div>
+      <?php endif; ?>
       <div class="forum-promo-text">
         <span class="forum-promo-eyebrow">Watch</span>
         <h2><?= htmlspecialchars($fs['title'] !== '' ? $fs['title'] : 'All-Candidates Forum') ?></h2>

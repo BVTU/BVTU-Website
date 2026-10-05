@@ -17,10 +17,13 @@ $chapters = $live ? forumChapters((int)$video['id']) : [];
  * repairs the file when it finds a mismatch. Only on a mismatch: this is a
  * public page and it should not be writing on every view.
  */
+if ($live) forumEnsureThumb((string)$video['youtube_id']);
+
 $fstate = $live ? $video : ['published' => 0, 'youtube_id' => ''];
 if (!forumStateMatches($fstate, count($chapters))) {
     forumWriteState($fstate, count($chapters));
 }
+$thumb = $live ? forumThumbUrl((string)$video['youtube_id']) : '';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -41,6 +44,14 @@ if (!forumStateMatches($fstate, count($chapters))) {
                flex-direction: column; align-items: center; justify-content: center; gap: .5rem;
                background: linear-gradient(160deg, #15402a, #0c2318); color: #fff;
                border: 0; cursor: pointer; font-family: inherit; }
+    /* With a thumbnail the panel becomes the poster; the gradient stays as a
+       scrim so the words on top are still readable. The image is served from
+       this site, never from Google — see members/forum-state.php. */
+    .fv-play.has-thumb { background-size: cover; background-position: center;
+                         background-repeat: no-repeat; text-shadow: 0 1px 10px rgba(0,0,0,.75); }
+    .fv-play.has-thumb::before { content: ''; position: absolute; inset: 0;
+                                 background: linear-gradient(180deg, rgba(0,0,0,.25), rgba(0,0,0,.6)); }
+    .fv-play.has-thumb > * { position: relative; }
     .fv-play:hover .fv-tri { transform: scale(1.08); }
     .fv-tri { width: 0; height: 0; border-left: 26px solid #fff; border-top: 16px solid transparent;
               border-bottom: 16px solid transparent; margin-left: 6px; transition: transform .15s; }
@@ -127,12 +138,6 @@ if (!forumStateMatches($fstate, count($chapters))) {
     </div>
   <?php else: ?>
 
-    <?php if (trim((string)$video['blurb']) !== ''): ?>
-      <p style="font-size:1.02rem;line-height:1.8;color:var(--gray-700);max-width:70ch;">
-        <?= nl2br(htmlspecialchars($video['blurb'])) ?>
-      </p>
-    <?php endif; ?>
-
     <?php
     /*
      * A placeholder, not the player.
@@ -147,7 +152,9 @@ if (!forumStateMatches($fstate, count($chapters))) {
     <div class="fv-wrap">
       <div class="fv-frame" id="fv-frame"
            data-video="<?= htmlspecialchars($video['youtube_id']) ?>">
-        <button type="button" class="fv-play" id="fv-play" aria-label="Play the forum recording">
+        <button type="button" class="fv-play<?= $thumb !== '' ? ' has-thumb' : '' ?>"
+                id="fv-play" aria-label="Play the forum recording"
+                <?= $thumb !== '' ? 'style="background-image:url(' . htmlspecialchars($thumb) . ')"' : '' ?>>
           <span class="fv-tri" aria-hidden="true"></span>
           <span class="fv-label">Play the recording</span>
           <span class="fv-sub">Loads the video from YouTube</span>
@@ -160,6 +167,14 @@ if (!forumStateMatches($fstate, count($chapters))) {
            target="_blank" rel="noopener">Open it on YouTube instead</a>.
       </p>
     </div>
+
+    <?php if (trim((string)$video['blurb']) !== ''): ?>
+      <?php // Below the player on purpose: the video is what people came for,
+            // and nobody should have to scroll past paragraphs to reach it. ?>
+      <p style="font-size:1.02rem;line-height:1.8;color:var(--gray-700);max-width:70ch;margin-top:1.4rem;">
+        <?= nl2br(htmlspecialchars($video['blurb'])) ?>
+      </p>
+    <?php endif; ?>
 
     <?php if ($chapters): ?>
     <h2 style="font-size:1.05rem;margin:2.2rem 0 .3rem;">Jump to a part</h2>

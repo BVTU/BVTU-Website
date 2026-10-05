@@ -1005,3 +1005,22 @@ body.has-vote-bar .search-fab { bottom: calc(1.75rem + var(--vote-bar-h, 3rem));
   .forum-promo-play { flex-basis: 44px; height: 44px; }
   .forum-promo-btn { width: 100%; text-align: center; }
 }
+/* Thumbnail in the homepage forum band. The image file is copied to this site
+   by members/forum-state.php, so showing it costs no request to Google. */
+.forum-promo-thumb { position: relative; flex: 0 0 240px; display: block; line-height: 0;
+                     border-radius: 10px; overflow: hidden; }
+/* Held to 16:9 and cropped. YouTube thumbnails are normally that shape, but
+   maxresdefault can come back oddly proportioned, and one tall image would
+   stretch the whole band out of shape. */
+.forum-promo-thumb img { width: 100%; aspect-ratio: 16 / 9; height: auto;
+                         object-fit: cover; object-position: center; display: block; }
+.forum-promo-thumb::after { content: ''; position: absolute; inset: 0;
+                            background: rgba(0,0,0,.18); transition: background .15s; }
+.forum-promo-thumb:hover::after { background: rgba(0,0,0,0); }
+.forum-promo-play-sm { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+                       width: 46px; height: 46px; border-radius: 50%; background: rgba(0,0,0,.55);
+                       display: flex; align-items: center; justify-content: center; z-index: 1; }
+.forum-promo-play-sm span { width: 0; height: 0; border-left: 14px solid #fff;
+                            border-top: 9px solid transparent; border-bottom: 9px solid transparent;
+                            margin-left: 4px; }
+@media (max-width: 680px) { .forum-promo-thumb { flex-basis: 100%; } }
