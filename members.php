@@ -11,7 +11,7 @@ $member   = $loggedIn ? getMember() : null;
   <meta name="site-root" content="">
   <title>Members — Bulkley Valley Teachers' Union</title>
   <meta name="description" content="BVTU member resources — release time, salary grids, certification fees, grants, and TTOC information.">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=<?= @filemtime(__DIR__ . '/css/style.css') ?>">
   <link rel="icon" href="favicon.ico">
 </head>
 <body>

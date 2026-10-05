@@ -11,7 +11,7 @@ $member   = $loggedIn ? getMember() : null;
   <meta name="site-root" content="">
   <title>Release Time &amp; Atrieve Entries — Bulkley Valley Teachers' Union</title>
   <meta name="description" content="How to enter union-paid release time in Atrieve for SD54 teachers — BCTF and BVTU events, codes, approval process.">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=<?= @filemtime(__DIR__ . '/css/style.css') ?>">
   <link rel="icon" href="favicon.ico">
   <style>
 

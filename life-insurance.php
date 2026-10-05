@@ -11,7 +11,7 @@ $member   = $loggedIn ? getMember() : null;
   <meta name="site-root" content="">
   <title>Life Insurance — Bulkley Valley Teachers' Union</title>
   <meta name="description" content="BCTF-BCSTA Group Life Insurance Plan EB — coverage details, eligibility, beneficiary designation, and claims information for SD54 teachers.">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=<?= @filemtime(__DIR__ . '/css/style.css') ?>">
   <link rel="icon" href="favicon.ico">
   <style>
     /* ── Coverage highlight cards ─────────────────────────────────── */

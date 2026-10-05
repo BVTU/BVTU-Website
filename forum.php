@@ -33,7 +33,7 @@ $thumb = $live ? forumThumbUrl((string)$video['youtube_id']) : '';
   <meta name="site-root" content="">
   <title>All-Candidates Forum — Bulkley Valley Teachers' Union</title>
   <meta name="description" content="Watch the BVTU all-candidates forum for the School District 54 trustee election, with chapters to jump to each candidate and question.">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=<?= @filemtime(__DIR__ . '/css/style.css') ?>">
   <link rel="icon" href="favicon.ico">
   <style>
     .fv-wrap { margin: 1.4rem 0 .4rem; }

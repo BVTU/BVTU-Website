@@ -13,7 +13,7 @@ $member   = $loggedIn ? getMember() : null;
   <meta name="site-root" content="">
   <title>Bulkley Valley Teachers' Union</title>
   <meta name="description" content="Bulkley Valley Teachers' Union — Local of the BC Teachers' Federation, representing educators in Houston, Telkwa, and Smithers.">
-  <link rel="stylesheet" href="css/style.css?v=2026-09-29">
+  <link rel="stylesheet" href="css/style.css?v=<?= @filemtime(__DIR__ . '/css/style.css') ?>">
   <link rel="icon" href="favicon.ico">
 </head>
 <body>

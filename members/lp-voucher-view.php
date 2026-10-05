@@ -185,7 +185,7 @@ arsort($blSummary);
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Voucher <?= htmlspecialchars($voucher['voucher_number'] ?: '#'.$id) ?> — BVTU</title>
-  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/style.css?v=<?= @filemtime(__DIR__ . '/../css/style.css') ?>">
   <link rel="icon" href="../favicon.ico">
   <style>
     .approval-card { background:#fff; border:1px solid var(--gray-200); border-radius:12px;

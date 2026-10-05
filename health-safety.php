@@ -11,7 +11,7 @@ $member   = $loggedIn ? getMember() : null;
   <meta name="site-root" content="">
   <title>Health &amp; Safety — Bulkley Valley Teachers' Union</title>
   <meta name="description" content="BVTU health and safety resources — workplace committees, WorkSafe forms, employee assistance, and mental health support.">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=<?= @filemtime(__DIR__ . '/css/style.css') ?>">
   <link rel="icon" href="favicon.ico">
 </head>
 <body>

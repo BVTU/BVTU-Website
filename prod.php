@@ -11,7 +11,7 @@ $member   = $loggedIn ? getMember() : null;
   <meta name="site-root" content="">
   <title>PRO-D — Bulkley Valley Teachers' Union</title>
   <meta name="description" content="BVTU professional development — policies, committee information, and training opportunities.">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=<?= @filemtime(__DIR__ . '/css/style.css') ?>">
   <link rel="icon" href="favicon.ico">
 </head>
 <body>

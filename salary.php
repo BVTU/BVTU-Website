@@ -11,7 +11,7 @@ $member   = $loggedIn ? getMember() : null;
   <meta name="site-root" content="">
   <title>Salary Grids — Bulkley Valley Teachers' Union</title>
   <meta name="description" content="SD54 salary grids for 2024–2028 — view and download annual teacher salary grids for BVTU members.">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=<?= @filemtime(__DIR__ . '/css/style.css') ?>">
   <link rel="icon" href="favicon.ico">
   <style>
     .salary-grid-cards {

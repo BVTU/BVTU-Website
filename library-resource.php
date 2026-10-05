@@ -78,7 +78,7 @@ $loginUrl    = 'members/login.php?redirect=' . urlencode('../library-resource.ph
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="site-root" content="">
   <title><?= isset($notFound) ? 'Not Found' : htmlspecialchars($resource['title']) ?> — BVTU Library</title>
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=<?= @filemtime(__DIR__ . '/css/style.css') ?>">
   <link rel="icon" href="favicon.ico">
   <style>
     /* ── Resource detail layout ──────────────────────────────── */

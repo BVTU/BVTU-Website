@@ -88,7 +88,7 @@ $hoursLeft   = $invite ? max(1, (int)ceil($expiresIn / 3600)) : 0;
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Create Account — BVTU</title>
-  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/style.css?v=<?= @filemtime(__DIR__ . '/../css/style.css') ?>">
   <link rel="icon" href="../favicon.ico">
   <style>
     .auth-wrap { min-height: calc(100vh - var(--hdr-h)); display: flex; align-items: center;

@@ -8,7 +8,7 @@
   <meta name="site-root" content="">
   <title>Documents — Bulkley Valley Teachers' Union</title>
   <meta name="description" content="BVTU documents — collective agreements, settlements, provincial regulations, ethics codes, and professional standards.">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=<?= @filemtime(__DIR__ . '/css/style.css') ?>">
   <link rel="icon" href="favicon.ico">
   <style>
     .members-locked {

@@ -29,7 +29,7 @@ $statusBg    = ['pending' => '#fffbeb', 'approved' => '#f0fdf4', 'rejected' => '
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>My Requests — BVTU Pro-D</title>
-  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/style.css?v=<?= @filemtime(__DIR__ . '/../css/style.css') ?>">
   <link rel="icon" href="../favicon.ico">
   <style>
     body { background: #f4f6f8; }

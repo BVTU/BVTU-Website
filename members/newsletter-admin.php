@@ -54,7 +54,7 @@ $lastSync    = nlGetLastSync();
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="site-root" content="../">
   <title>Newsletter Admin — BVTU</title>
-  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/style.css?v=<?= @filemtime(__DIR__ . '/../css/style.css') ?>">
   <link rel="icon" href="../favicon.ico">
   <style>
     .admin-wrap { max-width: 1000px; margin: 0 auto; }

@@ -20,7 +20,7 @@ $resources = curatedGetAll($selBand ?: null, $selSubject ?: null);
   <meta name="site-root" content="">
   <title>Curated Resources — Bulkley Valley Teachers' Union</title>
   <meta name="description" content="Hand-picked teaching resources organised by grade band and subject — curated by BVTU educators.">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=<?= @filemtime(__DIR__ . '/css/style.css') ?>">
   <link rel="icon" href="favicon.ico">
   <style>
     /* ── Band filter bar ─────────────────────────────────────── */

@@ -27,7 +27,7 @@ $loggedIn = true;
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="site-root" content="">
   <title><?= htmlspecialchars($nl['subject']) ?> — BVTU Newsletter</title>
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=<?= @filemtime(__DIR__ . '/css/style.css') ?>">
   <link rel="icon" href="favicon.ico">
   <style>
     .nl-view-wrap { max-width: 880px; margin: 0 auto; }

@@ -11,7 +11,7 @@ $member   = $loggedIn ? getMember() : null;
   <meta name="site-root" content="">
   <title>TTOC Resources — Bulkley Valley Teachers' Union</title>
   <meta name="description" content="TTOC resources for SD54 — EI hours calculator, call-out rates, experience credit, sick leave, pro-D entitlements, and benefits information.">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=<?= @filemtime(__DIR__ . '/css/style.css') ?>">
   <link rel="icon" href="favicon.ico">
   <style>
 

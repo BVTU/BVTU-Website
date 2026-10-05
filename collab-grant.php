@@ -82,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
   <meta name="site-root" content="">
   <title>Collaboration Grant — BVTU</title>
   <meta name="description" content="The BVTU Collaboration Grant supports mentorship and professional collaboration for SD54 educators. Up to 3 release days per year — apply online.">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=<?= @filemtime(__DIR__ . '/css/style.css') ?>">
   <link rel="icon" href="favicon.ico">
   <style>
     /* ── Page-level layout ─────────────────────────────────── */

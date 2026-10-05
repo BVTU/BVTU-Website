@@ -35,7 +35,7 @@ if (is_dir($docsDir)) {
   <meta name="site-root" content="">
   <title>Collective Agreement 2022–2025 — BVTU</title>
   <meta name="description" content="Download the SD54 Bulkley Valley Collective Agreement 2022–2025. Covers salary, leaves, working conditions, TTOC rights, and more.">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=<?= @filemtime(__DIR__ . '/css/style.css') ?>">
   <link rel="icon" href="favicon.ico">
   <style>
     .ca-download-card {

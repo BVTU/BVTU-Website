@@ -11,7 +11,7 @@ $member   = $loggedIn ? getMember() : null;
   <meta name="site-root" content="">
   <title>School Calendars — Bulkley Valley Teachers' Union</title>
   <meta name="description" content="SD54 school calendars for 2025–26 and 2026–27 — instructional days, Pro-D days, and key dates.">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=<?= @filemtime(__DIR__ . '/css/style.css') ?>">
   <link rel="icon" href="favicon.ico">
   <style>
     .cal-grid {

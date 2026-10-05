@@ -177,7 +177,7 @@ function tcDate(string $d): string { return $d !== '' ? date('F j, Y', strtotime
   <meta name="site-root" content="">
   <title>School Trustee Candidate Responses — Bulkley Valley Teachers' Union</title>
   <meta name="description" content="Responses from SD54 school trustee candidates to the BVTU survey, published as submitted.">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=<?= @filemtime(__DIR__ . '/css/style.css') ?>">
   <link rel="icon" href="favicon.ico">
   <style>
     .tc-wrap { max-width: var(--max-w, 1120px); margin: 0 auto; padding: 2.25rem 1.5rem 4rem; }

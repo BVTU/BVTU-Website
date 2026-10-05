@@ -101,7 +101,7 @@ render:
   <meta name="site-root" content="">
   <title>Contact — Bulkley Valley Teachers' Union</title>
   <meta name="description" content="Contact the Bulkley Valley Teachers' Union. Send a message to union leadership in School District 54.">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=<?= @filemtime(__DIR__ . '/css/style.css') ?>">
   <link rel="icon" href="favicon.ico">
   <style>
     .contact-grid {

@@ -11,7 +11,7 @@ $member   = $loggedIn ? getMember() : null;
   <meta name="site-root" content="">
   <title>Contract Assistant — Bulkley Valley Teachers' Union</title>
   <meta name="description" content="Ask questions about the BVTU collective agreement and signed letters of understanding. Get plain-language answers instantly.">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=<?= @filemtime(__DIR__ . '/css/style.css') ?>">
   <link rel="icon" href="favicon.ico">
   <style>
     /* ── CA Assistant page styles ─────────────────────────────────────────── */

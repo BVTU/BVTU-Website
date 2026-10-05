@@ -11,7 +11,7 @@ $member   = $loggedIn ? getMember() : null;
   <meta name="site-root" content="">
   <title>Letters of Understanding — Bulkley Valley Teachers' Union</title>
   <meta name="description" content="All signed Letters of Understanding, settlement agreements, and arbitration awards between BVTU and School District 54.">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=<?= @filemtime(__DIR__ . '/css/style.css') ?>">
   <link rel="icon" href="favicon.ico">
   <style>
     .lou-year-group { margin-bottom: 2.5rem; }

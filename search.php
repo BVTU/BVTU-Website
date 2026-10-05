@@ -62,7 +62,7 @@ function snippetValue(array $hit, string $attr): string {
   <meta name="site-root" content="">
   <title><?= $query ? 'Search: ' . htmlspecialchars($query) . ' — BVTU' : 'Search — BVTU' ?></title>
   <meta name="robots" content="noindex">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=<?= @filemtime(__DIR__ . '/css/style.css') ?>">
   <link rel="icon" href="favicon.ico">
   <style>
     .search-page-hero {

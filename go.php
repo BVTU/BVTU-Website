@@ -25,7 +25,7 @@ if (!$link) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Link Not Found — BVTU</title>
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/style.css?v=<?= @filemtime(__DIR__ . '/css/style.css') ?>">
   <link rel="icon" href="/favicon.ico">
   <style>
     body { display:flex; align-items:center; justify-content:center; min-height:100vh;
