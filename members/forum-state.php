@@ -219,3 +219,48 @@ function forumEnsureThumb(string $id, bool $force = false): bool {
             . ' — is the video Private rather than Unlisted?');
     return false;
 }
+
+/**
+ * Why there is, or is not, a poster — in words the editor can act on.
+ *
+ * The fetch fails invisibly from outside: the page simply shows a plain panel
+ * and nothing says whether the picture is missing because the video is
+ * unreachable, because images/ cannot be written, or because a failed attempt
+ * is still cooling off. Those need different fixes, so the screen should say
+ * which one it is.
+ *
+ * Returns ['ok' => bool, 'why' => string].
+ */
+function forumThumbStatus(string $id): array {
+    if ($id === '' || !preg_match('~^[A-Za-z0-9_-]{11}$~', $id)) {
+        return ['ok' => false, 'why' => 'No video link saved yet.'];
+    }
+    $dest = forumThumbAbs($id);
+    if (is_file($dest) && filesize($dest) > 2048) {
+        return ['ok' => true, 'why' => 'Saved on this site as ' . forumThumbRel($id)
+                . ' (' . round(filesize($dest) / 1024) . ' KB).'];
+    }
+
+    $dir = dirname($dest);
+    if (!is_dir($dir)) {
+        return ['ok' => false, 'why' => 'The images folder is missing on the server.'];
+    }
+    if (!is_writable($dir)) {
+        return ['ok' => false, 'why' => 'The images folder on the server is not writable, so the '
+              . 'poster cannot be saved. The page falls back to a plain play panel; everything '
+              . 'else works. Fixing it means making images/ writable on the host.'];
+    }
+    if (!function_exists('curl_init')) {
+        return ['ok' => false, 'why' => 'This server has no cURL, so the poster cannot be '
+              . 'downloaded. Everything else works.'];
+    }
+
+    $miss = $dest . '.miss';
+    if (is_file($miss)) {
+        $mins = max(0, 60 - (int)floor((time() - filemtime($miss)) / 60));
+        return ['ok' => false, 'why' => 'The last attempt could not find a public thumbnail. '
+              . 'Check the video is Unlisted rather than Private, then reload this page to try '
+              . 'again — it retries by itself in about ' . $mins . ' minutes.'];
+    }
+    return ['ok' => false, 'why' => 'Not downloaded yet. Reload this page to fetch it.'];
+}

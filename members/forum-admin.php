@@ -212,6 +212,9 @@ forumWriteState($liveNow ?: ['published' => 0, 'youtube_id' => ''],
             <br>Currently: <code><?= htmlspecialchars($video['youtube_id']) ?></code> &mdash;
             <a href="https://www.youtube.com/watch?v=<?= htmlspecialchars($video['youtube_id']) ?>"
                target="_blank" rel="noopener">check it plays</a>.
+            <?php $ts = forumThumbStatus((string)$video['youtube_id']); ?>
+            <br><strong>Poster image:</strong>
+            <?= $ts['ok'] ? '&#x2713; ' : '&#x26A0; ' ?><?= htmlspecialchars($ts['why']) ?>
           <?php endif; ?>
         </div>
       </div>
