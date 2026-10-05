@@ -110,6 +110,15 @@ $notice   = $notice ?: (string)($_GET['notice'] ?? '');
 $error    = $error  ?: (string)($_GET['error']  ?? '');
 $video    = forumGetForEdit($year);
 $chapters = forumChapters($vid);
+
+/*
+ * Refresh the file the public pages read, on every load rather than only after
+ * a save. If anyone ever edits the row directly in the database, the cache
+ * repairs itself the next time this screen is opened.
+ */
+$liveNow = forumLatest();
+forumWriteState($liveNow ?: ['published' => 0, 'youtube_id' => ''],
+                $liveNow ? count(forumChapters((int)$liveNow['id'])) : 0);
 ?>
 <!DOCTYPE html>
 <html lang="en">

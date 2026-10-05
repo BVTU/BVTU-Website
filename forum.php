@@ -7,6 +7,20 @@ $member   = $loggedIn ? getMember() : null;
 $video    = forumLatest();                 // read-only; null until one is published
 $live     = $video !== null;
 $chapters = $live ? forumChapters((int)$video['id']) : [];
+
+/*
+ * Keep the homepage's cache honest.
+ *
+ * members/forum-state.json is gitignored server state, so a deploy can leave it
+ * absent while a recording is published — and the homepage would hide a video
+ * that this page is happily showing. This page already knows the truth, so it
+ * repairs the file when it finds a mismatch. Only on a mismatch: this is a
+ * public page and it should not be writing on every view.
+ */
+$fstate = $live ? $video : ['published' => 0, 'youtube_id' => ''];
+if (!forumStateMatches($fstate, count($chapters))) {
+    forumWriteState($fstate, count($chapters));
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">

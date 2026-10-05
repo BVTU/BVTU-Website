@@ -12,3 +12,9 @@ members/protected-docs/
 # so anything committed here is downloadable from the live site.
 /*.xlsx
 /*.csv
+
+# Written by members/forum-admin.php on the server, read by index.php.
+# Server state, not source — committing a local copy would overwrite the live
+# one and could hide or wrongly advertise the forum recording.
+members/forum-state.json
+members/forum-state.json.tmp

@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/members/auth.php';
+// Filesystem only — no database. See members/forum-state.php.
+require_once __DIR__ . '/members/forum-state.php';
 $loggedIn = isLoggedIn();
 $member   = $loggedIn ? getMember() : null;
 ?>
@@ -80,11 +82,18 @@ $member   = $loggedIn ? getMember() : null;
    * The matching strip on every other page is injected by js/site.js, which
    * carries the same date. Styles for both are at the end of css/style.css.
    */
-  // Explicit timezone: an anonymous homepage request never loads members/db.php,
-  // which is where this site sets one. On a UTC server the block would vanish
-  // at 5pm on voting day, which is while people are still voting.
-  $tz = new DateTimeZone('America/Vancouver');
-  if ((new DateTime('now', $tz))->format('Y-m-d') <= '2026-10-17'):
+  /*
+   * Worked out once and used by both this block and the forum band below, so
+   * the two cannot drift apart or quietly depend on each other's variables.
+   *
+   * Explicit timezone: an anonymous homepage request never loads members/db.php,
+   * which is where this site sets one. On a UTC server the promotion would
+   * vanish at 5pm on voting day, while people are still voting.
+   */
+  $electionPromoOn =
+      (new DateTime('now', new DateTimeZone('America/Vancouver')))->format('Y-m-d') <= '2026-10-17';
+
+  if ($electionPromoOn):
   ?>
   <section class="vote-promo">
     <div class="container">
@@ -137,6 +146,41 @@ $member   = $loggedIn ? getMember() : null;
           <a href="trustee-candidates.php" class="btn btn-outline">Read candidate responses</a>
         </div>
       </div>
+    </div>
+  </section>
+  <?php endif; ?>
+
+  <?php
+  /*
+   * The forum, under the map. Shown only once there is a recording to watch —
+   * read from a small file rather than the database, because this page has
+   * never needed one and a database outage should not take the front page down.
+   */
+  $fs = forumState();
+  // Gated on the same date as the election block above, so the whole promotion
+  // comes down together on 18 October. The forum page itself stays up as a
+  // record; what ends is advertising a finished election from the front page.
+  if ($fs && $electionPromoOn):
+  ?>
+  <section class="forum-promo">
+    <div class="container">
+      <div class="forum-promo-play" aria-hidden="true"><span></span></div>
+      <div class="forum-promo-text">
+        <span class="forum-promo-eyebrow">Watch</span>
+        <h2><?= htmlspecialchars($fs['title'] !== '' ? $fs['title'] : 'All-Candidates Forum') ?></h2>
+        <p>
+          Every candidate, in their own words.
+          <?php if ($fs['event_date'] !== ''): ?>
+            Recorded <?= htmlspecialchars(date('j F', strtotime($fs['event_date']))) ?>.
+          <?php endif; ?>
+          <?php if ($fs['chapters'] > 0): ?>
+            It runs about three hours, so it is split into
+            <?= (int)$fs['chapters'] ?> parts &mdash; jump straight to the candidate or the
+            question you care about.
+          <?php endif; ?>
+        </p>
+      </div>
+      <a href="forum.php" class="btn btn-primary forum-promo-btn">Watch the forum</a>
     </div>
   </section>
   <?php endif; ?>

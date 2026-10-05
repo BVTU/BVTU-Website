@@ -980,3 +980,28 @@ body.has-vote-bar .search-fab { bottom: calc(1.75rem + var(--vote-bar-h, 3rem));
                       letter-spacing: .05em; color: var(--gray-500); }
 .vote-promo-list .names { font-weight: 700; color: var(--gray-800); }
 .vote-promo-list .how { font-size: .8rem; color: var(--gray-600); }
+
+/* Forum band on the homepage, directly under the election block. Dark so the
+   two read as a sequence rather than one long green stripe. It shows only while
+   a recording is published AND the election promotion is still running, so the
+   whole thing comes down together on 18 October. */
+.forum-promo { background: #10241a; color: #fff; padding: 1.9rem 0; }
+.forum-promo .container { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
+.forum-promo-play { flex: 0 0 56px; height: 56px; border-radius: 50%;
+                    background: rgba(255,255,255,.12); display: flex; align-items: center;
+                    justify-content: center; }
+.forum-promo-play span { width: 0; height: 0; border-left: 17px solid #fff;
+                         border-top: 11px solid transparent; border-bottom: 11px solid transparent;
+                         margin-left: 5px; }
+.forum-promo-text { flex: 1; min-width: 240px; }
+.forum-promo-eyebrow { display: block; font-size: .7rem; font-weight: 800; letter-spacing: .12em;
+                       text-transform: uppercase; color: rgba(255,255,255,.6); margin-bottom: .2rem; }
+.forum-promo h2 { font-size: 1.3rem; margin: 0 0 .35rem; color: #fff; }
+.forum-promo p  { margin: 0; font-size: .92rem; line-height: 1.7; color: rgba(255,255,255,.82);
+                  max-width: 62ch; }
+.forum-promo-btn { flex: 0 0 auto; }
+@media (max-width: 680px) {
+  .forum-promo .container { gap: 1rem; }
+  .forum-promo-play { flex-basis: 44px; height: 44px; }
+  .forum-promo-btn { width: 100%; text-align: center; }
+}
