@@ -72,23 +72,38 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
 
 $notice = '';
 
+// ── Send someone the link to change their own application ─────────────────
+// Separate from the status buttons because it changes nothing about the
+// application — it just puts the link in the applicant's hands.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'resend_link') {
+    csrfCheck();
+    $target = cgGetApplication((int)($_POST['app_id'] ?? 0));
+    if (!$target) {
+        $notice = 'Could not find that application.';
+    } elseif (cgSendEditLink($target, $member['email'])) {
+        $notice = 'Edit link sent to ' . $target['applicant_email'] . '.';
+    } else {
+        $notice = 'The email would not send. Check the mail settings and try again.';
+    }
+    $apps = cgGetApplications($year);
+}
+
 // ── Status updates ────────────────────────────────────────────────────────
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['app_id'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_id'])
+    && in_array($_POST['action'] ?? '', ['approved', 'declined', 'waitlisted', 'pending'], true)) {
     csrfCheck();
     $id     = (int)$_POST['app_id'];
     $action = $_POST['action'];
     $notes  = trim($_POST['admin_notes'] ?? '');
 
-    if (in_array($action, ['approved', 'declined', 'waitlisted', 'pending'], true)) {
-        cgUpdateStatus($id, $action, $member['email'], $notes);
+    cgUpdateStatus($id, $action, $member['email'], $notes);
 
-        if ($action === 'approved') {
-            $app = cgGetApplication($id);
-            if ($app) cgSendApprovalEmail($app);
-            $notice = 'Application approved — notification email sent to the applicant.';
-        } else {
-            $notice = 'Status updated to ' . ucfirst($action) . '.';
-        }
+    if ($action === 'approved') {
+        $target = cgGetApplication($id);
+        if ($target) cgSendApprovalEmail($target);
+        $notice = 'Application approved — notification email sent to the applicant.';
+    } else {
+        $notice = 'Status updated to ' . ucfirst($action) . '.';
     }
     // Refresh apps after update
     $apps = cgGetApplications($year);
@@ -668,6 +683,27 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
                 <?php endif; ?>
               </span>
             </p>
+
+            <?php // Anyone who applied before the edit page existed has an
+                  // application they have never been given a link to. ?>
+            <form method="post" style="margin:.5rem 0 0;font-size:.85rem;">
+              <?= csrfField() ?>
+              <input type="hidden" name="app_id" value="<?= (int)$app['id'] ?>">
+              <input type="hidden" name="action" value="resend_link">
+              <button type="submit" class="btn"
+                      style="border:1px solid var(--border);background:#fff;
+                             color:var(--gray-700);font-size:.82rem;padding:.35rem .8rem;">
+                <?= !empty($app['link_sent_at']) ? 'Send the edit link again' : 'Email them the edit link' ?>
+              </button>
+              <span style="color:var(--gray-500);margin-left:.5rem;">
+                <?php if (!empty($app['link_sent_at'])): ?>
+                  Sent <?= date('M j, Y', strtotime($app['link_sent_at'])) ?><?php
+                    ?><?= $app['link_sent_by'] ? ' by ' . htmlspecialchars($app['link_sent_by']) : '' ?>.
+                <?php else: ?>
+                  Lets <?= htmlspecialchars($app['applicant_name']) ?> change it themselves.
+                <?php endif; ?>
+              </span>
+            </form>
 
             <form class="app-action-form" method="post">
               <?= csrfField() ?>

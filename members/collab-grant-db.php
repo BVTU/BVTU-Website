@@ -342,6 +342,8 @@ function cgEnsureEditSupport(): void {
         'edited_at'        => 'DATETIME DEFAULT NULL',
         'edited_by'        => "VARCHAR(255) NOT NULL DEFAULT ''",
         'changed_after_ok' => 'TINYINT(1) NOT NULL DEFAULT 0',
+        'link_sent_at'     => 'DATETIME DEFAULT NULL',
+        'link_sent_by'     => "VARCHAR(255) NOT NULL DEFAULT ''",
     ] as $col => $type) {
         try {
             $db->query("SELECT `$col` FROM collab_grant_applications LIMIT 1");
@@ -549,4 +551,23 @@ function cgSendEditNotification(array $app, array $changed, string $actor): void
           . 'Review it: ' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca')
           . '/members/collab-grant-admin.php' . "\n";
     siteMail('lp54@bctf.ca', $subject, $body);
+}
+
+/**
+ * Send an applicant the link to change their own application.
+ *
+ * Needed as its own button because the link only started going out with the
+ * emails from this change: everyone who applied before it has an application
+ * they cannot reach.
+ */
+function cgSendEditLink(array $app, string $actor): bool {
+    cgEnsureEditSupport();
+    $tv   = ['{{name}}' => $app['applicant_name']];
+    $body = emailTplBlock('collab_edit_link', 'body', $tv) . "\n" . cgEditFooter((int)$app['id']);
+    $ok   = siteMail($app['applicant_email'], emailTplSubject('collab_edit_link', $tv), $body);
+    if ($ok) {
+        getDB()->prepare("UPDATE collab_grant_applications SET link_sent_at=NOW(), link_sent_by=? WHERE id=?")
+               ->execute([$actor, (int)$app['id']]);
+    }
+    return $ok;
 }

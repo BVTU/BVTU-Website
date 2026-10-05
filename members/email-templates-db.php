@@ -133,6 +133,18 @@ const EMAIL_TEMPLATES = [
         ],
     ],
 
+    'collab_edit_link' => [
+        'label'   => 'Collaboration grant — link to change an application',
+        'when'    => 'Sent from the review panel when you send someone their edit link.',
+        'format'  => 'text',
+        'subject' => 'Change your Collaboration Grant application — BVTU',
+        'vars'    => ['{{name}}' => 'the applicant’s name'],
+        'blocks'  => [
+            'body' => ['label' => 'Message',
+                       'text'  => "Hi {{name}},\n\nYou can now go back into your BVTU Collaboration Grant application and change it yourself — add a release day, move a date, update your collaborator. No need to email us and wait.\n\nYour application keeps its place in the queue, and if it's already approved it stays approved.\n\nBulkley Valley Teachers' Union"],
+        ],
+    ],
+
     'collab_approved' => [
         'label'   => 'Collaboration grant — approved',
         'when'    => 'Sent to the applicant when their grant is approved.',
