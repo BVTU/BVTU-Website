@@ -986,29 +986,30 @@ body.has-vote-bar .search-fab { bottom: calc(1.75rem + var(--vote-bar-h, 3rem));
    a recording is published AND the election promotion is still running, so the
    whole thing comes down together on 18 October. */
 .forum-promo { background: #10241a; color: #fff; padding: 1.9rem 0; }
-.forum-promo .container { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
+.forum-promo .container { display: flex; flex-direction: column; align-items: center;
+                          text-align: center; gap: 1.1rem; }
 .forum-promo-play { flex: 0 0 56px; height: 56px; border-radius: 50%;
                     background: rgba(255,255,255,.12); display: flex; align-items: center;
                     justify-content: center; }
 .forum-promo-play span { width: 0; height: 0; border-left: 17px solid #fff;
                          border-top: 11px solid transparent; border-bottom: 11px solid transparent;
                          margin-left: 5px; }
-.forum-promo-text { flex: 1; min-width: 240px; }
+.forum-promo-text { max-width: 60ch; }
 .forum-promo-eyebrow { display: block; font-size: .7rem; font-weight: 800; letter-spacing: .12em;
                        text-transform: uppercase; color: rgba(255,255,255,.6); margin-bottom: .2rem; }
 .forum-promo h2 { font-size: 1.3rem; margin: 0 0 .35rem; color: #fff; }
-.forum-promo p  { margin: 0; font-size: .92rem; line-height: 1.7; color: rgba(255,255,255,.82);
-                  max-width: 62ch; }
+.forum-promo p  { margin: 0 auto; font-size: .92rem; line-height: 1.7;
+                  color: rgba(255,255,255,.82); }
 .forum-promo-btn { flex: 0 0 auto; }
 @media (max-width: 680px) {
-  .forum-promo .container { gap: 1rem; }
-  .forum-promo-play { flex-basis: 44px; height: 44px; }
+  .forum-promo .container { gap: .9rem; }
   .forum-promo-btn { width: 100%; text-align: center; }
 }
 /* Thumbnail in the homepage forum band. The image file is copied to this site
    by members/forum-state.php, so showing it costs no request to Google. */
-.forum-promo-thumb { position: relative; flex: 0 0 240px; display: block; line-height: 0;
-                     border-radius: 10px; overflow: hidden; }
+.forum-promo-thumb { position: relative; width: 100%; max-width: 560px; display: block;
+                     line-height: 0; border-radius: 12px; overflow: hidden;
+                     box-shadow: 0 6px 24px rgba(0,0,0,.3); }
 /* Held to 16:9 and cropped. YouTube thumbnails are normally that shape, but
    maxresdefault can come back oddly proportioned, and one tall image would
    stretch the whole band out of shape. */
@@ -1023,4 +1024,4 @@ body.has-vote-bar .search-fab { bottom: calc(1.75rem + var(--vote-bar-h, 3rem));
 .forum-promo-play-sm span { width: 0; height: 0; border-left: 14px solid #fff;
                             border-top: 9px solid transparent; border-bottom: 9px solid transparent;
                             margin-left: 4px; }
-@media (max-width: 680px) { .forum-promo-thumb { flex-basis: 100%; } }
+
