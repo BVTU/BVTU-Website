@@ -33,7 +33,7 @@ $member   = $loggedIn ? getMember() : null;
       </button>
       <nav class="main-nav" id="main-nav">
         <ul>
-          <li><a href="about.php" class="active">About</a></li>
+          <li><a href="about.php">About</a></li>
           <li class="has-dropdown"><a href="documents.php">Documents</a><ul class="dropdown"><li><a href="documents.php">All Documents</a></li><li><a href="collective-agreement.php">Collective Agreement</a></li><li><a href="lous.php">Letters of Understanding</a></li><li><a href="ca-assistant.php">Contract Assistant</a></li><li><a href="documents/BVTU-Constitution-and-Bylaws-2026.pdf" target="_blank">Constitution &amp; Bylaws</a></li><li><a href="calendars.php">School Calendars</a></li><li><a href="trustee-zones.html">Trustee Zone Map</a></li><li><a href="trustee-candidates.php">Trustee Candidate Responses</a></li></ul></li>
 <li class="has-dropdown">
             <a href="members.php">Members</a>
@@ -93,8 +93,21 @@ $member   = $loggedIn ? getMember() : null;
       <li><strong>Nothing from the members-only area.</strong> What a signed-in
           member reads is not counted at all.</li>
       <li><strong>No advertising or third-party trackers.</strong> Nothing on this
-          site reports to Google, Meta or anyone else. No tracking cookies.</li>
+          site reports to Google, Meta or anyone else as you browse. No tracking
+          cookies.</li>
     </ul>
+
+    <h2 style="font-size:1.1rem;margin:2rem 0 .7rem;">The forum video</h2>
+    <p style="line-height:1.8;color:var(--gray-700);">
+      The all-candidates forum recording is held on YouTube rather than here, because a
+      three-hour video needs to adjust its quality for a slow connection and to carry
+      captions, and our own server does neither. That means the player comes from Google,
+      and Google will see your request for it &mdash; so <strong>nothing is requested until
+      you press play</strong>. Open <a href="forum.php">the forum page</a> and nothing
+      reaches Google; press play and it does, on the same terms as watching anything on
+      YouTube. We use their no-cookie player address, which holds off on cookies until
+      you actually watch.
+    </p>
 
     <h2 style="font-size:1.1rem;margin:2rem 0 .7rem;">How visitors are counted</h2>
     <p style="line-height:1.8;color:var(--gray-700);">

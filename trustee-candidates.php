@@ -187,6 +187,11 @@ function tcDate(string $d): string { return $d !== '' ? date('F j, Y', strtotime
               color: #fff; font-weight: 700; border-radius: 8px; padding: .65rem 1.1rem;
               text-decoration: none; font-size: .92rem; margin-bottom: 1.75rem; }
     .tc-pdf:hover { background: var(--primary-dk); color: #fff; }
+    /* Its own class rather than an inline colour, so the hover rule below still
+       applies — an inline background would outrank it and the button would sit
+       dead next to one that responds. */
+    .tc-watch { background: var(--gray-700); }
+    .tc-watch:hover { background: var(--gray-800); }
 
     .tc-controls { background: #fff; border: 1px solid var(--border); border-radius: 10px;
                    padding: 1rem 1.15rem; margin-bottom: 1.75rem; }
@@ -317,6 +322,24 @@ function tcDate(string $d): string { return $d !== '' ? date('F j, Y', strtotime
     <?php if (TC_LAST_UPDATED !== ''): ?>
     <p class="tc-meta">Last updated <?= htmlspecialchars(tcDate(TC_LAST_UPDATED)) ?>.</p>
     <?php endif; ?>
+
+    <?php
+    /*
+     * Unconditional on purpose.
+     *
+     * Asking the database whether a recording is published would make this page
+     * need a database — and it never has. getDB() ends the request with die()
+     * rather than an exception when the database is unreachable, so no catch
+     * can hold it, and an outage would truncate the candidates' answers partway
+     * down. Those answers are the thing this page exists for.
+     *
+     * So the link always shows, and forum.php says plainly when there is
+     * nothing to watch yet.
+     */
+    ?>
+    <a class="tc-pdf tc-watch" href="forum.php">
+      &#9654; Watch the all-candidates forum
+    </a>
 
     <?php if (TC_PDF_URL !== ''): ?>
     <a class="tc-pdf" href="<?= htmlspecialchars(TC_PDF_URL) ?>" target="_blank" rel="noopener">
