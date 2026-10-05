@@ -11,6 +11,13 @@ $formSuccess = false;
 $formError   = '';
 $formData    = [];
 
+// Prefilled from the account, and still editable: a member may want the grant
+// correspondence going somewhere other than their portal address. Only used when
+// the form has not been submitted — a field someone deliberately cleared stays
+// cleared when validation sends them back.
+$prefillName  = $loggedIn ? ($member['name']  ?? '') : '';
+$prefillEmail = $loggedIn ? ($member['email'] ?? '') : '';
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
     // Sanitise inputs
     $f = function(string $k): string { return trim($_POST[$k] ?? ''); };
@@ -709,14 +716,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
               <div class="grant-form-group">
                 <label for="cg-name">Full name <span class="req">*</span></label>
                 <input type="text" id="cg-name" name="name" required
-                  value="<?= htmlspecialchars($formData['name'] ?? '') ?>"
+                  value="<?= htmlspecialchars($formData['name'] ?? $prefillName) ?>"
                   placeholder="Jane Smith">
               </div>
               <div class="grant-form-group">
                 <label for="cg-email">Email address <span class="req">*</span></label>
                 <input type="email" id="cg-email" name="email" required
-                  value="<?= htmlspecialchars($formData['email'] ?? '') ?>"
+                  value="<?= htmlspecialchars($formData['email'] ?? $prefillEmail) ?>"
                   placeholder="you@sd54.bc.ca">
+                <?php if ($loggedIn): ?>
+                  <span class="hint" style="display:block;font-size:.8rem;color:var(--gray-500);margin-top:.3rem;">
+                    From your BVTU account. Keep it to see this application on your
+                    dashboard, or change it to have us reply elsewhere.
+                  </span>
+                <?php endif; ?>
               </div>
             </div>
 
