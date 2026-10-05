@@ -136,7 +136,42 @@ function forumThumbUrl(string $id): string {
  * retried on later visits, so switching the video to Unlisted is enough to make
  * the picture appear without touching anything here.
  */
-function forumEnsureThumb(string $id): bool {
+/**
+ * Fetch a URL, or null.
+ *
+ * cURL first. file_get_contents over HTTPS depends on the build having a CA
+ * bundle configured, and where it does not it fails outright with nothing but
+ * "operation failed" — which is how the first version of this silently never
+ * downloaded anything. cURL carries its own certificate handling and is on
+ * effectively every PHP host; the stream wrapper stays as a fallback for the
+ * rare one where it is not.
+ */
+function forumFetchUrl(string $url): ?string {
+    if (function_exists('curl_init')) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS      => 3,
+            CURLOPT_TIMEOUT        => 6,
+            CURLOPT_CONNECTTIMEOUT => 4,
+            CURLOPT_USERAGENT      => 'BVTU-site/1.0 (+https://bvtu.ca)',
+        ]);
+        $body = curl_exec($ch);
+        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err  = curl_error($ch);
+        curl_close($ch);
+        if ($body !== false && $code === 200) return (string)$body;
+        if ($err !== '') error_log('forumFetchUrl: ' . $url . ' — ' . $err);
+        return null;
+    }
+
+    $ctx  = stream_context_create(['http' => ['timeout' => 6, 'ignore_errors' => true]]);
+    $body = @file_get_contents($url, false, $ctx);
+    return $body === false ? null : $body;
+}
+
+function forumEnsureThumb(string $id, bool $force = false): bool {
     if ($id === '' || !preg_match('~^[A-Za-z0-9_-]{11}$~', $id)) return false;
     $dest = forumThumbAbs($id);
     if (is_file($dest) && filesize($dest) > 2048) return true;
@@ -145,22 +180,26 @@ function forumEnsureThumb(string $id): bool {
     if (!is_dir($dir) || !is_writable($dir)) return false;
 
     /*
-     * Do not keep trying.
+     * Do not keep trying — but do not sulk, either.
      *
-     * A private video has no public thumbnail, and this is called from a public
-     * page: without a cooling-off period every visitor would wait through three
-     * failed fetches — up to twelve seconds of blank page — and write a line to
-     * the error log each time. One attempt every six hours is enough to pick
-     * the picture up shortly after the video is made Unlisted.
+     * A private video has no public thumbnail, and this runs on a public page:
+     * without a pause, every visitor would wait through three failed fetches
+     * and write a line to the error log. But the first version waited six
+     * hours, and that turned "make the video Unlisted" into "make it Unlisted,
+     * then wait, and wonder whether it worked" — which is exactly how it felt.
+     *
+     * An hour is plenty to stop the pile-up. And $force lets the editor try
+     * again straight away: somebody pressing Save is a person saying "look
+     * now", and making them wait out a timer set by an earlier failure is the
+     * software being obstinate about its own bookkeeping.
      */
     $miss = $dest . '.miss';
-    if (is_file($miss) && (time() - filemtime($miss)) < 21600) return false;
+    if (!$force && is_file($miss) && (time() - filemtime($miss)) < 3600) return false;
 
     foreach (['maxresdefault', 'sddefault', 'hqdefault'] as $size) {
-        $url = 'https://i.ytimg.com/vi/' . $id . '/' . $size . '.jpg';
-        $ctx = stream_context_create(['http' => ['timeout' => 4, 'ignore_errors' => true]]);
-        $data = @file_get_contents($url, false, $ctx);
-        if ($data === false || strlen($data) < 4096) continue;   // 404s return a tiny placeholder
+        $url  = 'https://i.ytimg.com/vi/' . $id . '/' . $size . '.jpg';
+        $data = forumFetchUrl($url);
+        if ($data === null || strlen($data) < 4096) continue;   // 404s return a tiny placeholder
 
         // Confirm it really is a JPEG before writing it into the web root.
         $info = @getimagesizefromstring($data);
