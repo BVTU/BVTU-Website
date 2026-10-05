@@ -115,20 +115,25 @@ function cgGetApplication(int $id): ?array {
     return $s->fetch() ?: null;
 }
 
-function cgUpdateStatus(int $id, string $status, string $reviewedBy, string $notes = ''): void {
+function cgUpdateStatus(int $id, string $status, string $reviewedBy, string $notes = '',
+                        ?int $daysApproved = null): void {
+    cgEnsureEditSupport();
+    // Only an approval carries a day count. Anything else clears it, so a grant
+    // reset to pending does not keep counting against the applicant's three days.
+    if ($status !== 'approved') $daysApproved = null;
     $s = getDB()->prepare(
         "UPDATE collab_grant_applications
-         SET status=?, admin_notes=?, reviewed_at=NOW(), reviewed_by=?
+         SET status=?, admin_notes=?, reviewed_at=NOW(), reviewed_by=?, days_approved=?
          WHERE id=?"
     );
-    $s->execute([$status, $notes, $reviewedBy, $id]);
+    $s->execute([$status, $notes, $reviewedBy, $daysApproved, $id]);
 }
 
 // Sent to applicant when their application is approved
 function cgSendApprovalEmail(array $app): void {
     $name      = $app['applicant_name'];
     $email     = $app['applicant_email'];
-    $days      = (int)$app['days_requested'];
+    $days      = cgEffectiveDays($app);
     $dayWord   = $days === 1 ? 'day' : 'days';
     $hasCollab = !empty($app['collaborator_name']);
     $collab    = $app['collaborator_name'] ?? '';
@@ -344,6 +349,9 @@ function cgEnsureEditSupport(): void {
         'changed_after_ok' => 'TINYINT(1) NOT NULL DEFAULT 0',
         'link_sent_at'     => 'DATETIME DEFAULT NULL',
         'link_sent_by'     => "VARCHAR(255) NOT NULL DEFAULT ''",
+        // What the Executive actually granted, which need not be what was asked
+        // for. NULL means nobody has decided yet, which is not the same as zero.
+        'days_approved'    => 'INT DEFAULT NULL',
     ] as $col => $type) {
         try {
             $db->query("SELECT `$col` FROM collab_grant_applications LIMIT 1");
@@ -530,8 +538,7 @@ function cgSendApplicantEditNotice(array $app, array $changed): void {
           . "The BVTU has updated your Collaboration Grant application.\n\n"
           . "What changed:\n  " . str_replace('; ', "\n  ", cgDescribeChanges($changed)) . "\n\n"
           . 'Your release days are now: ' . cgDateList($app['proposed_dates'])
-          . ' (' . (int)$app['days_requested'] . ' '
-          . ((int)$app['days_requested'] === 1 ? 'day' : 'days') . ").\n\n"
+          . ' (' . cgDaysLine($app) . ").\n\n"
           . "If that isn't what you expected, reply to this email or write to\n"
           . "lp54@bctf.ca and we'll put it right.\n\n"
           . "Bulkley Valley Teachers' Union\n"
@@ -546,7 +553,7 @@ function cgSendEditNotification(array $app, array $changed, string $actor): void
           . "Collaboration Grant application.\n\n"
           . "What changed:\n  " . str_replace('; ', "\n  ", cgDescribeChanges($changed)) . "\n\n"
           . 'Status: ' . ucfirst((string)$app['status']) . "\n"
-          . 'Release days now: ' . (int)$app['days_requested'] . "\n"
+          . 'Release days: ' . cgDaysLine($app) . "\n"
           . 'Dates now: ' . cgDateList($app['proposed_dates']) . "\n\n"
           . 'Review it: ' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca')
           . '/members/collab-grant-admin.php' . "\n";
@@ -570,4 +577,211 @@ function cgSendEditLink(array $app, string $actor): bool {
                ->execute([$actor, (int)$app['id']]);
     }
     return $ok;
+}
+
+// ── Days used, per person, per year ──────────────────────────────────────────
+//
+// The grant is three release days per person per school year, and the FAQ
+// promises priority to teachers who have not used the fund. Both need a running
+// total, and a total built from applicants alone would be wrong: one application
+// covers two teachers. The lead applies; the collaborator is named on the same
+// form and books their own Atrieve absence for the same days. So a collaborator
+// spends their own three days without ever appearing as an applicant.
+//
+// That is also where the ledger's accuracy runs out. An applicant is identified
+// by email address. A collaborator is a typed name with no address, matched
+// against the contacts table, so anything attributed to a collaborator is marked
+// approximate and the panel says so rather than presenting a guess as a count.
+
+const CG_DAY_CAP = 3;
+
+/** The days a grant actually spends: what was granted, or what was asked when
+ *  nobody has decided yet. */
+function cgEffectiveDays(array $app): int {
+    $a = $app['days_approved'] ?? null;
+    return $a === null ? (int)$app['days_requested'] : (int)$a;
+}
+
+/** A name reduced to something comparable: case, punctuation and spacing gone. */
+function cgNameKey(string $name): string {
+    $n = function_exists('mb_strtolower') ? mb_strtolower(trim($name), 'UTF-8') : strtolower(trim($name));
+    // Folded rather than stripped: the character class below deletes anything
+    // non-ASCII, so without this "René Dubé" would key as "ren dub" and never
+    // meet a colleague who typed "Rene Dube".
+    $n = strtr($n, [
+        'á'=>'a','à'=>'a','â'=>'a','ä'=>'a','ã'=>'a','å'=>'a','ā'=>'a',
+        'é'=>'e','è'=>'e','ê'=>'e','ë'=>'e','ē'=>'e',
+        'í'=>'i','ì'=>'i','î'=>'i','ï'=>'i','ī'=>'i',
+        'ó'=>'o','ò'=>'o','ô'=>'o','ö'=>'o','õ'=>'o','ø'=>'o','ō'=>'o',
+        'ú'=>'u','ù'=>'u','û'=>'u','ü'=>'u','ū'=>'u',
+        'ç'=>'c','ñ'=>'n','ý'=>'y','ÿ'=>'y','š'=>'s','ž'=>'z','ł'=>'l',
+        'ß'=>'ss','æ'=>'ae','œ'=>'oe',
+    ]);
+    $n = str_replace(['’', '‘', '`', '´'], "'", $n);
+    $n = preg_replace('/[^a-z0-9\' ]+/u', ' ', $n);
+    $n = preg_replace('/\s+/', ' ', $n);
+    return trim((string)$n);
+}
+
+/**
+ * Contacts indexed by comparable name, for resolving a typed collaborator.
+ *
+ * A name shared by two contacts resolves to neither: guessing which colleague
+ * used three days is worse than admitting the name is ambiguous.
+ */
+function cgContactsByName(): array {
+    static $map = null;
+    if ($map !== null) return $map;
+    $map = [];
+    try {
+        $rows = getDB()->query(
+            "SELECT first_name, last_name, preferred_name, email FROM contacts")->fetchAll();
+    } catch (Exception $e) {
+        return $map;   // no contacts table yet: every collaborator stays unmatched
+    }
+    foreach ($rows as $r) {
+        $names = [trim($r['first_name'] . ' ' . $r['last_name'])];
+        if (trim((string)$r['preferred_name']) !== '') {
+            $names[] = trim($r['preferred_name'] . ' ' . $r['last_name']);
+        }
+        foreach ($names as $n) {
+            $k = cgNameKey($n);
+            if ($k === '') continue;
+            if (isset($map[$k]) && $map[$k]['email'] !== $r['email']) {
+                $map[$k]['ambiguous'] = true;
+                continue;
+            }
+            $map[$k] = ['email' => $r['email'], 'name' => trim($r['first_name'] . ' ' . $r['last_name']),
+                        'ambiguous' => false];
+        }
+    }
+    return $map;
+}
+
+/**
+ * Everyone who spent a collaboration day in $year, keyed by person.
+ *
+ * Keys are 'e:<address>' for anyone we can identify by email and 'n:<name>' for
+ * a collaborator whose name matches no contact — kept in the ledger rather than
+ * dropped, because those days were still taken.
+ */
+function cgDaysLedger(int $year): array {
+    static $cache = [];
+    if (isset($cache[$year])) return $cache[$year];
+
+    cgEnsureEditSupport();
+    $people = [];
+
+    $add = function (string $key, string $name, string $email, string $status,
+                     int $days, int $appId, string $role, bool $exact) use (&$people) {
+        if (!isset($people[$key])) {
+            $people[$key] = ['key' => $key, 'name' => $name, 'email' => $email,
+                             'approved' => 0, 'pending' => 0, 'exact' => true, 'apps' => []];
+        }
+        if ($email !== '' && $people[$key]['email'] === '') $people[$key]['email'] = $email;
+        if ($status === 'approved') $people[$key]['approved'] += $days;
+        else                        $people[$key]['pending']  += $days;
+        if (!$exact) $people[$key]['exact'] = false;
+        $people[$key]['apps'][] = ['id' => $appId, 'role' => $role,
+                                   'status' => $status, 'days' => $days, 'exact' => $exact];
+    };
+
+    try {
+        $st = getDB()->prepare(
+            "SELECT id, applicant_name, applicant_email, collaborator_name,
+                    has_collaborator, status, days_requested, days_approved
+             FROM collab_grant_applications
+             WHERE school_year=? AND status IN ('approved','pending')");
+        $st->execute([$year]);
+        $rows = $st->fetchAll();
+    } catch (Exception $e) {
+        error_log('cgDaysLedger: ' . $e->getMessage());
+        return $cache[$year] = [];
+    }
+
+    $byName = null;   // read lazily: most loads never need it
+
+    foreach ($rows as $r) {
+        $days = cgEffectiveDays($r);
+        if ($days < 1) continue;
+
+        $email = strtolower(trim((string)$r['applicant_email']));
+        $lName = trim((string)$r['applicant_name']);
+        $add($email !== '' ? 'e:' . $email : 'n:' . cgNameKey($lName),
+             $lName, $email, $r['status'], $days, (int)$r['id'], 'lead', true);
+
+        // 'has_collaborator' is what the review panel reads, so the ledger reads
+        // it too: a name left behind after someone switched back to "not yet"
+        // must not charge three days to a teacher the panel calls None identified.
+        $cName = trim((string)$r['collaborator_name']);
+        if ($cName === '' || empty($r['has_collaborator'])) continue;
+
+        // Matched by name, so never exact — the panel shows this as approximate.
+        $k = cgNameKey($cName);
+        if ($byName === null) $byName = cgContactsByName();
+        if ($k !== '' && isset($byName[$k]) && !$byName[$k]['ambiguous']) {
+            $cEmail = strtolower(trim($byName[$k]['email']));
+            $add('e:' . $cEmail, $byName[$k]['name'], $cEmail,
+                 $r['status'], $days, (int)$r['id'], 'collaborator', false);
+        } else {
+            $add('n:' . $k, $cName, '', $r['status'], $days, (int)$r['id'], 'collaborator', false);
+        }
+    }
+
+    foreach ($people as $k => $p) {
+        $people[$k]['used'] = $p['approved'] + $p['pending'];
+        $people[$k]['left'] = max(0, CG_DAY_CAP - $p['approved'] - $p['pending']);
+        $people[$k]['over'] = ($p['approved'] + $p['pending']) > CG_DAY_CAP;
+    }
+
+    uasort($people, function ($a, $b) {
+        return [$b['used'], strtolower($a['name'])] <=> [$a['used'], strtolower($b['name'])];
+    });
+
+    return $cache[$year] = $people;
+}
+
+/** One person's standing for the year, whether or not they appear in the ledger. */
+function cgPersonDays(int $year, string $email, string $name = ''): array {
+    $ledger = cgDaysLedger($year);
+    $email  = strtolower(trim($email));
+    if ($email !== '' && isset($ledger['e:' . $email])) return $ledger['e:' . $email];
+
+    $nk = $name === '' ? '' : cgNameKey($name);
+    if ($nk !== '') {
+        $byName = cgContactsByName();
+        if (isset($byName[$nk]) && !$byName[$nk]['ambiguous']) {
+            $ck = 'e:' . strtolower(trim($byName[$nk]['email']));
+            if (isset($ledger[$ck])) return $ledger[$ck];
+        }
+        if (isset($ledger['n:' . $nk])) return $ledger['n:' . $nk];
+    }
+    return ['key' => $email !== '' ? 'e:' . $email : 'n:' . $nk,
+            'name' => $name, 'email' => $email, 'approved' => 0, 'pending' => 0,
+            'used' => 0, 'left' => CG_DAY_CAP, 'over' => false, 'exact' => true, 'apps' => []];
+}
+
+/**
+ * The day count for an email, naming both figures when they disagree.
+ *
+ * An applicant can raise the number of dates after approval, so "3 days" and
+ * "1 day granted" can both be true at once; printing one alone misleads whoever
+ * is reading.
+ */
+function cgDaysLine(array $app): string {
+    $asked   = (int)$app['days_requested'];
+    $granted = $app['days_approved'] ?? null;
+    $word    = function (int $n) { return $n . ' ' . ($n === 1 ? 'day' : 'days'); };
+    if ($granted === null || (int)$granted === $asked) return $word($asked);
+    return $word($asked) . ' now listed, ' . (int)$granted . ' granted';
+}
+
+/** "2 of 3 days used — 1 approved, 1 awaiting a decision". */
+function cgDaysSentence(array $p): string {
+    $bits = [];
+    if ($p['approved']) $bits[] = $p['approved'] . ' approved';
+    if ($p['pending'])  $bits[] = $p['pending'] . ' awaiting a decision';
+    $s = $p['used'] . ' of ' . CG_DAY_CAP . ' ' . (CG_DAY_CAP === 1 ? 'day' : 'days') . ' used';
+    if ($bits) $s .= ' — ' . implode(', ', $bits);
+    return $s;
 }

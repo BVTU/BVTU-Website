@@ -163,6 +163,11 @@ if ($app) {
 }
 $history = $app ? cgEditHistory((int)$app['id']) : [];
 
+// Their standing for the year, so "can I add a day?" has an answer on the page
+// they'd add it on. Only ever their own — this page is reached with their token
+// or their login, never by typing someone else's address.
+$standing = $app ? cgPersonDays((int)$app['school_year'], $app['applicant_email'], $app['applicant_name']) : null;
+
 $statusLabel = [
     'pending'    => ['Pending review', '#fffbeb', '#fde68a', '#92400e'],
     'approved'   => ['Approved',       '#f0f9f3', '#b3d9bf', '#1a5c2e'],
@@ -454,6 +459,26 @@ function cgOld(string $key, $fallback) {
       </div>
 
       <div class="cge-section">Release days</div>
+
+      <?php if ($standing): ?>
+        <p style="font-size:.88rem;color:var(--gray-600);background:var(--off-white);
+                  border:1px solid var(--border);border-radius:8px;padding:.7rem .85rem;
+                  margin:0 0 1rem;line-height:1.7;">
+          You've used <strong><?= (int)$standing['used'] ?> of your <?= CG_DAY_CAP ?> days</strong>
+          this school year<?= $standing['pending'] ? ', counting ' . (int)$standing['pending'] . ' still awaiting a decision' : '' ?>.
+          <?php if ($standing['left'] > 0): ?>
+            You have <?= (int)$standing['left'] ?> <?= (int)$standing['left'] === 1 ? 'day' : 'days' ?> left.
+          <?php else: ?>
+            Adding another day would put you over the limit — you can still ask, and
+            the BVTU Executive will decide.
+          <?php endif; ?>
+          <?php if (trim((string)$app['collaborator_name']) !== '' && !empty($app['has_collaborator'])): ?>
+            Days on this grant count for both you and
+            <?= htmlspecialchars($app['collaborator_name']) ?>, since you're both
+            released on the same days.
+          <?php endif; ?>
+        </p>
+      <?php endif; ?>
 
       <div class="cge-group">
         <label>Your release day(s)

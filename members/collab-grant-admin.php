@@ -27,7 +27,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
         'ID', 'Status', 'Submitted',
         'Applicant Name', 'Email', 'School', 'Position', 'Time in Role',
         'Has Collaborator', 'Collaborator Name', 'Collaborator School', 'Needs Partner Help',
-        'Days Requested', 'Proposed Dates',
+        'Days Requested', 'Days Granted', 'Proposed Dates',
         'Collaboration Description', 'Goals',
         'Admin Notes', 'Reviewed By', 'Reviewed At',
         'Atrieve Logged', 'Atrieve Confirmed', 'Atrieve Confirmed By', 'Invoice Number',
@@ -52,6 +52,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
             $a['collaborator_school'],
             $a['needs_partner'] ? 'Yes' : 'No',
             $a['days_requested'],
+            ($a['days_approved'] ?? null) !== null ? (int)$a['days_approved'] : '',
             $pdStr,
             $a['collaboration_desc'],
             $a['goals'],
@@ -64,6 +65,33 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
             $a['invoice_number'] ?? '',
             ($a['release_cost'] ?? null) !== null
                 ? number_format((float)$a['release_cost'], 2, '.', '') : '',
+        ]));
+    }
+    fclose($out);
+    exit;
+}
+
+// ── Days-per-person export ────────────────────────────────────────────────
+if (isset($_GET['export']) && $_GET['export'] === 'days') {
+    header('Content-Type: text/csv; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="collab-days-' . $year . '-' . ($year+1) . '.csv"');
+    require_once __DIR__ . '/xlsx-writer.php';   // csvSafeText(), shared guard
+    $out = fopen('php://output', 'w');
+    fputcsv($out, ['Teacher', 'Email', 'Days Approved', 'Days Pending', 'Days Used',
+                   'Days Left', 'Over Limit', 'Took Part As', 'Identified By']);
+    foreach (cgDaysLedger($year) as $lp) {
+        $roles = array_unique(array_column($lp['apps'], 'role'));
+        sort($roles);
+        fputcsv($out, array_map('csvSafeText', [
+            $lp['name'],
+            $lp['email'],
+            $lp['approved'],
+            $lp['pending'],
+            $lp['used'],
+            $lp['over'] ? 0 : $lp['left'],
+            $lp['over'] ? 'Yes, by ' . ($lp['used'] - CG_DAY_CAP) : 'No',
+            implode(' + ', $roles),
+            $lp['exact'] ? 'Email address' : 'Includes days matched by name — approximate',
         ]));
     }
     fclose($out);
@@ -96,7 +124,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_id'])
     $action = $_POST['action'];
     $notes  = trim($_POST['admin_notes'] ?? '');
 
-    cgUpdateStatus($id, $action, $member['email'], $notes);
+    // Blank or absent falls back to what was asked for, so the button still works
+    // without touching the box.
+    $grantDays = null;
+    if ($action === 'approved') {
+        $raw       = trim((string)($_POST['days_approved'] ?? ''));
+        $asked     = cgGetApplication($id);
+        $grantDays = $raw === '' ? (int)($asked['days_requested'] ?? 1) : (int)$raw;
+        $grantDays = max(1, min(CG_DAY_CAP, $grantDays));
+    }
+    cgUpdateStatus($id, $action, $member['email'], $notes, $grantDays);
 
     if ($action === 'approved') {
         $target = cgGetApplication($id);
@@ -131,10 +168,8 @@ $statusColour = [
     'waitlisted' => ['bg' => '#eff6ff', 'border' => '#bfdbfe', 'text' => '#1e40af', 'label' => 'Waitlisted'],
 ];
 
-$totalDaysApproved = array_sum(array_column(
-    array_filter($apps, fn($a) => $a['status'] === 'approved'),
-    'days_requested'
-));
+$totalDaysApproved = array_sum(array_map('cgEffectiveDays',
+    array_filter($apps, fn($a) => $a['status'] === 'approved')));
 $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'));
 ?>
 <!DOCTYPE html>
@@ -463,6 +498,10 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Export CSV
       </a>
+      <a href="?export=days&year=<?= $year ?>" class="export-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Days per person
+      </a>
       <?php if ($view === 'read'): ?>
       <button onclick="window.print()" class="export-btn" style="cursor:pointer;border:1.5px solid var(--border);">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
@@ -516,6 +555,78 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
       approved grant<?= ($rc['approved'] - $rc['costed']) === 1 ? ' has' : 's have' ?>
       no release cost recorded, so the total above is what is known so far, not the year's full cost.
     </p>
+    <?php endif; ?>
+
+    <?php // Who has spent what, for the three-day cap and for the FAQ's promise
+          // that teachers who haven't used the fund get priority.
+          // Only people who have spent a day appear, so there is no "never used"
+          // count to take from here — that shows per application instead, where
+          // the person being considered is known.
+          $ledger = cgDaysLedger($year);
+          $anyApprox = (bool)array_filter($ledger, fn($lp) => !$lp['exact']);
+    ?>
+    <?php if ($ledger): ?>
+    <details style="margin-bottom:1.75rem;" <?= $view === 'read' ? 'open' : '' ?>>
+      <summary style="cursor:pointer;font-weight:700;color:var(--primary);font-size:.95rem;
+                      padding:.6rem 0;">
+        Days used by person — <?= count($ledger) ?> <?= count($ledger) === 1 ? 'teacher' : 'teachers' ?>
+        this year
+      </summary>
+      <div style="background:var(--white);border:1.5px solid var(--border);border-radius:10px;
+                  padding:1rem;margin-top:.5rem;overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:.86rem;">
+          <thead>
+            <tr style="text-align:left;color:var(--gray-500);font-size:.78rem;
+                       text-transform:uppercase;letter-spacing:.04em;">
+              <th style="padding:.4rem .5rem;">Teacher</th>
+              <th style="padding:.4rem .5rem;">Approved</th>
+              <th style="padding:.4rem .5rem;">Pending</th>
+              <th style="padding:.4rem .5rem;">Used</th>
+              <th style="padding:.4rem .5rem;">Left</th>
+              <th style="padding:.4rem .5rem;">As</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($ledger as $lp): ?>
+              <?php
+                $roles = array_unique(array_column($lp['apps'], 'role'));
+                sort($roles);
+              ?>
+              <tr style="border-top:1px solid var(--border);">
+                <td style="padding:.45rem .5rem;">
+                  <strong><?= htmlspecialchars($lp['name']) ?></strong>
+                  <?php if ($lp['email']): ?>
+                    <span style="color:var(--gray-500);">· <?= htmlspecialchars($lp['email']) ?></span>
+                  <?php endif; ?>
+                  <?php if (!$lp['exact']): ?>
+                    <span style="color:var(--gray-500);">· includes a name match</span>
+                  <?php endif; ?>
+                </td>
+                <td style="padding:.45rem .5rem;"><?= (int)$lp['approved'] ?></td>
+                <td style="padding:.45rem .5rem;"><?= (int)$lp['pending'] ?: '—' ?></td>
+                <td style="padding:.45rem .5rem;font-weight:700;"><?= (int)$lp['used'] ?></td>
+                <td style="padding:.45rem .5rem;<?= $lp['over'] ? 'color:#991b1b;font-weight:700;' : '' ?>">
+                  <?= $lp['over'] ? 'over by ' . ($lp['used'] - CG_DAY_CAP) : (int)$lp['left'] ?>
+                </td>
+                <td style="padding:.45rem .5rem;color:var(--gray-500);">
+                  <?= htmlspecialchars(implode(' + ', $roles)) ?>
+                </td>
+              </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+        <p style="font-size:.8rem;color:var(--gray-500);line-height:1.7;margin:.9rem 0 0;">
+          Each application spends its days twice — once for the lead and once for the
+          collaborator, who books their own absence for the same days.
+          <?php if ($anyApprox): ?>
+            Rows marked approximate include days from an application where the person
+            was named as a collaborator; collaborators are typed names with no email
+            address, so those are matched by name and may be wrong.
+          <?php endif; ?>
+          Anyone who has applied for nothing this year does not appear here at all.
+        </p>
+      </div>
+    </details>
     <?php endif; ?>
 
     <?php if (empty($apps)): ?>
@@ -712,6 +823,68 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
                 Internal notes (optional)
                 <textarea name="admin_notes" rows="2" placeholder="Any notes for your records…"><?= htmlspecialchars($app['admin_notes'] ?? '') ?></textarea>
               </label>
+              <?php
+                // Both people on an application spend days, so the lead's standing
+                // and the collaborator's are both worth seeing before deciding.
+                $standings = [['Applicant', cgPersonDays($year, $app['applicant_email'], $app['applicant_name']), $app['applicant_name']]];
+                if (trim((string)$app['collaborator_name']) !== '' && !empty($app['has_collaborator'])) {
+                    $standings[] = ['Collaborator', cgPersonDays($year, '', $app['collaborator_name']), $app['collaborator_name']];
+                }
+              ?>
+              <div style="background:var(--off-white);border:1px solid var(--border);border-radius:8px;
+                          padding:.7rem .85rem;margin:.75rem 0;font-size:.85rem;">
+                <?php foreach ($standings as [$role, $p, $who]): ?>
+                  <div style="margin-bottom:.25rem;">
+                    <strong><?= htmlspecialchars($who) ?></strong>
+                    <span style="color:var(--gray-500);">(<?= $role ?>)</span> —
+                    <?= htmlspecialchars(cgDaysSentence($p)) ?>,
+                    <?php if ($p['over']): ?>
+                      <strong style="color:#991b1b;">over the <?= CG_DAY_CAP ?>-day limit</strong>
+                    <?php else: ?>
+                      <?= $p['left'] ?> left
+                    <?php endif; ?>
+                    <?php if (!$p['exact']): ?>
+                      <span title="Part of this total comes from an application where the person was named as a collaborator. Collaborators are typed names with no email address, so those days are matched by name and could belong to someone else."
+                            style="color:var(--gray-500);">· includes days matched by name</span>
+                    <?php endif; ?>
+                    <?php if ($p['used'] === 0): ?>
+                      <span style="color:#1a5c2e;font-weight:600;">· hasn't used the fund</span>
+                    <?php endif; ?>
+                  </div>
+                <?php endforeach; ?>
+                <div style="color:var(--gray-500);font-size:.8rem;margin-top:.35rem;">
+                  <?php if (in_array($app['status'], ['approved', 'pending'], true)): ?>
+                    This application is included in those totals.
+                  <?php else: ?>
+                    This application is <?= htmlspecialchars($app['status']) ?>, so its days
+                    are not counted above.
+                  <?php endif; ?>
+                </div>
+              </div>
+
+              <?php if ($app['status'] === 'approved' && ($app['days_approved'] ?? null) !== null
+                        && (int)$app['days_approved'] !== (int)$app['days_requested']): ?>
+                <div style="font-size:.84rem;color:#92400e;background:#fffbeb;border:1px solid #fde68a;
+                            border-radius:8px;padding:.5rem .7rem;margin-bottom:.6rem;">
+                  <?= (int)$app['days_approved'] ?> <?= (int)$app['days_approved'] === 1 ? 'day' : 'days' ?>
+                  granted, <?= (int)$app['days_requested'] ?> now requested.
+                </div>
+              <?php endif; ?>
+
+              <label style="font-size:.85rem;font-weight:600;color:var(--gray-600);
+                            display:block;margin-bottom:.6rem;max-width:230px;">
+                Days to grant
+                <input type="number" name="days_approved" min="1" max="<?= CG_DAY_CAP ?>" step="1"
+                       value="<?= (int)(($app['days_approved'] ?? null) !== null
+                                        ? $app['days_approved'] : $app['days_requested']) ?>"
+                       style="width:100%;border:1px solid var(--border);border-radius:7px;
+                              padding:.45rem .6rem;font-size:.9rem;font-family:inherit;
+                              box-sizing:border-box;margin-top:.25rem;">
+                <span style="display:block;font-weight:400;font-size:.78rem;color:var(--gray-500);margin-top:.2rem;">
+                  Used when you approve. Applies to both teachers.
+                </span>
+              </label>
+
               <div class="app-action-btns">
                 <button type="submit" name="action" value="approved"   class="btn btn-approve">✓ Approve &amp; notify applicant</button>
                 <button type="submit" name="action" value="waitlisted" class="btn btn-waitlist">Waitlist</button>

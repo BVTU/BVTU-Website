@@ -268,6 +268,14 @@ if (execIsAdmin($myEmail) && empty($myExecRoleSlugs)) {
       <?php if ($myGrants): ?>
       <div class="doc-section" style="margin-bottom:1.5rem;">
         <h2>My Collaboration Grant<?= count($myGrants) > 1 ? 's' : '' ?></h2>
+        <?php $cgStanding = cgPersonDays(cgCurrentYear(), $myEmail, $member['name']); ?>
+        <p style="font-size:.88rem;color:var(--gray-600);margin:-.3rem 0 .8rem;line-height:1.6;">
+          <?= (int)$cgStanding['used'] ?> of <?= CG_DAY_CAP ?> release days used this school year<?php
+            ?><?= $cgStanding['pending'] ? ', including ' . (int)$cgStanding['pending'] . ' awaiting a decision' : '' ?>.
+          <?php if ($cgStanding['left'] > 0): ?>
+            <?= (int)$cgStanding['left'] ?> left.
+          <?php endif; ?>
+        </p>
         <div class="doc-list">
           <?php foreach ($myGrants as $g):
             $gLabel = ['pending' => 'Pending review', 'approved' => 'Approved',
