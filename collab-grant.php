@@ -692,6 +692,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
           <div class="grant-success">
             <h3>✓ Application received — thank you!</h3>
             <p>We've sent a confirmation to your email address. We'll be in touch once your application has been reviewed. If you have any questions in the meantime, reach out at <a href="mailto:lp54@bctf.ca">lp54@bctf.ca</a>.</p>
+            <p style="margin-bottom:0;">Need to change something later — a different date, an extra day? That confirmation email has a link that reopens your application, so keep it handy.</p>
           </div>
 
         <?php else: ?>

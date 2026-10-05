@@ -9,13 +9,6 @@ requireLogin();
 
 $member = getMember();
 
-// Access check: PROD_ADMIN_EMAIL (always exec) or lp54@bctf.ca fallback
-function cgIsAdmin(string $email): bool {
-    $email = strtolower(trim($email));
-    if (defined('PROD_ADMIN_EMAIL') && $email === strtolower(trim(PROD_ADMIN_EMAIL))) return true;
-    return $email === 'lp54@bctf.ca';
-}
-
 if (!cgIsAdmin($member['email'])) {
     header('Location: dashboard.php');
     exit;
@@ -81,6 +74,7 @@ $notice = '';
 
 // ── Status updates ────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['app_id'])) {
+    csrfCheck();
     $id     = (int)$_POST['app_id'];
     $action = $_POST['action'];
     $notes  = trim($_POST['admin_notes'] ?? '');
@@ -102,6 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['app
 
 // ── Follow-through: Atrieve and the district invoice ──────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'fulfilment') {
+    csrfCheck();
     $id = (int)($_POST['app_id'] ?? 0);
     // The box is always submitted, so its contents are always applied: a figure
     // records one, an emptied box clears it back to "not recorded".
@@ -662,7 +657,20 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
               <div class="app-text-block" style="font-style:italic;"><?= htmlspecialchars($app['admin_notes']) ?></div>
             <?php endif; ?>
 
+            <p style="margin:1.25rem 0 0;font-size:.85rem;">
+              <a href="../collab-grant-edit.php?id=<?= (int)$app['id'] ?>"
+                 style="font-weight:600;">Edit this application</a>
+              <span style="color:var(--gray-500);">
+                — change the dates, days or details on the applicant's behalf.
+                <?php if (!empty($app['edited_at'])): ?>
+                  Last changed <?= date('M j, Y', strtotime($app['edited_at'])) ?>
+                  by <?= htmlspecialchars($app['edited_by']) ?>.
+                <?php endif; ?>
+              </span>
+            </p>
+
             <form class="app-action-form" method="post">
+              <?= csrfField() ?>
               <input type="hidden" name="app_id" value="<?= $app['id'] ?>">
               <label style="font-size:.85rem;font-weight:600;color:var(--gray-600);">
                 Internal notes (optional)
@@ -682,6 +690,7 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
                   // and no invoice to record, and an empty box invites guessing. ?>
             <?php if ($app['status'] === 'approved'): ?>
             <form class="app-action-form fulfil" method="post" style="margin-top:.6rem;">
+              <?= csrfField() ?>
               <input type="hidden" name="app_id" value="<?= $app['id'] ?>">
               <input type="hidden" name="action" value="fulfilment">
               <div style="font-size:.78rem;font-weight:800;text-transform:uppercase;

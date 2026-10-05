@@ -97,6 +97,7 @@ function cgSubmitApplication(array $d): int {
 }
 
 function cgGetApplications(int $year = 0, string $status = ''): array {
+    cgEnsureEditSupport();
     if (!$year) $year = cgCurrentYear();
     $sql    = "SELECT * FROM collab_grant_applications WHERE school_year=?";
     $params = [$year];
@@ -108,6 +109,7 @@ function cgGetApplications(int $year = 0, string $status = ''): array {
 }
 
 function cgGetApplication(int $id): ?array {
+    cgEnsureEditSupport();
     $s = getDB()->prepare("SELECT * FROM collab_grant_applications WHERE id=?");
     $s->execute([$id]);
     return $s->fetch() ?: null;
@@ -143,9 +145,25 @@ function cgSendApprovalEmail(array $app): void {
           . "─── NEXT STEP: BOOKING YOUR ABSENCE IN ATRIEVE ────────────────────\n\n"
           . emailTplBlock('collab_approved', 'booking', $tv) . "\n\n"
           . "─────────────────────────────────────────────────────────────────────\n\n"
-          . emailTplBlock('collab_approved', 'signoff', $tv) . "\n";
+          . emailTplBlock('collab_approved', 'signoff', $tv) . "\n"
+          . cgEditFooter((int)$app['id']);
 
     siteMail($email, $subject, $body);
+}
+
+/**
+ * The "change your application" link, appended in code rather than kept in the
+ * editable template: the wording in email-templates.php is prose the president
+ * can rewrite, and a URL quietly broken by an edit there would strand people.
+ */
+function cgEditFooter(int $id): string {
+    return "\n─────────────────────────────────────────────────────────────────────\n"
+         . "Need to change something — a different date, an extra day, a new\n"
+         . "collaborator? You can edit your application yourself here:\n\n"
+         . cgEditUrl($id) . "\n\n"
+         . "That link is the key to your application — please don't forward this\n"
+         . "email. If you need to send someone the booking details, copy the text\n"
+         . "above instead.\n";
 }
 
 // Sent to lp54@bctf.ca when a new application is submitted
@@ -197,7 +215,7 @@ function cgSendSubmissionConfirmation(array $app): void {
     $email   = $app['applicant_email'];
     $tv      = ['{{name}}' => $name];
     $subject = emailTplSubject('collab_received', $tv);
-    $body    = emailTplBlock('collab_received', 'body', $tv);
+    $body    = emailTplBlock('collab_received', 'body', $tv) . "\n" . cgEditFooter((int)$app['id']);
 
     siteMail($email, $subject, $body);
 }
@@ -282,4 +300,253 @@ function cgYearReleaseCost(int $year): array {
         $out['error'] = true;
     }
     return $out;
+}
+
+// ── Editing a submitted application ──────────────────────────────────────────
+//
+// Teachers could not reach their own application once it was sent, so a date
+// change meant an email and someone retyping it. They can now, and so can the
+// president — but a collaboration grant carries release days and money, so an
+// edit is never silent: every change is recorded, and a change after approval
+// says so and tells the president.
+
+/** The fields an applicant may change. Email is not among them: it is how the
+ *  application is identified, and changing it would hand the record to someone
+ *  else. The president can change it from the admin screen. */
+const CG_EDITABLE = [
+    'applicant_name'      => 'Name',
+    'school'              => 'School',
+    'position'            => 'Position',
+    'years_in_role'       => 'Years in role',
+    'has_collaborator'    => 'Has a collaborator',
+    'collaborator_name'   => 'Collaborator',
+    'collaborator_school' => 'Collaborator school',
+    'needs_partner'       => 'Looking for a partner',
+    'collaboration_desc'  => 'What the collaboration involves',
+    'goals'               => 'Goals',
+    'proposed_dates'      => 'Proposed dates',
+    'days_requested'      => 'Days requested',
+];
+
+/** Changes that alter what was approved, as opposed to fixing a typo. */
+const CG_MATERIAL = ['days_requested', 'proposed_dates', 'collaborator_name'];
+
+function cgEnsureEditSupport(): void {
+    static $done = false;
+    if ($done) return;
+    $done = true;
+    $db = getDB();
+
+    foreach ([
+        'edit_token'       => "VARCHAR(64) NOT NULL DEFAULT ''",
+        'edited_at'        => 'DATETIME DEFAULT NULL',
+        'edited_by'        => "VARCHAR(255) NOT NULL DEFAULT ''",
+        'changed_after_ok' => 'TINYINT(1) NOT NULL DEFAULT 0',
+    ] as $col => $type) {
+        try {
+            $db->query("SELECT `$col` FROM collab_grant_applications LIMIT 1");
+        } catch (\PDOException $e) {
+            // As in cgEnsureTable(): a host whose DB user cannot ALTER should
+            // lose the new column, not the page.
+            try {
+                $db->exec("ALTER TABLE collab_grant_applications ADD COLUMN `$col` $type");
+            } catch (\Exception $e2) {}
+        }
+    }
+
+    // One row per edit, holding what actually changed. A grant that quietly
+    // moved between approval and invoicing is near impossible to reconstruct a
+    // year later when the district queries the bill.
+    try {
+    $db->exec("CREATE TABLE IF NOT EXISTS collab_grant_edits (
+        id          INT AUTO_INCREMENT PRIMARY KEY,
+        app_id      INT NOT NULL,
+        changed_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+        changed_by  VARCHAR(255) NOT NULL DEFAULT '',
+        by_admin    TINYINT(1) NOT NULL DEFAULT 0,
+        changes     TEXT,
+        INDEX idx_app (app_id, changed_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch (\Exception $e) {}
+}
+
+/** The application's edit token, created on first use. */
+function cgEditToken(int $id): string {
+    cgEnsureEditSupport();
+    $db = getDB();
+    $s  = $db->prepare("SELECT edit_token FROM collab_grant_applications WHERE id=?");
+    $s->execute([$id]);
+    $row = $s->fetch();
+    if (!$row) return '';
+    if (($row['edit_token'] ?? '') !== '') return $row['edit_token'];
+
+    $t = bin2hex(random_bytes(24));
+    $db->prepare("UPDATE collab_grant_applications SET edit_token=? WHERE id=?")->execute([$t, $id]);
+    return $t;
+}
+
+/** The application a token belongs to, or null. */
+function cgAppByToken(string $token): ?array {
+    cgEnsureEditSupport();
+    $token = trim($token);
+    // Length-checked first so a short or empty token cannot match a row whose
+    // column is still at its '' default.
+    if (strlen($token) !== 48) return null;
+    $s = getDB()->prepare("SELECT * FROM collab_grant_applications WHERE edit_token=? LIMIT 1");
+    $s->execute([$token]);
+    return $s->fetch() ?: null;
+}
+
+/** Applications belonging to an email address, newest first. */
+function cgAppsForEmail(string $email): array {
+    cgEnsureEditSupport();
+    $e = strtolower(trim($email));
+    if ($e === '') return [];
+    // idx_email covers this, and the column's collation is case-insensitive, so
+    // the comparison does not need LOWER() on either side.
+    $st = getDB()->prepare(
+        "SELECT * FROM collab_grant_applications WHERE applicant_email=? ORDER BY submitted_at DESC");
+    $st->execute([$e]);
+    return $st->fetchAll();
+}
+
+/**
+ * Locked to the applicant once the district paperwork exists.
+ *
+ * After Atrieve is confirmed or an invoice number is recorded, the application
+ * is the record the district's bill is matched against. Changing the dates then
+ * makes the two disagree, and the invoice is the one that cannot be edited.
+ */
+function cgIsLockedToApplicant(array $app): bool {
+    return !empty($app['atrieve_confirmed']) || trim((string)($app['invoice_number'] ?? '')) !== '';
+}
+
+/**
+ * Apply an edit. Returns ['changed' => [field => [old, new]], 'material' => bool].
+ *
+ * Writes nothing and records nothing when nothing actually differs — resaving an
+ * unchanged form should not produce an audit entry or an email.
+ */
+function cgApplyEdit(int $id, array $values, string $actor, bool $isAdmin): array {
+    cgEnsureEditSupport();
+    $app = cgGetApplication($id);
+    if (!$app) return ['changed' => [], 'material' => false];
+
+    $changed = [];
+    foreach (CG_EDITABLE as $col => $label) {
+        if (!array_key_exists($col, $values)) continue;
+        $new = $values[$col];
+        $new = in_array($col, ['has_collaborator', 'needs_partner'], true) ? (int)(bool)$new
+             : ($col === 'days_requested' ? (int)$new : trim((string)$new));
+        $old = $app[$col];
+        $oldCmp = in_array($col, ['has_collaborator', 'needs_partner'], true) ? (int)$old
+                : ($col === 'days_requested' ? (int)$old : trim((string)$old));
+        if ($oldCmp === $new) continue;
+        $changed[$col] = [$oldCmp, $new];
+    }
+    if (!$changed) return ['changed' => [], 'material' => false];
+
+    $sets = [];
+    $args = [];
+    foreach ($changed as $col => $pair) { $sets[] = "`$col`=?"; $args[] = $pair[1]; }
+    $sets[] = 'edited_at=NOW()';
+    $sets[] = 'edited_by=?';  $args[] = $actor;
+
+    $material = (bool)array_intersect(array_keys($changed), CG_MATERIAL);
+    if ($material && ($app['status'] ?? '') === 'approved') {
+        $sets[] = 'changed_after_ok=1';
+    }
+    $args[] = $id;
+
+    getDB()->prepare("UPDATE collab_grant_applications SET " . implode(', ', $sets) . " WHERE id=?")
+           ->execute($args);
+
+    getDB()->prepare("INSERT INTO collab_grant_edits (app_id, changed_by, by_admin, changes) VALUES (?,?,?,?)")
+           ->execute([$id, $actor, $isAdmin ? 1 : 0, json_encode($changed, JSON_UNESCAPED_UNICODE)]);
+
+    return ['changed' => $changed, 'material' => $material];
+}
+
+function cgEditHistory(int $id): array {
+    cgEnsureEditSupport();
+    $s = getDB()->prepare("SELECT * FROM collab_grant_edits WHERE app_id=? ORDER BY changed_at DESC");
+    $s->execute([$id]);
+    return $s->fetchAll();
+}
+
+/** The president (and PROD_ADMIN_EMAIL, who is always exec). */
+function cgIsAdmin(string $email): bool {
+    $email = strtolower(trim($email));
+    if (defined('PROD_ADMIN_EMAIL') && $email === strtolower(trim(PROD_ADMIN_EMAIL))) return true;
+    return $email === 'lp54@bctf.ca';
+}
+
+/** Where an applicant goes to change their application. */
+function cgEditUrl(int $id): string {
+    $base = defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca';
+    return $base . '/collab-grant-edit.php?t=' . cgEditToken($id);
+}
+
+/** One readable line describing an edit, for the page and the email. */
+function cgDescribeChanges(array $changed): string {
+    $parts = [];
+    foreach ($changed as $col => $pair) {
+        $label = CG_EDITABLE[$col] ?? $col;
+        if ($col === 'proposed_dates') {
+            $parts[] = 'Dates: ' . cgDateList($pair[0]) . ' → ' . cgDateList($pair[1]);
+        } elseif (in_array($col, ['has_collaborator', 'needs_partner'], true)) {
+            $parts[] = $label . ': ' . ($pair[1] ? 'yes' : 'no');
+        } elseif (in_array($col, ['collaboration_desc', 'goals'], true)) {
+            // The long prose fields are not quoted in a summary line; the page
+            // shows the text itself.
+            $parts[] = $label . ' reworded';
+        } else {
+            $from = $pair[0] === '' ? '(blank)' : $pair[0];
+            $to   = $pair[1] === '' ? '(blank)' : $pair[1];
+            $parts[] = $label . ': ' . $from . ' → ' . $to;
+        }
+    }
+    return implode('; ', $parts);
+}
+
+/** A stored proposed_dates JSON value as readable dates. */
+function cgDateList($json): string {
+    $a = is_array($json) ? $json : json_decode((string)$json, true);
+    if (!is_array($a) || !$a) return 'none';
+    return implode(', ', array_map(function ($d) { return date('D M j', strtotime($d)); }, $a));
+}
+
+/**
+ * Tell the president an application changed.
+ *
+ * Sent for every applicant edit, not only edits after approval: a change to a
+ * pending application still arrives at the Executive meeting differently from
+ * the copy that was printed for it.
+ */
+function cgSendApplicantEditNotice(array $app, array $changed): void {
+    $body = 'Hi ' . $app['applicant_name'] . ",\n\n"
+          . "The BVTU has updated your Collaboration Grant application.\n\n"
+          . "What changed:\n  " . str_replace('; ', "\n  ", cgDescribeChanges($changed)) . "\n\n"
+          . 'Your release days are now: ' . cgDateList($app['proposed_dates'])
+          . ' (' . (int)$app['days_requested'] . ' '
+          . ((int)$app['days_requested'] === 1 ? 'day' : 'days') . ").\n\n"
+          . "If that isn't what you expected, reply to this email or write to\n"
+          . "lp54@bctf.ca and we'll put it right.\n\n"
+          . "Bulkley Valley Teachers' Union\n"
+          . cgEditFooter((int)$app['id']);
+    siteMail($app['applicant_email'], 'Your Collaboration Grant application was updated — BVTU', $body);
+}
+
+function cgSendEditNotification(array $app, array $changed, string $actor): void {
+    $after = ($app['status'] ?? '') === 'approved' ? ' (already approved)' : '';
+    $subject = 'Collaboration Grant changed — ' . $app['applicant_name'] . $after;
+    $body = $app['applicant_name'] . ' (' . $app['applicant_email'] . ') changed their '
+          . "Collaboration Grant application.\n\n"
+          . "What changed:\n  " . str_replace('; ', "\n  ", cgDescribeChanges($changed)) . "\n\n"
+          . 'Status: ' . ucfirst((string)$app['status']) . "\n"
+          . 'Release days now: ' . (int)$app['days_requested'] . "\n"
+          . 'Dates now: ' . cgDateList($app['proposed_dates']) . "\n\n"
+          . 'Review it: ' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca')
+          . '/members/collab-grant-admin.php' . "\n";
+    siteMail('lp54@bctf.ca', $subject, $body);
 }

@@ -4,6 +4,7 @@ require_once 'exp-db.php';
 require_once 'exec-db.php';
 require_once 'prod-db.php';
 require_once 'lp-db.php';   // lpCanReview/lpCanSign*/lpCountByStatus for the approvals entry
+require_once 'collab-grant-db.php';  // cgAppsForEmail() for "my grant applications"
 requireLogin();
 $member  = getMember();
 $welcome = isset($_GET['welcome']);
@@ -12,6 +13,12 @@ execEnsureTables();
 prodEnsureTables();
 
 $myEmail = strtolower(trim($member['email']));
+
+// Collaboration Grant applications carrying this member's address. The public
+// form takes the email as free text and needs no login, so a member only sees
+// the ones they happened to apply with — the emailed link is the general way in.
+$myGrants = [];
+try { $myGrants = cgAppsForEmail($myEmail); } catch (Exception $e) { $myGrants = []; }
 
 // ── Gather this member's roles for the dashboard badge display ────────────────
 // EC roles (official positions)
@@ -257,6 +264,28 @@ if (execIsAdmin($myEmail) && empty($myExecRoleSlugs)) {
           <?php endif; ?>
         </div>
       </div>
+
+      <?php if ($myGrants): ?>
+      <div class="doc-section" style="margin-bottom:1.5rem;">
+        <h2>My Collaboration Grant<?= count($myGrants) > 1 ? 's' : '' ?></h2>
+        <div class="doc-list">
+          <?php foreach ($myGrants as $g):
+            $gLabel = ['pending' => 'Pending review', 'approved' => 'Approved',
+                       'declined' => 'Declined', 'waitlisted' => 'Waitlisted'][$g['status']] ?? ucfirst($g['status']);
+            $gDates = json_decode($g['proposed_dates'] ?? '[]', true);
+            $gDates = is_array($gDates) ? $gDates : [];
+          ?>
+          <a href="../collab-grant-edit.php?id=<?= (int)$g['id'] ?>" class="doc-item">
+            <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg>
+            <?= (int)$g['school_year'] ?>–<?= ((int)$g['school_year'] + 1) % 100 ?>
+            · <?= $gLabel ?>
+            · <?= (int)$g['days_requested'] ?> <?= (int)$g['days_requested'] === 1 ? 'day' : 'days' ?>
+            <?php if ($gDates): ?>(<?= htmlspecialchars(implode(', ', array_map(fn($d) => date('M j', strtotime($d)), $gDates))) ?>)<?php endif; ?>
+          </a>
+          <?php endforeach; ?>
+        </div>
+      </div>
+      <?php endif; ?>
 
       <?php if (execIsAdmin($myEmail) || prodIsExec($myEmail)): ?>
       <div class="doc-section" style="margin-bottom:1.5rem;">
