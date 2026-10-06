@@ -78,7 +78,8 @@ if (isset($_GET['export']) && $_GET['export'] === 'days') {
     require_once __DIR__ . '/xlsx-writer.php';   // csvSafeText(), shared guard
     $out = fopen('php://output', 'w');
     fputcsv($out, ['Teacher', 'Email', 'Days Approved', 'Days Pending', 'Days Used',
-                   'Days Left', 'Over Limit', 'Took Part As', 'Identified By']);
+                   'Days Left', 'Over Limit', 'Took Part As', 'Identified By',
+                   'Yearly Cap']);
     foreach (cgDaysLedger($year) as $lp) {
         $roles = array_unique(array_column($lp['apps'], 'role'));
         sort($roles);
@@ -88,10 +89,11 @@ if (isset($_GET['export']) && $_GET['export'] === 'days') {
             $lp['approved'],
             $lp['pending'],
             $lp['used'],
-            $lp['over'] ? 0 : $lp['left'],
-            $lp['over'] ? 'Yes, by ' . ($lp['used'] - CG_DAY_CAP) : 'No',
+            empty($lp['capped']) ? 'n/a' : ($lp['over'] ? 0 : $lp['left']),
+            empty($lp['capped']) ? 'n/a' : ($lp['over'] ? 'Yes, by ' . ($lp['used'] - CG_DAY_CAP) : 'No'),
             implode(' + ', $roles),
             $lp['exact'] ? 'Email address' : 'Includes days matched by name — approximate',
+            empty($lp['capped']) ? 'Not capped — ' . $lp['exempt_reason'] : 'Applies',
         ]));
     }
     fclose($out);
@@ -114,6 +116,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'resen
         $notice = 'The email would not send. Check the mail settings and try again.';
     }
     $apps = cgGetApplications($year);
+}
+
+// ── Who the three-day cap applies to ──────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST'
+    && in_array($_POST['action'] ?? '', ['exempt_on', 'exempt_off'], true)) {
+    csrfCheck();
+    $person = ['key'   => (string)($_POST['person_key'] ?? ''),
+               'email' => (string)($_POST['person_email'] ?? ''),
+               'name'  => (string)($_POST['person_name'] ?? '')];
+    if (($_POST['action'] ?? '') === 'exempt_off') {
+        $notice = cgExemptRemove($person)
+            ? 'The three-day limit applies to ' . $person['name'] . ' again, from '
+              . $year . '–' . (($year + 1) % 100) . ' on.'
+            : 'Nothing changed — no exemption was on record for them.';
+    } else {
+        $reason = trim((string)($_POST['reason'] ?? ''));
+        if ($reason === '') $reason = 'Release costs the local nothing';
+        // Recorded against the year being viewed and carried forward, so marking
+        // someone today does not rewrite a year already closed off.
+        $notice = cgExemptAdd($person, $reason, $member['email'], $year)
+            ? $person['name'] . ' is not capped from ' . $year . '–' . (($year + 1) % 100)
+              . ' on — ' . $reason
+            : 'Could not save that. The problem has been logged.';
+    }
 }
 
 // ── Status updates ────────────────────────────────────────────────────────
@@ -584,6 +610,7 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
               <th style="padding:.4rem .5rem;">Used</th>
               <th style="padding:.4rem .5rem;">Left</th>
               <th style="padding:.4rem .5rem;">As</th>
+              <th style="padding:.4rem .5rem;">Yearly cap</th>
             </tr>
           </thead>
           <tbody>
@@ -606,10 +633,43 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
                 <td style="padding:.45rem .5rem;"><?= (int)$lp['pending'] ?: '—' ?></td>
                 <td style="padding:.45rem .5rem;font-weight:700;"><?= (int)$lp['used'] ?></td>
                 <td style="padding:.45rem .5rem;<?= $lp['over'] ? 'color:#991b1b;font-weight:700;' : '' ?>">
-                  <?= $lp['over'] ? 'over by ' . ($lp['used'] - CG_DAY_CAP) : (int)$lp['left'] ?>
+                  <?php if (empty($lp['capped'])): ?>
+                    <span style="color:var(--gray-500);">not capped</span>
+                  <?php else: ?>
+                    <?= $lp['over'] ? 'over by ' . ($lp['used'] - CG_DAY_CAP) : (int)$lp['left'] ?>
+                  <?php endif; ?>
                 </td>
                 <td style="padding:.45rem .5rem;color:var(--gray-500);">
                   <?= htmlspecialchars(implode(' + ', $roles)) ?>
+                </td>
+                <td style="padding:.45rem .5rem;">
+                  <form method="post" style="display:flex;gap:.3rem;align-items:center;">
+                    <?= csrfField() ?>
+                    <input type="hidden" name="person_key"   value="<?= htmlspecialchars($lp['key']) ?>">
+                    <input type="hidden" name="person_email" value="<?= htmlspecialchars($lp['email']) ?>">
+                    <input type="hidden" name="person_name"  value="<?= htmlspecialchars($lp['name']) ?>">
+                    <?php if (empty($lp['capped'])): ?>
+                      <span style="font-size:.8rem;color:var(--gray-500);"
+                            title="<?= htmlspecialchars($lp['exempt_reason']) ?>">
+                        <?= htmlspecialchars($lp['exempt_reason']) ?>
+                      </span>
+                      <button type="submit" name="action" value="exempt_off" class="btn"
+                              style="border:1px solid var(--border);background:#fff;color:var(--gray-600);
+                                     font-size:.75rem;padding:.2rem .5rem;white-space:nowrap;">
+                        Apply the cap
+                      </button>
+                    <?php else: ?>
+                      <input type="text" name="reason" maxlength="200"
+                             placeholder="why, e.g. district support teacher"
+                             style="width:190px;border:1px solid var(--border);border-radius:6px;
+                                    padding:.2rem .4rem;font-size:.78rem;font-family:inherit;">
+                      <button type="submit" name="action" value="exempt_on" class="btn"
+                              style="border:1px solid var(--border);background:#fff;color:var(--gray-600);
+                                     font-size:.75rem;padding:.2rem .5rem;white-space:nowrap;">
+                        Not capped
+                      </button>
+                    <?php endif; ?>
+                  </form>
                 </td>
               </tr>
             <?php endforeach; ?>
@@ -624,6 +684,8 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
             address, so those are matched by name and may be wrong.
           <?php endif; ?>
           Anyone who has applied for nothing this year does not appear here at all.
+          Mark someone "not capped" when releasing them costs the local nothing — a
+          district support teacher, say. Their days still show; the limit stops applying.
         </p>
       </div>
     </details>
@@ -837,8 +899,12 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
                   <div style="margin-bottom:.25rem;">
                     <strong><?= htmlspecialchars($who) ?></strong>
                     <span style="color:var(--gray-500);">(<?= $role ?>)</span> —
-                    <?= htmlspecialchars(cgDaysSentence($p)) ?>,
-                    <?php if ($p['over']): ?>
+                    <?= htmlspecialchars(cgDaysSentence($p)) ?><?php
+                      ?><?= empty($p['capped']) ? '' : ',' ?>
+                    <?php if (empty($p['capped'])): ?>
+                      <span style="color:var(--gray-500);">
+                        (<?= htmlspecialchars($p['exempt_reason']) ?>)</span>
+                    <?php elseif ($p['over']): ?>
                       <strong style="color:#991b1b;">over the <?= CG_DAY_CAP ?>-day limit</strong>
                     <?php else: ?>
                       <?= $p['left'] ?> left
@@ -881,7 +947,8 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
                               padding:.45rem .6rem;font-size:.9rem;font-family:inherit;
                               box-sizing:border-box;margin-top:.25rem;">
                 <span style="display:block;font-weight:400;font-size:.78rem;color:var(--gray-500);margin-top:.2rem;">
-                  Used when you approve. Applies to both teachers.
+                  Used when you approve. Applies to both teachers. One application
+                  carries at most <?= CG_DAY_CAP ?> days, whoever is on it.
                 </span>
               </label>
 

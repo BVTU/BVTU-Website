@@ -729,9 +729,7 @@ function cgDaysLedger(int $year): array {
     }
 
     foreach ($people as $k => $p) {
-        $people[$k]['used'] = $p['approved'] + $p['pending'];
-        $people[$k]['left'] = max(0, CG_DAY_CAP - $p['approved'] - $p['pending']);
-        $people[$k]['over'] = ($p['approved'] + $p['pending']) > CG_DAY_CAP;
+        $people[$k] = cgApplyCap($p, $year);
     }
 
     uasort($people, function ($a, $b) {
@@ -756,9 +754,9 @@ function cgPersonDays(int $year, string $email, string $name = ''): array {
         }
         if (isset($ledger['n:' . $nk])) return $ledger['n:' . $nk];
     }
-    return ['key' => $email !== '' ? 'e:' . $email : 'n:' . $nk,
+    return cgApplyCap(['key' => $email !== '' ? 'e:' . $email : 'n:' . $nk,
             'name' => $name, 'email' => $email, 'approved' => 0, 'pending' => 0,
-            'used' => 0, 'left' => CG_DAY_CAP, 'over' => false, 'exact' => true, 'apps' => []];
+            'exact' => true, 'apps' => []], $year);
 }
 
 /**
@@ -781,7 +779,144 @@ function cgDaysSentence(array $p): string {
     $bits = [];
     if ($p['approved']) $bits[] = $p['approved'] . ' approved';
     if ($p['pending'])  $bits[] = $p['pending'] . ' awaiting a decision';
-    $s = $p['used'] . ' of ' . CG_DAY_CAP . ' ' . (CG_DAY_CAP === 1 ? 'day' : 'days') . ' used';
+    $s = empty($p['capped'])
+        ? $p['used'] . ' ' . ($p['used'] === 1 ? 'day' : 'days') . ' this year, not capped'
+        : $p['used'] . ' of ' . CG_DAY_CAP . ' ' . (CG_DAY_CAP === 1 ? 'day' : 'days') . ' used';
     if ($bits) $s .= ' — ' . implode(', ', $bits);
     return $s;
+}
+
+// ── People the three-day cap doesn't apply to ────────────────────────────────
+//
+// The cap rations TTOC coverage the local pays for. Releasing a district support
+// teacher costs the local nothing, so there is nothing to ration and the cap is
+// meaningless for them — but their days are still worth counting, because
+// "supporting six days of collaboration this year" is a real and useful fact.
+// So an exempt person keeps their total and loses the limit, rather than
+// disappearing from the ledger.
+//
+// A list the president manages, not a name in the source: the next district
+// support teacher should cost a click, not a deploy.
+
+function cgExemptEnsure(): void {
+    static $done = false;
+    if ($done) return;
+    $done = true;
+    try {
+        getDB()->exec("CREATE TABLE IF NOT EXISTS collab_grant_exempt (
+            id         INT AUTO_INCREMENT PRIMARY KEY,
+            person_key VARCHAR(255) NOT NULL,
+            email      VARCHAR(255) NOT NULL DEFAULT '',
+            name_key   VARCHAR(255) NOT NULL DEFAULT '',
+            label      VARCHAR(255) NOT NULL DEFAULT '',
+            reason     VARCHAR(255) NOT NULL DEFAULT '',
+            from_year  INT NOT NULL DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            created_by VARCHAR(255) NOT NULL DEFAULT '',
+            UNIQUE KEY uniq_person (person_key),
+            INDEX idx_email (email),
+            INDEX idx_name (name_key)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch (Exception $e) {}
+}
+
+function cgExemptAll(bool $fresh = false): array {
+    static $rows = null;
+    if ($fresh) $rows = null;
+    if ($rows !== null) return $rows;
+    cgExemptEnsure();
+    try {
+        $rows = getDB()->query("SELECT * FROM collab_grant_exempt ORDER BY label")->fetchAll();
+    } catch (Exception $e) {
+        $rows = [];
+    }
+    return $rows;
+}
+
+/**
+ * The exemption covering a person, or null.
+ *
+ * Matched on the address and the comparable name as well as the stored key,
+ * because a collaborator keyed by name today becomes keyed by email the moment
+ * someone adds them to contacts — and an exemption that quietly stopped applying
+ * at that point would be worse than none.
+ */
+function cgExemptFor(array $person, int $year): ?array {
+    $key   = (string)($person['key'] ?? '');
+    $email = strtolower(trim((string)($person['email'] ?? '')));
+    $nk    = cgNameKey((string)($person['name'] ?? ''));
+    foreach (cgExemptAll() as $r) {
+        // Carried forward from the year it was recorded, never backwards.
+        if ((int)$r['from_year'] > $year) continue;
+        $rEmail = strtolower(trim((string)$r['email']));
+        if ($r['person_key'] === $key) return $r;
+        if ($email !== '' && $rEmail === $email) return $r;
+        // Two different addresses are two different people however alike the
+        // names read, so a shared name alone does not uncap anybody.
+        if ($nk !== '' && $r['name_key'] === $nk
+            && ($email === '' || $rEmail === '' || $rEmail === $email)) return $r;
+    }
+    return null;
+}
+
+function cgExemptAdd(array $person, string $reason, string $actor, int $fromYear = 0): bool {
+    cgExemptEnsure();
+    if (!$fromYear) $fromYear = cgCurrentYear();
+    try {
+        getDB()->prepare(
+            "INSERT INTO collab_grant_exempt
+                 (person_key, email, name_key, label, reason, from_year, created_by)
+             VALUES (?,?,?,?,?,?,?)
+             ON DUPLICATE KEY UPDATE reason=VALUES(reason), from_year=VALUES(from_year),
+                                     created_by=VALUES(created_by)"
+        )->execute([
+            (string)($person['key'] ?? ''),
+            strtolower(trim((string)($person['email'] ?? ''))),
+            cgNameKey((string)($person['name'] ?? '')),
+            (string)($person['name'] ?? ''),
+            trim($reason),
+            $fromYear,
+            $actor,
+        ]);
+        cgExemptAll(true);
+        return true;
+    } catch (Exception $e) {
+        error_log('cgExemptAdd: ' . $e->getMessage());
+        return false;
+    }
+}
+
+function cgExemptRemove(array $person): bool {
+    cgExemptEnsure();
+    $key   = (string)($person['key'] ?? '');
+    $email = strtolower(trim((string)($person['email'] ?? '')));
+    $nk    = cgNameKey((string)($person['name'] ?? ''));
+    try {
+        // Matched the same three ways cgExemptFor matches, or a row found by
+        // address would survive a button that reported success.
+        $st = getDB()->prepare(
+            "DELETE FROM collab_grant_exempt
+             WHERE person_key=?
+                OR (email    <> '' AND email    = ?)
+                OR (name_key <> '' AND name_key = ?)");
+        $st->execute([$key, $email, $nk]);
+        cgExemptAll(true);
+        return $st->rowCount() > 0;
+    } catch (Exception $e) {
+        error_log('cgExemptRemove: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/** Fill in a person's cap standing, exempt or not. Shared so the ledger and the
+ *  not-in-the-ledger default can never disagree about it. */
+function cgApplyCap(array $p, int $year): array {
+    $used  = (int)$p['approved'] + (int)$p['pending'];
+    $ex    = cgExemptFor($p, $year);
+    $p['used']   = $used;
+    $p['capped'] = ($ex === null);
+    $p['exempt_reason'] = $ex === null ? '' : (string)$ex['reason'];
+    $p['left'] = $ex === null ? max(0, CG_DAY_CAP - $used) : 0;
+    $p['over'] = $ex === null ? $used > CG_DAY_CAP : false;
+    return $p;
 }
