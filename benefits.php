@@ -111,6 +111,12 @@ $member   = $loggedIn ? getMember() : null;
     }
 
     /* ── Section sub-headers ─────────────────────────────────────── */
+    /*
+     * Each section is a <details>, so the page can be scanned as a list of
+     * headings rather than scrolled end to end. Native rather than scripted:
+     * the keyboard, screen readers and the browser's own find-in-page all
+     * understand <details> without anything being wired up for them.
+     */
     .ben-section { margin-bottom: 2rem; }
     .ben-section-head {
       display: flex;
@@ -123,6 +129,56 @@ $member   = $loggedIn ? getMember() : null;
       padding-bottom: .5rem;
       border-bottom: 2px solid var(--accent);
     }
+    summary.ben-section-head {
+      cursor: pointer;
+      list-style: none;           /* the default triangle, replaced below */
+      margin-bottom: 0;           /* closed: no gap under the rule */
+      user-select: none;
+    }
+    summary.ben-section-head::-webkit-details-marker { display: none; }
+    .ben-section[open] > summary.ben-section-head { margin-bottom: .9rem; }
+    summary.ben-section-head:hover,
+    summary.ben-section-head:focus-visible { background: var(--off-white); }
+    summary.ben-section-head:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    /* A chevron, turned down when the section is open. */
+    summary.ben-section-head::after {
+      content: "";
+      margin-left: auto;
+      width: 9px;
+      height: 9px;
+      border-right: 2.5px solid var(--primary);
+      border-bottom: 2.5px solid var(--primary);
+      transform: rotate(-45deg);
+      transition: transform .18s ease;
+      flex-shrink: 0;
+      margin-right: .25rem;
+    }
+    .ben-section[open] > summary.ben-section-head::after { transform: rotate(45deg); }
+
+    @media print {
+      summary.ben-section-head { cursor: auto; }
+      summary.ben-section-head::after { display: none; }   /* no chevron on paper */
+      .ben-toggle-all { display: none; }
+    }
+
+    /* ── Expand / collapse all ───────────────────────────────────── */
+    .ben-toggle-all {
+      display: flex;
+      justify-content: flex-end;
+      margin: -.5rem 0 1.25rem;
+    }
+    .ben-toggle-all button {
+      background: var(--white);
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      padding: .35rem .8rem;
+      font: inherit;
+      font-size: .82rem;
+      font-weight: 600;
+      color: var(--gray-600);
+      cursor: pointer;
+    }
+    .ben-toggle-all button:hover { border-color: var(--primary); color: var(--primary); }
     .ben-section-icon {
       width: 32px;
       height: 32px;
@@ -462,6 +518,10 @@ $member   = $loggedIn ? getMember() : null;
         <button class="benefits-tab" role="tab" data-tab="claims">How to Claim</button>
       </div>
 
+      <div class="ben-toggle-all">
+        <button type="button" id="benToggleAll" aria-expanded="false">Expand all sections</button>
+      </div>
+
       <!-- ══════════════════════════════════════════════════════════
            TAB: DENTAL
       ══════════════════════════════════════════════════════════ -->
@@ -474,12 +534,12 @@ $member   = $loggedIn ? getMember() : null;
         </div>
 
         <!-- Basic & Preventive -->
-        <div class="ben-section">
-          <div class="ben-section-head">
-            <div class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M12 22s-8-4-8-10V5l8-3 8 3v7c0 6-8 10-8 10z"/></svg></div>
+        <details class="ben-section">
+          <summary class="ben-section-head">
+            <span class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M12 22s-8-4-8-10V5l8-3 8 3v7c0 6-8 10-8 10z"/></svg></span>
             Basic &amp; Preventive Services
             <span class="tier-badge tier-100">90% covered</span>
-          </div>
+          </summary>
           <table class="coverage-table">
             <thead>
               <tr><th>Service</th><th>Frequency / Limit</th><th>Coverage</th></tr>
@@ -505,15 +565,15 @@ $member   = $loggedIn ? getMember() : null;
               <tr><td>Space maintainers</td><td><span class="coverage-note">1 per quadrant per calendar year</span></td><td><span class="coverage-pct">90%</span></td></tr>
             </tbody>
           </table>
-        </div>
+        </details>
 
         <!-- Major Restorative -->
-        <div class="ben-section">
-          <div class="ben-section-head">
-            <div class="ben-section-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></div>
+        <details class="ben-section">
+          <summary class="ben-section-head">
+            <span class="ben-section-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></span>
             Major Restorative — Crowns, Bridges &amp; Dentures
             <span class="tier-badge tier-80">70% covered</span>
-          </div>
+          </summary>
           <p style="font-size:.9rem;color:var(--gray-600);margin-bottom:.9rem;">Major restorative services are reimbursed at <strong>70%</strong> of the BC Dental Fee Guide. There is no single annual dollar maximum — limits are per tooth per period as shown. Pre-authorization is strongly recommended.</p>
           <table class="coverage-table">
             <thead>
@@ -529,15 +589,15 @@ $member   = $loggedIn ? getMember() : null;
               <tr><td>Partial dentures</td><td><span class="coverage-note">1 per person per 60 months</span></td><td><span class="coverage-pct">70%</span></td></tr>
             </tbody>
           </table>
-        </div>
+        </details>
 
         <!-- Denture Maintenance -->
-        <div class="ben-section">
-          <div class="ben-section-head">
-            <div class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+        <details class="ben-section">
+          <summary class="ben-section-head">
+            <span class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>
             Denture Maintenance &amp; Bridge Repairs
             <span class="tier-badge tier-100">90% covered</span>
-          </div>
+          </summary>
           <table class="coverage-table">
             <thead>
               <tr><th>Service</th><th>Limit</th><th>Coverage</th></tr>
@@ -551,17 +611,17 @@ $member   = $loggedIn ? getMember() : null;
               <tr><td>Bridge removal</td><td><span class="coverage-note">2 per tooth per day from first eligible claim</span></td><td><span class="coverage-pct">90%</span></td></tr>
             </tbody>
           </table>
-        </div>
+        </details>
 
         <!-- Orthodontics -->
-        <div class="ben-section">
-          <div class="ben-section-head">
-            <div class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
+        <details class="ben-section">
+          <summary class="ben-section-head">
+            <span class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></span>
             Orthodontic Services
             <span class="tier-badge tier-80">75% · $5,000 lifetime max</span>
-          </div>
+          </summary>
           <p>Orthodontic coverage (braces, retainers, appliances) is reimbursed at <strong>75%</strong> up to a <strong>$5,000 lifetime maximum per person</strong>. A pre-determination must be submitted to PBC before treatment begins. TMJ dysfunction and lost/stolen appliances are not covered.</p>
-        </div>
+        </details>
 
       </div>
 
@@ -577,11 +637,11 @@ $member   = $loggedIn ? getMember() : null;
         </div>
 
         <!-- Paramedical -->
-        <div class="ben-section">
-          <div class="ben-section-head">
-            <div class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+        <details class="ben-section">
+          <summary class="ben-section-head">
+            <span class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></span>
             Paramedical Services
-          </div>
+          </summary>
           <p style="font-size:.88rem;color:var(--gray-600);margin-bottom:.9rem;">All paramedical limits are <strong>per person per calendar year</strong>. Practitioners must be registered in BC. If visits exceed what PBC considers reasonable, a doctor's note may be requested.</p>
           <table class="coverage-table">
             <thead>
@@ -625,15 +685,15 @@ $member   = $loggedIn ? getMember() : null;
               </tr>
             </tbody>
           </table>
-        </div>
+        </details>
 
         <!-- Counselling -->
-        <div class="ben-section">
-          <div class="ben-section-head">
-            <div class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+        <details class="ben-section">
+          <summary class="ben-section-head">
+            <span class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
             Mental Health &amp; Counselling Services
             <span class="tier-badge tier-80">$1,500/year combined</span>
-          </div>
+          </summary>
           <p style="font-size:.88rem;color:var(--gray-600);margin-bottom:.9rem;">All counselling providers below share a <strong>combined $1,500 per person per calendar year</strong> limit, including psychologist, registered clinical counsellor, and registered social worker services. Subject to the 80/100% reimbursement structure and $50 family deductible. Eligible amounts are based on a 60-minute visit — your actual reimbursement depends on visit length. <strong>This combined maximum increases to $1,750/year effective July 1, 2028.</strong></p>
           <table class="coverage-table">
             <thead>
@@ -668,28 +728,28 @@ $member   = $loggedIn ? getMember() : null;
             <span class="pill no">Parenting training — not a benefit</span>
             <span class="pill no">Group counselling — not eligible</span>
           </div>
-        </div>
+        </details>
 
         <!-- Gender Affirming Care -->
-        <div class="ben-section">
-          <div class="ben-section-head">
-            <div class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+        <details class="ben-section">
+          <summary class="ben-section-head">
+            <span class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></span>
             Gender Affirming Care
             <span class="effective-badge effective-2026">New — Jul 1, 2026</span>
-          </div>
+          </summary>
           <p style="font-size:.88rem;color:var(--gray-600);margin-bottom:.9rem;">Effective <strong>July 1, 2026</strong>, Gender Affirming Care is covered under the Pacific Blue Cross Core + Enhanced plan up to a <strong>$30,000 lifetime maximum</strong>. The lifetime maximum increases to a total of <strong>$50,000</strong> effective <strong>July 1, 2028</strong>, when the remaining $20,000 becomes available.</p>
           <div class="info-box" style="font-size:.88rem;">
             <strong>Before accessing care:</strong> contact Pacific Blue Cross directly at <strong>1-888-275-4672</strong> or log in to your <a href="https://service.pac.bluecross.ca/member/login/" target="_blank" rel="noopener">PBC member account</a> for full details on what's covered under this benefit and to arrange any necessary pre-authorization.
           </div>
-        </div>
+        </details>
 
         <!-- Vision -->
-        <div class="ben-section">
-          <div class="ben-section-head">
-            <div class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div>
+        <details class="ben-section">
+          <summary class="ben-section-head">
+            <span class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span>
             Vision Care
             <span class="tier-badge tier-80">80/100% · $50 deductible</span>
-          </div>
+          </summary>
           <p style="font-size:.88rem;color:var(--gray-600);margin-bottom:.9rem;">Vision benefits are subject to the standard extended health <strong>$50 annual family deductible</strong> and the <strong>80/100% reimbursement structure</strong> (same as paramedical). All eyewear types share a single combined dollar maximum.</p>
           <table class="coverage-table">
             <thead>
@@ -708,14 +768,14 @@ $member   = $loggedIn ? getMember() : null;
               </tr>
             </tbody>
           </table>
-        </div>
+        </details>
 
         <!-- Hospital & Equipment -->
-        <div class="ben-section">
-          <div class="ben-section-head">
-            <div class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>
+        <details class="ben-section">
+          <summary class="ben-section-head">
+            <span class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
             Hospital, Equipment &amp; Other Benefits
-          </div>
+          </summary>
           <table class="coverage-table">
             <thead>
               <tr><th>Benefit</th><th>Maximum</th><th>Notes</th></tr>
@@ -784,19 +844,19 @@ $member   = $loggedIn ? getMember() : null;
             <span class="pill no">Osteopath — not a benefit</span>
             <span class="pill no">Nursing home (residential) care — not a benefit</span>
           </div>
-        </div>
+        </details>
 
         <!-- Medical referral travel ──────────────────────────────
              Kept with the travel coverage below, but it is a different thing:
              this is planned travel to a specialist you were referred to, not an
              emergency away from home. Members here routinely drive to Prince
              George, Terrace or Vancouver for appointments. -->
-        <div class="ben-section">
-          <div class="ben-section-head">
-            <div class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M5 17h14M5 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM23 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"/><path d="M3 17V9l2.5-4.5h9L18 9h3v8"/></svg></div>
+        <details class="ben-section">
+          <summary class="ben-section-head">
+            <span class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M5 17h14M5 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM23 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"/><path d="M3 17V9l2.5-4.5h9L18 9h3v8"/></svg></span>
             Medical Referral Travel Benefit
             <span class="tier-badge tier-80">$0.28/km &middot; $50/day</span>
-          </div>
+          </summary>
           <p>When your physician refers you to a medical specialist you have to travel
              to see, this benefit helps with the cost of getting there and staying over.
              Living where we do, that is a regular fact of life — a referral to Prince
@@ -832,15 +892,15 @@ $member   = $loggedIn ? getMember() : null;
             entitlement and any conditions with PBC at <strong>1-888-275-4672</strong>
             before you travel — this page is a summary, not the policy.
           </p>
-        </div>
+        </details>
 
         <!-- Travel -->
-        <div class="ben-section">
-          <div class="ben-section-head">
-            <div class="ben-section-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></div>
+        <details class="ben-section">
+          <summary class="ben-section-head">
+            <span class="ben-section-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
             Out-of-Province &amp; Out-of-Canada Emergency Coverage
             <span class="tier-badge tier-100">100% covered</span>
-          </div>
+          </summary>
           <p>Emergency medical expenses incurred while travelling outside your province of residence or outside Canada are reimbursed at <strong>100%</strong>. <strong>Important: if your trip exceeds 30 days, contact PBC before you leave</strong> — trip duration limits may apply.</p>
           <table class="coverage-table">
             <thead>
@@ -860,14 +920,14 @@ $member   = $loggedIn ? getMember() : null;
             </tbody>
           </table>
           <p style="font-size:.85rem;color:var(--gray-600);margin-top:.75rem;"><strong>Medi-Assist</strong> provides 24/7 travel assistance — medical evacuation, locating care, interpreter services, contacting relatives. Call them immediately in an emergency abroad.</p>
-        </div>
+        </details>
 
         <!-- Not Covered -->
-        <div class="ben-section">
-          <div class="ben-section-head">
-            <div class="ben-section-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></div>
+        <details class="ben-section">
+          <summary class="ben-section-head">
+            <span class="ben-section-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></span>
             What Is Not Covered
-          </div>
+          </summary>
           <div class="pill-list">
             <span class="pill no">Vitamins &amp; supplements</span>
             <span class="pill no">Hair loss medications</span>
@@ -884,7 +944,7 @@ $member   = $loggedIn ? getMember() : null;
             <span class="pill no">Elective out-of-province treatment</span>
             <span class="pill no">Ambulance (if not transported to hospital)</span>
           </div>
-        </div>
+        </details>
 
       </div>
 
@@ -896,23 +956,23 @@ $member   = $loggedIn ? getMember() : null;
         <p>Prescription drug coverage works through two complementary systems: your <strong>Pacific Blue Cross extended health plan</strong> (for drugs not covered by the province) and <strong>BC PharmaCare</strong> (the provincial drug plan). Together they provide broad coverage for most prescribed medications. Drug claims share the extended health <strong>$50 family deductible</strong> and the 80/100% reimbursement structure.</p>
 
         <!-- Pay-Direct -->
-        <div class="ben-section">
-          <div class="ben-section-head">
-            <div class="ben-section-icon"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
+        <details class="ben-section">
+          <summary class="ben-section-head">
+            <span class="ben-section-icon"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
             Pay-Direct at the Pharmacy
-          </div>
+          </summary>
           <p>Your Pacific Blue Cross plan includes a <strong>pay-direct drug card</strong>. Present your PBC ID card at any participating pharmacy — your pharmacist submits the claim directly and you only pay your share at the counter. No forms, no waiting for reimbursement.</p>
           <div class="info-box" style="margin:.75rem 0;font-size:.9rem;">
             A written prescription from a licensed physician or dentist is required for all drug claims.
           </div>
-        </div>
+        </details>
 
         <!-- What's Covered -->
-        <div class="ben-section">
-          <div class="ben-section-head">
-            <div class="ben-section-icon"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+        <details class="ben-section">
+          <summary class="ben-section-head">
+            <span class="ben-section-icon"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span>
             Covered Medications
-          </div>
+          </summary>
           <p>The plan covers drugs and medicines that are not covered by BC PharmaCare and require a written prescription, including:</p>
           <div class="pill-list">
             <span class="pill">Prescription medications (general)</span>
@@ -924,14 +984,14 @@ $member   = $loggedIn ? getMember() : null;
             <span class="pill">Vitamin B12 <em style="font-size:.78rem">(pernicious anaemia only)</em></span>
             <span class="pill">Allergy serums <em style="font-size:.78rem">(physician-administered)</em></span>
           </div>
-        </div>
+        </details>
 
         <!-- Not Covered -->
-        <div class="ben-section">
-          <div class="ben-section-head">
-            <div class="ben-section-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></div>
+        <details class="ben-section">
+          <summary class="ben-section-head">
+            <span class="ben-section-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></span>
             Not Covered
-          </div>
+          </summary>
           <div class="pill-list">
             <span class="pill no">Vitamins &amp; mineral supplements</span>
             <span class="pill no">Hair loss drugs (Minoxidil, Propecia)</span>
@@ -942,14 +1002,14 @@ $member   = $loggedIn ? getMember() : null;
             <span class="pill no">General anaesthetics</span>
             <span class="pill no">Food &amp; meal replacements</span>
           </div>
-        </div>
+        </details>
 
         <!-- BC PharmaCare -->
-        <div class="ben-section">
-          <div class="ben-section-head">
-            <div class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+        <details class="ben-section">
+          <summary class="ben-section-head">
+            <span class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
             BC PharmaCare (Provincial Plan)
-          </div>
+          </summary>
           <p>In addition to your PBC plan, BC PharmaCare provides a provincial prescription drug benefit. The deductible is income-based:</p>
           <table class="coverage-table">
             <thead>
@@ -962,7 +1022,7 @@ $member   = $loggedIn ? getMember() : null;
             </tbody>
           </table>
           <p style="font-size:.87rem;color:var(--gray-600);">Any deductible amounts and the remaining 30% not covered by PharmaCare may be claimed under your Pacific Blue Cross extended health plan, providing layered coverage on most prescription costs.</p>
-        </div>
+        </details>
 
       </div>
 
@@ -972,11 +1032,11 @@ $member   = $loggedIn ? getMember() : null;
       <div class="benefits-panel" id="tab-claims">
 
         <!-- Dental claims -->
-        <div class="ben-section">
-          <div class="ben-section-head">
-            <div class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M12 22s-8-4-8-10V5l8-3 8 3v7c0 6-8 10-8 10z"/></svg></div>
+        <details class="ben-section">
+          <summary class="ben-section-head">
+            <span class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M12 22s-8-4-8-10V5l8-3 8 3v7c0 6-8 10-8 10z"/></svg></span>
             Dental Claims
-          </div>
+          </summary>
           <div class="claim-steps">
             <div class="claim-step">
               <div class="claim-step-num">1</div>
@@ -999,14 +1059,14 @@ $member   = $loggedIn ? getMember() : null;
               <p>All dental claims must be submitted within <strong>1 year</strong> of the service date.</p>
             </div>
           </div>
-        </div>
+        </details>
 
         <!-- Drug claims -->
-        <div class="ben-section">
-          <div class="ben-section-head">
-            <div class="ben-section-icon"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
+        <details class="ben-section">
+          <summary class="ben-section-head">
+            <span class="ben-section-icon"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
             Prescription Drug Claims
-          </div>
+          </summary>
           <div class="claim-steps">
             <div class="claim-step">
               <div class="claim-step-num">1</div>
@@ -1019,14 +1079,14 @@ $member   = $loggedIn ? getMember() : null;
               <p>You pay only the portion not covered by the plan — no upfront payment and reimbursement wait.</p>
             </div>
           </div>
-        </div>
+        </details>
 
         <!-- Extended health claims -->
-        <div class="ben-section">
-          <div class="ben-section-head">
-            <div class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+        <details class="ben-section">
+          <summary class="ben-section-head">
+            <span class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></span>
             Extended Health Claims (Paramedical, Vision, etc.)
-          </div>
+          </summary>
           <div class="claim-steps">
             <div class="claim-step">
               <div class="claim-step-num">1</div>
@@ -1049,7 +1109,7 @@ $member   = $loggedIn ? getMember() : null;
               <p>All extended health claims must be submitted by <strong>December 31 of the year following</strong> the year the expense was incurred.</p>
             </div>
           </div>
-        </div>
+        </details>
 
         <!-- Contact -->
         <div class="contact-bar">
@@ -1120,7 +1180,100 @@ $member   = $loggedIn ? getMember() : null;
         document.querySelectorAll('.benefits-panel').forEach(p => p.classList.remove('active'));
         tab.classList.add('active');
         document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+        syncToggleAll();
       });
+    });
+
+    /*
+     * Expand / collapse everything in the tab on screen.
+     *
+     * Sections start closed so the page reads as a list of what is covered, and
+     * each heading still carries its tier badge, so a closed section is not a
+     * blank line. Using this button is remembered — a member who wants the whole
+     * page open should not have to say so on every visit. Opening one section on
+     * its own is not saved, deliberately: that is a glance at one answer, not a
+     * standing preference.
+     */
+    const benToggle = document.getElementById('benToggleAll');
+
+    const allSections = () => Array.from(document.querySelectorAll('details.ben-section'));
+
+    function benSections() {
+      const panel = document.querySelector('.benefits-panel.active');
+      return panel ? Array.from(panel.querySelectorAll('details.ben-section')) : [];
+    }
+
+    function syncToggleAll() {
+      const all = benSections();
+      const open = all.length > 0 && all.every(d => d.open);
+      benToggle.textContent = open ? 'Collapse all sections' : 'Expand all sections';
+      benToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+
+    function setAll(open) {
+      // Every tab, not just the one on screen: the saved choice is page-wide, and
+      // applying it to one tab while restoring it to four is how the button and
+      // the next visit come to disagree.
+      allSections().forEach(d => { d.open = open; });
+      try { localStorage.setItem('bvtu-benefits-open', open ? '1' : '0'); } catch (e) {}
+      syncToggleAll();
+    }
+
+    benToggle.addEventListener('click', () => {
+      const all = benSections();
+      setAll(!(all.length > 0 && all.every(d => d.open)));
+    });
+
+    // A section opened or closed on its own keeps the button honest.
+    document.querySelectorAll('details.ben-section').forEach(d => {
+      d.addEventListener('toggle', syncToggleAll);
+    });
+
+    // Storage can be unavailable or blocked; the page has to work either way.
+    try {
+      if (localStorage.getItem('bvtu-benefits-open') === '1') {
+        document.querySelectorAll('details.ben-section').forEach(d => { d.open = true; });
+      }
+    } catch (e) {}
+    syncToggleAll();
+
+    // Printing a collapsed page would put the headings on paper and nothing
+    // under them. Safari fires neither beforeprint nor afterprint, so the
+    // print media query is watched as well and both routes are kept idempotent.
+    function openForPrint() {
+      allSections().forEach(d => {
+        if (!d.open) { d.dataset.wasClosed = '1'; d.open = true; }
+      });
+    }
+    function restoreAfterPrint() {
+      document.querySelectorAll('details.ben-section[data-was-closed]').forEach(d => {
+        d.open = false;
+        delete d.dataset.wasClosed;
+      });
+    }
+    window.addEventListener('beforeprint', openForPrint);
+    window.addEventListener('afterprint', restoreAfterPrint);
+    if (window.matchMedia) {
+      const printMq = window.matchMedia('print');
+      const onPrintMq = e => (e.matches ? openForPrint() : restoreAfterPrint());
+      if (printMq.addEventListener) printMq.addEventListener('change', onPrintMq);
+      else if (printMq.addListener) printMq.addListener(onPrintMq);   // older Safari
+    }
+
+    /*
+     * Ctrl+F / Cmd+F opens everything first.
+     *
+     * Chromium expands a <details> when its find-in-page matches inside one;
+     * Firefox and Safari do not, so on those a search for "orthotics" would find
+     * nothing on a page that plainly covers it. The keypress is not swallowed —
+     * the browser's own find bar still opens.
+     */
+    document.addEventListener('keydown', ev => {
+      if ((ev.ctrlKey || ev.metaKey) && !ev.shiftKey && !ev.altKey
+          && (ev.key === 'f' || ev.key === 'F')) {
+        allSections().forEach(d => { d.open = true; });
+        syncToggleAll();
+      }
     });
   </script>
 </body>
