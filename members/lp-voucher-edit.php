@@ -206,8 +206,19 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
     /* No overflow here on wide screens: any scroll container would become the
        scrollport and break the sticky header below. Table fits under 1500px
        wrap, so horizontal scroll is only needed on narrower viewports. */
-    .expense-table-wrap { background: #fff; border: 1px solid var(--gray-200); border-radius: 12px; margin-bottom: 1.25rem; }
-    @media (max-width: 1200px) { .expense-table-wrap { overflow-x: auto; } }
+    /*
+     * Scrolls at every width, not only below 1200px. The table needs 1571px and
+     * .wrap is capped at 1500, so it never fitted on any screen: above 1200 the
+     * Budget Line column and the row-delete button simply hung outside the card
+     * with no scrollbar to reach them, dragging the whole page sideways instead.
+     */
+    .expense-table-wrap { background: #fff; border: 1px solid var(--gray-200); border-radius: 12px; margin-bottom: 1.25rem; overflow-x: auto; }
+    /*
+     * A horizontal scrollport is also a vertical one, which stops the sticky
+     * header sticking to the page. Above 1440px the trimmed table fits with room
+     * to spare and needs no scrolling, so the header is given back there.
+     */
+    @media (min-width: 1441px) { .expense-table-wrap { overflow-x: visible; } }
     table.expense-table { width: 100%; border-collapse: collapse; min-width: 1100px; font-size: .83rem; }
     .expense-table thead th { position: sticky; top: 0; z-index: 3; background: #1a2e1a; color: #fff; padding: .6rem .75rem; text-align: left; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,.18); }
     .expense-table thead th:first-child { border-top-left-radius: 12px; }
@@ -267,6 +278,70 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
     @keyframes rowFlash { 0%,100%{background:transparent} 30%{background:#dcfce7} }
     .row-flash { animation: rowFlash 1.6s ease; }
 
+    /* ── Category, amount and the split breakdown ───────────────── */
+    .cell-cat { min-width: 128px; }
+    .cell-cat.needs-category { border-color: #dc2626; background: #fef2f2; }
+    .cell-amount.is-split { background: var(--gray-100); cursor: not-allowed; }
+
+    .split-row > td { background: #f8fafc; padding: .6rem .75rem; }
+    .split-wrap { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+    .split-lead { font-size: .78rem; font-weight: 700; color: var(--gray-600); }
+    .split-field { display: flex; flex-direction: column; font-size: .7rem; font-weight: 700;
+                   text-transform: uppercase; letter-spacing: .04em; color: var(--gray-500); gap: .15rem; }
+    .split-input { width: 92px; border: 1px solid var(--gray-300); border-radius: 5px;
+                   padding: .25rem .4rem; font-size: .82rem; font-family: inherit; }
+    .split-close { margin-left: auto; background: none; border: none; font: inherit; font-size: .78rem;
+                   color: var(--primary); font-weight: 600; cursor: pointer; text-decoration: underline; }
+
+    /* ── Per-category totals, once six table columns ────────────── */
+    .cat-totals { display: flex; flex-wrap: wrap; gap: .5rem; margin: -.75rem 0 1.25rem; }
+    .cat-total { background: #fff; border: 1px solid var(--gray-200); border-radius: 8px;
+                 padding: .35rem .7rem; font-size: .84rem; font-weight: 700; color: var(--gray-800); }
+    .cat-total-label { font-size: .68rem; font-weight: 800; text-transform: uppercase;
+                       letter-spacing: .05em; color: var(--gray-500); margin-right: .35rem; }
+    .cat-total-grand { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .cat-total-grand .cat-total-label { color: rgba(255,255,255,.75); }
+    .cat-total-empty { font-size: .83rem; color: var(--gray-400); }
+
+    /*
+     * ── One card per row on a narrow screen ─────────────────────
+     * Below 900px even the trimmed table scrolls, and scrolling a form
+     * sideways to reach the field you are filling in is the worst of both.
+     */
+    @media (max-width: 900px) {
+      .expense-table-wrap { border: none; background: none; overflow-x: visible; }
+      table.expense-table, table.expense-table tbody, table.expense-table tfoot,
+      table.expense-table tr, table.expense-table td { display: block; width: 100%; min-width: 0; }
+      table.expense-table thead { display: none; }
+      table.expense-table tbody tr { background: #fff; border: 1px solid var(--gray-200);
+        border-radius: 10px; padding: .85rem; margin-bottom: .85rem; }
+      table.expense-table td { padding: .3rem 0; text-align: left !important; }
+      table.expense-table td[data-label]::before {
+        content: attr(data-label);
+        display: block; font-size: .68rem; font-weight: 800; text-transform: uppercase;
+        letter-spacing: .05em; color: var(--gray-500); margin-bottom: .15rem;
+      }
+      .cell-input, .cell-select, .cell-cat { width: 100% !important; }
+      input[type=date].cell-input { width: 100% !important; }
+      .cell-km, .cell-dollar { width: 100% !important; }
+      /* Right-aligned figures make sense in a column; in a card they drift away
+         from the label they belong to. */
+      .cell-input.num, table.expense-table td.num { text-align: left !important; }
+      .btn-row-remove { width: auto; padding: .3rem .7rem; font-size: .95rem; }
+      table.expense-table tfoot tr { background: #fff; border: 1px solid var(--gray-200);
+        border-radius: 10px; padding: .85rem; }
+      /* A sibling row becomes its own card, which would float free of the row
+         it belongs to; the accent edge and the pulled-up margin keep them read
+         as one thing. */
+      table.expense-table tbody tr.split-row { margin-top: -.6rem; border-top: none;
+        border-left: 3px solid var(--primary); border-radius: 0 0 10px 10px; }
+      .split-row > td { background: none; padding: .3rem 0; }
+      .split-wrap { gap: .5rem; }
+      .split-field { flex: 1 1 28%; }
+      .split-input { width: 100%; }
+      .split-close { margin-left: 0; flex-basis: 100%; text-align: left; }
+    }
+
     /* ── Phone upload QR panel ── */
     .qr-panel { display:none; background:#fff; border:1px solid var(--gray-200); border-radius:12px; padding:1.25rem 1.5rem; margin-bottom:1.25rem; }
     .qr-panel.open { display:flex; gap:1.5rem; align-items:flex-start; flex-wrap:wrap; }
@@ -281,7 +356,6 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
     .btn-phone:hover { background:#dcfce7; }
     .btn-wide { background:#fff; color:var(--gray-500); border:1.5px solid var(--gray-300); border-radius:8px; padding:.5rem .9rem; font-size:.85rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:.4rem; margin-left:auto; }
     .btn-wide:hover { background:#f9fafb; }
-    .wrap.full-wide { max-width: none !important; }
 
     /* ── Pending receipts tray ── */
     .pending-tray { display:none; background:#f0fdf4; border:1.5px solid #86efac; border-radius:12px; padding:1rem 1.25rem; margin-bottom:1.25rem; }
@@ -374,7 +448,6 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
     <button type="button" class="btn-add" onclick="addRow()">+ Add Row</button>
     <button type="button" class="btn-phone" onclick="toggleQR()">📱 Phone Upload</button>
     <span class="mileage-note">Mileage: $<?= number_format($mileageRate, 2) ?>/km · attach receipts with 📎</span>
-    <button type="button" class="btn-wide" id="btnWide" onclick="toggleWide()">⟷ Widen</button>
   </div>
 
   <!-- Global drop zone -->
@@ -416,13 +489,8 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
           <th>Date</th>
           <th>Description</th>
           <th class="num">km</th>
-          <th class="num">Travel $</th>
-          <th class="num">Meals $</th>
-          <th class="num">Gifts $</th>
-          <th class="num">Misc $</th>
-          <th class="num">Office $</th>
-          <th class="num">Phone $</th>
-          <th class="num">Total</th>
+          <th>Category</th>
+          <th class="num">Amount</th>
           <th>BCTF Grant</th>
           <th>Budget Line</th>
           <th style="width:32px;"></th>
@@ -433,18 +501,16 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
         <tr>
           <td colspan="3" class="total-label">Totals</td>
           <td class="num" id="tot_km">—</td>
-          <td class="num" id="tot_travel">—</td>
-          <td class="num" id="tot_meals">—</td>
-          <td class="num" id="tot_gifts">—</td>
-          <td class="num" id="tot_misc">—</td>
-          <td class="num" id="tot_office">—</td>
-          <td class="num" id="tot_phone">—</td>
+          <td></td>
           <td class="num" id="tot_total" style="font-size:.92rem;">—</td>
           <td colspan="3"></td>
         </tr>
       </tfoot>
     </table>
   </div>
+
+  <!-- Per-category totals, which used to be six columns in the table footer. -->
+  <div class="cat-totals" id="catTotals"><span class="cat-total-empty">No amounts entered yet.</span></div>
 
   <div class="save-bar">
     <div class="total-display"><span>Voucher Total</span><br><span id="grandTotal">$0.00</span></div>
@@ -515,7 +581,7 @@ function addRow(data = {}) {
     const tr = document.createElement('tr');
     tr.id = 'row-' + id;
     tr.innerHTML = `
-      <td class="receipt-cell">
+      <td class="receipt-cell" data-label="Receipt">
         <div id="receipt-wrap-${id}">
           <div class="receipt-btn-group">
             <button type="button" class="receipt-attach-btn" id="attach-btn-${id}"
@@ -531,21 +597,27 @@ function addRow(data = {}) {
         <input type="hidden" name="receipt_path[]" id="rpath-${id}" value="${escHtml(data.receipt_path || '')}">
         <input type="hidden" name="receipt_orig[]" id="rorig-${id}" value="${escHtml(data.receipt_filename || '')}">
       </td>
-      <td><input type="date" name="expense_date[]" class="cell-input" value="${data.expense_date || ''}" style="width:130px;"></td>
-      <td><input type="text" name="description[]" class="cell-input cell-desc" placeholder="Description" value="${escHtml(data.description || '')}"></td>
-      <td><input type="number" name="travel_km[]" id="km-${id}" class="cell-input num cell-km" placeholder="0" step="0.1" min="0" value="${data.travel_km > 0 ? data.travel_km : ''}" oninput="calcMileage(${id})"></td>
-      <td><input type="number" name="travel_amt[]" id="tamt-${id}" class="cell-input num cell-dollar" placeholder="0.00" step="0.01" min="0" value="${data.travel_amt > 0 ? parseFloat(data.travel_amt).toFixed(2) : ''}" oninput="updateRow(${id})"></td>
-      <td><input type="number" name="meals[]" class="cell-input num cell-dollar" placeholder="0.00" step="0.01" min="0" value="${data.meals > 0 ? parseFloat(data.meals).toFixed(2) : ''}" oninput="updateRow(${id})"></td>
-      <td><input type="number" name="gifts[]" class="cell-input num cell-dollar" placeholder="0.00" step="0.01" min="0" value="${data.gifts > 0 ? parseFloat(data.gifts).toFixed(2) : ''}" oninput="updateRow(${id})"></td>
-      <td><input type="number" name="misc[]"  class="cell-input num cell-dollar" placeholder="0.00" step="0.01" min="0" value="${data.misc  > 0 ? parseFloat(data.misc).toFixed(2)  : ''}" oninput="updateRow(${id})"></td>
-      <td><input type="number" name="office[]" class="cell-input num cell-dollar" placeholder="0.00" step="0.01" min="0" value="${data.office > 0 ? parseFloat(data.office).toFixed(2) : ''}" oninput="updateRow(${id})"></td>
-      <td><input type="number" name="phone[]" class="cell-input num cell-dollar" placeholder="0.00" step="0.01" min="0" value="${data.phone  > 0 ? parseFloat(data.phone).toFixed(2)  : ''}" oninput="updateRow(${id})"></td>
-      <td class="num" id="rowtotal-${id}" style="font-weight:700;color:var(--primary);white-space:nowrap;">$0.00</td>
-      <td><select name="grant_id[]" class="cell-select" style="min-width:160px;">${buildGrantOptions(data.grant_id || '')}</select></td>
-      <td><select name="budget_line_id[]" class="cell-select" style="min-width:180px;">${buildBLOptions(data.budget_line_id || '')}</select></td>
+      <td data-label="Date"><input type="date" name="expense_date[]" class="cell-input" value="${data.expense_date || ''}" style="width:130px;"></td>
+      <td data-label="Description"><input type="text" name="description[]" class="cell-input cell-desc" placeholder="Description" value="${escHtml(data.description || '')}"></td>
+      <td data-label="Travel km"><input type="number" name="travel_km[]" id="km-${id}" class="cell-input num cell-km" placeholder="0" step="0.1" min="0" value="${data.travel_km > 0 ? data.travel_km : ''}" oninput="calcMileage(${id})"></td>
+      <td data-label="Category">
+        <select name="cat_sel[]" class="cell-select cell-cat" id="cat-${id}" onchange="catChanged(${id})">
+          ${buildCatOptions(data)}
+        </select>
+        ${hiddenAmounts(id, data)}
+      </td>
+      <td data-label="Amount"><input type="number" class="cell-input num cell-dollar cell-amount"
+           id="amt-${id}" placeholder="0.00" step="0.01" min="0" value="${rowAmount(data)}"
+           oninput="amountChanged(${id})"></td>
+      <td data-label="BCTF Grant"><select name="grant_id[]" class="cell-select" style="min-width:160px;">${buildGrantOptions(data.grant_id || '')}</select></td>
+      <td data-label="Budget Line"><select name="budget_line_id[]" class="cell-select" style="min-width:180px;">${buildBLOptions(data.budget_line_id || '')}</select></td>
       <td><button type="button" class="btn-row-remove" onclick="removeRow(${id})">×</button></td>
     `;
     document.getElementById('expenseRows').appendChild(tr);
+    // Rows that arrive split across categories open their breakdown, or the
+    // figures would be real, posted and invisible.
+    if (document.getElementById('cat-' + id) &&
+        document.getElementById('cat-' + id).value === '__split') openSplit(id);
 
     if (data.receipt_path) {
         showThumb(id, data.receipt_path, null);
@@ -559,16 +631,291 @@ function addRow(data = {}) {
 function removeRow(id) {
     const row = document.getElementById('row-' + id);
     if (row) row.remove();
+    closeSplit(id);        // its breakdown is a sibling row, not a child
     updateTotals();
 }
 
 function calcMileage(id) {
     const km = parseFloat(document.getElementById('km-' + id)?.value) || 0;
     const tamtEl = document.getElementById('tamt-' + id);
-    if (tamtEl && km > 0) tamtEl.value = (km * MILEAGE_RATE).toFixed(2);
+    if (tamtEl && km > 0) {
+        tamtEl.value = (km * MILEAGE_RATE).toFixed(2);
+        // Kilometres can only be travel, so the row says so rather than leaving
+        // the category unset and the amount looking like it came from nowhere.
+        const cat = document.getElementById('cat-' + id);
+        const amt = document.getElementById('amt-' + id);
+        if (cat && cat.value !== '__split') {
+            const other = cat.value && cat.value !== 'travel_amt' &&
+                          (parseFloat(amt && amt.value) || 0) > 0;
+            if (other) {
+                // Mileage plus something else is exactly what a split is for;
+                // overwriting the category here would lose the other amount.
+                cat.value = '__split';
+                openSplit(id);
+            } else {
+                cat.value = 'travel_amt';
+                if (amt) amt.value = tamtEl.value;
+                cat.classList.remove('needs-category');
+            }
+        } else if (cat && cat.value === '__split') {
+            const box = splitRowEl(id) &&
+                        splitRowEl(id).querySelector('[data-cat="travel_amt"]');
+            if (box) { box.value = tamtEl.value; splitChanged(id); }
+        }
+    }
     updateRow(id);
 }
 function getVal(el) { return parseFloat(el?.value) || 0; }
+/* ── Category + amount ───────────────────────────────────────────────────────
+ *
+ * The voucher used to carry a column per category — Travel, Meals, Gifts, Misc,
+ * Office, Phone — six boxes a row, five of them empty. They took 588px of a
+ * table that only had about 1450px to live in, which is why Budget Line hung off
+ * the right-hand edge at every screen size.
+ *
+ * One select and one amount box now stand in front of those six fields, which
+ * are still posted under exactly the same names, so the database, the printed
+ * voucher and the year-end reports are untouched. A row that genuinely splits
+ * across categories — a trip with mileage and a meal — keeps all six, shown in a
+ * breakdown under the row.
+ */
+const LP_CATS = [
+    ['travel_amt', 'Travel'],
+    ['meals',      'Meals'],
+    ['gifts',      'Gifts'],
+    ['misc',       'Misc'],
+    ['office',     'Office'],
+    ['phone',      'Phone']
+];
+
+/* The two pages name their row data differently — travel_amount here, travel_amt
+ * there — so read whichever is present rather than keeping two copies of this. */
+function catValue(data, key) {
+    const alt = { travel_amt: 'travel_amount', meals: 'meals_amount', gifts: 'gifts_amount',
+                  misc: 'misc_amount', office: 'office_amount', phone: 'phone_amount' }[key];
+    const v = (data && data[key] !== undefined && data[key] !== '') ? data[key]
+            : (data && alt && data[alt] !== undefined ? data[alt] : 0);
+    return parseFloat(v) || 0;
+}
+
+function catsUsed(data) {
+    return LP_CATS.map(c => c[0]).filter(k => catValue(data, k) > 0);
+}
+
+function rowAmount(data) {
+    const used = catsUsed(data);
+    if (used.length !== 1) return '';            // nothing yet, or a split row
+    return catValue(data, used[0]).toFixed(2);
+}
+
+function buildCatOptions(data) {
+    const used = catsUsed(data);
+    const sel  = used.length === 1 ? used[0] : (used.length > 1 ? '__split' : '');
+    let html = '<option value=""' + (sel === '' ? ' selected' : '') + '>Choose…</option>';
+    LP_CATS.forEach(([k, label]) => {
+        html += '<option value="' + k + '"' + (sel === k ? ' selected' : '') + '>' + label + '</option>';
+    });
+    html += '<option value="__split"' + (sel === '__split' ? ' selected' : '') + '>Split across categories…</option>';
+    return html;
+}
+
+function hiddenAmounts(id, data) {
+    return LP_CATS.map(([k]) => {
+        const extra = k === 'travel_amt' ? ' id="tamt-' + id + '"' : '';
+        const v = catValue(data, k);
+        return '<input type="hidden" name="' + k + '[]"' + extra +
+               ' class="hid-' + k + '" value="' + (v > 0 ? v.toFixed(2) : '') + '">';
+    }).join('');
+}
+
+/*
+ * Bring the Category select and Amount box back in line with the six hidden
+ * fields.
+ *
+ * Needed because receipt scanning writes straight into those fields. Once they
+ * stopped being visible columns, a scanned amount became money nobody could see:
+ * it was in the form, it would have saved, and the first touch of the Category
+ * select would have wiped it. Anything that writes a hidden amount calls this.
+ */
+function syncRowFromHidden(id) {
+    const row = document.getElementById('row-' + id);
+    const cat = document.getElementById('cat-' + id);
+    const amt = document.getElementById('amt-' + id);
+    if (!row || !cat || !amt) return;
+    const filled = LP_CATS.map(([k]) => k).filter(k => {
+        const h = hiddenFor(id, k);
+        return h && (parseFloat(h.value) || 0) > 0;
+    });
+    if (filled.length > 1) {
+        cat.value = '__split';
+        openSplit(id);
+    } else if (filled.length === 1) {
+        closeSplit(id);
+        cat.value = filled[0];
+        amt.value = parseFloat(hiddenFor(id, filled[0]).value).toFixed(2);
+        cat.classList.remove('needs-category');
+    }
+    updateRow(id);
+}
+
+function hiddenFor(id, key) {
+    const row = document.getElementById('row-' + id);
+    return row ? row.querySelector('.hid-' + key) : null;
+}
+
+/* The visible amount goes to the chosen category and nowhere else, so switching
+ * category moves the money rather than leaving a copy behind. */
+function amountChanged(id) {
+    const cat = document.getElementById('cat-' + id);
+    const amt = document.getElementById('amt-' + id);
+    if (!cat || !amt) return;
+    if (cat.value === '__split') return;         // the breakdown owns the figures
+    LP_CATS.forEach(([k]) => { const h = hiddenFor(id, k); if (h) h.value = ''; });
+    if (cat.value) {
+        const h = hiddenFor(id, cat.value);
+        if (h) h.value = amt.value;
+    }
+    cat.classList.toggle('needs-category', !cat.value && (parseFloat(amt.value) || 0) > 0);
+    updateRow(id);
+}
+
+function catChanged(id) {
+    const cat = document.getElementById('cat-' + id);
+    if (!cat) return;
+    if (cat.value === '__split') { openSplit(id); return; }
+
+    // Leaving a split would drop every category but one, so it asks first and
+    // puts the select back if the answer is no.
+    if (splitRowEl(id)) {
+        const filled = LP_CATS.map(([k]) => k).filter(k => {
+            const h = hiddenFor(id, k);
+            return h && (parseFloat(h.value) || 0) > 0;
+        });
+        if (filled.length > 1 &&
+            !confirm('This row is split across ' + filled.length + ' categories. ' +
+                     'Moving it to one category clears the others. Continue?')) {
+            cat.value = '__split';
+            return;
+        }
+        LP_CATS.forEach(([k]) => { const h = hiddenFor(id, k); if (h) h.value = ''; });
+        const amt0 = document.getElementById('amt-' + id);
+        if (amt0) amt0.value = '';
+    }
+    closeSplit(id);
+
+    // Kilometres mean travel. The server fills travel_amt from travel_km
+    // whenever the posted travel amount is zero, so a row left carrying km
+    // under another category would save the mileage *as well* — the voucher
+    // would total more than the screen ever showed.
+    if (cat.value && cat.value !== 'travel_amt') {
+        const kmEl = document.getElementById('km-' + id);
+        if (kmEl && (parseFloat(kmEl.value) || 0) > 0) {
+            kmEl.value = '';
+            const h = hiddenFor(id, 'travel_amt');
+            if (h) h.value = '';
+        }
+    }
+    amountChanged(id);
+}
+
+/* ── Split rows ──────────────────────────────────────────────────────────── */
+
+function splitRowEl(id) { return document.getElementById('split-' + id); }
+
+function openSplit(id) {
+    const row = document.getElementById('row-' + id);
+    if (!row || splitRowEl(id)) return;
+    const amtEl = document.getElementById('amt-' + id);
+    if (amtEl) { amtEl.readOnly = true; amtEl.classList.add('is-split'); }
+
+    const tr = document.createElement('tr');
+    tr.id = 'split-' + id;
+    tr.className = 'split-row';
+    const td = document.createElement('td');
+    td.colSpan = row.children.length;
+    td.innerHTML = '<div class="split-wrap"><span class="split-lead">Split this row:</span>' +
+        LP_CATS.map(([k, label]) =>
+            '<label class="split-field">' + label +
+            '<input type="number" step="0.01" min="0" class="split-input" data-cat="' + k + '"' +
+            ' oninput="splitChanged(' + id + ')"></label>').join('') +
+        '<button type="button" class="split-close" onclick="cancelSplit(' + id + ')">Use one category instead</button>' +
+        '</div>';
+    tr.appendChild(td);
+    row.after(tr);
+
+    // Seed the boxes from what the row already holds.
+    tr.querySelectorAll('.split-input').forEach(inp => {
+        const h = hiddenFor(id, inp.dataset.cat);
+        if (h) inp.value = h.value;
+    });
+    splitChanged(id);
+}
+
+function splitChanged(id) {
+    const tr = splitRowEl(id);
+    if (!tr) return;
+    let total = 0;
+    tr.querySelectorAll('.split-input').forEach(inp => {
+        const h = hiddenFor(id, inp.dataset.cat);
+        if (h) h.value = inp.value;
+        total += parseFloat(inp.value) || 0;
+    });
+    // Left alone when the breakdown is still empty, so an amount typed before a
+    // category was chosen stays on screen instead of vanishing. A row in that
+    // state is caught by rowsMissingCategory() rather than saved as nothing.
+    const amtEl = document.getElementById('amt-' + id);
+    if (amtEl && total) amtEl.value = total.toFixed(2);
+    updateRow(id);
+}
+
+function closeSplit(id) {
+    const tr = splitRowEl(id);
+    if (tr) tr.remove();
+    const amtEl = document.getElementById('amt-' + id);
+    if (amtEl) { amtEl.readOnly = false; amtEl.classList.remove('is-split'); }
+}
+
+/* Collapsing a split back to one category would silently drop the other figures,
+ * so it says what it is about to do first. */
+function cancelSplit(id) {
+    const filled = LP_CATS.map(([k]) => k).filter(k => {
+        const h = hiddenFor(id, k);
+        return h && (parseFloat(h.value) || 0) > 0;
+    });
+    if (filled.length > 1 &&
+        !confirm('This row is split across ' + filled.length + ' categories. ' +
+                 'Going back to one category clears the others. Continue?')) return;
+    LP_CATS.forEach(([k]) => { const h = hiddenFor(id, k); if (h && k !== filled[0]) h.value = ''; });
+    const cat = document.getElementById('cat-' + id);
+    if (cat) cat.value = filled[0] || '';
+    closeSplit(id);
+    const amtEl = document.getElementById('amt-' + id);
+    const keep  = filled[0] ? hiddenFor(id, filled[0]) : null;
+    if (amtEl) amtEl.value = keep ? keep.value : '';
+    amountChanged(id);
+}
+
+/* A row with money but no category would post six zeroes and be dropped on the
+ * floor by the server loop, so it is caught here instead. */
+function rowsMissingCategory() {
+    return Array.from(document.querySelectorAll('#expenseRows tr[id^="row-"]')).filter(row => {
+        const id  = row.id.replace('row-', '');
+        const cat = document.getElementById('cat-' + id);
+        const amt = document.getElementById('amt-' + id);
+        if (!cat || !amt) return false;
+        const shown = parseFloat(amt.value) || 0;
+        if (shown <= 0) return false;
+        if (!cat.value) return true;
+        if (cat.value !== '__split') return false;
+        // A split whose boxes add to nothing is an amount with nowhere to go.
+        const allocated = LP_CATS.reduce((sum, [k]) => {
+            const h = hiddenFor(id, k);
+            return sum + (h ? (parseFloat(h.value) || 0) : 0);
+        }, 0);
+        return allocated <= 0;
+    });
+}
+
 function updateRow(id) {
     const row = document.getElementById('row-' + id);
     if (!row) return;
@@ -592,15 +939,25 @@ function updateTotals() {
         phone  += getVal(row.querySelector('[name="phone[]"]'));
     });
     const grand = travel+meals+gifts+misc+office+phone;
-    document.getElementById('tot_km').textContent     = km     ? km.toFixed(1)+' km' : '—';
-    document.getElementById('tot_travel').textContent = travel ? '$'+travel.toFixed(2) : '—';
-    document.getElementById('tot_meals').textContent  = meals  ? '$'+meals.toFixed(2)  : '—';
-    document.getElementById('tot_gifts').textContent  = gifts  ? '$'+gifts.toFixed(2)  : '—';
-    document.getElementById('tot_misc').textContent   = misc   ? '$'+misc.toFixed(2)   : '—';
-    document.getElementById('tot_office').textContent = office ? '$'+office.toFixed(2) : '—';
-    document.getElementById('tot_phone').textContent  = phone  ? '$'+phone.toFixed(2)  : '—';
-    document.getElementById('tot_total').textContent  = grand  ? '$'+grand.toFixed(2)  : '—';
+    document.getElementById('tot_km').textContent    = km    ? km.toFixed(1) + ' km' : '—';
+    document.getElementById('tot_total').textContent = grand ? '$' + grand.toFixed(2) : '—';
     document.getElementById('grandTotal').textContent = '$' + grand.toFixed(2);
+
+    // The per-category totals left the table with their columns, but they are
+    // what the Treasurer reads off, so they appear under it — and only the
+    // categories this voucher actually used, rather than six dashes.
+    const strip = document.getElementById('catTotals');
+    if (strip) {
+        const parts = [['Travel', travel], ['Meals', meals], ['Gifts', gifts],
+                       ['Misc', misc], ['Office', office], ['Phone', phone]]
+            .filter(([, v]) => v > 0)
+            .map(([label, v]) => '<span class="cat-total"><span class="cat-total-label">' +
+                 label + '</span> $' + v.toFixed(2) + '</span>');
+        strip.innerHTML = parts.length
+            ? parts.join('') + '<span class="cat-total cat-total-grand">' +
+              '<span class="cat-total-label">Total</span> $' + grand.toFixed(2) + '</span>'
+            : '<span class="cat-total-empty">No amounts entered yet.</span>';
+    }
 }
 
 function isPdfSrc(src) {
@@ -706,7 +1063,7 @@ function handleRowScan(input, rowId) {
                 document.getElementById('rorig-' + rowId).value = data.original_name || '';
                 showThumb(rowId, data.saved_path, null);
             }
-            updateRow(rowId);
+            syncRowFromHidden(rowId);
         })
         .catch(() => { if (spinner) spinner.style.display = 'none'; });
 }
@@ -796,7 +1153,7 @@ function fillRowFromScan(rowId, sd) {
         var bEl = tr.querySelector('[name="budget_line_id[]"]');
         if (bEl && !bEl.value) bEl.value = sd.suggested_bl_id;
     }
-    updateRow(rowId);
+    syncRowFromHidden(rowId);
 }
 
 // Load existing expenses, then add blank rows up to 10 minimum
@@ -858,15 +1215,6 @@ function generateQR() {
     }
 }
 
-function toggleWide() {
-    var wrap = document.querySelector('.wrap');
-    var btn  = document.getElementById('btnWide');
-    if (wrap.classList.toggle('full-wide')) {
-        btn.textContent = '⟵ Narrow';
-    } else {
-        btn.textContent = '⟷ Widen';
-    }
-}
 
 // ── Pending receipts polling ──────────────────────────────────────────────────
 const seenReceiptIds = {};
@@ -1104,6 +1452,22 @@ function showToast(msg) {
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function() { t.classList.remove('show'); }, 4000);
 }
+
+    /* A row with an amount and no category would post six zeroes, and the server
+     * loop skips rows that total nothing — the money would vanish on save. */
+    document.getElementById('voucherForm').addEventListener('submit', function (ev) {
+      const bad = rowsMissingCategory();
+      if (!bad.length) return;
+      ev.preventDefault();
+      bad.forEach(row => {
+        const cat = document.getElementById('cat-' + row.id.replace('row-', ''));
+        if (cat) cat.classList.add('needs-category');
+      });
+      bad[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      alert(bad.length === 1
+        ? 'One row has an amount but no category. Pick a category so the money lands somewhere.'
+        : bad.length + ' rows have an amount but no category. Pick a category for each so the money lands somewhere.');
+    });
 </script>
 <div id="receiptToast"></div>
 </body>
