@@ -269,9 +269,59 @@ $member   = $loggedIn ? getMember() : null;
     .effective-2026 { background: #dbeafe; color: #1e40af; }
     .effective-2028 { background: #fef3c7; color: #92400e; }
 
+    /*
+     * Every other coverage table on this page ends in a short value — "90%",
+     * "$1,000 per year" — which is why the shared rule keeps that column on one
+     * line and right-aligned. This one ends in full sentences, and forbidding
+     * them to wrap pushed the column to 1549px, the table to 1778px inside a
+     * 1072px box, and the whole page 631px wider than the window.
+     */
+    .improvements-box .coverage-table th:last-child { text-align: left; }
+    .improvements-box .coverage-table td:last-child {
+      white-space: normal;
+      text-align: left;
+    }
+
     @media (max-width: 600px) {
       .coverage-table { font-size: .82rem; }
       .coverage-table th, .coverage-table td { padding: .55rem .7rem; }
+
+      /*
+       * Three columns do not fit a phone when one of them is a paragraph: the
+       * details column lands at about 96px, two or three words to a line, one
+       * row filling the screen. Each row becomes a card instead — the change,
+       * when it takes effect, and what it means.
+       */
+      .improvements-box .coverage-table thead { display: none; }
+      .improvements-box .coverage-table,
+      .improvements-box .coverage-table tbody,
+      .improvements-box .coverage-table tr,
+      .improvements-box .coverage-table td { display: block; width: 100%; }
+      .improvements-box .coverage-table tr {
+        background: #fff;
+        border: 1px solid #bbf7d0;
+        border-radius: 8px;
+        padding: .7rem .8rem;
+        margin-bottom: .55rem;
+      }
+      .improvements-box .coverage-table tr:last-child { margin-bottom: 0; }
+      .improvements-box .coverage-table td,
+      .improvements-box .coverage-table tr:nth-child(even) td {
+        background: transparent;
+        border-bottom: none;
+        padding: .15rem 0;
+      }
+      .improvements-box .coverage-table td:first-child { font-size: .9rem; }
+      /* The badge alone reads as a date with nothing saying what it is of. */
+      .improvements-box .coverage-table td:nth-child(2)::before {
+        content: "Effective ";
+        font-size: .72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        color: var(--gray-500);
+        margin-right: .3rem;
+      }
     }
   </style>
 </head>
