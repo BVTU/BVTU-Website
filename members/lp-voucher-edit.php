@@ -487,6 +487,8 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
   </div>
 </div>
 
+<script src="../js/qrcode.js?v=<?= @filemtime(__DIR__ . '/../js/qrcode.js') ?>"></script>
+<script src="../js/qr-img.js?v=<?= @filemtime(__DIR__ . '/../js/qr-img.js') ?>"></script>
 <script>
   const LP_CSRF = <?= json_encode(csrfToken()) ?>;
 
@@ -849,8 +851,11 @@ function clearPhoneTarget() {
 
 function generateQR() {
     var img = document.getElementById('qrImg');
-    img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&color=1a2e1a&bgcolor=ffffff&data=' + encodeURIComponent(MOBILE_URL);
-    qrGenerated = true;
+    if (bvtuQrInto(img, MOBILE_URL, 180)) {
+        qrGenerated = true;
+    } else {
+        img.style.display = 'none';   // the link is printed below regardless
+    }
 }
 
 function toggleWide() {

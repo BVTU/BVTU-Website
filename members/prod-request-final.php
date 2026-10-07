@@ -337,6 +337,8 @@ $mobileUrl   = "{$protocol}://{$host}/members/prod-mobile-receipt.php?token={$up
 
 <div id="receiptToast"></div>
 
+<script src="../js/qrcode.js?v=<?= @filemtime(__DIR__ . '/../js/qrcode.js') ?>"></script>
+<script src="../js/qr-img.js?v=<?= @filemtime(__DIR__ . '/../js/qr-img.js') ?>"></script>
 <script>
   const PROD_CSRF = <?= json_encode(csrfToken()) ?>;
 
@@ -353,9 +355,12 @@ function toggleQR() {
     panel.classList.toggle('open', qrPanelOpen);
     if (qrPanelOpen && !qrGenerated) {
         var img = document.getElementById('qrImg');
-        img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&color=1a2e1a&bgcolor=ffffff&data=' + encodeURIComponent(MOBILE_URL);
+        if (bvtuQrInto(img, MOBILE_URL, 160)) {
+            qrGenerated = true;
+        } else {
+            img.style.display = 'none';   // the link below still works
+        }
         document.getElementById('qrUrlText').textContent = MOBILE_URL;
-        qrGenerated = true;
         if (!pollInterval) {
             pollReceipt();
             pollInterval = setInterval(pollReceipt, 5000);

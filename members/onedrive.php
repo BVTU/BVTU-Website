@@ -161,8 +161,9 @@ $recent = odRecentUploads();
   <?php if ($live): ?>
   <h2 class="sec">Upload documents</h2>
   <div class="pcard qr-row">
-    <img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&color=1a2e1a&bgcolor=ffffff&data=<?= urlencode($mobileUrl) ?>"
-         width="160" height="160" alt="QR code to open the camera page on your phone">
+    <img id="qrImg" width="160" height="160" alt="QR code to open the camera page on your phone"
+         style="border-radius:8px;background:#fff;">
+    <noscript><a href="<?= htmlspecialchars($mobileUrl) ?>">Open the uploader link</a></noscript>
     <div class="txt">
       <strong style="color:var(--gray-800);">Scan with your phone</strong><br>
       Browse to any folder in your OneDrive, then photograph a document into it. Give it a
@@ -200,5 +201,22 @@ $recent = odRecentUploads();
   <?php endif; ?>
 
 </div>
+<script src="../js/qrcode.js?v=<?= @filemtime(__DIR__ . '/../js/qrcode.js') ?>"></script>
+<script src="../js/qr-img.js?v=<?= @filemtime(__DIR__ . '/../js/qr-img.js') ?>"></script>
+<?php if ($live): ?>
+<script>
+(function () {
+  var img = document.getElementById('qrImg');
+  var url = <?= json_encode($mobileUrl) ?>;
+  if (bvtuQrInto(img, url, 160)) return;
+  // Say so and give them the link rather than leaving an empty box.
+  var a = document.createElement('a');
+  a.href = url;
+  a.textContent = "Open the uploader on your phone";
+  a.style.fontWeight = '700';
+  if (img && img.parentNode) img.parentNode.replaceChild(a, img);
+})();
+</script>
+<?php endif; ?>
 </body>
 </html>

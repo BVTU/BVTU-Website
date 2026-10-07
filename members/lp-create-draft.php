@@ -31,10 +31,20 @@ lpEnsureTables();
 
 // Clean up abandoned drafts older than 24 hours (belt-and-suspenders hygiene)
 try {
-    getDB()->prepare(
-        "DELETE FROM lp_vouchers WHERE name='(draft)' AND status='draft'
+    $db0   = getDB();
+    $stale = $db0->query(
+        "SELECT id FROM lp_vouchers WHERE name='(draft)' AND status='draft'
          AND created_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)"
-    )->execute([]);
+    )->fetchAll(PDO::FETCH_COLUMN);
+    if ($stale) {
+        $ph = implode(',', array_fill(0, count($stale), '?'));
+        // Children first, as in exp-create-draft.php: no foreign keys, so
+        // tokens and unclaimed receipts would otherwise outlive the voucher.
+        $db0->prepare("DELETE FROM lp_expenses         WHERE voucher_id IN ($ph)")->execute($stale);
+        $db0->prepare("DELETE FROM lp_upload_tokens    WHERE voucher_id IN ($ph)")->execute($stale);
+        $db0->prepare("DELETE FROM lp_pending_receipts WHERE voucher_id IN ($ph)")->execute($stale);
+        $db0->prepare("DELETE FROM lp_vouchers        WHERE id IN ($ph)")->execute($stale);
+    }
 } catch (Exception $e) {}
 
 // Create the draft voucher

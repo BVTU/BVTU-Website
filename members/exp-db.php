@@ -1013,8 +1013,11 @@ function expAddPendingReceipt(int $expenseId, string $savedPath, string $origNam
 
 function expGetPendingReceipt(int $expenseId): ?array {
     $s = getDB()->prepare(
+        // Oldest first: receipts are handed over one per poll, and taking the
+        // newest would apply a burst of photos in reverse and give the pinned
+        // row the wrong one.
         "SELECT * FROM exp_pending_receipts WHERE expense_id=? AND claimed=0
-         ORDER BY created_at DESC LIMIT 1"
+         ORDER BY created_at ASC, id ASC LIMIT 1"
     );
     $s->execute([$expenseId]);
     $r = $s->fetch();

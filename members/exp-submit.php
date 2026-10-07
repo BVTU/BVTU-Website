@@ -284,6 +284,26 @@ $rows = $items ?: [[
     .save-bar .total-display { font-size: 1.2rem; font-weight: 900; color: var(--primary); margin-right: auto; }
     .save-bar .total-display span { display: block; font-size: .72rem; font-weight: 600; color: var(--gray-400); text-transform: uppercase; letter-spacing: .04em; }
 
+    /* ── Phone upload ── */
+    .btn-phone { background:#f0fdf4; color:var(--primary); border:1.5px solid #86efac; border-radius:8px; padding:.45rem .85rem; font-size:.85rem; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:.4rem; }
+    .btn-phone:hover { background:#dcfce7; }
+    .qr-panel { display:none; background:#fff; border:1px solid var(--gray-200); border-radius:12px; padding:1.25rem 1.5rem; margin-bottom:1.25rem; }
+    .qr-panel.open { display:flex; gap:1.5rem; align-items:flex-start; flex-wrap:wrap; }
+    .qr-box { flex-shrink:0; }
+    .qr-instructions h3 { font-size:.95rem; font-weight:800; color:var(--primary); margin:0 0 .5rem; }
+    .qr-instructions p { font-size:.83rem; color:var(--gray-500); line-height:1.55; margin:0 0 .6rem; max-width:46ch; }
+    .qr-url { font-size:.72rem; color:var(--gray-400); word-break:break-all; background:var(--off-white); padding:.4rem .6rem; border-radius:5px; }
+    .qr-loading { display:flex; align-items:center; gap:.6rem; font-size:.85rem; color:var(--gray-500); padding:.5rem 0; }
+    .qr-spinner { width:18px; height:18px; border:2px solid var(--gray-200); border-top-color:var(--primary); border-radius:50%; animation:spin .7s linear infinite; flex-shrink:0; }
+    .qr-target { display:none; background:#f0fdf4; border:1.5px solid #86efac; border-radius:8px; padding:.5rem .75rem; margin-top:.6rem; font-size:.82rem; color:#166534; align-items:center; gap:.5rem; flex-wrap:wrap; }
+    .qr-target-clear { background:none; border:none; cursor:pointer; color:#9ca3af; font-size:.9rem; margin-left:auto; padding:.1rem .3rem; border-radius:4px; }
+    .qr-target-clear:hover { color:#dc2626; background:#fef2f2; }
+    .receipt-phone-btn { background:none; border:1px dashed #86efac; border-radius:5px; padding:.2rem .4rem; margin-top:.35rem; cursor:pointer; font-size:.72rem; color:var(--primary); width:100%; }
+    .receipt-phone-btn:hover { background:#f0fdf4; border-style:solid; }
+    .receipt-phone-btn.targeting { background:#dcfce7; border-style:solid; border-color:var(--primary); font-weight:700; }
+    tr.row-flash { animation: rowflash 1.6s ease-out; }
+    @keyframes rowflash { 0% { background:#dcfce7; } 100% { background:transparent; } }
+
     #receiptToast { position: fixed; bottom: 5rem; left: 50%; transform: translateX(-50%) translateY(20px); background: #1a6b35; color: #fff; font-size: .9rem; font-weight: 700; padding: .75rem 1.25rem; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,.2); opacity: 0; transition: opacity .3s, transform .3s; pointer-events: none; z-index: 9999; white-space: nowrap; }
     #receiptToast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
@@ -373,7 +393,36 @@ $rows = $items ?: [[
 
     <div class="toolbar">
       <button type="button" class="btn-add" onclick="addRow()">&#x2795; Add expense item</button>
+      <button type="button" class="btn-phone" onclick="openPhoneUpload()">&#x1F4F1; Use my phone's camera</button>
       <span style="font-size:.8rem;color:var(--gray-400);">Each item needs its own receipt (or mark "no receipt").</span>
+    </div>
+
+    <?php // The phone uploader this opens, and everything behind it, already
+          // existed — exp-create-draft.php, exp-mobile-receipt.php,
+          // exp-mobile-scan.php, exp-poll-receipt.php and exp-claim-receipt.php
+          // were all written and never linked to from anywhere. ?>
+    <div class="qr-panel" id="qrPanel">
+      <div class="qr-box">
+        <img id="qrImg" src="" alt="QR code to open the receipt uploader on your phone"
+             style="border-radius:8px;display:none;">
+        <div class="qr-loading" id="qrLoading"><div class="qr-spinner"></div> Setting up&hellip;</div>
+      </div>
+      <div class="qr-instructions" id="qrInstructions" style="display:none;">
+        <h3>&#x1F4F1; Photograph receipts with your phone</h3>
+        <p>Point your phone's camera at this code. The page that opens goes
+           straight to the camera — take a photo of a receipt and it appears in
+           your claim here, read and filled in automatically. No email, no AirDrop.</p>
+        <div class="qr-url" id="qrUrlText"></div>
+        <div class="qr-target" id="qrTarget">
+          &#x1F4CC; Next photo &rarr; <strong id="qrTargetLabel"></strong>
+          <button type="button" class="qr-target-clear" onclick="clearPhoneTarget()"
+                  title="Stop sending to that item">&#x2715;</button>
+        </div>
+        <p style="margin:.6rem 0 0;font-size:.78rem;color:var(--gray-400);">
+          Keep this code to yourself — anyone who scans it can add a receipt to
+          this claim. It stops working once you leave the page for a day.
+        </p>
+      </div>
     </div>
 
     <div class="item-table-wrap">
@@ -422,8 +471,11 @@ $rows = $items ?: [[
 
 <div id="receiptToast"></div>
 
+<script src="../js/qrcode.js?v=<?= @filemtime(__DIR__ . '/../js/qrcode.js') ?>"></script>
+<script src="../js/qr-img.js?v=<?= @filemtime(__DIR__ . '/../js/qr-img.js') ?>"></script>
 <script>
 var ROW_INDEX = <?= count($rows) ?>;
+var EXP_CSRF  = <?= json_encode(csrfToken()) ?>;
 var CATEGORIES = <?= json_encode($catLabels) ?>;
 
 function emptyRowHtml(idx) {
@@ -481,6 +533,9 @@ function emptyRowHtml(idx) {
           '<span class="zone-label">&#x1F4F7; Upload receipt</span>' +
           '<input type="file" accept="image/*,.pdf" onchange="handleRowFile(this)">' +
         '</label>' +
+        '<button type="button" class="receipt-phone-btn" onclick="phoneForRow(this)">' +
+          '&#x1F4F1; Photograph this one' +
+        '</button>' +
         '<div class="row-flag" style="display:none;"></div>' +
         '<label class="no-receipt-mini"><input type="checkbox" onchange="toggleNoReceiptMini(this)"> No receipt for this item</label>' +
       '</td>' +
@@ -514,9 +569,11 @@ function removeRow(btn) {
     zone.style.pointerEvents = 'auto';
     zone.querySelector('.zone-label').innerHTML = '&#x1F4F7; Upload receipt';
     row.querySelector('.row-flag').style.display = 'none';
+    if (typeof expTargetRow !== 'undefined' && expTargetRow === row) clearPhoneTarget();
     recalcTotal();
     return;
   }
+  if (typeof expTargetRow !== 'undefined' && expTargetRow === row) clearPhoneTarget();
   row.remove();
   recalcTotal();
 }
@@ -539,6 +596,258 @@ function recalcTotal() {
   var formatted = sum.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   document.getElementById('totalDisplay').textContent = '$' + formatted;
   document.getElementById('saveBarTotal').textContent = formatted;
+}
+
+/* ── Phone upload ───────────────────────────────────────────────────────────
+ *
+ * The desktop file picker cannot reach a phone's camera, so a receipt in
+ * somebody's hand used to mean photographing it, emailing it to themselves and
+ * then uploading the attachment. This opens a code the phone's camera reads; the
+ * page behind it goes straight to the camera, and the photo arrives here.
+ *
+ * The draft expense created for this is only a mailbox for arriving receipts —
+ * it is not the claim, which already exists as a draft batch. It is hidden from
+ * the dashboard and swept up after a day.
+ */
+var EXP_DRAFT_ID = 0,
+    expMobileUrl = '',
+    qrPanelOpen  = false,
+    qrGenerated  = false,
+    expPoll      = null,
+    expTargetRow = null,   // the <tr> the next photo attaches to, if any
+    expSeen      = {};
+
+var expDraftPending = false;
+
+function openPhoneUpload() {
+  var panel = document.getElementById('qrPanel');
+  panel.classList.add('open');
+  qrPanelOpen = true;
+
+  if (EXP_DRAFT_ID) { showQR(); startPolling(); return; }
+  if (expDraftPending) return;   // a second click would mint a second mailbox
+  expDraftPending = true;
+
+  document.getElementById('qrLoading').style.display = 'flex';
+  document.getElementById('qrInstructions').style.display = 'none';
+
+  var fd = new FormData();
+  fd.append('csrf_token', EXP_CSRF);
+  fetch('exp-create-draft.php', { method: 'POST', body: fd })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      expDraftPending = false;
+      if (!d || !d.ok) { qrFailed((d && d.error) || 'Could not start the upload session.'); return; }
+      EXP_DRAFT_ID = d.expense_id;
+      expMobileUrl = d.mobile_url;
+      showQR();
+      startPolling();
+    })
+    .catch(function() { expDraftPending = false; qrFailed('Could not reach the server.'); });
+}
+
+/* Every failure path clears the spinner. A spinner left turning says "still
+ * working" when nothing is. */
+function qrFailed(why) {
+  document.getElementById('qrLoading').innerHTML =
+    '\u26A0 ' + why + ' <a href="#" onclick="retryPhoneUpload();return false;" ' +
+    'style="color:var(--primary);font-weight:700;">Try again</a>';
+}
+
+function retryPhoneUpload() {
+  document.getElementById('qrLoading').innerHTML =
+    '<div class="qr-spinner"></div> Setting up\u2026';
+  openPhoneUpload();
+}
+
+function showQR() {
+  document.getElementById('qrLoading').style.display = 'none';
+  document.getElementById('qrInstructions').style.display = 'block';
+  document.getElementById('qrUrlText').textContent = expMobileUrl;
+  if (!qrGenerated && expMobileUrl) {
+    var img = document.getElementById('qrImg');
+    // Drawn in the browser: the URL carries an upload token that needs no
+    // login, so it is not handed to a QR service to put in its logs.
+    if (bvtuQrInto(img, expMobileUrl, 180)) {
+      img.style.display = 'block';
+      qrGenerated = true;
+    } else {
+      document.getElementById('qrLoading').style.display = 'flex';
+      qrFailed('Could not draw the code. Open the link below on your phone instead.');
+      document.getElementById('qrInstructions').style.display = 'block';
+    }
+  }
+}
+
+function phoneForRow(btn) {
+  var tr = btn.closest('tr');
+  if (!qrPanelOpen) openPhoneUpload();
+
+  expTargetRow = tr;
+  var descEl = tr.querySelector('textarea[name="description[]"]');
+  var dateEl = tr.querySelector('input[name="expense_date[]"]');
+  var desc   = descEl && descEl.value.trim();
+  var rows   = Array.prototype.slice.call(document.querySelectorAll('#itemTbody tr'));
+  var label  = desc || (dateEl && dateEl.value) || ('Item ' + (rows.indexOf(tr) + 1));
+
+  document.getElementById('qrTargetLabel').textContent = label;
+  document.getElementById('qrTarget').style.display = 'flex';
+
+  document.querySelectorAll('.receipt-phone-btn').forEach(function(b) {
+    b.classList.remove('targeting');
+  });
+  btn.classList.add('targeting');
+  document.getElementById('qrPanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function clearPhoneTarget() {
+  expTargetRow = null;
+  document.getElementById('qrTarget').style.display = 'none';
+  document.querySelectorAll('.receipt-phone-btn').forEach(function(b) {
+    b.classList.remove('targeting');
+  });
+}
+
+function startPolling() {
+  if (expPoll || !EXP_DRAFT_ID) return;
+  pollPhoneReceipt();
+  expPoll = setInterval(pollPhoneReceipt, 5000);
+}
+
+function pollPhoneReceipt() {
+  if (!EXP_DRAFT_ID) return;
+  fetch('exp-poll-receipt.php?expense_id=' + EXP_DRAFT_ID)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var rec = d && d.receipt;
+      if (!rec || expSeen[rec.id]) return;
+      expSeen[rec.id] = true;
+      takePhoneReceipt(rec);
+    })
+    .catch(function() {});
+}
+
+/* Receipts land in the targeted row, or in a fresh row when nothing is
+ * targeted — so a photo is never silently dropped. */
+function takePhoneReceipt(rec) {
+  var sd = rec.scan_data || {};
+  var data = {
+    saved_path:    rec.saved_path,
+    original_name: rec.original_name || '',
+    vendor:   sd.vendor   || '',
+    date:     sd.date     || '',
+    amount:   sd.amount   || '',
+    category: sd.category || '',
+    concerns: sd.concerns || '',
+    flag:     sd.flag     || ''
+  };
+
+  // A targeted row that has since been removed, or already has a receipt, is
+  // not a target any more.
+  var tr = expTargetRow;
+  if (tr && (!document.body.contains(tr) ||
+             (tr.querySelector('.f-receipt-path') || {}).value)) {
+    clearPhoneTarget();
+    tr = null;
+  }
+  if (!tr) {
+    tr = firstEmptyReceiptRow();
+    if (!tr) { addRow(); tr = document.querySelector('#itemTbody tr:last-child'); }
+  } else {
+    clearPhoneTarget();
+  }
+
+  // Pinning a row and then photographing a receipt for it settles the question
+  // of whether there is one.
+  var noneCb = tr.querySelector('.no-receipt-mini input[type=checkbox]');
+  if (noneCb && noneCb.checked) { noneCb.checked = false; toggleNoReceiptMini(noneCb); }
+
+  applyScanToRow(tr.querySelector('td[data-label="Receipt"]'), data);
+
+  tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  tr.classList.add('row-flash');
+  setTimeout(function() { tr.classList.remove('row-flash'); }, 1600);
+  showToast('📱 ' + (data.vendor || 'Receipt') + ' added from your phone');
+
+  // Mark it dealt with, or the next poll offers it again.
+  var fd = new FormData();
+  fd.append('pending_id', rec.id);
+  fd.append('csrf_token', EXP_CSRF);
+  fetch('exp-claim-receipt.php', { method: 'POST', body: fd })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      // Deliberately not re-offered: the receipt is already in a row, and
+      // putting it back invites a second row against the same photo.
+      if (!d || !d.ok) {
+        alert((d && d.error) ? d.error
+          : 'That receipt is attached, but could not be marked as filed. Reload '
+            + 'before adding more so it is not attached twice.');
+      }
+    })
+    .catch(function() {
+      alert('That receipt is attached, but the server did not confirm it. Reload '
+            + 'before adding more so it is not attached twice.');
+    });
+}
+
+/* A row with no receipt and no "no receipt" tick — somewhere a photo belongs. */
+function firstEmptyReceiptRow() {
+  var found = null;
+  document.querySelectorAll('#itemTbody tr').forEach(function(tr) {
+    if (found) return;
+    var path = tr.querySelector('.f-receipt-path');
+    var none = tr.querySelector('.f-no-receipt');
+    if (path && !path.value.trim() && (!none || none.value !== '1')) found = tr;
+  });
+  return found;
+}
+
+/*
+ * Put a scanned receipt into a row.
+ *
+ * Shared by the desktop upload and the phone, so a receipt photographed on a
+ * phone lands in exactly the same fields, with the same prefilling and the same
+ * flag, as one picked off a hard drive. The two drifting apart is the obvious
+ * way for this to go wrong later.
+ */
+function applyScanToRow(td, data) {
+  var zone  = td.querySelector('.receipt-zone');
+  var label = zone.querySelector('.zone-label');
+  var flag  = td.querySelector('.row-flag');
+
+  td.querySelector('.f-receipt-path').value   = data.saved_path    || '';
+  td.querySelector('.f-receipt-orig').value   = data.original_name || '';
+  td.querySelector('.f-ext-vendor').value     = data.vendor        || '';
+  td.querySelector('.f-ext-date').value       = data.date          || '';
+  td.querySelector('.f-ext-amount').value     = data.amount        || '';
+  td.querySelector('.f-ext-flag').value       = data.flag          || '';
+  td.querySelector('.f-ext-concerns').value   = data.concerns      || '';
+
+  zone.classList.add('has-file');
+  label.textContent = '✅ ' + (data.original_name || 'Receipt attached');
+
+  var row = td.closest('tr');
+  var amountEl = row.querySelector('input[name="amount[]"]');
+  var dateEl   = row.querySelector('input[name="expense_date[]"]');
+  var catEl    = row.querySelector('select[name="category[]"]');
+
+  if (data.amount && !amountEl.value) {
+    amountEl.value = parseFloat(data.amount).toFixed(2);
+    recalcTotal();
+  }
+  if (data.date && !dateEl.value) dateEl.value = data.date;
+  if (data.category && !catEl.value) {
+    for (var i = 0; i < catEl.options.length; i++) {
+      if (catEl.options[i].value === data.category) { catEl.selectedIndex = i; break; }
+    }
+  }
+  if (data.concerns || data.flag) {
+    flag.textContent = '⚠ ' + (data.concerns || 'Flagged for review');
+    flag.style.display = 'block';
+  } else {
+    flag.textContent = '';
+    flag.style.display = 'none';
+  }
 }
 
 function handleRowFile(input) {
@@ -567,36 +876,7 @@ function handleRowFile(input) {
         return;
       }
 
-      td.querySelector('.f-receipt-path').value   = data.saved_path    || '';
-      td.querySelector('.f-receipt-orig').value   = data.original_name || '';
-      td.querySelector('.f-ext-vendor').value     = data.vendor        || '';
-      td.querySelector('.f-ext-date').value       = data.date          || '';
-      td.querySelector('.f-ext-amount').value     = data.amount        || '';
-      td.querySelector('.f-ext-flag').value       = data.flag          || '';
-      td.querySelector('.f-ext-concerns').value   = data.concerns      || '';
-
-      zone.classList.add('has-file');
-      label.textContent = '✅ ' + (data.original_name || 'Receipt attached');
-
-      var row = td.closest('tr');
-      var amountEl = row.querySelector('input[name="amount[]"]');
-      var dateEl   = row.querySelector('input[name="expense_date[]"]');
-      var catEl    = row.querySelector('select[name="category[]"]');
-
-      if (data.amount && !amountEl.value) {
-        amountEl.value = parseFloat(data.amount).toFixed(2);
-        recalcTotal();
-      }
-      if (data.date && !dateEl.value) dateEl.value = data.date;
-      if (data.category && !catEl.value) {
-        for (var i = 0; i < catEl.options.length; i++) {
-          if (catEl.options[i].value === data.category) { catEl.selectedIndex = i; break; }
-        }
-      }
-      if (data.concerns || data.flag) {
-        flag.textContent = '⚠ ' + (data.concerns || 'Flagged for review');
-        flag.style.display = 'block';
-      }
+      applyScanToRow(td, data);
       showToast('Receipt scanned — fields auto-filled');
     })
     .catch(function() {
@@ -681,6 +961,7 @@ function renderItemRow(int $idx, array $row, array $catLabels): string {
           <span class="zone-label">' . $zoneLabel . '</span>
           <input type="file" accept="image/*,.pdf" onchange="handleRowFile(this)">
         </label>
+        <button type="button" class="receipt-phone-btn" onclick="phoneForRow(this)">&#x1F4F1; Photograph this one</button>
         ' . $flagHtml . '
         <label class="no-receipt-mini"><input type="checkbox" onchange="toggleNoReceiptMini(this)"' . ($noReceiptChecked ? ' checked' : '') . '> No receipt for this item</label>
       </td>

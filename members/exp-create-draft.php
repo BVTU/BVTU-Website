@@ -19,9 +19,38 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+// Inserts a row and mints an upload token, so it is a state change. Reported as
+// JSON rather than through csrfCheck()'s plain-text exit, which the caller's
+// r.json() would choke on and report as "could not reach the server".
+if (!csrfValid()) {
+    http_response_code(400);
+    echo json_encode(['ok' => false, 'error' => 'Could not verify the request. Reload the page.']);
+    exit;
+}
+
 expEnsureTables();
 
 $db      = getDB();
+
+// Each press of Phone Upload leaves a placeholder behind, and placeholders are
+// filtered out of the dashboard, so without this they pile up where nobody can
+// see them. Same sweep lp-create-draft.php does.
+try {
+    $stale = $db->query(
+        "SELECT id FROM exp_expenses
+         WHERE description='(draft)' AND status='draft'
+           AND created_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)"
+    )->fetchAll(PDO::FETCH_COLUMN);
+    if ($stale) {
+        $ph = implode(',', array_fill(0, count($stale), '?'));
+        // Children first: nothing enforces this for us, and a token that
+        // outlives its expense resolves to a bare 404 rather than saying the
+        // link has expired.
+        $db->prepare("DELETE FROM exp_upload_tokens    WHERE expense_id IN ($ph)")->execute($stale);
+        $db->prepare("DELETE FROM exp_pending_receipts WHERE expense_id IN ($ph)")->execute($stale);
+        $db->prepare("DELETE FROM exp_expenses        WHERE id IN ($ph)")->execute($stale);
+    }
+} catch (Exception $e) {}
 $refCode = expGenerateRefCode();
 
 $db->prepare(

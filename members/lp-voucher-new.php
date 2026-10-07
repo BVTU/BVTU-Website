@@ -447,6 +447,8 @@ $initRowsJson = json_encode($initRows);
   <?php endif; ?>
 </div>
 
+<script src="../js/qrcode.js?v=<?= @filemtime(__DIR__ . '/../js/qrcode.js') ?>"></script>
+<script src="../js/qr-img.js?v=<?= @filemtime(__DIR__ . '/../js/qr-img.js') ?>"></script>
 <script>
 const GRANTS       = <?= $grantsJson ?>;
 const BUDGET_LINES = <?= $budgetLinesJson ?>;
@@ -943,10 +945,18 @@ function showQR() {
     document.getElementById('qrInstructions').style.display = 'block';
     document.getElementById('qrUrlText').textContent = mobileUrl;
     if (!qrGenerated && mobileUrl) {
+        // Drawn here rather than fetched from a QR service: the URL carries an
+        // upload token that needs no login, and a query string is the part of a
+        // request most likely to end up in somebody else's logs.
         var img = document.getElementById('qrImg');
-        img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&color=1a2e1a&bgcolor=ffffff&data=' + encodeURIComponent(mobileUrl);
-        img.style.display = 'block';
-        qrGenerated = true;
+        if (bvtuQrInto(img, mobileUrl, 180)) {
+            img.style.display = 'block';
+            qrGenerated = true;
+        } else {
+            document.getElementById('qrLoading').style.display = 'flex';
+            qrFailed('Could not draw the QR code. Open the link below on your phone instead.');
+            document.getElementById('qrInstructions').style.display = 'block';
+        }
     }
 }
 
