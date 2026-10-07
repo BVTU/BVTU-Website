@@ -7,6 +7,13 @@ require_once __DIR__ . '/onedrive-db.php';
 
 $token = trim($_GET['token'] ?? '');
 $row   = $token ? odValidateUploadToken($token) : null;
+
+// Shared links are handed to someone who cannot open the admin page, so "scan
+// the QR again" is no use to them — they need to be told to ask for a new link.
+$shareLabel = $row && ($row['kind'] ?? 'self') === 'share' ? trim((string)$row['label']) : '';
+// From the database's seconds-remaining, the same clock that let this page open.
+$shareUntil = $row && isset($row['secs_left']) && $row['secs_left'] !== null
+            ? time() + (int)$row['secs_left'] : 0;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -51,12 +58,23 @@ $row   = $token ? odValidateUploadToken($token) : null;
 <body>
 
 <?php if (!$row): ?>
-  <div class="err"><strong>This link has expired.</strong><br>
-    Open OneDrive Doc Upload on your computer and scan the QR code again.</div>
+  <div class="err"><strong>This link no longer works.</strong><br>
+    It may have run out, or been turned off. If someone shared it with you, ask
+    them for a new one. If it is your own, open OneDrive Doc Upload on your
+    computer and scan the QR code again.</div>
 <?php else: ?>
 
   <h1>Upload to OneDrive</h1>
   <div class="sub">Choose a folder, then photograph a document into it.</div>
+  <?php if ($shareLabel !== ''): ?>
+    <div class="sub" style="background:#eef6f0;border:1px solid #c7e3d1;border-radius:8px;
+                            padding:.55rem .7rem;margin:-.5rem 0 1rem;color:#14532d;">
+      Shared with <strong><?= htmlspecialchars($shareLabel) ?></strong><?php
+        if ($shareUntil): ?> &middot; works until
+        <strong><?= date('g:ia \o\n D j M', $shareUntil) ?></strong><?php endif; ?>.
+      Uploads are recorded under that name.
+    </div>
+  <?php endif; ?>
 
   <div class="crumbs" id="crumbs"></div>
   <div id="folders"></div>

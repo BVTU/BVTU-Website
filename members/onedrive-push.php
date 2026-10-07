@@ -16,7 +16,13 @@ $token = $_POST['token'] ?? '';
 $row   = $token ? odValidateUploadToken($token) : null;
 $who   = null;
 if ($row) {
-    $who = $row['created_by'];
+    // A share is logged under the name it was issued to, so the upload list says
+    // who actually did it rather than crediting the president with everything.
+    $label = trim((string)($row['label'] ?? ''));
+    $who   = ($row['kind'] ?? 'self') === 'share' && $label !== ''
+           ? $label . ' (shared link)'
+           : $row['created_by'];
+    odTouchToken($token);
 } else {
     startSession();
     if (isLoggedIn() && execIsAdmin(getMember()['email'])) $who = getMember()['email'];

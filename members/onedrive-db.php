@@ -52,6 +52,41 @@ function odEnsureTables(): void {
         created_by VARCHAR(255) NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    /*
+     * Shared links.
+     *
+     * The page used to mint one token per load and delete every earlier one, so
+     * handing somebody a link and then reopening the page silently broke theirs.
+     * A share is a separate row with a name on it and an hour it stops working,
+     * so lending someone upload access for an afternoon does not mean lending
+     * them a phone and an account.
+     */
+    $ok = true;
+    foreach ([
+        'label'        => "VARCHAR(120) NOT NULL DEFAULT ''",
+        'ref'          => "VARCHAR(24) NOT NULL DEFAULT ''",
+        'kind'         => "VARCHAR(16) NOT NULL DEFAULT 'self'",
+        'expires_at'   => 'DATETIME DEFAULT NULL',
+        'revoked_at'   => 'DATETIME DEFAULT NULL',
+        'revoked_by'   => "VARCHAR(255) NOT NULL DEFAULT ''",
+        'last_used_at' => 'DATETIME DEFAULT NULL',
+        'uses'         => 'INT NOT NULL DEFAULT 0',
+    ] as $col => $type) {
+        try {
+            $db->query("SELECT `$col` FROM onedrive_tokens LIMIT 1");
+        } catch (\PDOException $e) {
+            try {
+                $db->exec("ALTER TABLE onedrive_tokens ADD COLUMN `$col` $type");
+            } catch (\Exception $e2) {
+                // Said out loud. Silently losing the column would turn every
+                // later query into a fatal on the admin page instead.
+                error_log('onedrive: could not add ' . $col . ' — ' . $e2->getMessage());
+                $ok = false;
+            }
+        }
+    }
+    $GLOBALS['od_share_cols'] = $ok;
 }
 
 function odIsConfigured(): bool {
@@ -220,17 +255,135 @@ function odRecentUploads(int $limit = 25): array {
     return $s->fetchAll();
 }
 
+/** Whether the share columns are actually there. A host whose DB user cannot
+ *  ALTER keeps the old behaviour rather than a broken page. */
+function odShareCols(): bool {
+    odEnsureTables();
+    return !empty($GLOBALS['od_share_cols']);
+}
+
+/** The admin's own QR, replaced each time they open the page. */
 function odCreateUploadToken(string $email): string {
     odEnsureTables();
-    getDB()->prepare("DELETE FROM onedrive_tokens WHERE created_by=?")->execute([$email]);
     $t = bin2hex(random_bytes(16));
-    getDB()->prepare("INSERT INTO onedrive_tokens (token, created_by) VALUES (?,?)")->execute([$t, $email]);
+    if (!odShareCols()) {           // pre-migration shape, behaves as it always did
+        getDB()->prepare("DELETE FROM onedrive_tokens WHERE created_by=?")->execute([$email]);
+        getDB()->prepare("INSERT INTO onedrive_tokens (token, created_by) VALUES (?,?)")
+               ->execute([$t, $email]);
+        return $t;
+    }
+    // Only this person's own token, not the shares they have handed out — that
+    // DELETE used to take every row for the address with it.
+    getDB()->prepare("DELETE FROM onedrive_tokens WHERE created_by=? AND kind='self'")
+           ->execute([$email]);
+    getDB()->prepare("INSERT INTO onedrive_tokens (token, created_by, kind) VALUES (?,?,'self')")
+           ->execute([$t, $email]);
     return $t;
 }
 
+/**
+ * A usable token, or null.
+ *
+ * Expiry and revocation are decided here rather than by a sweep, so a link stops
+ * working at the hour it says it will even if nothing has run since.
+ */
 function odValidateUploadToken(string $token): ?array {
     odEnsureTables();
-    $s = getDB()->prepare("SELECT * FROM onedrive_tokens WHERE token=? LIMIT 1");
+    if (!odShareCols()) {
+        $s = getDB()->prepare("SELECT * FROM onedrive_tokens WHERE token=? LIMIT 1");
+        $s->execute([$token]);
+        return $s->fetch() ?: null;
+    }
+    // NOW(), not PHP's clock: db.php sets the session time zone on a best-effort
+    // basis, and on a host where that fails a link compared in PHP would keep
+    // working for hours after the admin list had already called it expired.
+    $s = getDB()->prepare(
+        "SELECT *, TIMESTAMPDIFF(SECOND, NOW(), expires_at) AS secs_left
+         FROM onedrive_tokens
+         WHERE token=? AND revoked_at IS NULL
+           AND (expires_at IS NULL OR expires_at > NOW())
+         LIMIT 1");
     $s->execute([$token]);
     return $s->fetch() ?: null;
+}
+
+/** Note that a share was used, for the list on the admin page. */
+function odTouchToken(string $token): void {
+    try {
+        getDB()->prepare("UPDATE onedrive_tokens SET last_used_at=NOW(), uses=uses+1 WHERE token=?")
+               ->execute([$token]);
+    } catch (Exception $e) {}
+}
+
+/** Create a share. $hours is how long it lasts. */
+function odCreateShare(string $label, int $hours, string $by): ?array {
+    odEnsureTables();
+    $label = trim($label);
+    if ($label === '' || $hours < 1) return null;
+    if ($hours > 720) $hours = 720;          // 30 days, an upper bound on "short"
+    if (!odShareCols()) return null;
+    $t   = bin2hex(random_bytes(16));
+    $ref = bin2hex(random_bytes(8));
+    try {
+        getDB()->prepare(
+            "INSERT INTO onedrive_tokens (token, created_by, kind, label, ref, expires_at)
+             VALUES (?,?,'share',?,?, DATE_ADD(NOW(), INTERVAL ? HOUR))"
+        )->execute([$t, $by, $label, $ref, $hours]);
+    } catch (Exception $e) {
+        error_log('odCreateShare: ' . $e->getMessage());
+        return null;
+    }
+    return ['token' => $t, 'ref' => $ref, 'label' => $label, 'hours' => $hours];
+}
+
+/* Takes the row's ref, not its token: the Turn-off button lives in the page's
+ * HTML, and putting the token there would reprint every live link on a screen
+ * that tells you the link is shown only once. */
+function odRevokeShare(string $ref, string $by): bool {
+    odEnsureTables();
+    if ($ref === '') return false;
+    try {
+        $st = getDB()->prepare(
+            "UPDATE onedrive_tokens SET revoked_at=NOW(), revoked_by=?
+             WHERE ref=? AND kind='share' AND revoked_at IS NULL");
+        $st->execute([$by, $ref]);
+        return $st->rowCount() > 0;
+    } catch (Exception $e) {
+        error_log('odRevokeShare: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/** Shares worth showing: the live ones, and recently finished ones for the record. */
+function odShares(): array {
+    odEnsureTables();
+    try {
+        return getDB()->query(
+            "SELECT *, TIMESTAMPDIFF(SECOND, NOW(), expires_at) AS secs_left
+             FROM onedrive_tokens
+             WHERE kind='share'
+               AND ((revoked_at IS NULL AND expires_at > NOW())
+                    OR COALESCE(revoked_at, expires_at) > DATE_SUB(NOW(), INTERVAL 7 DAY))
+             ORDER BY created_at DESC"
+        )->fetchAll();
+    } catch (Exception $e) {
+        return [];
+    }
+}
+
+/** Live, expired or revoked — said plainly, because a link that quietly stopped
+ *  working is the thing this replaces. */
+function odShareState(array $row): array {
+    if (!empty($row['revoked_at'])) return ['state' => 'revoked', 'text' => 'Revoked'];
+    // secs_left comes from the database, the same clock that decides whether the
+    // link still opens, so the list cannot disagree with the lock.
+    $left = array_key_exists('secs_left', $row) && $row['secs_left'] !== null
+          ? (int)$row['secs_left']
+          : strtotime((string)$row['expires_at']) - time();
+    if ($left <= 0) return ['state' => 'expired', 'text' => 'Expired'];
+    $mins = (int)ceil($left / 60);
+    if ($mins < 60)  return ['state' => 'live', 'text' => $mins . ' min left'];
+    $hours = (int)floor($mins / 60);
+    if ($hours < 48) return ['state' => 'live', 'text' => $hours . ' hr left'];
+    return ['state' => 'live', 'text' => (int)floor($hours / 24) . ' days left'];
 }

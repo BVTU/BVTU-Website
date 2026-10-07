@@ -18,6 +18,9 @@ odEnsureTables();
 $notice = htmlspecialchars($_GET['notice'] ?? '');
 $error  = htmlspecialchars($_GET['error']  ?? '');
 
+$siteBase = defined('SITE_URL') ? rtrim(SITE_URL, '/')
+          : 'https://' . ($_SERVER['HTTP_HOST'] ?? 'bvtu.ca');
+
 $configured = odIsConfigured();
 $account    = $configured ? odGetAccount() : null;
 $live       = false;
@@ -31,10 +34,62 @@ if ($account) {
     $whoami = $live ? ($me['userPrincipalName'] ?? $me['displayName'] ?? '') : '';
 }
 
+// ── Lending upload access for a while ─────────────────────────────────────
+//
+// Both handlers redirect afterwards. Without that, reloading the page re-posts
+// the form and mints a second live link with the same name, and there is no way
+// to tell afterwards which of the two was the one actually sent to anybody.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['od_action'] ?? '') === 'share') {
+    csrfCheck();
+    startSession();
+    // Sharing needs a working connection: the panel that shows the new link, and
+    // the list that can turn it off, are both behind the live check. A link
+    // created without one would exist, work, and be unreachable.
+    if (!$live) {
+        $_SESSION['od_flash'] = 'Connect OneDrive first — a shared link would have nowhere to upload to.';
+    } else {
+        $made = odShareCols()
+              ? odCreateShare((string)($_POST['label'] ?? ''), (int)($_POST['hours'] ?? 0), $member['email'])
+              : null;
+        if (!odShareCols()) {
+            $_SESSION['od_flash'] = 'Sharing is unavailable on this server — the database '
+                                  . 'could not be updated for it. The details are in the error log.';
+            header('Location: onedrive.php'); exit;
+        }
+        if ($made) {
+            // Carried through the redirect rather than put in the URL: the whole
+            // point of the token is that it is not written down anywhere public,
+            // and a URL lands in history and in the server's logs.
+            $_SESSION['od_new_share'] = $made;
+            $_SESSION['od_flash'] = 'Link created for ' . $made['label'] . '. Send it to them below.';
+        } else {
+            $_SESSION['od_flash'] = 'Give the link a name and a length of time.';
+        }
+    }
+    header('Location: onedrive.php'); exit;
+}
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['od_action'] ?? '') === 'revoke') {
+    csrfCheck();
+    startSession();
+    $_SESSION['od_flash'] = odRevokeShare((string)($_POST['ref'] ?? ''), $member['email'])
+        ? 'That link has been turned off. It stops working immediately.'
+        : 'That link was already off.';
+    header('Location: onedrive.php'); exit;
+}
+
+startSession();
+$newShare = $_SESSION['od_new_share'] ?? null;
+unset($_SESSION['od_new_share']);          // shown once, as the panel promises
+if (!empty($_SESSION['od_flash'])) {
+    $notice = htmlspecialchars($_SESSION['od_flash']);
+    unset($_SESSION['od_flash']);
+}
+
+$shares   = odShares();
+$shareUrl = $newShare ? $siteBase . '/members/onedrive-mobile.php?token=' . $newShare['token'] : '';
+
 $uploadToken = $live ? odCreateUploadToken($member['email']) : '';
-$mobileUrl   = $live
-    ? 'https://' . ($_SERVER['HTTP_HOST'] ?? 'bvtu.ca') . '/members/onedrive-mobile.php?token=' . $uploadToken
-    : '';
+$mobileUrl   = $live ? $siteBase . '/members/onedrive-mobile.php?token=' . $uploadToken : '';
 $recent = odRecentUploads();
 ?>
 <!DOCTYPE html>
@@ -173,12 +228,111 @@ $recent = odRecentUploads();
   </div>
   <?php endif; ?>
 
+  <?php if ($live): ?>
+  <h2 class="sec">Lend someone upload access</h2>
+  <div class="pcard">
+    <p style="margin:0 0 1rem;font-size:.9rem;color:var(--gray-600);line-height:1.65;max-width:62ch;">
+      Creates a separate link that opens the same phone uploader without a login, for
+      as long as you say. It does not touch your own QR code above, and it gives them
+      nothing else on this site — no dashboard, no documents, no account. Uploads made
+      through it are recorded under the name you give here.
+    </p>
+
+    <form method="post" style="display:flex;gap:.6rem;align-items:flex-end;flex-wrap:wrap;margin-bottom:1rem;">
+      <?= csrfField() ?>
+      <input type="hidden" name="od_action" value="share">
+      <label style="font-size:.82rem;font-weight:700;color:var(--gray-600);">
+        Who is it for?
+        <input type="text" name="label" maxlength="120" required placeholder="e.g. Dana — office help"
+               style="display:block;margin-top:.25rem;min-width:240px;border:1px solid var(--border);
+                      border-radius:7px;padding:.45rem .6rem;font:inherit;font-size:.9rem;">
+      </label>
+      <label style="font-size:.82rem;font-weight:700;color:var(--gray-600);">
+        For how long?
+        <select name="hours" style="display:block;margin-top:.25rem;border:1px solid var(--border);
+                      border-radius:7px;padding:.45rem .6rem;font:inherit;font-size:.9rem;">
+          <option value="4">4 hours</option>
+          <option value="8" selected>The rest of today (8 hours)</option>
+          <option value="24">24 hours</option>
+          <option value="72">3 days</option>
+          <option value="168">A week</option>
+        </select>
+      </label>
+      <button type="submit" class="btn btn-primary" style="padding:.5rem 1.1rem;font-size:.9rem;">Create link</button>
+    </form>
+
+    <?php if ($newShare): ?>
+      <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:1rem;
+                  display:flex;gap:1.25rem;align-items:flex-start;flex-wrap:wrap;">
+        <img id="shareQr" width="150" height="150" alt="QR code for the shared uploader"
+             style="border-radius:8px;background:#fff;">
+        <div style="flex:1;min-width:260px;">
+          <strong style="color:#166534;">Link for <?= htmlspecialchars($newShare['label']) ?></strong>
+          <p style="font-size:.84rem;color:#14532d;margin:.35rem 0 .6rem;line-height:1.6;">
+            They can scan this, or you can send them the address. It stops working by
+            itself, and you can turn it off sooner from the list below.
+          </p>
+          <input type="text" readonly value="<?= htmlspecialchars($shareUrl) ?>"
+                 onclick="this.select()" style="width:100%;border:1px solid #86efac;border-radius:7px;
+                 padding:.45rem .6rem;font-size:.78rem;font-family:ui-monospace,monospace;background:#fff;">
+          <p style="font-size:.78rem;color:#166534;margin:.5rem 0 0;">
+            This is the only time the full link is shown — the list below can turn it
+            off, but cannot show it again. Copy it now.
+          </p>
+        </div>
+      </div>
+    <?php endif; ?>
+
+    <?php if ($shares): ?>
+      <table style="margin-top:1.25rem;">
+        <thead><tr><th>Shared with</th><th>Status</th><th>Used</th><th></th></tr></thead>
+        <tbody>
+          <?php foreach ($shares as $sh): $st = odShareState($sh); ?>
+          <tr>
+            <td style="font-weight:600;"><?= htmlspecialchars($sh['label']) ?></td>
+            <td style="white-space:nowrap;color:<?= $st['state'] === 'live' ? '#166534' : 'var(--gray-400)' ?>;">
+              <?= htmlspecialchars($st['text']) ?>
+              <?php if ($st['state'] === 'live'): ?>
+                <span style="color:var(--gray-400);font-weight:400;">
+                  (until <?= date('g:ia D j M', time() + (int)$sh['secs_left']) ?>)</span>
+              <?php endif; ?>
+            </td>
+            <td style="color:var(--gray-500);white-space:nowrap;">
+              <?= (int)$sh['uses'] ? (int)$sh['uses'] . ' upload' . ((int)$sh['uses'] === 1 ? '' : 's') : '—' ?>
+              <?php if (!empty($sh['last_used_at'])): ?>
+                <span style="color:var(--gray-400);">· last <?= date('M j, g:ia', strtotime($sh['last_used_at'])) ?></span>
+              <?php endif; ?>
+            </td>
+            <td style="text-align:right;">
+              <?php if ($st['state'] === 'live'): ?>
+              <form method="post" style="display:inline;"
+                    onsubmit="return confirm('Turn off the link for <?= htmlspecialchars(addslashes($sh['label'])) ?>? It stops working straight away.');">
+                <?= csrfField() ?>
+                <input type="hidden" name="od_action" value="revoke">
+                <input type="hidden" name="ref" value="<?= htmlspecialchars($sh['ref']) ?>">
+                <button type="submit" style="background:none;border:1px solid var(--border);border-radius:6px;
+                        padding:.25rem .6rem;font:inherit;font-size:.78rem;color:#991b1b;cursor:pointer;">Turn off</button>
+              </form>
+              <?php endif; ?>
+            </td>
+          </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+      <p style="font-size:.78rem;color:var(--gray-400);margin:.6rem 0 0;">
+        Links that have finished stay listed for a week so you can see they were used,
+        then drop off.
+      </p>
+    <?php endif; ?>
+  </div>
+  <?php endif; ?>
+
   <h2 class="sec">Recent uploads</h2>
   <?php if (!$recent): ?>
     <p class="empty">Nothing uploaded yet.</p>
   <?php else: ?>
   <table>
-    <thead><tr><th>File</th><th>Folder</th><th>When</th></tr></thead>
+    <thead><tr><th>File</th><th>Folder</th><th>By</th><th>When</th></tr></thead>
     <tbody>
       <?php foreach ($recent as $u): ?>
       <tr>
@@ -191,6 +345,7 @@ $recent = odRecentUploads();
           <?php endif; ?>
         </td>
         <td style="color:var(--gray-500);"><?= htmlspecialchars($u['folder_path']) ?></td>
+        <td style="color:var(--gray-500);"><?= htmlspecialchars($u['uploaded_by']) ?></td>
         <td style="color:var(--gray-400);white-space:nowrap;">
           <?= date('M j, g:ia', strtotime($u['created_at'])) ?>
         </td>
@@ -208,6 +363,8 @@ $recent = odRecentUploads();
 (function () {
   var img = document.getElementById('qrImg');
   var url = <?= json_encode($mobileUrl) ?>;
+  const share = document.getElementById('shareQr');
+  if (share) bvtuQrInto(share, <?= json_encode($shareUrl) ?>, 150);
   if (bvtuQrInto(img, url, 160)) return;
   // Say so and give them the link rather than leaving an empty box.
   var a = document.createElement('a');
