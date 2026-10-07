@@ -786,6 +786,54 @@ $member   = $loggedIn ? getMember() : null;
           </div>
         </div>
 
+        <!-- Medical referral travel ──────────────────────────────
+             Kept with the travel coverage below, but it is a different thing:
+             this is planned travel to a specialist you were referred to, not an
+             emergency away from home. Members here routinely drive to Prince
+             George, Terrace or Vancouver for appointments. -->
+        <div class="ben-section">
+          <div class="ben-section-head">
+            <div class="ben-section-icon"><svg viewBox="0 0 24 24"><path d="M5 17h14M5 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM23 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"/><path d="M3 17V9l2.5-4.5h9L18 9h3v8"/></svg></div>
+            Medical Referral Travel Benefit
+            <span class="tier-badge tier-80">$0.28/km &middot; $50/day</span>
+          </div>
+          <p>When your physician refers you to a medical specialist you have to travel
+             to see, this benefit helps with the cost of getting there and staying over.
+             Living where we do, that is a regular fact of life — a referral to Prince
+             George, Terrace or the Lower Mainland is a long drive and often a night away.</p>
+          <table class="coverage-table">
+            <thead>
+              <tr><th>Benefit</th><th>Maximum</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Mileage</td><td>$0.28 per km</td></tr>
+              <tr><td>Accommodation</td><td>$50 per day &middot; up to 7 days</td></tr>
+              <tr><td>Meals</td><td>Not covered</td></tr>
+            </tbody>
+          </table>
+
+          <div class="info-box" style="font-size:.88rem;">
+            <strong>Before you go:</strong> Part 3 of the claim form has to be filled in
+            and signed by the physician who referred you — it is far easier to get that
+            done at the referral appointment than to chase it afterwards. Keep your
+            itemized accommodation receipts; Pacific Blue Cross asks for the originals,
+            and an incomplete form is the usual reason a claim is held up.
+          </div>
+
+          <p style="margin-top:1rem;">
+            <a href="documents/medical-referral-travel-claim-form.pdf" target="_blank" rel="noopener"
+               class="btn btn-primary" style="padding:.6rem 1.2rem;font-size:.9rem;">
+              &#x1F4C4; Travel &amp; Accommodation claim form (PDF)
+            </a>
+          </p>
+          <p style="font-size:.85rem;color:var(--gray-600);margin-top:.75rem;">
+            Mail the completed form to Pacific Blue Cross at PO Box 7000, Vancouver BC
+            V6B 4E1, or drop it off at 4250 Canada Way, Burnaby. Check your own
+            entitlement and any conditions with PBC at <strong>1-888-275-4672</strong>
+            before you travel — this page is a summary, not the policy.
+          </p>
+        </div>
+
         <!-- Travel -->
         <div class="ben-section">
           <div class="ben-section-head">
