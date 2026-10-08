@@ -177,12 +177,31 @@ if (execIsAdmin($myEmail) && empty($myExecRoleSlugs)) {
             <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
             Approvals &amp; Payments
             <?php
+              /*
+               * Counted the same way the Approvals page decides what to offer:
+               * your own claims and vouchers are not work waiting on you, and a
+               * badge that counts them never reaches zero.
+               */
               $waiting = 0;
-              if (expIsEligibleSigner1($member['email'])) $waiting += expBatchPendingCount('pending');
-              if (expIsEligibleSigner2($member['email'])) $waiting += expBatchPendingCount('signer1_approved');
-              if (expCanMarkPaid($member['email']))       $waiting += expBatchPendingCount('signer2_approved');
-              if (lpCanSign1($member['email']))           $waiting += lpCountByStatus('submitted') + lpCountByStatus('vp_approved');
-              if (lpCanSign2($member['email']))           $waiting += lpCountByStatus('treasurer_approved');
+              $mineOut = function (array $rows) use ($member) {
+                  return count(array_filter($rows, fn($r) => !expWouldSelfSign(
+                      $member['email'], $r['user_email'] ?? null, $r['submitted_by_email'] ?? null)));
+              };
+              if (expIsEligibleSigner1($member['email'])) $waiting += $mineOut(expBatchGetAll('pending'));
+              if (expIsEligibleSigner2($member['email'])) $waiting += $mineOut(expBatchGetAll('signer1_approved'));
+              if (expCanMarkPaid($member['email']))       $waiting += $mineOut(expBatchGetAll('signer2_approved'));
+              // One pass: lpGetVouchersByStatuses runs a GROUP BY aggregate, and
+              // calling it per status ran the same join three times.
+              $mayFor = ['submitted'           => lpCanSign1($member['email']),
+                         'vp_approved'         => lpCanSign1($member['email']),
+                         'treasurer_approved'  => lpCanSign2($member['email'])];
+              $wanted = array_keys(array_filter($mayFor));
+              if ($wanted) {
+                  $waiting += $mineOut(array_filter(
+                      lpGetVouchersByStatuses($wanted),
+                      fn($v) => !empty($mayFor[$v['status']])
+                  ));
+              }
               if ($waiting > 0): ?>
             <span class="lock-badge"><?= $waiting ?> waiting on you</span>
             <?php endif; ?>

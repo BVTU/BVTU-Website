@@ -172,6 +172,12 @@ $catLabels = [
     <div class="action-row">
       <!-- Approve -->
       <div class="approve-area">
+        <?php // The same rule the server enforces: never your own expense. ?>
+        <?php if (expWouldSelfSign($member['email'], $exp['user_email'] ?? null)): ?>
+          <div style="font-size:.84rem;color:var(--gray-500);font-style:italic;">
+            Your own expense — it needs two other officers.
+          </div>
+        <?php else: ?>
         <form method="POST" action="exp-action.php" id="form-approve-<?= $exp['id'] ?>">
         <?= csrfField() ?>
           <input type="hidden" name="action"     value="signer1_approve">
@@ -188,6 +194,7 @@ $catLabels = [
             </button>
           </div>
         </form>
+      <?php endif; ?>
       </div>
 
       <!-- Reject -->

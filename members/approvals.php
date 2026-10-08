@@ -56,12 +56,29 @@ $lpDone   = lpGetVouchersByStatuses(['paid', 'rejected']);
 
 /** Does this claim need this viewer right now? Drives the highlight. */
 function _claimNeedsMe(array $b, bool $s1, bool $s2, bool $pay): bool {
+    // Never your own, whatever role you hold: the server refuses it, so counting
+    // it as waiting on you is a queue that can never reach zero.
+    if (_isMyClaim($b)) return false;
     if ($b['status'] === 'pending')           return $s1;
     if ($b['status'] === 'signer1_approved')  return $s2;
     if ($b['status'] === 'signer2_approved')  return $pay;
     return false;
 }
+
+/** A claim this signer submitted, or is being paid for. */
+function _isMyClaim(array $b): bool {
+    global $email;
+    return expWouldSelfSign($email, $b['user_email'] ?? null, $b['submitted_by_email'] ?? null);
+}
+
+/** A voucher this signer submitted. */
+function _isMyVoucher(array $v): bool {
+    global $email;
+    return expWouldSelfSign($email, $v['submitted_by_email'] ?? null);
+}
+/** Whether a voucher is waiting on this person. */
 function _lpNeedsMe(array $v, bool $treas, bool $vp): bool {
+    if (_isMyVoucher($v)) return false;          // as for claims: never your own
     if ($v['status'] === 'submitted')           return $treas;
     if ($v['status'] === 'treasurer_approved')  return $vp;
     if ($v['status'] === 'vp_approved')         return $treas;
@@ -140,6 +157,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
 
     .acts { display:flex;gap:.4rem;align-items:center;margin-top:.6rem;flex-wrap:wrap; }
     .acts .spacer { margin-left:auto; }
+    .own-item { font-size: .82rem; color: var(--gray-500); font-style: italic; }
     .btn-go   { background:var(--primary);color:#fff;border:none;border-radius:6px;
                 padding:.35rem .85rem;font-size:.82rem;font-weight:700;cursor:pointer; }
     .btn-go:hover { background:var(--primary-dk); }
@@ -202,6 +220,8 @@ function _signedLine(array $r, string $role1, string $role2): string {
 
   <?php foreach ($claimsActive as $b):
     $mine  = _claimNeedsMe($b, $canSign1, $canSign2, $canPayClaim);
+    // Declining money is not self-approval: you may always withdraw your own.
+    $mayStop = $mine || _isMyClaim($b);
     $items = expBatchGetItems($b['id']);
     $total = expBatchTotal($b['id']);
   ?>
@@ -218,7 +238,17 @@ function _signedLine(array $r, string $role1, string $role2): string {
     </div>
 
     <div class="acts">
-      <?php if ($b['status'] === 'pending' && $canSign1): ?>
+      <?php if (_isMyClaim($b)): ?>
+        <span class="own-item"><?php
+          if ($b['status'] === 'signer2_approved') {
+              echo 'Signed off. Someone else records the payment.';
+          } elseif (strtolower(trim($b['user_email'] ?? '')) !== strtolower(trim($email))) {
+              echo 'You submitted this one, so you cannot also sign it.';
+          } else {
+              echo 'Your own claim — two other officers sign it. You can withdraw it below.';
+          }
+        ?></span>
+      <?php elseif ($b['status'] === 'pending' && $canSign1): ?>
         <form method="POST" action="exp-claim-action.php" style="display:inline;">
         <?= csrfField() ?>
           <input type="hidden" name="action" value="signer1_approve">
@@ -239,7 +269,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
       <a class="link-sm" href="exp-claim-view.php?id=<?= (int)$b['id'] ?>">View &rarr;</a>
     </div>
 
-    <?php if ($b['status'] === 'signer2_approved' && $canPayClaim): ?>
+    <?php if ($b['status'] === 'signer2_approved' && $canPayClaim && !_isMyClaim($b)): ?>
     <details class="more">
       <summary>&#x25B8; Record e-transfer</summary>
       <form method="POST" action="exp-claim-action.php" class="form-inline">
@@ -255,9 +285,9 @@ function _signedLine(array $r, string $role1, string $role2): string {
     </details>
     <?php endif; ?>
 
-    <?php if ($mine && $b['status'] !== 'signer2_approved'): ?>
+    <?php if ($mayStop && $b['status'] !== 'signer2_approved'): ?>
     <details class="more">
-      <summary>&#x25B8; Reject</summary>
+      <summary>&#x25B8; <?= _isMyClaim($b) && !$mine ? 'Withdraw' : 'Reject' ?></summary>
       <form method="POST" action="exp-claim-action.php" class="form-inline">
         <?= csrfField() ?>
         <input type="hidden" name="action" value="reject">
@@ -315,7 +345,11 @@ function _signedLine(array $r, string $role1, string $role2): string {
     </div>
 
     <div class="acts">
-      <?php if ($v['status'] === 'submitted' && $isTreasurer): ?>
+      <?php if (_isMyVoucher($v)): ?>
+        <span class="own-item"><?= $v['status'] === 'vp_approved'
+            ? 'Signed off. The Treasurer records the payment.'
+            : 'Your own voucher — the Treasurer and VP sign it. You can withdraw it below.' ?></span>
+      <?php elseif ($v['status'] === 'submitted' && $isTreasurer): ?>
         <form method="POST" action="lp-action.php" style="display:inline;">
         <?= csrfField() ?>
           <input type="hidden" name="action" value="treasurer_approve">
@@ -336,7 +370,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
       <a class="link-sm" href="lp-voucher-edit.php?id=<?= (int)$v['id'] ?>">View &rarr;</a>
     </div>
 
-    <?php if ($v['status'] === 'vp_approved' && $isTreasurer): ?>
+    <?php if ($v['status'] === 'vp_approved' && $isTreasurer && !_isMyVoucher($v)): ?>
     <details class="more">
       <summary>&#x25B8; Record e-transfer</summary>
       <form method="POST" action="lp-action.php" class="form-inline">
@@ -352,9 +386,9 @@ function _signedLine(array $r, string $role1, string $role2): string {
     </details>
     <?php endif; ?>
 
-    <?php if ($mine && $v['status'] !== 'vp_approved'): ?>
+    <?php if (($mine || _isMyVoucher($v)) && $v['status'] !== 'vp_approved'): ?>
     <details class="more">
-      <summary>&#x25B8; Reject</summary>
+      <summary>&#x25B8; <?= _isMyVoucher($v) && !$mine ? 'Withdraw' : 'Reject' ?></summary>
       <form method="POST" action="lp-action.php" class="form-inline">
         <?= csrfField() ?>
         <input type="hidden" name="action" value="reject">

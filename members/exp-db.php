@@ -428,6 +428,23 @@ function expBatchSubmit(int $id): void {
 }
 
 /**
+ * Would this person be signing their own claim?
+ *
+ * The same test the guard below throws on, exposed so a page can decline to
+ * offer the button in the first place. The approvals queue was showing "Approve"
+ * on the President's own voucher purely because they hold the role — the server
+ * refused it, but only after it had been clicked, and the queue counted it as
+ * waiting on them.
+ */
+function expWouldSelfSign(string $signerEmail, ?string $beneficiaryEmail, ?string $submitterEmail = null): bool {
+    $signer = strtolower(trim($signerEmail));
+    foreach ([$beneficiaryEmail, $submitterEmail] as $conflict) {
+        if ($conflict && strtolower(trim($conflict)) === $signer) return true;
+    }
+    return false;
+}
+
+/**
  * Two signatures only count if neither is the claimant. Blocks both the person
  * being reimbursed and whoever filed on their behalf, since either signing is
  * self-authorisation. Role checks alone don't cover this: expIsTreasurer()
@@ -436,14 +453,11 @@ function expBatchSubmit(int $id): void {
  * the VP substitution exists to prevent.
  */
 function expAssertNotOwnClaim(string $signerEmail, ?string $beneficiaryEmail, ?string $submitterEmail = null): void {
-    $signer = strtolower(trim($signerEmail));
-    foreach ([$beneficiaryEmail, $submitterEmail] as $conflict) {
-        if ($conflict && strtolower(trim($conflict)) === $signer) {
-            throw new RuntimeException(
-                'You cannot sign a claim you submitted or are being reimbursed for. '
-              . 'It needs two signatures from other officers.'
-            );
-        }
+    if (expWouldSelfSign($signerEmail, $beneficiaryEmail, $submitterEmail)) {
+        throw new RuntimeException(
+            'You cannot sign a claim you submitted or are being reimbursed for. '
+          . 'It needs two signatures from other officers.'
+        );
     }
 }
 
