@@ -566,7 +566,7 @@ function addRow(data = {}) {
               title="Upload from phone" onclick="phoneForRow(${id})">📱</button>
           </div>
           <div class="scan-spinner" id="spinner-${id}"></div>
-          <input type="file" id="file-${id}" accept="image/*,.pdf" capture="environment" style="display:none"
+          <input type="file" id="file-${id}" accept="image/*,.pdf" style="display:none"
             onchange="handleRowScan(this, ${id})">
         </div>
         <input type="hidden" name="exp_id[]"       value="${data.db_id || ''}">

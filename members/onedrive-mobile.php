@@ -82,8 +82,8 @@ $shareUntil = $row && isset($row['secs_left']) && $row['secs_left'] !== null
   <div class="here" id="here"></div>
 
   <input class="cap" id="caption" placeholder="Name for the file (optional)">
-  <button class="shoot" onclick="document.getElementById('cam').click();">&#x1F4F7; Take a photo</button>
-  <input type="file" id="cam" accept="image/*" capture="environment" onchange="send(this)">
+  <button class="shoot" onclick="document.getElementById('cam').click();">&#x1F4F7; Take a photo or choose one</button>
+  <input type="file" id="cam" accept="image/*" onchange="send(this)">
 
   <div id="log"></div>
 

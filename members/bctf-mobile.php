@@ -57,9 +57,9 @@ $row   = $token ? bctfValidateUploadToken($token) : null;
   <div class="sub">Photograph each form. The surname is read automatically — check it before sending.</div>
 
   <button class="shoot" onclick="document.getElementById('cam').click();">
-    &#x1F4F7; Take a photo
+    &#x1F4F7; Take a photo or choose one
   </button>
-  <input type="file" id="cam" accept="image/*" capture="environment" onchange="send(this)">
+  <input type="file" id="cam" accept="image/*" onchange="send(this)">
 
   <div id="list"></div>
   <div class="count" id="count"></div>

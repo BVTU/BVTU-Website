@@ -172,7 +172,7 @@ $expense  = $tokenRow ? expGet((int)$tokenRow['expense_id']) : null;
         <span class="icon">&#x1F4F7;</span>
         Take Photo or Choose File
       </button>
-      <input type="file" id="fileInput" accept="image/*,.pdf" capture="environment"
+      <input type="file" id="fileInput" accept="image/*,.pdf"
              onchange="handleFile(this)">
       <p class="hint">Photo goes straight to your desktop expense form &mdash; no AirDrop needed.</p>
     </div>

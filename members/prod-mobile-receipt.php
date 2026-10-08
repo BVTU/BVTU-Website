@@ -168,7 +168,7 @@ if ($tokenRow) {
         <span class="icon">📷</span>
         Take Photo or Choose File
       </button>
-      <input type="file" id="fileInput" accept="image/*,.pdf" capture="environment"
+      <input type="file" id="fileInput" accept="image/*,.pdf"
              onchange="handleFile(this)">
       <p class="hint">Photo goes straight to your desktop claim form — no AirDrop needed.</p>
     </div>
