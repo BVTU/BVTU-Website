@@ -254,8 +254,30 @@ function lpCanCreate(string $email): bool {
     return execIsAdmin($email);
 }
 
+/**
+ * Who may read Expenses & Grants.
+ *
+ * The Treasurer signs the vouchers and writes the cheques, so being unable to
+ * open the page that totals them was a gap rather than a policy. Creating a
+ * voucher stays with the President (lpCanCreate), and the grant and year-end
+ * tools stay on execIsAdmin() — this is read access plus the BCTF-submitted tick.
+ */
 function lpCanView(string $email): bool {
-    return execIsAdmin($email);
+    require_once __DIR__ . '/exp-db.php';
+    return execIsAdmin($email) || expIsTreasurerRole($email);
+}
+
+/**
+ * Who may record a payment made outside a voucher.
+ *
+ * Both officers handle that money — the Treasurer writes the cheque, the
+ * President reconciles the grant — so both may record one. Deliberately its own
+ * predicate: lpCanView() is read access and must not quietly become write
+ * access the next time it widens.
+ */
+function lpCanRecordDirect(string $email): bool {
+    require_once __DIR__ . '/exp-db.php';
+    return execIsAdmin($email) || expIsTreasurerRole($email);
 }
 
 /** BVTU Treasurer — signer 1 for LP vouchers */
@@ -505,6 +527,7 @@ function lpRowTotal(array $expense): float {
 function lpGrantSummary(int $year = 0): array {
     if (!$year) $year = lpCurrentYear();
     $grants = lpGetGrants($year);
+    $direct = lpDirectTotals('grant_id', $year);
     $db = getDB();
     foreach ($grants as &$g) {
         $s = $db->prepare(
@@ -514,9 +537,11 @@ function lpGrantSummary(int $year = 0): array {
              WHERE e.grant_id=?"
         );
         $s->execute([$g['id']]);
-        $g['spent']     = (float)$s->fetchColumn();
-        $g['remaining'] = $g['budget'] - $g['spent'];
-        $g['pct']       = $g['budget'] > 0 ? round($g['spent'] / $g['budget'] * 100) : 0;
+        $g['spent_vouchers'] = (float)$s->fetchColumn();
+        $g['spent_direct']   = $direct[(int)$g['id']] ?? 0.0;
+        $g['spent']          = $g['spent_vouchers'] + $g['spent_direct'];
+        $g['remaining']      = $g['budget'] - $g['spent'];
+        $g['pct']            = $g['budget'] > 0 ? round($g['spent'] / $g['budget'] * 100) : 0;
     }
     return $grants;
 }
@@ -797,6 +822,7 @@ function lpDeleteVoucher(int $id): void {
 function lpBudgetSummary(int $year = 0): array {
     if (!$year) $year = lpCurrentYear();
     $lines = lpGetBudgetLines($year);
+    $direct = lpDirectTotals('budget_line_id', $year);
     $db = getDB();
     foreach ($lines as &$l) {
         $s = $db->prepare(
@@ -806,9 +832,11 @@ function lpBudgetSummary(int $year = 0): array {
              WHERE e.budget_line_id=?"
         );
         $s->execute([$l['id']]);
-        $l['spent']     = (float)$s->fetchColumn();
-        $l['remaining'] = $l['budget'] - $l['spent'];
-        $l['pct']       = $l['budget'] > 0 ? round($l['spent'] / $l['budget'] * 100) : 0;
+        $l['spent_vouchers'] = (float)$s->fetchColumn();
+        $l['spent_direct']   = $direct[(int)$l['id']] ?? 0.0;
+        $l['spent']          = $l['spent_vouchers'] + $l['spent_direct'];
+        $l['remaining']      = $l['budget'] - $l['spent'];
+        $l['pct']            = $l['budget'] > 0 ? round($l['spent'] / $l['budget'] * 100) : 0;
     }
     return $lines;
 }
@@ -1082,4 +1110,135 @@ function archiveSection(string $key, array $grants, array $lines, array $voucher
                      'Atrieve logged', 'Invoice number', 'Release cost'], $rows];
     }
     return [[], []];
+}
+
+// ── Direct expenses ─────────────────────────────────────────────────────────
+//
+// Money the union paid straight out — a cheque for a speaker, a deposit for a
+// venue — that never passes through a President's voucher. It still spends a
+// grant, so without somewhere to record it the Political Action total read low
+// and the BCTF claim went in short.
+//
+// Kept in their own table rather than as vouchers-less rows in lp_expenses:
+// lp_expenses.voucher_id is NOT NULL, every voucher query assumes it, and these
+// carry things a reimbursement line has no use for — a payee and a cheque number.
+
+function lpDirectEnsure(): void {
+    static $done = false;
+    if ($done) return;
+    $done = true;
+    try {
+        getDB()->exec("CREATE TABLE IF NOT EXISTS lp_direct_expenses (
+            id               INT AUTO_INCREMENT PRIMARY KEY,
+            year             INT NOT NULL,
+            grant_id         INT DEFAULT NULL,
+            budget_line_id   INT DEFAULT NULL,
+            spent_on         DATE,
+            payee            VARCHAR(200) NOT NULL DEFAULT '',
+            description      TEXT,
+            amount           DECIMAL(10,2) NOT NULL DEFAULT 0,
+            cheque_ref       VARCHAR(60) NOT NULL DEFAULT '',
+            receipt_path     VARCHAR(500),
+            receipt_filename VARCHAR(255),
+            created_by       VARCHAR(255) NOT NULL DEFAULT '',
+            created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_year  (year),
+            INDEX idx_grant (grant_id),
+            INDEX idx_line  (budget_line_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch (Exception $e) {
+        error_log('lpDirectEnsure: ' . $e->getMessage());
+    }
+}
+
+/** Returns the new row's id, or 0 when the figures do not make an expense. */
+function lpAddDirectExpense(array $d, string $by): int {
+    lpDirectEnsure();
+    $amount = round((float)($d['amount'] ?? 0), 2);
+    $payee  = trim((string)($d['payee'] ?? ''));
+    if ($amount <= 0 || $payee === '') return 0;
+    // One or the other must be chosen, or the money is recorded against nothing
+    // and the totals it exists to correct stay wrong.
+    $grantId = (int)($d['grant_id'] ?? 0) ?: null;
+    $lineId  = (int)($d['budget_line_id'] ?? 0) ?: null;
+    if (!$grantId && !$lineId) return 0;
+
+    $date = trim((string)($d['spent_on'] ?? ''));
+    if ($date !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) $date = '';
+
+    try {
+        getDB()->prepare(
+            "INSERT INTO lp_direct_expenses
+             (year, grant_id, budget_line_id, spent_on, payee, description, amount,
+              cheque_ref, receipt_path, receipt_filename, created_by)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?)"
+        )->execute([
+            (int)($d['year'] ?? lpCurrentYear()), $grantId, $lineId,
+            $date !== '' ? $date : null,
+            $payee, trim((string)($d['description'] ?? '')), $amount,
+            trim((string)($d['cheque_ref'] ?? '')),
+            ($d['receipt_path'] ?? '') ?: null,
+            ($d['receipt_filename'] ?? '') ?: null,
+            $by,
+        ]);
+        return (int)getDB()->lastInsertId();
+    } catch (Exception $e) {
+        error_log('lpAddDirectExpense: ' . $e->getMessage());
+        return 0;
+    }
+}
+
+function lpGetDirectExpenses(int $year, ?int $grantId = null, ?int $lineId = null): array {
+    lpDirectEnsure();
+    $sql = "SELECT d.*, g.name AS grant_name, b.name AS budget_line_name
+            FROM lp_direct_expenses d
+            LEFT JOIN lp_grants g       ON g.id = d.grant_id
+            LEFT JOIN lp_budget_lines b ON b.id = d.budget_line_id
+            WHERE d.year=?";
+    $args = [$year];
+    if ($grantId !== null) { $sql .= " AND d.grant_id=?";       $args[] = $grantId; }
+    if ($lineId  !== null) { $sql .= " AND d.budget_line_id=?"; $args[] = $lineId;  }
+    $sql .= " ORDER BY d.spent_on, d.id";
+    try {
+        $s = getDB()->prepare($sql);
+        $s->execute($args);
+        return $s->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Exception $e) {
+        return [];
+    }
+}
+
+function lpGetDirectExpense(int $id): ?array {
+    lpDirectEnsure();
+    $s = getDB()->prepare("SELECT * FROM lp_direct_expenses WHERE id=?");
+    $s->execute([$id]);
+    return $s->fetch(PDO::FETCH_ASSOC) ?: null;
+}
+
+function lpDeleteDirectExpense(int $id): bool {
+    lpDirectEnsure();
+    try {
+        $st = getDB()->prepare("DELETE FROM lp_direct_expenses WHERE id=?");
+        $st->execute([$id]);
+        return $st->rowCount() > 0;
+    } catch (Exception $e) {
+        return false;
+    }
+}
+
+/** What direct spending adds to a grant or budget line, keyed by its id. */
+function lpDirectTotals(string $column, int $year): array {
+    lpDirectEnsure();
+    $col = $column === 'grant_id' ? 'grant_id' : 'budget_line_id';
+    try {
+        $s = getDB()->prepare(
+            "SELECT $col AS k, COALESCE(SUM(amount),0) AS t
+             FROM lp_direct_expenses WHERE year=? AND $col IS NOT NULL GROUP BY $col");
+        $s->execute([$year]);
+        $out = [];
+        foreach ($s->fetchAll(PDO::FETCH_ASSOC) as $r) $out[(int)$r['k']] = (float)$r['t'];
+        return $out;
+    } catch (Exception $e) {
+        return [];
+    }
 }

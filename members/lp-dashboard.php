@@ -27,6 +27,7 @@ $vouchers   = lpGetVouchers('', '', $year);
 // while reading a past year, this year's live vouchers are not strays.
 $strays     = $isCurrent ? lpUnfinishedOtherYears(lpCurrentYear()) : [];
 $grantSum   = lpGrantSummary($year);
+$directExp  = lpGetDirectExpenses($year);
 $budgetSum  = lpBudgetSummary($year);
 
 $totalSpent  = array_sum(array_column($grantSum, 'spent'));
@@ -45,6 +46,23 @@ foreach ($grantSum as &$g) {
 
     if ($g['spent'] > 0) {
         $expenses = lpGetExpensesByGrant($g['id']);
+        // Direct payments shaped like voucher rows, so the modal shows the same
+        // money the card totals; otherwise the two disagree and the card looks wrong.
+        foreach (lpGetDirectExpenses($year, (int)$g['id']) as $d) {
+            $expenses[] = [
+                'id'             => 'd' . $d['id'],
+                'expense_date'   => $d['spent_on'],
+                'description'    => trim($d['payee'] . ($d['description'] ? ' — ' . $d['description'] : '')),
+                'travel_km'      => 0, 'travel_amt' => 0, 'meals' => 0, 'gifts' => 0,
+                'misc'           => $d['amount'], 'office' => 0, 'phone' => 0,
+                'receipt_path'   => $d['receipt_path'],
+                'receipt_filename' => $d['receipt_filename'],
+                'created_at'     => $d['created_at'],
+                'voucher_name'   => 'Paid directly' . ($d['cheque_ref'] ? ' · ' . $d['cheque_ref'] : ''),
+                'voucher_number' => null, 'voucher_id' => null, 'voucher_status' => 'paid',
+            ];
+        }
+        usort($expenses, fn($a, $b) => strcmp((string)$a['expense_date'], (string)$b['expense_date']));
         $grantExpenses[$g['id']] = $expenses;
 
         $cutoff = $g['submission'] ? strtotime($g['submission']['submitted_at']) : null;
@@ -78,6 +96,30 @@ $grantSumJson      = json_encode(array_values($grantSum));
     .portal-header h1 { font-size: 1.35rem; font-weight: 800; color: var(--gray-800); margin: 0; }
     .back-link { font-size: .85rem; color: var(--primary); text-decoration: none; }
     .back-link:hover { text-decoration: underline; }
+    .direct-box { background:#fff; border:1px solid var(--gray-200); border-radius:10px;
+      padding:.5rem .9rem; margin-bottom:1.5rem; }
+    .direct-box > summary { cursor:pointer; font-size:.82rem; font-weight:800;
+      text-transform:uppercase; letter-spacing:.05em; color:var(--gray-500); padding:.4rem 0; }
+    .direct-box > summary:hover { color:var(--primary); }
+    .direct-count { font-weight:700; text-transform:none; letter-spacing:0; color:var(--primary); }
+    .direct-form { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+      gap:.7rem; padding:.6rem 0 .9rem; }
+    .direct-form label { font-size:.75rem; font-weight:700; color:var(--gray-600); display:block; }
+    .direct-form label.wide { grid-column:1/-1; }
+    .direct-form input, .direct-form select { width:100%; margin-top:.2rem; border:1px solid var(--gray-300);
+      border-radius:7px; padding:.4rem .55rem; font:inherit; font-size:.86rem; box-sizing:border-box; }
+    .direct-actions { display:flex; align-items:center; gap:.8rem; flex-wrap:wrap; }
+    .direct-hint { font-size:.76rem; color:var(--gray-500); font-weight:400; }
+    .lp-btn { background:var(--primary); color:#fff; border:none; border-radius:7px;
+      padding:.45rem 1rem; font:inherit; font-size:.86rem; font-weight:700; cursor:pointer; }
+    .direct-table { width:100%; border-collapse:collapse; font-size:.82rem; margin-bottom:.6rem; }
+    .direct-table th { text-align:left; font-size:.68rem; text-transform:uppercase;
+      letter-spacing:.05em; color:var(--gray-400); padding:.3rem .4rem; }
+    .direct-table td { padding:.4rem .4rem; border-top:1px solid var(--gray-100); vertical-align:top; }
+    .direct-table .r { text-align:right; }
+    .direct-table .muted { color:var(--gray-500); font-weight:400; }
+    .direct-del { background:none; border:none; color:#b91c1c; font:inherit; font-size:.78rem;
+      cursor:pointer; text-decoration:underline; padding:0; }
     .section-title { font-size: .82rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--gray-500); margin: 0 0 .85rem; }
 
     /* Hero */
@@ -293,9 +335,11 @@ $grantSumJson      = json_encode(array_values($grantSum));
           // year is on screen would read as "edit what I am looking at". ?>
     <a href="lp-archive.php?year=<?= (int)$year ?>" style="font-size:.78rem;font-weight:700;color:var(--gray-600);text-decoration:none;border:1px solid var(--gray-200);border-radius:6px;padding:.3rem .75rem;">Archive &amp; export</a>
     <?php if ($isCurrent): ?>
+    <?php if (execIsAdmin($member['email'])): // these three are President-only ?>
     <a href="lp-releasetime.php" style="font-size:.78rem;font-weight:700;color:var(--gray-600);text-decoration:none;border:1px solid var(--gray-200);border-radius:6px;padding:.3rem .75rem;">Release time</a>
     <a href="lp-year-end.php" style="font-size:.78rem;font-weight:700;color:var(--gray-600);text-decoration:none;border:1px solid var(--gray-200);border-radius:6px;padding:.3rem .75rem;">Year end</a>
     <a href="lp-grants-manage.php" style="font-size:.78rem;font-weight:700;color:var(--primary);text-decoration:none;background:var(--accent);border:1px solid #b8ddc5;border-radius:6px;padding:.3rem .75rem;">✏ Edit budgets</a>
+    <?php endif; ?>
     <?php else: ?>
     <span style="font-size:.78rem;color:var(--gray-500);">Past year &mdash; read only</span>
     <?php endif; ?>
@@ -329,6 +373,99 @@ $grantSumJson      = json_encode(array_values($grantSum));
     </div>
     <?php endforeach; ?>
   </div>
+
+  <!-- ── Direct expenses ──────────────────────────────────────────────────
+       Money the union paid straight out — a cheque to a speaker, a venue
+       deposit — that never reaches a President's voucher but still spends the
+       grant. Recorded here so the grant total is the real one. -->
+  <?php // Recording is for the open year only: a past year is read-only here and
+        // may already be closed and archived. ?>
+  <?php if ($isCurrent && !lpYearIsClosed($year) && lpCanRecordDirect($member['email'])): ?>
+  <details class="direct-box"<?= $directExp ? ' open' : '' ?>>
+    <summary>Record a payment made outside a voucher<?php
+      if ($directExp): ?> <span class="direct-count"><?= count($directExp) ?> recorded</span><?php endif; ?></summary>
+
+    <form method="POST" action="lp-direct-action.php" enctype="multipart/form-data" class="direct-form">
+      <?= csrfField() ?>
+      <input type="hidden" name="action" value="add">
+      <input type="hidden" name="year" value="<?= (int)$year ?>">
+
+      <label>Paid to
+        <input type="text" name="payee" required maxlength="200" placeholder="e.g. Dr Chen — speaker fee">
+      </label>
+      <label>Amount
+        <input type="number" name="amount" step="0.01" min="0.01" required placeholder="0.00">
+      </label>
+      <label>Date
+        <input type="date" name="spent_on" value="<?= date('Y-m-d') ?>">
+      </label>
+      <label>Cheque / reference
+        <input type="text" name="cheque_ref" maxlength="60" placeholder="optional">
+      </label>
+      <label>Counts against — BCTF grant
+        <select name="grant_id">
+          <option value="">— none —</option>
+          <?php foreach ($grantSum as $g): ?>
+            <option value="<?= (int)$g['id'] ?>"><?= htmlspecialchars($g['name']) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </label>
+      <label>&hellip; or local budget line
+        <select name="budget_line_id">
+          <option value="">— none —</option>
+          <?php foreach ($budgetSum as $b): ?>
+            <option value="<?= (int)$b['id'] ?>"><?= htmlspecialchars($b['name']) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </label>
+      <label class="wide">What it was for
+        <input type="text" name="description" maxlength="255" placeholder="optional">
+      </label>
+      <label class="wide">Receipt or invoice
+        <input type="file" name="receipt" accept="image/*,application/pdf,.pdf">
+      </label>
+      <div class="wide direct-actions">
+        <button type="submit" class="lp-btn">Record it</button>
+        <span class="direct-hint">Pick a grant or a budget line — that is what the amount counts toward.</span>
+      </div>
+    </form>
+
+    <?php if ($directExp): ?>
+    <table class="direct-table">
+      <thead><tr><th>Date</th><th>Paid to</th><th>Counts against</th><th class="r">Amount</th><th></th><th></th></tr></thead>
+      <tbody>
+        <?php foreach ($directExp as $d): ?>
+        <tr>
+          <td><?= $d['spent_on'] ? date('M j, Y', strtotime($d['spent_on'])) : '—' ?></td>
+          <td>
+            <strong><?= htmlspecialchars($d['payee']) ?></strong>
+            <?php if ($d['description']): ?><span class="muted"> · <?= htmlspecialchars($d['description']) ?></span><?php endif; ?>
+            <?php if ($d['cheque_ref']): ?><span class="muted"> · <?= htmlspecialchars($d['cheque_ref']) ?></span><?php endif; ?>
+          </td>
+          <td class="muted"><?= htmlspecialchars($d['grant_name'] ?: ($d['budget_line_name'] ?: '—')) ?></td>
+          <td class="r">$<?= number_format((float)$d['amount'], 2) ?></td>
+          <td>
+            <?php if ($d['receipt_path']): ?>
+              <a href="lp-receipt.php?f=<?= urlencode($d['receipt_path']) ?>" target="_blank" rel="noopener">Receipt</a>
+            <?php else: ?><span class="muted">no receipt</span><?php endif; ?>
+          </td>
+          <td class="r">
+            <form method="POST" action="lp-direct-action.php" style="display:inline;"
+                  onsubmit="return confirm('Remove this payment from the total? The receipt file is kept.');">
+              <?= csrfField() ?>
+              <input type="hidden" name="action" value="delete">
+              <input type="hidden" name="year" value="<?= (int)$year ?>">
+              <input type="hidden" name="id" value="<?= (int)$d['id'] ?>">
+              <button type="submit" class="direct-del">Remove</button>
+            </form>
+          </td>
+        </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
+    <?php endif; ?>
+  </details>
+  <?php endif; ?>
 
   <!-- Vouchers -->
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.85rem;flex-wrap:wrap;gap:.5rem;">
@@ -552,8 +689,12 @@ function openGrantModal(grantId) {
             const tr = document.createElement('tr');
             tr.innerHTML =
                 '<td style="white-space:nowrap;">' + fmtDate(e.expense_date) + '</td>' +
-                '<td><a class="voucher-link" href="lp-voucher-view.php?id=' + e.voucher_id + '" target="_blank">' +
-                    escH(vLabel) + ' ↗</a>' + statusBadge + '</td>' +
+                // A direct payment has no voucher to open, so it is named, not linked.
+                '<td>' + (e.voucher_id
+                    ? '<a class="voucher-link" href="lp-voucher-view.php?id=' + e.voucher_id +
+                      '" target="_blank">' + escH(vLabel) + ' ↗</a>'
+                    : '<span class="voucher-link" style="text-decoration:none;cursor:default;">' +
+                      escH(vLabel) + '</span>') + statusBadge + '</td>' +
                 '<td>' + escH(e.description || '—') + '</td>' +
                 '<td class="r">' + (parseFloat(e.travel_km) > 0 ? parseFloat(e.travel_km).toFixed(1) : '') + '</td>' +
                 '<td class="r">' + (parseFloat(e.travel_amt) > 0 ? fmt2(e.travel_amt) : '') + '</td>' +

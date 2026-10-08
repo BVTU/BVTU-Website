@@ -31,12 +31,23 @@ if (!$row) {
     $row = $s2->fetch();
 }
 
+// Payments made outside a voucher keep their receipts in the same folder but
+// their own table, and this served 404 for every one of them.
+if (!$row) {
+    $s3 = getDB()->prepare(
+        "SELECT created_by AS submitted_by_email FROM lp_direct_expenses
+         WHERE receipt_path = ? LIMIT 1"
+    );
+    $s3->execute([$path]);
+    $row = $s3->fetch();
+}
+
 if (!$row) { http_response_code(404); exit('Receipt not found.'); }
 
 $isOwner      = $row['submitted_by_email'] === $member['email'];
-// lpCanView() is President-only. The Treasurer and VP reach the voucher itself
-// through lp-voucher-edit.php (gated on lpCanReview), so without this they could
-// read the line items but got 403 on every receipt they were being asked to sign.
+// lpCanView() now covers President and Treasurer. The VP reaches the voucher
+// itself through lp-voucher-edit.php (gated on lpCanReview), so without this
+// they could read the line items but got 403 on every receipt to be signed.
 $isPrivileged = lpCanView($member['email']) || lpCanReview($member['email']);
 
 if (!$isOwner && !$isPrivileged) { http_response_code(403); exit('Access denied.'); }

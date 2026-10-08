@@ -57,6 +57,29 @@ if ($voucherId) {
     if (!$grant) { http_response_code(404); exit('Grant not found.'); }
 
     $expenses = lpGetExpensesByGrant($grantId);
+
+    /*
+     * Payments made outside a voucher spend the grant too, and the BCTF claim is
+     * built from this ZIP. Leaving them out meant the receipts and the CSV total
+     * disagreed with the figure on the dashboard — the reconciliation gap the
+     * direct-expense record exists to close.
+     */
+    foreach (lpGetDirectExpenses((int)$grant['year'], $grantId) as $d) {
+        $expenses[] = [
+            'id'               => 'd' . $d['id'],
+            'expense_date'     => $d['spent_on'],
+            'description'      => trim($d['payee'] . ($d['description'] ? ' — ' . $d['description'] : '')),
+            'travel_km'        => 0, 'travel_amt' => 0, 'meals' => 0, 'gifts' => 0,
+            'misc'             => $d['amount'], 'office' => 0, 'phone' => 0,
+            'receipt_path'     => $d['receipt_path'],
+            'receipt_filename' => $d['receipt_filename'],
+            'created_at'       => $d['created_at'],
+            'voucher_name'     => 'Paid directly' . ($d['cheque_ref'] ? ' · ' . $d['cheque_ref'] : ''),
+            'voucher_number'   => null,
+        ];
+    }
+    usort($expenses, fn($a, $b) => strcmp((string)$a['expense_date'], (string)$b['expense_date']));
+
     $zipStem  = $grant['name'] . '-Receipts-' . $grant['year'];
 
     $contextHeaders = ['Voucher'];

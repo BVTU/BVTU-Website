@@ -14,7 +14,10 @@ require_once __DIR__ . '/lp-releasetime-db.php';
 
 requireLogin();
 $member = getMember();
-if (!lpCanView($member['email'])) {
+// execIsAdmin, not lpCanView: this page adds, edits and deletes release-time
+// records, and lpCanView was widened to let the Treasurer *read* Expenses &
+// Grants. Reusing it here would have handed them the write handler below.
+if (!execIsAdmin($member['email'])) {
     header('Location: dashboard.php');
     exit;
 }

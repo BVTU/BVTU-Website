@@ -20,7 +20,9 @@ require_once __DIR__ . '/xlsx-writer.php';
 
 requireLogin();
 $member = getMember();
-if (!execIsAdmin($member['email'])) { header('Location: lp-dashboard.php'); exit; }
+// An export of the year's records, not a change to them — the same read access
+// as the archive page it is reached from, so the Treasurer can take the books.
+if (!lpCanView($member['email'])) { header('Location: lp-dashboard.php'); exit; }
 
 lpEnsureTables();
 expBatchEnsureTables();
@@ -72,6 +74,22 @@ foreach (LP_ARCHIVE_SECTIONS as $key => $file) {
     $counts[$file] = count($rows);
     $zip->addFromString('Data/' . $file . '.csv', bundleCsv($headers, $rows));
 }
+
+/* Payments made outside a voucher, as their own CSV: the grants and budget-line
+ * sheets already count them in 'spent', so a bundle without them cannot be
+ * reconciled against itself. */
+try {
+    $directRows = lpGetDirectExpenses($year);
+} catch (Exception $e) { $directRows = []; }
+$zip->addFromString('Data/direct-payments.csv', bundleCsv(
+    ['Date', 'Paid to', 'Description', 'Counts against', 'Cheque / ref', 'Amount', 'Recorded by'],
+    array_map(fn($d) => [
+        $d['spent_on'] ?: '', $d['payee'], (string)$d['description'],
+        $d['grant_name'] ?: ($d['budget_line_name'] ?: ''),
+        $d['cheque_ref'], number_format((float)$d['amount'], 2, '.', ''), $d['created_by'],
+    ], $directRows)
+));
+$counts['direct-payments'] = count($directRows);
 
 /**
  * Copy receipts in, recording for each one whether the file was actually there.
@@ -155,6 +173,21 @@ $included = 0; $missing = 0;
 foreach (array_slice($manifest, 1) as $m) {
     if ($m[4] === 'included') $included++; else $missing++;
 }
+foreach ($directRows as $d) {
+    if (empty($d['receipt_path'])) continue;
+    $disk = LP_RECEIPTS_DIR . basename($d['receipt_path']);
+    $desc = trim($d['payee'] . ($d['description'] ? ' — ' . $d['description'] : ''));
+    $ref  = $d['grant_name'] ?: ($d['budget_line_name'] ?: 'unassigned');
+    if (!file_exists($disk)) {
+        $manifest[] = ['Paid directly', $ref, $desc, '', 'FILE MISSING ON SERVER'];
+        continue;
+    }
+    $ext  = strtolower(pathinfo($disk, PATHINFO_EXTENSION));
+    $name = bundleName($used, 'Receipts/Direct-payments', ($d['spent_on'] ?: 'undated') . '_' . $desc, $ext);
+    $zip->addFile($disk, $name);
+    $manifest[] = ['Paid directly', $ref, $desc, $name, 'included'];
+}
+
 $zip->addFromString('Data/receipt-manifest.csv', bundleCsv(array_shift($manifest), $manifest));
 
 $readme = "BVTU — {$label} archive bundle\n"
@@ -168,6 +201,7 @@ $readme = "BVTU — {$label} archive bundle\n"
     . "CONTENTS\n"
     . "  Data/grants.csv                 BCTF grants: budget, spent, remaining\n"
     . "  Data/budget-lines.csv           Local budget lines: budget, spent, remaining\n"
+    . "  Data/direct-payments.csv        Paid outside a voucher; counted in the figures above\n"
     . "  Data/vouchers.csv               President's expense vouchers\n"
     . "  Data/member-claims.csv          Member reimbursement claims\n"
     . "  Data/collaboration-grants.csv   Collaboration grant applications\n"
