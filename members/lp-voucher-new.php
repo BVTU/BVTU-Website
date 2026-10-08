@@ -1004,6 +1004,29 @@ function showLocalPreview(rowId, file) {
     reader.readAsDataURL(file);
 }
 
+/** Put a failed upload where the person who dropped the file is looking. */
+function showRowScanError(rowId, message) {
+    var tr = document.getElementById('row-' + rowId);
+    if (tr) {
+        tr.classList.add('row-flag');
+        var wrap = document.getElementById('receipt-wrap-' + rowId);
+        if (wrap) {
+            // Its own class: .flag-label belongs to the scan's concerns marker,
+            // and removing that would throw away a real flag on this row.
+            var old = wrap.querySelector('.scan-error-label');
+            if (old) old.remove();
+            var el = document.createElement('div');
+            el.className = 'scan-error-label';
+            el.style.cssText = 'margin-top:.15rem;font-size:.68rem;color:#92400e;';
+            el.title = message;
+            el.textContent = '⚠ ' + (message.length > 28 ? 'Upload failed' : message);
+            wrap.appendChild(el);
+        }
+    }
+    if (typeof showToast === 'function') showToast('⚠ ' + message);
+    else alert(message);
+}
+
 function uploadAndScan(file, rowId) {
     const spinner = document.getElementById('spinner-' + rowId);
     if (spinner) { spinner.style.display = 'block'; }
@@ -1015,10 +1038,18 @@ function uploadAndScan(file, rowId) {
         .then(r => r.json())
         .then(data => {
             if (spinner) spinner.style.display = 'none';
+            // Dropping a file used to look identical whether it worked or not:
+            // the spinner stopped and nothing happened. Eight different failures
+            // on the server all ended here and said nothing.
+            if (data && data.error) {
+                showRowScanError(rowId, data.error);
+                if (!data.saved_path) return;   // nothing was stored to attach
+            }
             populateRow(rowId, data);
         })
         .catch(() => {
             if (spinner) spinner.style.display = 'none';
+            showRowScanError(rowId, 'The server did not answer — the receipt was not uploaded.');
         });
 }
 

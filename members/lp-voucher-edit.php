@@ -1006,25 +1006,66 @@ function enableRowDrop(rowId) {
 })();
 
 function triggerRowScan(rowId) { document.getElementById('file-' + rowId).click(); }
+/*
+ * The drop zone calls these two, and on this page they did not exist — dropping
+ * a file threw "uploadAndScan is not defined" and nothing happened at all. The
+ * scan logic was written inline inside handleRowScan, reachable only by clicking
+ * the paperclip. It is shared now, so both ways in do the same thing.
+ */
+function showLocalPreview(rowId, file) {
+    if (file.type === 'application/pdf') {
+        showThumb(rowId, null, '__pdf__');
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = e => showThumb(rowId, null, e.target.result);
+    reader.readAsDataURL(file);
+}
+
 function handleRowScan(input, rowId) {
     if (!input.files[0]) return;
-    // Instant local preview
-    if (input.files[0].type === 'application/pdf') {
-        showThumb(rowId, null, '__pdf__');
-    } else {
-        const reader = new FileReader();
-        reader.onload = e => showThumb(rowId, null, e.target.result);
-        reader.readAsDataURL(input.files[0]);
+    showLocalPreview(rowId, input.files[0]);
+    uploadAndScan(input.files[0], rowId);
+}
+
+/** Put a failed upload where the person who dropped the file is looking. */
+function showRowScanError(rowId, message) {
+    var tr = document.getElementById('row-' + rowId);
+    if (tr) {
+        tr.classList.add('row-flag');
+        var wrap = document.getElementById('receipt-wrap-' + rowId);
+        if (wrap) {
+            // Its own class: .flag-label belongs to the scan's concerns marker,
+            // and removing that would throw away a real flag on this row.
+            var old = wrap.querySelector('.scan-error-label');
+            if (old) old.remove();
+            var el = document.createElement('div');
+            el.className = 'scan-error-label';
+            el.style.cssText = 'margin-top:.15rem;font-size:.68rem;color:#92400e;';
+            el.title = message;
+            el.textContent = '\u26A0 ' + (message.length > 28 ? 'Upload failed' : message);
+            wrap.appendChild(el);
+        }
     }
-    // Upload + AI scan
+    if (typeof showToast === 'function') showToast('\u26A0 ' + message);
+    else alert(message);
+}
+
+function uploadAndScan(file, rowId) {
     const spinner = document.getElementById('spinner-' + rowId);
     if (spinner) spinner.style.display = 'block';
     const fd = new FormData();
-    fd.append('receipt', input.files[0]);
+    fd.append('receipt', file);
     fetch('lp-scan.php', { method: 'POST', body: fd })
         .then(r => r.json())
         .then(data => {
             if (spinner) spinner.style.display = 'none';
+            if (data && data.error) {
+                showRowScanError(rowId, data.error);
+                // "Scan failed, fill it in by hand" still returns a saved file;
+                // a rejected upload does not, and there is nothing to fill in.
+                if (!data.saved_path) return;
+            }
             const row = document.getElementById('row-' + rowId);
             if (!row) return;
             if (data.date)        row.querySelector('[name="expense_date[]"]').value = data.date;
@@ -1042,7 +1083,10 @@ function handleRowScan(input, rowId) {
             }
             syncRowFromHidden(rowId);
         })
-        .catch(() => { if (spinner) spinner.style.display = 'none'; });
+        .catch(() => {
+            if (spinner) spinner.style.display = 'none';
+            showRowScanError(rowId, 'The server did not answer — the receipt was not uploaded.');
+        });
 }
 
 function showThumb(rowId, savedPath, dataUrl) {

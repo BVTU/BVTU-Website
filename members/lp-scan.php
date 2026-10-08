@@ -15,8 +15,38 @@ require_once __DIR__ . '/lp-db.php';
 header('Content-Type: application/json');
 
 if (!isLoggedIn()) { http_response_code(401); echo json_encode(['error' => 'Not logged in']); exit; }
-if ($_SERVER['REQUEST_METHOD'] !== 'POST' || empty($_FILES['receipt'])) {
-    http_response_code(400); echo json_encode(['error' => 'No file uploaded']); exit;
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405); echo json_encode(['error' => 'Method not allowed']); exit;
+}
+/*
+ * A file bigger than post_max_size arrives as nothing at all: PHP discards the
+ * whole body, so $_FILES and $_POST are both empty and the old message said
+ * "No file uploaded" — which is true and useless. CONTENT_LENGTH still tells us
+ * something was sent.
+ */
+if (empty($_FILES['receipt'])) {
+    $sent = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
+    $cap  = trim((string)ini_get('post_max_size'));
+    http_response_code(400);
+    echo json_encode(['error' => $sent > 0
+        ? 'That file was too big for the server to accept (its limit is ' . $cap . ').'
+        : 'No file was received.']);
+    exit;
+}
+// PHP's own upload errors, which are not all about size.
+$uploadErr = (int)($_FILES['receipt']['error'] ?? UPLOAD_ERR_NO_FILE);
+if ($uploadErr !== UPLOAD_ERR_OK) {
+    $why = [
+        UPLOAD_ERR_INI_SIZE   => 'That file is larger than the server accepts ('
+                               . ini_get('upload_max_filesize') . ').',
+        UPLOAD_ERR_FORM_SIZE  => 'That file is larger than this form accepts.',
+        UPLOAD_ERR_PARTIAL    => 'The upload was interrupted — try again.',
+        UPLOAD_ERR_NO_FILE    => 'No file was received.',
+        UPLOAD_ERR_NO_TMP_DIR => 'The server has nowhere to put uploads. Tell the webmaster.',
+        UPLOAD_ERR_CANT_WRITE => 'The server could not write the file. Tell the webmaster.',
+        UPLOAD_ERR_EXTENSION  => 'The server blocked that upload. Tell the webmaster.',
+    ][$uploadErr] ?? 'The upload failed (code ' . $uploadErr . ').';
+    http_response_code(400); echo json_encode(['error' => $why]); exit;
 }
 if (!defined('CLAUDE_API_KEY')) { echo json_encode(['error' => 'Claude API key not configured']); exit; }
 
