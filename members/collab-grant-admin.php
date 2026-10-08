@@ -185,7 +185,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'fulfi
     $apps   = cgGetApplications($year);
 }
 
-$view = ($_GET['view'] ?? 'review'); // 'review' or 'read'
+/*
+ * Reviewing applications and chasing paperwork are different jobs on different
+ * days, and they used to be stacked in one list. 'review' is pending only —
+ * what you open on meeting night; 'followup' is approved grants still missing
+ * an Atrieve confirmation, an invoice number or a cost; 'all' is everything.
+ */
+$view = $_GET['view'] ?? 'review';
+if (!in_array($view, ['review', 'followup', 'all', 'print', 'read'], true)) $view = 'review';
+if ($view === 'read') $view = 'print';    // the old toggle's name, still linked from bookmarks
+
+/** Approved, but the district paperwork is not finished. */
+$cgNeedsFollowUp = function (array $a): bool {
+    return $a['status'] === 'approved'
+        && (empty($a['atrieve_confirmed'])
+            || trim((string)($a['invoice_number'] ?? '')) === ''
+            || ($a['release_cost'] ?? null) === null);
+};
+$pendingApps  = array_values(array_filter($apps, fn($a) => $a['status'] === 'pending'));
+$followUpApps = array_values(array_filter($apps, $cgNeedsFollowUp));
+$shownApps    = $view === 'review' ? $pendingApps
+              : ($view === 'followup' ? $followUpApps : $apps);
+// 'print' is the plain read-through for a meeting; everything else is workable.
+$cgReadOnly   = ($view === 'print');
 
 $statusColour = [
     'pending'    => ['bg' => '#fffbeb', 'border' => '#fde68a', 'text' => '#92400e', 'label' => 'Pending'],
@@ -196,7 +218,6 @@ $statusColour = [
 
 $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
     array_filter($apps, fn($a) => $a['status'] === 'approved')));
-$pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -360,6 +381,47 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
     .app-detail-item .dl { color: var(--gray-400); font-size: .74rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; margin-bottom: .15rem; }
     .app-detail-item .dd { color: var(--text); font-size: .88rem; font-weight: 500; }
 
+    /* ── The decision, as one block ───────────────────────────────
+       Everything needed to say yes or no, together and visibly apart
+       from the reading above it. */
+    .cg-decision { background: var(--off-white); border: 1px solid var(--border);
+      border-radius: 10px; padding: 1rem 1.1rem; margin-top: 1.25rem; }
+    .cg-decision .app-action-form { margin: 0; }
+    .cg-decision .btn-approve { font-size: .92rem; padding: .55rem 1.1rem; }
+
+    /* One line per person, scannable rather than read. */
+    .cg-standing { display: flex; align-items: center; gap: .45rem; flex-wrap: wrap;
+      font-size: .85rem; margin-bottom: .3rem; }
+    .cg-standing-who { font-weight: 700; color: var(--gray-800); }
+    .cg-standing-role { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em;
+      color: var(--gray-400); font-weight: 700; }
+    .cg-standing-days { color: var(--gray-600); font-weight: 600; }
+    .cg-standing-days.over { color: #991b1b; }
+    .cg-standing-foot { font-size: .78rem; color: var(--gray-500); margin-top: .2rem; }
+    .cg-tag { font-size: .7rem; font-weight: 700; padding: .1rem .45rem; border-radius: 999px;
+      background: var(--gray-100); color: var(--gray-600); white-space: nowrap; }
+    .cg-tag.over  { background: #fef2f2; color: #991b1b; }
+    .cg-tag.good  { background: #f0fdf4; color: #166534; }
+    .cg-tag.approx{ background: #fffbeb; color: #92400e; cursor: help; }
+
+    /* ── The things you need twice a term ─────────────────────── */
+    .cg-field-note { display: block; font-weight: 400; font-size: .76rem;
+      color: var(--gray-500); margin-top: .25rem; }
+    .cg-followup-hint { font-size: .82rem; color: var(--gray-500); margin: .9rem 0 0; }
+    .app-more { margin-top: .9rem; }
+    .app-more > summary { cursor: pointer; font-size: .82rem; font-weight: 600;
+      color: var(--gray-500); list-style: none; padding: .3rem 0; }
+    .app-more > summary::-webkit-details-marker { display: none; }
+    .app-more > summary::before { content: '+ '; font-weight: 800; }
+    .app-more[open] > summary::before { content: '\2212 '; }
+    .app-more > summary:hover { color: var(--primary); }
+    .app-more-body { font-size: .85rem; padding: .25rem 0 .25rem .9rem;
+      border-left: 2px solid var(--border); }
+    .app-more-body p { margin: 0 0 .5rem; }
+    .app-more-note { color: var(--gray-400); }
+    .app-more-btn { border: 1px solid var(--border); background: #fff; color: var(--gray-700);
+      font-size: .82rem; padding: .3rem .7rem; }
+
     .app-text-label {
       font-size: .74rem;
       font-weight: 700;
@@ -500,8 +562,13 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
     <!-- Toolbar -->
     <div class="admin-toolbar">
       <div class="view-toggle">
-        <a href="?view=review&year=<?= $year ?>" class="<?= $view === 'review' ? 'active' : '' ?>">Review</a>
-        <a href="?view=read&year=<?= $year ?>"   class="<?= $view === 'read'   ? 'active' : '' ?>">Read all</a>
+        <a href="?view=review&year=<?= $year ?>" class="<?= $view === 'review' ? 'active' : '' ?>">
+          To review<?= count($pendingApps) ? ' (' . count($pendingApps) . ')' : '' ?></a>
+        <a href="?view=followup&year=<?= $year ?>" class="<?= $view === 'followup' ? 'active' : '' ?>">
+          Follow-through<?= count($followUpApps) ? ' (' . count($followUpApps) . ')' : '' ?></a>
+        <a href="?view=all&year=<?= $year ?>" class="<?= $view === 'all' ? 'active' : '' ?>">All</a>
+        <a href="?view=print&year=<?= $year ?>" class="<?= $cgReadOnly ? 'active' : '' ?>"
+           title="A plain read-through, for printing or reading at a meeting">Print view</a>
       </div>
       <a href="?export=csv&year=<?= $year ?>" class="export-btn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -511,7 +578,7 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Days per person
       </a>
-      <?php if ($view === 'read'): ?>
+      <?php if ($cgReadOnly): ?>
       <button onclick="window.print()" class="export-btn" style="cursor:pointer;border:1.5px solid var(--border);">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
         Print
@@ -523,25 +590,19 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
       <div class="notice"><?= htmlspecialchars($notice) ?></div>
     <?php endif; ?>
 
-    <!-- Summary -->
+    <?php $rc = cgYearReleaseCost($year); ?>
+    <?php // Three figures, not five. "Total applications" and "Approved" are both
+          // in the view tabs above, and the costing caveat belongs with the cost
+          // rather than in a banner of its own. ?>
     <div class="summary-row">
       <div class="summary-card">
         <div class="val"><?= count($apps) ?></div>
-        <div class="lbl">Total applications</div>
-      </div>
-      <div class="summary-card">
-        <div class="val"><?= $pendingCount ?></div>
-        <div class="lbl">Awaiting review</div>
+        <div class="lbl"><?= $year ?>–<?= ($year + 1) % 100 ?> applications</div>
       </div>
       <div class="summary-card">
         <div class="val"><?= $totalDaysApproved ?></div>
         <div class="lbl">Release days approved</div>
       </div>
-      <div class="summary-card">
-        <div class="val"><?= count(array_filter($apps, fn($a) => $a['status'] === 'approved')) ?></div>
-        <div class="lbl">Approved</div>
-      </div>
-      <?php $rc = cgYearReleaseCost($year); ?>
       <div class="summary-card">
         <?php if (!empty($rc['error'])): ?>
           <div class="val" style="color:#991b1b;font-size:1rem;">unavailable</div>
@@ -549,22 +610,15 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
         <?php else: ?>
           <div class="val">$<?= number_format($rc['total'], 2) ?></div>
           <div class="lbl">
-            Release cost<?php if ($rc['approved'] > 0): ?>
-              &middot; <?= (int)$rc['costed'] ?> of <?= (int)$rc['approved'] ?> costed
+            Release cost
+            <?php if ($rc['approved'] > $rc['costed']): ?>
+              <span style="color:#92400e;">· so far; <?= (int)($rc['approved'] - $rc['costed']) ?>
+                not yet costed</span>
             <?php endif; ?>
           </div>
         <?php endif; ?>
       </div>
     </div>
-
-    <?php if (empty($rc['error']) && $rc['approved'] > $rc['costed']): ?>
-    <p style="font-size:.82rem;color:#92400e;background:#fffbeb;border:1px solid #fde68a;
-              border-radius:8px;padding:.6rem .9rem;margin:-.4rem 0 1.2rem;line-height:1.7;">
-      <?= (int)($rc['approved'] - $rc['costed']) ?>
-      approved grant<?= ($rc['approved'] - $rc['costed']) === 1 ? ' has' : 's have' ?>
-      no release cost recorded, so the total above is what is known so far, not the year's full cost.
-    </p>
-    <?php endif; ?>
 
     <?php // Who has spent what, for the three-day cap and for the FAQ's promise
           // that teachers who haven't used the fund get priority.
@@ -575,7 +629,7 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
           $anyApprox = (bool)array_filter($ledger, fn($lp) => !$lp['exact']);
     ?>
     <?php if ($ledger): ?>
-    <details style="margin-bottom:1.75rem;" <?= $view === 'read' ? 'open' : '' ?>>
+    <details style="margin-bottom:1.75rem;" <?= $cgReadOnly ? 'open' : '' ?>>
       <summary style="cursor:pointer;font-weight:700;color:var(--primary);font-size:.95rem;
                       padding:.6rem 0;">
         Days used by person — <?= count($ledger) ?> <?= count($ledger) === 1 ? 'teacher' : 'teachers' ?>
@@ -674,13 +728,23 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
     </details>
     <?php endif; ?>
 
-    <?php if (empty($apps)): ?>
-      <div class="empty-state">No applications yet for this school year.</div>
+    <?php if (empty($shownApps)): ?>
+      <div class="empty-state">
+        <?php if (empty($apps)): ?>
+          No applications yet for this school year.
+        <?php elseif ($view === 'review'): ?>
+          Nothing waiting for a decision. <a href="?view=all&amp;year=<?= $year ?>">See all
+          <?= count($apps) ?> applications</a>.
+        <?php elseif ($view === 'followup'): ?>
+          Every approved grant has its Atrieve confirmation, invoice number and cost recorded.
+          <a href="?view=all&amp;year=<?= $year ?>">See all applications</a>.
+        <?php endif; ?>
+      </div>
 
-    <?php elseif ($view === 'read'): ?>
+    <?php elseif ($cgReadOnly): ?>
       <!-- ══ READ ALL VIEW ════════════════════════════════════════ -->
       <div class="read-list">
-        <?php foreach ($apps as $app):
+        <?php foreach ($shownApps as $app):
           $sc   = $statusColour[$app['status']] ?? $statusColour['pending'];
           $days = (int)$app['days_requested'];
         ?>
@@ -746,11 +810,13 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
     <?php else: ?>
       <!-- ══ REVIEW VIEW — accordion ══════════════════════════════ -->
       <div class="app-list">
-        <?php foreach ($apps as $app):
+        <?php foreach ($shownApps as $app):
           $sc   = $statusColour[$app['status']] ?? $statusColour['pending'];
           $days = (int)$app['days_requested'];
         ?>
-        <div class="app-card <?= $app['status'] === 'pending' ? 'open' : '' ?>" id="app-<?= $app['id'] ?>">
+        <?php // Open where the card is the job: pending in Review, paperwork in
+              // Follow-through. In All it is a list to find something in. ?>
+        <div class="app-card <?= ($view !== 'all' ) ? 'open' : '' ?>" id="app-<?= $app['id'] ?>">
 
           <div class="app-card-head" onclick="toggleCard(<?= $app['id'] ?>)">
             <div style="flex:1;min-width:0;">
@@ -817,57 +883,21 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
               <?php endif; ?>
             </div>
 
+            <?php if ($view !== 'followup'): ?>
             <div class="app-text-label">Collaboration description</div>
             <div class="app-text-block"><?= htmlspecialchars($app['collaboration_desc']) ?></div>
 
             <div class="app-text-label">Goals</div>
             <div class="app-text-block"><?= htmlspecialchars($app['goals']) ?></div>
-
-            <?php if ($app['admin_notes']): ?>
-              <div class="app-text-label">Admin notes</div>
-              <div class="app-text-block" style="font-style:italic;"><?= htmlspecialchars($app['admin_notes']) ?></div>
             <?php endif; ?>
 
-            <p style="margin:1.25rem 0 0;font-size:.85rem;">
-              <a href="../collab-grant-edit.php?id=<?= (int)$app['id'] ?>"
-                 style="font-weight:600;">Edit this application</a>
-              <span style="color:var(--gray-500);">
-                — change the dates, days or details on the applicant's behalf.
-                <?php if (!empty($app['edited_at'])): ?>
-                  Last changed <?= date('M j, Y', strtotime($app['edited_at'])) ?>
-                  by <?= htmlspecialchars($app['edited_by']) ?>.
-                <?php endif; ?>
-              </span>
-            </p>
 
-            <?php // Anyone who applied before the edit page existed has an
-                  // application they have never been given a link to. ?>
-            <form method="post" style="margin:.5rem 0 0;font-size:.85rem;">
-              <?= csrfField() ?>
-              <input type="hidden" name="app_id" value="<?= (int)$app['id'] ?>">
-              <input type="hidden" name="action" value="resend_link">
-              <button type="submit" class="btn"
-                      style="border:1px solid var(--border);background:#fff;
-                             color:var(--gray-700);font-size:.82rem;padding:.35rem .8rem;">
-                <?= !empty($app['link_sent_at']) ? 'Send the edit link again' : 'Email them the edit link' ?>
-              </button>
-              <span style="color:var(--gray-500);margin-left:.5rem;">
-                <?php if (!empty($app['link_sent_at'])): ?>
-                  Sent <?= date('M j, Y', strtotime($app['link_sent_at'])) ?><?php
-                    ?><?= $app['link_sent_by'] ? ' by ' . htmlspecialchars($app['link_sent_by']) : '' ?>.
-                <?php else: ?>
-                  Lets <?= htmlspecialchars($app['applicant_name']) ?> change it themselves.
-                <?php endif; ?>
-              </span>
-            </form>
 
+            <?php if ($view !== 'followup'): ?>
+            <div class="cg-decision">
             <form class="app-action-form" method="post">
               <?= csrfField() ?>
               <input type="hidden" name="app_id" value="<?= $app['id'] ?>">
-              <label style="font-size:.85rem;font-weight:600;color:var(--gray-600);">
-                Internal notes (optional)
-                <textarea name="admin_notes" rows="2" placeholder="Any notes for your records…"><?= htmlspecialchars($app['admin_notes'] ?? '') ?></textarea>
-              </label>
               <?php
                 // Both people on an application spend days, so the lead's standing
                 // and the collaborator's are both worth seeing before deciding.
@@ -879,36 +909,36 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
               <div style="background:var(--off-white);border:1px solid var(--border);border-radius:8px;
                           padding:.7rem .85rem;margin:.75rem 0;font-size:.85rem;">
                 <?php foreach ($standings as [$role, $p, $who]): ?>
-                  <div style="margin-bottom:.25rem;">
-                    <strong><?= htmlspecialchars($who) ?></strong>
-                    <span style="color:var(--gray-500);">(<?= $role ?>)</span> —
-                    <?= htmlspecialchars(cgDaysSentence($p)) ?><?php
-                      ?><?= empty($p['capped']) ? '' : ',' ?>
+                  <div class="cg-standing">
+                    <span class="cg-standing-who"><?= htmlspecialchars($who) ?></span>
+                    <span class="cg-standing-role"><?= $role ?></span>
                     <?php if (empty($p['capped'])): ?>
-                      <span style="color:var(--gray-500);">
-                        (<?= htmlspecialchars($p['exempt_reason']) ?>)</span>
-                    <?php elseif ($p['over']): ?>
-                      <strong style="color:#991b1b;">over the <?= CG_DAY_CAP ?>-day limit</strong>
+                      <span class="cg-standing-days"><?= (int)$p['used'] ?> days<?php
+                        ?><?= $p['pending'] ? ' (' . (int)$p['pending'] . ' awaiting)' : '' ?></span>
+                      <span class="cg-tag" title="<?= htmlspecialchars($p['exempt_reason']) ?>">not capped</span>
                     <?php else: ?>
-                      <?= $p['left'] ?> left
+                      <span class="cg-standing-days<?= $p['over'] ? ' over' : '' ?>">
+                        <?= (int)$p['used'] ?> of <?= CG_DAY_CAP ?> days<?php
+                          ?><?= $p['pending'] ? ' (' . (int)$p['pending'] . ' awaiting)' : '' ?>
+                      </span>
+                      <?php if ($p['over']): ?>
+                        <span class="cg-tag over">over the limit</span>
+                      <?php elseif ($p['used'] === 0): ?>
+                        <span class="cg-tag good">hasn't used the fund</span>
+                      <?php endif; ?>
                     <?php endif; ?>
                     <?php if (!$p['exact']): ?>
-                      <span title="Part of this total comes from an application where the person was named as a collaborator. Collaborators are typed names with no email address, so those days are matched by name and could belong to someone else."
-                            style="color:var(--gray-500);">· includes days matched by name</span>
-                    <?php endif; ?>
-                    <?php if ($p['used'] === 0): ?>
-                      <span style="color:#1a5c2e;font-weight:600;">· hasn't used the fund</span>
+                      <span class="cg-tag approx"
+                            title="Part of this total comes from an application where the person was named as a collaborator. Collaborators are typed names with no email address, so those days are matched by name and could belong to someone else.">name match</span>
                     <?php endif; ?>
                   </div>
                 <?php endforeach; ?>
-                <div style="color:var(--gray-500);font-size:.8rem;margin-top:.35rem;">
-                  <?php if (in_array($app['status'], ['approved', 'pending'], true)): ?>
-                    This application is included in those totals.
-                  <?php else: ?>
-                    This application is <?= htmlspecialchars($app['status']) ?>, so its days
-                    are not counted above.
-                  <?php endif; ?>
-                </div>
+                <?php if (!in_array($app['status'], ['approved', 'pending'], true)): ?>
+                  <?php // Worth saying only when it is surprising: a declined or
+                        // waitlisted application is not in the figures above. ?>
+                  <div class="cg-standing-foot">Not counted above —
+                    this application is <?= htmlspecialchars($app['status']) ?>.</div>
+                <?php endif; ?>
               </div>
 
               <?php if ($app['status'] === 'approved' && ($app['days_approved'] ?? null) !== null
@@ -929,10 +959,7 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
                        style="width:100%;border:1px solid var(--border);border-radius:7px;
                               padding:.45rem .6rem;font-size:.9rem;font-family:inherit;
                               box-sizing:border-box;margin-top:.25rem;">
-                <span style="display:block;font-weight:400;font-size:.78rem;color:var(--gray-500);margin-top:.2rem;">
-                  Used when you approve. Applies to both teachers. One application
-                  carries at most <?= CG_DAY_CAP ?> days, whoever is on it.
-                </span>
+                <span class="cg-field-note">Charged to both teachers on this application.</span>
               </label>
 
               <div class="app-action-btns">
@@ -943,7 +970,51 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
                   <button type="submit" name="action" value="pending" class="btn" style="border:1px solid var(--border);background:#fff;color:var(--gray-500);">Reset to pending</button>
                 <?php endif; ?>
               </div>
+
+              <label style="font-size:.85rem;font-weight:600;color:var(--gray-600);">
+                Internal notes
+                <textarea name="admin_notes" rows="2" placeholder="Only you see these…"><?= htmlspecialchars($app['admin_notes'] ?? '') ?></textarea>
+              </label>
             </form>
+            </div>
+            <?php else: ?>
+              <?php if (trim((string)$app['admin_notes']) !== ''): ?>
+                <div class="app-text-label">Internal notes</div>
+                <div class="app-text-block" style="font-style:italic;"><?= htmlspecialchars($app['admin_notes']) ?></div>
+              <?php endif; ?>
+              <p class="cg-followup-hint">Already approved — to change the decision or the
+                days, open it under <a href="?view=all&amp;year=<?= $year ?>#app-<?= (int)$app['id'] ?>">All</a>.</p>
+            <?php endif; ?>
+
+            <?php // The edit link and the "send them the link" button are needed
+                  // perhaps twice a term. They used to sit between the goals and
+                  // the decision, which is the one place nothing should. ?>
+            <details class="app-more">
+              <summary>Other things you can do with this application</summary>
+              <div class="app-more-body">
+                <p>
+                  <a href="../collab-grant-edit.php?id=<?= (int)$app['id'] ?>">Edit this application</a>
+                  on <?= htmlspecialchars($app['applicant_name']) ?>'s behalf
+                  <?php if (!empty($app['edited_at'])): ?>
+                    <span class="app-more-note">— last changed
+                      <?= date('M j, Y', strtotime($app['edited_at'])) ?>
+                      by <?= htmlspecialchars($app['edited_by']) ?></span>
+                  <?php endif; ?>
+                </p>
+                <form method="post">
+                  <?= csrfField() ?>
+                  <input type="hidden" name="app_id" value="<?= (int)$app['id'] ?>">
+                  <input type="hidden" name="action" value="resend_link">
+                  <button type="submit" class="btn app-more-btn">
+                    <?= !empty($app['link_sent_at']) ? 'Send the edit link again' : 'Email them the edit link' ?>
+                  </button>
+                  <?php if (!empty($app['link_sent_at'])): ?>
+                    <span class="app-more-note">Sent
+                      <?= date('M j, Y', strtotime($app['link_sent_at'])) ?></span>
+                  <?php endif; ?>
+                </form>
+              </div>
+            </details>
 
             <?php // Only once approved: before that there is no absence to log
                   // and no invoice to record, and an empty box invites guessing. ?>
@@ -1003,7 +1074,21 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
 
   <script src="../js/site.js"></script>
   <script>
-    function toggleCard(id) {
+    /* Opens the card a #app-N link points at — the Follow-through hint sends you to
+ * All for a specific application, and it would otherwise arrive collapsed. */
+(function () {
+  function openHashCard() {
+    if (!/^#app-\d+$/.test(location.hash)) return;
+    var el = document.querySelector(location.hash);
+    if (!el) return;
+    el.classList.add('open');
+    el.scrollIntoView({ block: 'center' });
+  }
+  window.addEventListener('hashchange', openHashCard);
+  openHashCard();
+})();
+
+function toggleCard(id) {
       document.getElementById('app-' + id).classList.toggle('open');
     }
   </script>

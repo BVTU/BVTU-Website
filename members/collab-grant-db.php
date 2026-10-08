@@ -774,17 +774,6 @@ function cgDaysLine(array $app): string {
     return $word($asked) . ' now listed, ' . (int)$granted . ' granted';
 }
 
-/** "2 of 3 days used — 1 approved, 1 awaiting a decision". */
-function cgDaysSentence(array $p): string {
-    $bits = [];
-    if ($p['approved']) $bits[] = $p['approved'] . ' approved';
-    if ($p['pending'])  $bits[] = $p['pending'] . ' awaiting a decision';
-    $s = empty($p['capped'])
-        ? $p['used'] . ' ' . ($p['used'] === 1 ? 'day' : 'days') . ' this year, not capped'
-        : $p['used'] . ' of ' . CG_DAY_CAP . ' ' . (CG_DAY_CAP === 1 ? 'day' : 'days') . ' used';
-    if ($bits) $s .= ' — ' . implode(', ', $bits);
-    return $s;
-}
 
 // ── People the three-day cap doesn't apply to ────────────────────────────────
 //
