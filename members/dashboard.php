@@ -112,29 +112,7 @@ if (execIsAdmin($myEmail) && empty($myExecRoleSlugs)) {
 </head>
 <body>
 
-  <header class="site-header">
-    <div class="header-inner container">
-      <a href="../index.php" class="logo">
-        <img src="../bvtu-logo.png" alt="BVTU Logo">
-        <div class="logo-text">
-          <span class="logo-name">Bulkley Valley Teachers' Union</span>
-          <span class="logo-sub">Local of the BC Teachers' Federation</span>
-        </div>
-      </a>
-      <nav class="main-nav">
-        <ul>
-          
-          <li><a href="../documents.php">Documents</a></li>
-          <li><a href="../members.php">Members</a></li>
-          <li><a href="../prod.php">PRO-D</a></li>
-          <li><a href="../health-safety.php">Health &amp; Safety</a></li>
-          <li><a href="../bctf.php">BCTF</a></li>
-          <li><a href="../library.php">Resource Library</a></li>
-          <li><a href="logout.php">Sign Out</a></li>
-        </ul>
-      </nav>
-    </div>
-  </header>
+  <?php require_once __DIR__ . '/../inc/nav.php'; bvtuNav(['base' => '../']); ?>
 
   <div class="dashboard-hero">
     <div class="container dashboard-hero-inner">

@@ -19,46 +19,7 @@ $member   = $loggedIn ? getMember() : null;
 <body>
 
   <!-- Header -->
-  <header class="site-header hero-mode">
-    <div class="header-inner container">
-      <a href="index.php" class="logo">
-        <img src="bvtu-logo.png" alt="BVTU Logo">
-        <div class="logo-text">
-          <span class="logo-name">Bulkley Valley Teachers' Union</span>
-          <span class="logo-sub">Local of the BC Teachers' Federation</span>
-        </div>
-      </a>
-      <button class="search-btn" data-search-open aria-label="Search">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      </button>
-      <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
-        <span></span><span></span><span></span>
-      </button>
-      <nav class="main-nav" id="main-nav">
-        <ul>
-          
-          <li class="has-dropdown"><a href="documents.php">Documents</a><ul class="dropdown"><li><a href="documents.php">All Documents</a></li><li><a href="collective-agreement.php">Collective Agreement</a></li><li><a href="lous.php">Letters of Understanding</a></li><li><a href="ca-assistant.php">Contract Assistant</a></li><li><a href="documents/BVTU-Constitution-and-Bylaws-2026.pdf" target="_blank">Constitution &amp; Bylaws</a></li><li><a href="calendars.php">School Calendars</a></li><li><a href="trustee-zones.html">Trustee Zone Map</a></li><li><a href="trustee-candidates.php">Trustee Candidate Responses</a></li></ul></li>
-<li class="has-dropdown">
-            <a href="members.php">Members</a>
-            <ul class="dropdown">
-              <li><a href="members.php">Member Resources</a></li>
-              <li><a href="benefits.php">Health &amp; Dental</a></li><li><a href="life-insurance.php">Life Insurance</a></li><li><a href="loan-forgiveness.php">Student Loan Forgiveness</a></li><li><a href="salary.php">Salary Grids</a></li><li><a href="ttoc.php">TTOC Resources</a></li><li><a href="atrieve.php">Release Time / Atrieve</a></li><li><a href="remedy-tracker.php">Remedy Tracker</a></li>
-              <li><a href="collab-grant.php">Collaboration Grant</a></li>
-            </ul>
-          </li>
-          <li><a href="prod.php">PRO-D</a></li>
-          <li class="has-dropdown"><a href="health-safety.php">Health &amp; Safety</a><ul class="dropdown"><li><a href="health-safety.php">H&amp;S Resources</a></li><li><a href="https://www.worksafebc.com" target="_blank" rel="noopener">WorkSafe BC</a></li><li><a href="https://sd54.lifeworks.com/" target="_blank" rel="noopener">EFAP</a></li></ul></li>
-          <li class="has-dropdown"><a href="bctf.php">BCTF</a><ul class="dropdown"><li><a href="bctf.php">BCTF Resources</a></li><li><a href="https://bctf.ca" target="_blank" rel="noopener">BCTF Website</a></li><li><a href="https://www.bctf.ca/topics/services-information/benefits/view-member-discounts-bctf-advantage" target="_blank" rel="noopener">Benefits &amp; Discounts</a></li></ul></li>
-          <li class="has-dropdown"><a href="library.php">Resources</a><ul class="dropdown"><li><a href="library.php">Resource Library</a></li><li><a href="curated.php">Curated Resources</a></li></ul></li><li><a href="newsletter-archive.php">Newsletters</a></li>
-          <li><a href="<?= $loggedIn ? '/members/dashboard.php' : 'members/login.php' ?>"
-              class="btn btn-primary"
-              style="padding:.4rem .9rem;font-size:.88rem;margin-left:.5rem;<?= $loggedIn ? 'background:#1a6b35;border-color:#1a6b35;' : '' ?>">
-            <?= $loggedIn ? 'My Dashboard' : 'Member Login' ?>
-          </a></li>
-        </ul>
-      </nav>
-    </div>
-  </header>
+  <?php require_once __DIR__ . '/inc/nav.php'; bvtuNav(['hero' => true]); ?>
 
   <!-- Hero -->
   <section class="hero">
@@ -97,7 +58,7 @@ $member   = $loggedIn ? getMember() : null;
   ?>
   <section class="vote-promo">
     <div class="container">
-      <a class="vote-promo-map" href="trustee-zones.html"
+      <a class="vote-promo-map" href="trustee-zones.php"
          aria-label="Open the interactive trustee zone map">
         <img src="images/trustee-zones-map.svg"
              alt="Map of the four School District 54 trustee voting zones" width="760" height="943">
@@ -115,7 +76,7 @@ $member   = $loggedIn ? getMember() : null;
         /*
          * By zone, with the seat count, because that is how the ballot works —
          * and because Zone 4 endorses three candidates for two seats. The rule
-         * set on trustee-zones.html is that the "any two of these three" caveat
+         * set on trustee-zones.php is that the "any two of these three" caveat
          * appears wherever the names appear: three names above a two-seat zone
          * invites a Houston voter to mark all three and spoil their ballot.
          */
@@ -142,7 +103,7 @@ $member   = $loggedIn ? getMember() : null;
           declining to answer, and one did not reply. Every answer is published as it was written.
         </p>
         <div class="vote-promo-btns">
-          <a href="trustee-zones.html" class="btn btn-primary">Find your zone &amp; who we endorse</a>
+          <a href="trustee-zones.php" class="btn btn-primary">Find your zone &amp; who we endorse</a>
           <a href="trustee-candidates.php" class="btn btn-outline">Read candidate responses</a>
         </div>
       </div>
@@ -296,7 +257,7 @@ $member   = $loggedIn ? getMember() : null;
         <h3>Navigate</h3>
         <ul class="footer-nav-list">
           
-          <li class="has-dropdown"><a href="documents.php">Documents</a><ul class="dropdown"><li><a href="documents.php">All Documents</a></li><li><a href="collective-agreement.php">Collective Agreement</a></li><li><a href="lous.php">Letters of Understanding</a></li><li><a href="ca-assistant.php">Contract Assistant</a></li><li><a href="documents/BVTU-Constitution-and-Bylaws-2026.pdf" target="_blank">Constitution &amp; Bylaws</a></li><li><a href="calendars.php">School Calendars</a></li><li><a href="trustee-zones.html">Trustee Zone Map</a></li><li><a href="trustee-candidates.php">Trustee Candidate Responses</a></li></ul></li>
+          <li class="has-dropdown"><a href="documents.php">Documents</a><ul class="dropdown"><li><a href="documents.php">All Documents</a></li><li><a href="collective-agreement.php">Collective Agreement</a></li><li><a href="lous.php">Letters of Understanding</a></li><li><a href="ca-assistant.php">Contract Assistant</a></li><li><a href="documents/BVTU-Constitution-and-Bylaws-2026.pdf" target="_blank">Constitution &amp; Bylaws</a></li><li><a href="calendars.php">School Calendars</a></li><li><a href="trustee-zones.php">Trustee Zone Map</a></li><li><a href="trustee-candidates.php">Trustee Candidate Responses</a></li></ul></li>
           <li><a href="members.php">Members</a></li>
           <li><a href="prod.php">PRO-D</a></li>
           <li class="has-dropdown"><a href="health-safety.php">Health &amp; Safety</a><ul class="dropdown"><li><a href="health-safety.php">H&amp;S Resources</a></li><li><a href="https://www.worksafebc.com" target="_blank" rel="noopener">WorkSafe BC</a></li><li><a href="https://sd54.lifeworks.com/" target="_blank" rel="noopener">EFAP</a></li></ul></li>

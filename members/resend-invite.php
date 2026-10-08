@@ -51,6 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="site-root" content="../">
   <title>Resend Registration Link — BVTU</title>
   <link rel="stylesheet" href="../css/style.css?v=<?= @filemtime(__DIR__ . '/../css/style.css') ?>">
   <link rel="icon" href="../favicon.ico">
@@ -84,17 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   </style>
 </head>
 <body>
-  <header class="site-header">
-    <div class="header-inner container">
-      <a href="../index.php" class="logo">
-        <img src="../bvtu-logo.png" alt="BVTU Logo">
-        <div class="logo-text">
-          <span class="logo-name">Bulkley Valley Teachers' Union</span>
-          <span class="logo-sub">Local of the BC Teachers' Federation</span>
-        </div>
-      </a>
-    </div>
-  </header>
+  <?php require_once __DIR__ . '/../inc/nav.php'; bvtuNav(['base' => '../']); ?>
 
   <div class="auth-wrap">
     <div class="auth-card">
@@ -144,5 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <?php endif; ?>
     </div>
   </div>
+  <script src="../js/site.js?v=<?= @filemtime(__DIR__ . '/../js/site.js') ?>"></script>
+  <script src="../js/search.js?v=<?= @filemtime(__DIR__ . '/../js/search.js') ?>"></script>
 </body>
 </html>

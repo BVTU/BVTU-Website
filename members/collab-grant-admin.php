@@ -203,6 +203,7 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="site-root" content="../">
   <title>Collaboration Grant — Admin Review</title>
   <link rel="stylesheet" href="../css/style.css?v=<?= @filemtime(__DIR__ . '/../css/style.css') ?>">
   <link rel="icon" href="../favicon.ico">
@@ -489,25 +490,7 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
 </head>
 <body>
 
-  <header class="site-header">
-    <div class="header-inner container">
-      <a href="../index.php" class="logo">
-        <img src="../bvtu-logo.png" alt="BVTU Logo">
-        <div class="logo-text">
-          <span class="logo-name">Bulkley Valley Teachers' Union</span>
-          <span class="logo-sub">Local of the BC Teachers' Federation</span>
-        </div>
-      </a>
-      <nav class="main-nav" id="main-nav">
-        <ul>
-          <li><a href="dashboard.php">← Dashboard</a></li>
-          <li><a href="lp-dashboard.php">LP Dashboard</a></li>
-          <li><a href="../library.php">Resource Library</a></li>
-          <li><a href="../collab-grant.php" target="_blank">View grant page ↗</a></li>
-        </ul>
-      </nav>
-    </div>
-  </header>
+  <?php require_once __DIR__ . '/../inc/nav.php'; bvtuNav(['base' => '../']); ?>
 
   <div class="admin-wrap">
 
@@ -1024,5 +1007,6 @@ $pendingCount = count(array_filter($apps, fn($a) => $a['status'] === 'pending'))
       document.getElementById('app-' + id).classList.toggle('open');
     }
   </script>
+  <script src="../js/search.js?v=<?= @filemtime(__DIR__ . '/../js/search.js') ?>"></script>
 </body>
 </html>

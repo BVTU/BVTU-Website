@@ -33,6 +33,13 @@
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden}
+/* The one piece of site chrome this page carries: the full header would not fit
+   a 100vh shell and does not share this page's type or palette. */
+.back-to-site{position:fixed;top:10px;left:12px;z-index:1200;background:var(--surface2);
+  border:1px solid rgba(0,0,0,.12);border-radius:999px;padding:5px 12px;font-size:12.5px;
+  font-weight:600;color:var(--ink);text-decoration:none;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.back-to-site:hover{color:var(--accent)}
+@media (max-width:760px){.back-to-site{top:8px;left:8px;font-size:12px;padding:4px 10px}}
 body{background:var(--ground);color:var(--ink);font-family:var(--fb);font-size:15px;line-height:1.5}
 .shell{display:flex;height:100vh;overflow:hidden}
 .side{width:var(--sbw);flex-shrink:0;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden}
@@ -238,6 +245,7 @@ h1{font-family:var(--fd);font-size:24px;font-weight:400;line-height:1.12;text-wr
 </style>
 </head>
 <body>
+<a href="index.php" class="back-to-site">&larr; bvtu.ca</a>
 <div class="shell">
 <aside class="side" id="side">
   <div class="side-head">

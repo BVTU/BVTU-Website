@@ -2,3 +2,8 @@ RewriteEngine On
 
 # Short link redirects: /go/{slug} → go.php?slug={slug}
 RewriteRule ^go/([a-zA-Z0-9\-]+)/?$ go.php?slug=$1 [L,QSA]
+
+# trustee-zones.html became .php so it can share the site's one header.
+# The old address was handed out on paper and in the Documents menu, so it keeps
+# working rather than 404ing.
+RewriteRule ^trustee-zones\.html$ /trustee-zones.php [R=301,L]

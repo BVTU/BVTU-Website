@@ -498,28 +498,7 @@ $loginUrl    = 'members/login.php?redirect=' . urlencode('../library-resource.ph
   </div>
   <?php endif; ?>
 
-  <header class="site-header">
-    <div class="header-inner container">
-      <a href="index.php" class="logo">
-        <img src="bvtu-logo.png" alt="BVTU Logo">
-        <div class="logo-text">
-          <span class="logo-name">Bulkley Valley Teachers' Union</span>
-          <span class="logo-sub">Local of the BC Teachers' Federation</span>
-        </div>
-      </a>
-      <nav class="main-nav">
-        <ul>
-          <li><a href="documents.php">Documents</a></li>
-          <li><a href="members.php">Members</a></li>
-          <li><a href="prod.php">PRO-D</a></li>
-          <li class="has-dropdown"><a href="health-safety.php">Health &amp; Safety</a><ul class="dropdown"><li><a href="health-safety.php">H&amp;S Resources</a></li><li><a href="https://www.worksafebc.com" target="_blank" rel="noopener">WorkSafe BC</a></li><li><a href="https://sd54.lifeworks.com/" target="_blank" rel="noopener">EFAP</a></li></ul></li>
-          <li class="has-dropdown"><a href="bctf.php">BCTF</a><ul class="dropdown"><li><a href="bctf.php">BCTF Resources</a></li><li><a href="https://bctf.ca" target="_blank" rel="noopener">BCTF Website</a></li><li><a href="https://www.bctf.ca/topics/services-information/benefits/view-member-discounts-bctf-advantage" target="_blank" rel="noopener">Benefits &amp; Discounts</a></li></ul></li>
-          <li><a href="library.php" class="active">Resource Library</a></li><li><a href="newsletter-archive.php">Newsletters</a></li>
-          <li><a href="members/logout.php">Sign Out</a></li>
-        </ul>
-      </nav>
-    </div>
-  </header>
+  <?php require_once __DIR__ . '/inc/nav.php'; bvtuNav(); ?>
 
   <div class="page-hero" style="padding-top: calc(var(--hdr-h) + 1rem); padding-bottom: 1rem;">
     <!-- intentionally minimal — hero is in the card -->
@@ -1292,6 +1271,7 @@ $loginUrl    = 'members/login.php?redirect=' . urlencode('../library-resource.ph
       });
     }
   </script>
+  <script src="js/search.js?v=<?= @filemtime(__DIR__ . '/js/search.js') ?>"></script>
 </body>
 </html>
 <?php

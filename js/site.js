@@ -105,7 +105,7 @@ document.querySelectorAll('.has-dropdown > a').forEach(link => {
 
   var here = location.pathname.split('/').pop();
   if (here === '' || here === 'index.php' ||
-      here === 'trustee-zones.html' || here === 'trustee-candidates.php') return;
+      here === 'trustee-zones.php' || here === 'trustee-candidates.php') return;
 
   // Run now if the document is already parsed. This file is loaded at the end
   // of <body> today, so DOMContentLoaded has not fired yet — but waiting on an
@@ -143,7 +143,7 @@ document.querySelectorAll('.has-dropdown > a').forEach(link => {
     bar.innerHTML =
       '<div class="container">' +
         '<span><strong>School trustee election</strong> &middot; 17 October</span>' +
-        '<a href="trustee-zones.html">Your zone &amp; who we endorse</a>' +
+        '<a href="trustee-zones.php">Your zone &amp; who we endorse</a>' +
         '<span class="sep">|</span>' +
         '<a href="trustee-candidates.php">Candidate responses</a>' +
         '<button class="close" type="button" aria-label="Dismiss">&times;</button>' +

@@ -121,33 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body>
 
-  <header class="site-header">
-    <div class="header-inner container">
-      <a href="../index.php" class="logo">
-        <img src="../bvtu-logo.png" alt="BVTU Logo">
-        <div class="logo-text">
-          <span class="logo-name">Bulkley Valley Teachers' Union</span>
-          <span class="logo-sub">Local of the BC Teachers' Federation</span>
-        </div>
-      </a>
-      <nav class="main-nav">
-        <ul>
-          
-          <li><a href="../documents.php">Documents</a></li>
-<li class="has-dropdown">
-            <a href="../members.php">Members</a>
-            <ul class="dropdown">
-              <li><a href="../members.php">Member Resources</a></li>
-              <li><a href="../remedy-tracker.php">Remedy Tracker</a></li>
-            </ul>
-          </li>
-          <li><a href="../prod.php">PRO-D</a></li>
-          <li><a href="../health-safety.php">Health &amp; Safety</a></li>
-          <li><a href="../bctf.php">BCTF</a></li>
-        </ul>
-      </nav>
-    </div>
-  </header>
+  <?php require_once __DIR__ . '/../inc/nav.php'; bvtuNav(['base' => '../']); ?>
 
   <div class="auth-wrap">
     <div class="auth-card">

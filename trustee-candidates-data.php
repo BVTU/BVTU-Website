@@ -113,7 +113,7 @@ const TC_SLUG_ALIASES = [
 /**
  * The four voting zones, as School District 54 draws them. A candidate runs in
  * one zone and only its voters elect them, so it is the first thing a reader
- * needs — hence the map at trustee-zones.html, which answers it from an address.
+ * needs — hence the map at trustee-zones.php, which answers it from an address.
  */
 const TC_ZONES = [
     1 => 'Lake Kathlyn / Evelyn / Witset',

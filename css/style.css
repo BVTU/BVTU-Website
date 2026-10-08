@@ -839,18 +839,17 @@ body.so-lock { overflow: hidden; }
   .footer-grid { grid-template-columns: 1fr 1fr; gap: 2rem; }
 }
 
-@media (max-width: 680px) {
-  :root { --hdr-h: 64px; }
-
-  /* Tighten header padding so logo + hamburger both fit */
-  .header-inner { padding-left: 1rem; padding-right: 1rem; gap: .25rem; }
-
-  /* Let the logo shrink rather than pushing the hamburger off-screen */
-  .logo { flex-shrink: 1; min-width: 0; gap: .5rem; }
-  .logo img { height: 36px; }
-  .logo-text { min-width: 0; }
-  .logo-name { font-size: .85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .logo-sub  { display: none; }
+/*
+ * The collapsed nav starts at 1280px, not 680px.
+ *
+ * The full bar needs 1280px of viewport — logo, eight sections and the member
+ * button. The hamburger that replaces it only appeared below 680px, so from
+ * 681px to 1280px the bar was simply cut off at the right edge: at 1000px
+ * "Newsletters" is clipped in half and the Member Login button is off-screen
+ * entirely. That is every tablet and a good many laptops, on every page of the
+ * site. The logo and type tightening below stays at 680px, where it belongs.
+ */
+@media (max-width: 1280px) {
 
   /* Hamburger must never shrink or clip */
   .nav-toggle { display: flex; flex-shrink: 0; }
@@ -898,6 +897,20 @@ body.so-lock { overflow: hidden; }
     background: rgba(255,255,255,.12);
     color: var(--white);
   }
+}
+
+@media (max-width: 680px) {
+  :root { --hdr-h: 64px; }
+
+  /* Tighten header padding so logo + hamburger both fit */
+  .header-inner { padding-left: 1rem; padding-right: 1rem; gap: .25rem; }
+
+  /* Let the logo shrink rather than pushing the hamburger off-screen */
+  .logo { flex-shrink: 1; min-width: 0; gap: .5rem; }
+  .logo img { height: 36px; }
+  .logo-text { min-width: 0; }
+  .logo-name { font-size: .85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .logo-sub  { display: none; }
 
   .hero { padding: calc(var(--hdr-h) + 3rem) 1.25rem 4rem; }
   .page-hero { padding: calc(var(--hdr-h) + 1.75rem) 1.25rem 2rem; }
