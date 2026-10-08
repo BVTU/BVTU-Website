@@ -1,4 +1,22 @@
 <?php
+/*
+ * Errors are logged, not printed.
+ *
+ * .user.ini says the same thing and is the real setting; this is here because
+ * it only applies where the host honours it, and a notice printed into a page
+ * publishes the server's filesystem path to whoever is reading. auth.php is the
+ * first thing almost every page loads, which is why it lives here.
+ *
+ * BVTU_DEBUG in members/config.php puts them back on screen while working on
+ * something; it is read only if config.php has already been loaded.
+ */
+if (!defined('BVTU_DEBUG') || !BVTU_DEBUG) {
+    @ini_set('display_errors', '0');
+    @ini_set('display_startup_errors', '0');
+    @ini_set('log_errors', '1');
+}
+error_reporting(E_ALL);
+
 function startSession(): void {
     if (session_status() !== PHP_SESSION_NONE) return;
 

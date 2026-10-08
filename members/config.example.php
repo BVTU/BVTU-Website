@@ -13,6 +13,11 @@
 // Used in email notifications and internal links. Update when switching domains.
 define('SITE_URL', 'https://bvtu.ca');
 
+// Put PHP errors back on screen while working on something. Leave it off or
+// absent on the live site: a printed notice publishes the server's absolute
+// path. Errors are written to the host's PHP error log either way.
+// define('BVTU_DEBUG', true);
+
 define('DB_HOST', 'localhost');
 define('DB_NAME', 'your_database_name');   // e.g. u123456789_bvtu
 define('DB_USER', 'your_database_user');   // e.g. u123456789_bvtu

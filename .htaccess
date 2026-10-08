@@ -7,3 +7,9 @@ RewriteRule ^go/([a-zA-Z0-9\-]+)/?$ go.php?slug=$1 [L,QSA]
 # The old address was handed out on paper and in the Documents menu, so it keeps
 # working rather than 404ing.
 RewriteRule ^trustee-zones\.html$ /trustee-zones.php [R=301,L]
+
+# Configuration files are not for visitors. .user.ini would otherwise be served
+# as plain text, and members/config.php holds the database password.
+<FilesMatch "^\.user\.ini$|^config\.php$">
+  Require all denied
+</FilesMatch>
