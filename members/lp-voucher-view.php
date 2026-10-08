@@ -216,6 +216,16 @@ arsort($blSummary);
        1200px wrap, so horizontal scroll is only needed on narrower viewports. */
     .table-wrap { background: #fff; border: 1px solid var(--gray-200); border-radius: 12px; margin-bottom: 1.5rem; }
     @media (max-width: 980px) { .table-wrap { overflow-x: auto; } }
+    /* Sortable Date heading */
+    th.sortable { cursor: pointer; user-select: none; }
+    th.sortable:hover { text-decoration: underline; }
+    th.sortable:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
+    .sort-caret { display: inline-block; width: 0; height: 0; margin-left: .35rem;
+      vertical-align: middle; border-left: 4px solid transparent;
+      border-right: 4px solid transparent; border-top: 5px solid currentColor; opacity: .35; }
+    th.sort-asc  .sort-caret { border-top: none; border-bottom: 5px solid currentColor; opacity: 1; }
+    th.sort-desc .sort-caret { opacity: 1; }
+
     table.etable { width: 100%; border-collapse: collapse; min-width: 900px; font-size: .83rem; }
     .etable thead th { position: sticky; top: 0; z-index: 3; background: #1a2e1a; color: #fff; padding: .6rem .75rem; text-align: left; font-size: .71rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,.18); }
     .etable thead th:first-child { border-top-left-radius: 12px; }
@@ -376,7 +386,7 @@ arsort($blSummary);
       <thead>
         <tr>
           <th>Receipt</th>
-          <th>Date</th>
+          <th id="thDate" title="Sort the rows by date">Date</th>
           <th>Description</th>
           <th class="r">km</th>
           <th class="r">Travel $</th>
@@ -389,7 +399,7 @@ arsort($blSummary);
           <th>Grant / Budget Line</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody id="expenseRows">
         <?php foreach ($expenses as $e):
           $rowTotal = lpRowTotal($e);
         ?>
@@ -403,7 +413,7 @@ arsort($blSummary);
             <span style="color:var(--gray-300);font-size:.75rem;">—</span>
             <?php endif; ?>
           </td>
-          <td style="white-space:nowrap;"><?= $e['expense_date'] ? date('M j, Y', strtotime($e['expense_date'])) : '—' ?></td>
+          <td style="white-space:nowrap;" data-sort-date="<?= htmlspecialchars($e['expense_date'] ?? '') ?>"><?= $e['expense_date'] ? date('M j, Y', strtotime($e['expense_date'])) : '—' ?></td>
           <td><?= htmlspecialchars($e['description'] ?? '') ?></td>
           <td class="r"><?= $e['travel_km'] > 0 ? number_format($e['travel_km'],1) : '' ?></td>
           <td class="r"><?= $e['travel_amt'] > 0 ? '$'.number_format($e['travel_amt'],2) : '' ?></td>
@@ -523,5 +533,7 @@ function closeLightbox() {
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
 </script>
+<script src="../js/sort-by-date.js?v=<?= @filemtime(__DIR__ . '/../js/sort-by-date.js') ?>"></script>
+<script>bvtuSortByDate({ body: '#expenseRows', header: '#thDate' });</script>
 </body>
 </html>

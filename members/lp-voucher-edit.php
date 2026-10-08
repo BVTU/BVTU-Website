@@ -219,6 +219,15 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
      * to spare and needs no scrolling, so the header is given back there.
      */
     @media (min-width: 1441px) { .expense-table-wrap { overflow-x: visible; } }
+    /* Sortable Date heading */
+    th.sortable { cursor: pointer; user-select: none; }
+    th.sortable:hover { text-decoration: underline; }
+    th.sortable:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
+    .sort-caret { display: inline-block; width: 0; height: 0; margin-left: .35rem;
+      vertical-align: middle; border-left: 4px solid transparent;
+      border-right: 4px solid transparent; border-top: 5px solid currentColor; opacity: .35; }
+    th.sort-asc  .sort-caret { border-top: none; border-bottom: 5px solid currentColor; opacity: 1; }
+    th.sort-desc .sort-caret { opacity: 1; }
     table.expense-table { width: 100%; border-collapse: collapse; min-width: 1100px; font-size: .83rem; }
     .expense-table thead th { position: sticky; top: 0; z-index: 3; background: #1a2e1a; color: #fff; padding: .6rem .75rem; text-align: left; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,.18); }
     .expense-table thead th:first-child { border-top-left-radius: 12px; }
@@ -462,7 +471,7 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
       <thead>
         <tr>
           <th style="width:52px;">Receipt</th>
-          <th>Date</th>
+          <th id="thDate" title="Sort the rows by date">Date</th>
           <th>Description</th>
           <th class="num">km</th>
           <th>Category</th>
@@ -529,6 +538,7 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
   </div>
 </div>
 
+<script src="../js/sort-by-date.js?v=<?= @filemtime(__DIR__ . '/../js/sort-by-date.js') ?>"></script>
 <script src="../js/qrcode.js?v=<?= @filemtime(__DIR__ . '/../js/qrcode.js') ?>"></script>
 <script src="../js/qr-img.js?v=<?= @filemtime(__DIR__ . '/../js/qr-img.js') ?>"></script>
 <script>
@@ -1495,6 +1505,13 @@ function showToast(msg) {
         ? 'One row has an amount but no category. Pick a category so the money lands somewhere.'
         : bad.length + ' rows have an amount but no category. Pick a category for each so the money lands somewhere.');
     });
+
+/* Clicking Date reorders the rows themselves, so the order survives the save. */
+bvtuSortByDate({
+    body: '#expenseRows',
+    header: '#thDate',
+    after: function () { if (typeof updateTotals === 'function') updateTotals(); }
+});
 </script>
 <div id="receiptToast"></div>
 </body>
