@@ -6,6 +6,7 @@
  * Returns JSON: { vendor, date, amount, category, concerns, flag, saved_path, original_name }
  */
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/scan-concerns.php';
 require_once __DIR__ . '/prod-db.php';
 
 header('Content-Type: application/json');
@@ -84,8 +85,7 @@ $prompt = 'You are reviewing a receipt submitted for a professional development 
           '{"vendor": string or null, "date": "YYYY-MM-DD" or null, "total_amount": number or null, ' .
           '"likely_category": "conference" | "course" | "materials" | "travel" | "other" | null, ' .
           '"concerns": string or null}. ' .
-          'In the concerns field, note anything suspicious: illegible receipt, food or alcohol, ' .
-          'personal expense, or anything that looks out of place for a professional development claim.';
+          scanConcernPrompt();
 
 $payload = json_encode([
     'model'      => 'claude-sonnet-4-5',
@@ -142,7 +142,7 @@ if (!is_array($extracted)) {
 
 // Determine extraction flag (none by default)
 $flag = null;
-if (!empty($extracted['concerns'])) {
+if (scanConcern($extracted['concerns'] ?? null) !== null) {
     $flag = 'suspicious_category';
 }
 // Date mismatch: if extracted date is more than 12 months ago or in the future
@@ -160,7 +160,7 @@ echo json_encode([
     'date'          => $extracted['date']            ?? null,
     'amount'        => $extracted['total_amount']    ?? null,
     'category'      => $extracted['likely_category'] ?? null,
-    'concerns'      => $extracted['concerns']        ?? null,
+    'concerns'      => scanConcern($extracted['concerns'] ?? null),
     'flag'          => $flag,
     'saved_path'    => $savedName,
     'original_name' => $origName,

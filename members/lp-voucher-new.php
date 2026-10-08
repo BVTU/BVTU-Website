@@ -141,6 +141,7 @@ if ($errors && !empty($descs)) {
             'original_name'      => $receiptOrig[$i]  ?? '',
             'suggested_grant_id' => $grantIds[$i]     ?? '',
             'suggested_bl_id'    => $blIds[$i]        ?? '',
+            'exp_notes'          => $expNotes[$i]     ?? '',
         ];
     }
 }
@@ -348,23 +349,6 @@ $initRowsJson = json_encode($initRows);
     .btn-wide { background:#fff; color:var(--gray-500); border:1.5px solid var(--gray-300); border-radius:8px; padding:.5rem .9rem; font-size:.85rem; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:.4rem; margin-left:auto; }
     .btn-wide:hover { background:#f9fafb; }
 
-    /* ── Pending receipts tray ── */
-    .pending-tray { display:none; background:#f0fdf4; border:1.5px solid #86efac; border-radius:12px; padding:1rem 1.25rem; margin-bottom:1.25rem; }
-    .pending-tray.has-items { display:block; }
-    .pending-tray-header { display:flex; align-items:center; gap:.6rem; margin-bottom:.85rem; }
-    .pending-tray-header h3 { font-size:.9rem; font-weight:800; color:var(--primary); margin:0; }
-    .pending-badge { background:var(--primary); color:#fff; font-size:.7rem; font-weight:800; border-radius:100px; padding:.1rem .5rem; }
-    .pending-tray-scroll { display:flex; gap:.75rem; flex-wrap:wrap; }
-    .pending-card { background:#fff; border:1px solid #bbf7d0; border-radius:10px; padding:.75rem; width:180px; flex-shrink:0; }
-    .pending-card img { width:100%; height:90px; object-fit:cover; border-radius:6px; margin-bottom:.5rem; cursor:pointer; }
-    .pending-card .pdf-thumb { width:100%; height:90px; background:#f9fafb; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:2rem; margin-bottom:.5rem; }
-    .pending-card .p-desc { font-size:.78rem; font-weight:700; color:#1a2e1a; margin-bottom:.15rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .pending-card .p-amt  { font-size:.8rem; color:var(--primary); font-weight:800; margin-bottom:.5rem; }
-    .pending-card .p-flag { font-size:.7rem; color:#92400e; margin-bottom:.4rem; }
-    .btn-claim { width:100%; background:var(--primary); color:#fff; border:none; border-radius:6px; padding:.4rem; font-size:.78rem; font-weight:700; cursor:pointer; margin-bottom:.3rem; }
-    .btn-claim:hover { background:var(--primary-dk); }
-    .attach-select { width:100%; border:1px solid #86efac; border-radius:6px; padding:.32rem .4rem; font-size:.74rem; font-family:inherit; background:#f0fdf4; color:var(--primary); font-weight:600; cursor:pointer; }
-    .attach-select:focus { outline:none; border-color:var(--primary); }
 
     /* Lightbox */
     .lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.85); z-index: 9999; align-items: center; justify-content: center; }
@@ -457,14 +441,6 @@ $initRowsJson = json_encode($initRows);
     </div>
   </div>
 
-  <!-- Pending receipts tray -->
-  <div class="pending-tray" id="pendingTray">
-    <div class="pending-tray-header">
-      <h3>📥 Receipts from your phone</h3>
-      <span class="pending-badge" id="pendingBadge">0</span>
-    </div>
-    <div class="pending-tray-scroll" id="pendingCards"></div>
-  </div>
 
   <!-- Expense table -->
   <div class="expense-table-wrap">
@@ -564,6 +540,7 @@ function addRow(data = {}) {
         </div>
         <input type="hidden" name="receipt_path[]" id="rpath-${id}" value="${data.saved_path || ''}">
         <input type="hidden" name="receipt_orig[]" id="rorig-${id}" value="${data.original_name || ''}">
+        <input type="hidden" name="exp_notes[]" value="${escHtml(data.exp_notes || '')}">
       </td>
       <td data-label="Date"><input type="date" name="expense_date[]" class="cell-input" value="${date}" style="width:130px;"></td>
       <td data-label="Description"><input type="text" name="description[]" class="cell-input cell-desc" placeholder="Description"
@@ -1344,9 +1321,6 @@ function pollPending() {
             if (!d.receipts || d.receipts.length === 0) return;
             var newOnes = d.receipts.filter(function(r) { return !seenReceiptIds[r.id]; });
             if (newOnes.length === 0) return;
-            var tray = document.getElementById('pendingTray');
-            tray.classList.add('has-items');
-            document.getElementById('pendingBadge').textContent = d.receipts.length;
             newOnes.forEach(function(receipt) {
                 seenReceiptIds[receipt.id] = true;
                 receiptStore[receipt.id]   = receipt;
@@ -1356,190 +1330,210 @@ function pollPending() {
         .catch(function() {});
 }
 
-function addPendingCard(receipt) {
-    receiptStore[receipt.id] = receipt;
+/* ── Where a phone receipt goes ───────────────────────────────────────────────
+ *
+ * It used to land in a tray and wait to be filed by hand, so taking three photos
+ * meant three trips back to the screen to say where each one went. A receipt now
+ * goes to the row you pinned, or the first row without one, or a new row.
+ *
+ * Which makes the itemized-plus-card-slip case matter: photograph a restaurant
+ * bill and then the Visa slip and you would get two rows for one meal, double
+ * counting it. A second receipt from the same vendor on the same day, for an
+ * amount within a tip of the first, is treated as the same bill — one row, the
+ * higher of the two figures, because the difference is the tip.
+ */
 
-    // If a row is targeted, auto-attach directly
-    if (targetRowId) {
-        var tid = targetRowId;
-        clearPhoneTarget();
-        var rpathEl = document.getElementById('rpath-' + tid);
-        var rorigEl = document.getElementById('rorig-' + tid);
-        if (rpathEl) rpathEl.value = receipt.saved_path;
-        if (rorigEl) rorigEl.value = receipt.original_name || '';
-        showThumb(tid, receipt.saved_path, null);
-        fillRowFromScan(tid, receipt.scan_data || {});
-        var fd = new FormData();
-        fd.append('pending_id', receipt.id);
-        fd.append('csrf_token', LP_CSRF);
-        fetch('lp-claim-receipt.php', { method: 'POST', body: fd })
-            .then(function (r) { return r.json(); })
-            .then(function (d) {
-                // Say so rather than leaving the tray looking cleared when the
-                // server refused — the receipt is still there on reload.
-                if (!d || !d.ok) {
-                    // Deliberately NOT re-offered: the receipt is already in a
-                    // row, so putting the card back invites a second row against
-                    // the same file. Say what happened and let them reload.
-                    alert((d && d.error) ? d.error
-                        : 'That receipt was attached here but could not be marked as filed. '
-                          + 'Reload before adding more so it is not attached twice.');
-                }
-            })
-            .catch(function () {
-                alert('That receipt could not be filed — the server did not respond. '
-                      + 'Reload before adding more.');
-            });
-        var tr = document.getElementById('row-' + tid);
-        if (tr) {
-            tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            tr.classList.add('row-flash');
-            setTimeout(function() { tr.classList.remove('row-flash'); }, 1600);
-        }
-        var sd2 = receipt.scan_data || {};
-        var label = sd2.description ? sd2.description : 'Receipt';
-        showToast('✅ ' + label + ' attached to row');
-        return;
-    }
-
-    // No target — show in pending tray
-    var sd      = receipt.scan_data || {};
-    var desc    = sd.description || receipt.original_name || 'Receipt';
-    var isPdf   = /\.pdf$/i.test(receipt.saved_path || '');
-    var thumbHtml = isPdf
-        ? '<div class="pdf-thumb">📄</div>'
-        : '<img src="' + escHtml(receipt.preview_url) + '" alt="Receipt">';
-    var amount = null;
-    ['travel_amount','meals_amount','gifts_amount','misc_amount','office_amount','phone_amount','total_amount'].forEach(function(k) {
-        if (!amount && sd[k] && parseFloat(sd[k]) > 0) amount = parseFloat(sd[k]);
-    });
-    var html = '<div class="pending-card" id="pc-' + receipt.id + '">'
-        + thumbHtml
-        + '<div class="p-desc" title="' + escHtml(desc) + '">' + escHtml(desc) + '</div>'
-        + (amount ? '<div class="p-amt">$' + amount.toFixed(2) + '</div>' : '')
-        + (sd.concerns ? '<div class="p-flag">⚠️ ' + escHtml(sd.concerns) + '</div>' : '')
-        + '<button class="btn-claim" onclick="claimReceipt(' + receipt.id + ')">+ New Row</button>'
-        + '<select class="attach-select" id="as-' + receipt.id + '"'
-        +   ' onclick="rebuildAttachOptions(' + receipt.id + ')"'
-        +   ' onchange="attachToRow(' + receipt.id + ', this)">'
-        + '<option value="">📎 Attach to existing row…</option>'
-        + '</select>'
-        + '</div>';
-    document.getElementById('pendingCards').insertAdjacentHTML('beforeend', html);
-
-    // Scroll tray into view and notify
-    document.getElementById('pendingTray').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    showToast('📱 Receipt arrived — tap "+ New Row" or attach to a row');
+/** Everything the scan put in a category, or its stated total. */
+function scanTotal(sd) {
+    if (!sd) return 0;
+    var keys = ['travel_amount','meals_amount','gifts_amount','misc_amount','office_amount','phone_amount'];
+    var sum = 0;
+    keys.forEach(function (k) { sum += parseFloat(sd[k]) || 0; });
+    return sum > 0 ? sum : (parseFloat(sd.total_amount) || 0);
 }
 
-function rebuildAttachOptions(pendingId) {
-    var sel = document.getElementById('as-' + pendingId);
-    if (!sel) return;
-    while (sel.options.length > 1) sel.remove(1);
-    var found = 0;
-    document.querySelectorAll('#expenseRows tr').forEach(function(tr) {
-        var rowId  = tr.id ? tr.id.replace('row-', '') : '';
-        if (!rowId) return;
-        var rpath  = document.getElementById('rpath-' + rowId);
-        if (!rpath || rpath.value.trim()) return;
-        var descEl = tr.querySelector('[name="description[]"]');
-        var dateEl = tr.querySelector('[name="expense_date[]"]');
-        var desc   = descEl ? descEl.value.trim() : '';
-        var date   = dateEl ? dateEl.value : '';
-        if (!desc && !date) return;
-        var label  = (date ? date + ' — ' : '') + (desc || '(no description)');
-        var opt    = document.createElement('option');
-        opt.value  = rowId;
-        opt.textContent = label;
-        sel.appendChild(opt);
-        found++;
-    });
-    if (!found) {
-        var opt = document.createElement('option');
-        opt.disabled = true;
-        opt.textContent = 'No rows without a receipt';
-        sel.appendChild(opt);
-    }
+function normVendor(v) {
+    return String(v || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
-function attachToRow(pendingId, selectEl) {
-    var rowId = selectEl.value;
-    if (!rowId) return;
-    selectEl.value = '';
-    var receipt = receiptStore[pendingId];
-    if (!receipt) return;
-    var rpathEl = document.getElementById('rpath-' + rowId);
-    var rorigEl = document.getElementById('rorig-' + rowId);
+/** The row a receipt should join, if this is the second half of one bill. */
+function findSameBillRow(sd) {
+    var vendor = normVendor(sd.vendor);
+    var date   = sd.date || '';
+    var amount = scanTotal(sd);
+    if (!vendor || !date || amount <= 0) return null;
+
+    var match = null;
+    document.querySelectorAll('#expenseRows tr').forEach(function (tr) {
+        if (match || !tr.id) return;
+        if (tr.dataset.billVendor !== vendor || tr.dataset.billDate !== date) return;
+        var had = parseFloat(tr.dataset.billAmount) || 0;
+        if (had <= 0) return;
+        // Same bill, allowing for a tip either way round. Beyond about a third
+        // it is more likely two genuinely separate purchases.
+        var hi = Math.max(had, amount), lo = Math.min(had, amount);
+        if (lo > 0 && hi / lo <= 1.35 && singleFilledCategory(tr)) match = tr;
+    });
+    return match;
+}
+
+/** The one category this row keeps money in, or null when it is split or empty.
+ *  A split row is left alone: which part of it the tip belongs to is a guess. */
+function singleFilledCategory(tr) {
+    var found = null, count = 0;
+    ['travel_amt','meals','gifts','misc','office','phone'].forEach(function (k) {
+        var el = tr.querySelector('.hid-' + k);
+        if (el && (parseFloat(el.value) || 0) > 0) { count++; found = k; }
+    });
+    return count === 1 ? found : null;
+}
+
+/** A row nobody has started filling in — not merely one without a receipt. A
+ *  mileage row with km and a description is somebody's work, not a free slot. */
+function rowIsUntouched(tr) {
+    var path = tr.querySelector('[name="receipt_path[]"]');
+    if (!path || String(path.value).trim()) return false;
+    var desc = tr.querySelector('[name="description[]"]');
+    if (desc && desc.value.trim()) return false;
+    var km = tr.querySelector('[name="travel_km[]"]');
+    if (km && (parseFloat(km.value) || 0) > 0) return false;
+    var any = false;
+    ['travel_amt','meals','gifts','misc','office','phone'].forEach(function (k) {
+        var el = tr.querySelector('.hid-' + k);
+        if (el && (parseFloat(el.value) || 0) > 0) any = true;
+    });
+    return !any;
+}
+
+function rowIdOf(tr) { return tr && tr.id ? tr.id.replace('row-', '') : null; }
+
+/** The first row with no receipt on it yet. */
+function firstFreeRowId() {
+    var found = null;
+    document.querySelectorAll('#expenseRows tr').forEach(function (tr) {
+        if (found || !tr.id) return;
+        if (rowIsUntouched(tr)) found = rowIdOf(tr);
+    });
+    return found;
+}
+
+/** Mark the receipt filed, so the next poll does not offer it again. */
+function claimPending(id) {
+    var fd = new FormData();
+    fd.append('pending_id', id);
+    fd.append('csrf_token', LP_CSRF);
+    return fetch('lp-claim-receipt.php', { method: 'POST', body: fd })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+            if (!d || !d.ok) {
+                // Not re-offered: it is already on a row, and putting it back
+                // invites a second row against the same photo.
+                alert((d && d.error) ? d.error
+                    : 'That receipt is attached, but could not be marked as filed. '
+                      + 'Reload before adding more so it is not attached twice.');
+            }
+        })
+        .catch(function () {
+            alert('That receipt is attached, but the server did not confirm it. '
+                  + 'Reload before adding more.');
+        });
+}
+
+function flashRow(tr) {
+    if (!tr) return;
+    tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    tr.classList.add('row-flash');
+    setTimeout(function () { tr.classList.remove('row-flash'); }, 1600);
+}
+
+function putReceiptOnRow(id, receipt, sd) {
+    var rpathEl = document.getElementById('rpath-' + id);
+    var rorigEl = document.getElementById('rorig-' + id);
     if (rpathEl) rpathEl.value = receipt.saved_path;
     if (rorigEl) rorigEl.value = receipt.original_name || '';
-    showThumb(rowId, receipt.saved_path, null);
-    fillRowFromScan(rowId, receipt.scan_data || {});
-    var tr = document.getElementById('row-' + rowId);
+    showThumb(id, receipt.saved_path, null);
+    fillRowFromScan(id, sd);
+    var tr = document.getElementById('row-' + id);
     if (tr) {
-        tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        tr.classList.add('row-flash');
-        setTimeout(function() { tr.classList.remove('row-flash'); }, 1600);
+        tr.dataset.billVendor = normVendor(sd.vendor);
+        tr.dataset.billDate   = sd.date || '';
+        tr.dataset.billAmount = String(scanTotal(sd));
     }
-    var sd2 = (receipt.scan_data || {});
-    showToast('✅ ' + (sd2.description || 'Receipt') + ' attached to row');
-    dismissPendingCard(pendingId);
 }
 
-function claimReceipt(pendingId) {
-    var receipt = receiptStore[pendingId];
-    if (!receipt) return;
-    var sd = receipt.scan_data || {};
-    var rowId = addRow({
-        date:               sd.date || '',
-        description:        sd.description || '',
-        travel_amount:      sd.travel_amount  || '',
-        meals_amount:       sd.meals_amount   || '',
-        gifts_amount:       sd.gifts_amount   || '',
-        misc_amount:        sd.misc_amount    || '',
-        office_amount:      sd.office_amount  || '',
-        phone_amount:       sd.phone_amount   || '',
-        suggested_grant_id: sd.suggested_grant_id || '',
-        suggested_bl_id:    sd.suggested_bl_id    || '',
-        saved_path:         receipt.saved_path,
-        original_name:      receipt.original_name,
-        concerns:           sd.concerns || '',
-        flag:               sd.flag || '',
-    });
-    var newRow = document.getElementById('row-' + rowId);
-    if (newRow) newRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    dismissPendingCard(pendingId);
+/** Note on the row, kept with it into the database. */
+function appendRowNote(tr, text) {
+    if (!tr) return;
+    var el = tr.querySelector('[name="exp_notes[]"]');
+    if (!el) return;
+    el.value = el.value ? (el.value + ' ' + text) : text;
 }
 
-function dismissPendingCard(pendingId) {
-    var fd = new FormData();
-    fd.append('pending_id', pendingId);
-    fd.append('csrf_token', LP_CSRF);
-    fetch('lp-claim-receipt.php', { method: 'POST', body: fd })
-            .then(function (r) { return r.json(); })
-            .then(function (d) {
-                // Say so rather than leaving the tray looking cleared when the
-                // server refused — the receipt is still there on reload.
-                if (!d || !d.ok) {
-                    // Not re-offered. Both callers of this have already attached
-                    // the receipt to a row, so putting the card back would let a
-                    // second click create a duplicate line for the same file.
-                    alert((d && d.error) ? d.error
-                        : 'That receipt was attached but could not be marked as filed. '
-                          + 'Reload before adding more so it is not attached twice.');
-                }
-            })
-            .catch(function () {
-                alert('That receipt could not be filed — the server did not respond. '
-                      + 'Reload before adding more.');
-            });
-    var card = document.getElementById('pc-' + pendingId);
-    if (card) card.remove();
-    var remaining = document.getElementById('pendingCards').children.length;
-    if (remaining === 0) {
-        document.getElementById('pendingTray').classList.remove('has-items');
+/*
+ * The second half of a bill. The row keeps one receipt, so it keeps the one
+ * that matches the figure being claimed — a $38 itemized receipt beside a $45
+ * row is the kind of thing a Treasurer has to stop and ask about — and the
+ * other file is named in the row's notes so it is not simply lost.
+ */
+function mergeIntoRow(tr, receipt, sd) {
+    var id      = rowIdOf(tr);
+    var had     = parseFloat(tr.dataset.billAmount) || 0;
+    var coming  = scanTotal(sd);
+    var keepNew = coming > had;
+    var higher  = Math.max(had, coming);
+
+    if (keepNew) {
+        // The attached image should match the figure claimed: a $38 itemized
+        // receipt beside a $45 row is exactly what makes a Treasurer stop.
+        var oldName = (tr.querySelector('[name="receipt_orig[]"]') || {}).value || 'the first receipt';
+        putReceiptOnRow(id, receipt, sd);
+        appendRowNote(tr, 'Also provided: ' + oldName + '.');
     } else {
-        document.getElementById('pendingBadge').textContent = remaining;
+        appendRowNote(tr, 'Also provided: ' + (receipt.original_name || 'a second receipt') + '.');
     }
+
+    // Through the hidden field the row actually posts, then resync, or the
+    // screen would show the old figure while the form carried the new one.
+    var cat = singleFilledCategory(tr);
+    var hid = cat ? tr.querySelector('.hid-' + cat) : null;
+    if (hid) hid.value = higher.toFixed(2);
+    tr.dataset.billAmount = String(higher);
+
+    if (typeof syncRowFromHidden === 'function') syncRowFromHidden(id);
+    else if (typeof updateRow === 'function') updateRow(id);
+    claimPending(receipt.id);
+    flashRow(tr);
+    showToast('🧾 Same bill as "' + ((sd.vendor || 'that receipt')) + '" — kept $'
+              + higher.toFixed(2) + ', the higher of the two');
+}
+
+function addPendingCard(receipt) {
+    receiptStore[receipt.id] = receipt;
+    var sd = receipt.scan_data || {};
+
+    // The second half of a bill already on the voucher.
+    var same = findSameBillRow(sd);
+    if (same) { mergeIntoRow(same, receipt, sd); return; }
+
+    // A pinned row, else the first row without a receipt, else a new one — so a
+    // photo never waits to be filed by hand.
+    var id = targetRowId;
+    if (id) clearPhoneTarget();
+    if (id) {
+        var pinned = document.getElementById('row-' + id);
+        var held   = pinned && pinned.querySelector('[name="receipt_path[]"]');
+        if (held && String(held.value).trim() &&
+            !confirm('That row already has a receipt on it. Replace it with this photo?')) {
+            id = null;
+        }
+    }
+    if (!id || !document.getElementById('row-' + id)) id = firstFreeRowId();
+    if (!id) id = addRow();
+
+    putReceiptOnRow(id, receipt, sd);
+    claimPending(receipt.id);
+    flashRow(document.getElementById('row-' + id));
+    showToast('\u2705 ' + (sd.description || sd.vendor || 'Receipt') + ' added');
 }
 
 // ── Toast notification ────────────────────────────────────────────────────────

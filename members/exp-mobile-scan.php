@@ -6,6 +6,7 @@
  * Returns JSON: { ok, id, vendor, date, amount, category, concerns, saved_path, original_name, error? }
  */
 require_once __DIR__ . '/exp-db.php';
+require_once __DIR__ . '/scan-concerns.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -109,7 +110,7 @@ if (defined('CLAUDE_API_KEY')) {
             . '{"vendor": string or null, "date": "YYYY-MM-DD" or null, "total_amount": number or null, '
             . '"likely_category": "meals" | "travel" | "supplies" | "conference" | "accommodation" | "other" | null, '
             . '"concerns": string or null}. '
-            . 'In concerns, note anything suspicious (illegible, personal purchase, unusually large, etc.). Null if clean.';
+            . scanConcernPrompt();
 
     $payload = json_encode([
         'model'      => 'claude-sonnet-4-5',
@@ -142,7 +143,7 @@ if (defined('CLAUDE_API_KEY')) {
 
         if (is_array($extracted)) {
             $flag = null;
-            if (!empty($extracted['concerns'])) {
+            if (scanConcern($extracted['concerns'] ?? null) !== null) {
                 $flag = 'flagged';
             }
             if (!empty($extracted['date'])) {
@@ -157,7 +158,7 @@ if (defined('CLAUDE_API_KEY')) {
                 'date'     => $extracted['date']            ?? null,
                 'amount'   => $extracted['total_amount']    ?? null,
                 'category' => $extracted['likely_category'] ?? null,
-                'concerns' => $extracted['concerns']        ?? null,
+                'concerns' => scanConcern($extracted['concerns'] ?? null),
                 'flag'     => $flag,
             ];
         }

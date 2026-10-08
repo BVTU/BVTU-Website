@@ -9,6 +9,7 @@
  *                 saved_path, original_name }
  */
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/scan-concerns.php';
 require_once __DIR__ . '/lp-db.php';
 
 header('Content-Type: application/json');
@@ -80,6 +81,7 @@ $contentBlock = $isPdf ? [
     'source' => ['type' => 'base64', 'media_type' => $mimeType, 'data' => $fileData],
 ];
 
+$concernRules = scanConcernPrompt();
 $prompt = <<<PROMPT
 You are reviewing a receipt for a teachers' union president's expense reimbursement.
 Extract the following and return ONLY valid JSON — no markdown, no preamble:
@@ -116,7 +118,7 @@ Available BVTU budget lines (suggest the best match or null):
 {$blNames}
 
 For description: write a concise 3-7 word description of what was purchased (e.g. "Smithers Secondary school visit lunch" or "Office supplies — Staples").
-For concerns: note anything suspicious — personal items, alcohol, unusually large amounts, illegible receipt. Null if clean.
+{$concernRules}
 PROMPT;
 
 $payload = json_encode([
@@ -195,7 +197,7 @@ if (!empty($extracted['suggested_budget_line'])) {
 
 // Flag logic
 $flag = null;
-if (!empty($extracted['concerns'])) $flag = 'flagged';
+if (scanConcern($extracted['concerns'] ?? null) !== null) $flag = 'flagged';
 if (!empty($extracted['date'])) {
     $ts = strtotime($extracted['date']);
     if ($ts && ($ts < strtotime('-18 months') || $ts > time() + 86400)) {
@@ -218,7 +220,7 @@ echo json_encode([
     'suggested_budget_line' => $extracted['suggested_budget_line'] ?? null,
     'suggested_grant_id'    => $suggestedGrantId,
     'suggested_bl_id'       => $suggestedBlId,
-    'concerns'              => $extracted['concerns']        ?? null,
+    'concerns'              => scanConcern($extracted['concerns'] ?? null),
     'flag'                  => $flag,
     'saved_path'            => $savedName,
     'original_name'         => $origName,

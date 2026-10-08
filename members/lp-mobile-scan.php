@@ -6,6 +6,7 @@
  * Returns JSON: { ok, id, description, amount, date, concerns, saved_path, original_name, error? }
  */
 require_once __DIR__ . '/lp-db.php';
+require_once __DIR__ . '/scan-concerns.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -97,7 +98,8 @@ if (defined('CLAUDE_API_KEY')) {
         'source' => ['type' => 'base64', 'media_type' => $mimeType, 'data' => $fileData],
     ];
 
-    $prompt = <<<PROMPT
+    $concernRules = scanConcernPrompt();
+$prompt = <<<PROMPT
 You are reviewing a receipt for a teachers' union president's expense reimbursement.
 Extract the following and return ONLY valid JSON — no markdown, no preamble:
 {
@@ -127,7 +129,7 @@ Expense category rules:
 Available BCTF grants: {$grantNames}
 Available BVTU budget lines: {$blNames}
 For description: write a concise 3-7 word description (e.g. "Smithers school visit lunch").
-For concerns: note anything suspicious. Null if clean.
+{$concernRules}
 PROMPT;
 
     $payload = json_encode([
@@ -181,7 +183,7 @@ PROMPT;
             }
 
             $flag = null;
-            if (!empty($extracted['concerns'])) $flag = 'flagged';
+            if (scanConcern($extracted['concerns'] ?? null) !== null) $flag = 'flagged';
             if (!empty($extracted['date'])) {
                 $ts = strtotime($extracted['date']);
                 if ($ts && ($ts < strtotime('-18 months') || $ts > time() + 86400)) {
@@ -202,7 +204,7 @@ PROMPT;
                 'total_amount'        => $extracted['total_amount']    ?? null,
                 'suggested_grant_id'  => $grantId,
                 'suggested_bl_id'     => $blId,
-                'concerns'            => $extracted['concerns']        ?? null,
+                'concerns'            => scanConcern($extracted['concerns'] ?? null),
                 'flag'                => $flag,
             ];
         }
