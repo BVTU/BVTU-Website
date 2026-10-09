@@ -267,6 +267,22 @@ $rows = $items ?: [[
     .cell-desc   { min-width: 220px; }
     .cell-textarea { resize: vertical; min-height: 42px; }
     .cell-receipt { width: 170px; }
+    /* On a phone there is a camera above the picker; on a desktop there is not,
+       and a "Take a photo" button that opens a file dialog would be a lie. */
+    .receipt-cam { display: none; }
+    .is-touch .receipt-cam { display: block; position: relative; border: 1.5px solid var(--primary);
+      background: var(--primary); color: #fff; border-radius: 7px; padding: .55rem;
+      text-align: center; cursor: pointer; font-size: .8rem; font-weight: 700;
+      margin-bottom: .35rem; }
+    .is-touch .receipt-cam input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    /* The picker is an inline label, which is fine inside a narrow table cell
+       and looks like an afterthought under a full-width camera button once the
+       table stacks into cards. Phones only; the desktop table is untouched. */
+    .is-touch .receipt-zone { display: block; }
+    /* The QR is for sending a photo from a phone to a desktop. On the phone
+       itself it is a picture of the page you are already looking at. */
+    .is-touch .btn-phone,
+    .is-touch .receipt-phone-btn { display: none; }
     .receipt-zone { border: 1.5px dashed var(--gray-300); border-radius: 7px; padding: .5rem; text-align: center; cursor: pointer; position: relative; font-size: .76rem; color: var(--gray-500); transition: border-color .12s, background .12s; }
     .receipt-zone:hover { border-color: var(--primary); background: var(--accent); }
     .receipt-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
@@ -474,6 +490,27 @@ $rows = $items ?: [[
 <script src="../js/qrcode.js?v=<?= @filemtime(__DIR__ . '/../js/qrcode.js') ?>"></script>
 <script src="../js/qr-img.js?v=<?= @filemtime(__DIR__ . '/../js/qr-img.js') ?>"></script>
 <script>
+/* ── Is this a phone? ────────────────────────────────────────────────────────
+ *
+ * A teacher filling in a claim on their phone was shown a QR code — a picture
+ * of the page they were already on — and a file picker that, on Android, only
+ * offers photos already taken. The camera was unreachable from the one device
+ * that had one.
+ *
+ * (pointer: coarse) is the primary pointer, so a laptop with a touchscreen and
+ * a trackpad still reads as a desktop. Both ways of being wrong are safe: a
+ * desktop shown the camera button gets an ordinary file dialog, and a phone
+ * read as a desktop gets exactly what it gets today.
+ */
+var IS_TOUCH = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+if (IS_TOUCH) document.documentElement.classList.add('is-touch');
+
+/* The picker is "upload a receipt" on a desktop and "the other option" on a
+ * phone, where the camera button sits above it. One constant, because the
+ * label is also rewritten when a row is cleared. */
+var ZONE_DEFAULT = IS_TOUCH ? '\u{1F5BC}\uFE0F Choose a saved photo or PDF'
+                            : '\u{1F4F7} Upload receipt';
+
 var ROW_INDEX = <?= count($rows) ?>;
 var EXP_CSRF  = <?= json_encode(csrfToken()) ?>;
 var CATEGORIES = <?= json_encode($catLabels) ?>;
@@ -528,9 +565,10 @@ function emptyRowHtml(idx) {
         '<input type="hidden" name="ext_flag[]" class="f-ext-flag">' +
         '<input type="hidden" name="ext_concerns[]" class="f-ext-concerns">' +
         '<input type="hidden" name="no_receipt[]" class="f-no-receipt" value="0">' +
+        '<label class="receipt-cam">&#x1F4F7; Take a photo<input type="file" accept="image/*" capture="environment" onchange="handleRowFile(this)"></label>' +
         '<label class="receipt-zone">' +
           '<div class="spinner"></div>' +
-          '<span class="zone-label">&#x1F4F7; Upload receipt</span>' +
+          '<span class="zone-label"></span>' +
           '<input type="file" accept="image/*,.pdf" onchange="handleRowFile(this)">' +
         '</label>' +
         '<button type="button" class="receipt-phone-btn" onclick="phoneForRow(this)">' +
@@ -546,8 +584,25 @@ function addRow() {
   var tbody = document.getElementById('itemTbody');
   var div = document.createElement('tbody');
   div.innerHTML = emptyRowHtml(ROW_INDEX);
-  tbody.appendChild(div.firstElementChild);
+  var tr = div.firstElementChild;
+  tbody.appendChild(tr);
+  labelRestingZones(tr);
   ROW_INDEX++;
+}
+
+/**
+ * Put ZONE_DEFAULT on every picker that is not already holding a receipt.
+ *
+ * Needed in two places: rows built here, and the rows PHP renders on load —
+ * which are written with the desktop wording because the server cannot know
+ * what is holding the phone.
+ */
+function labelRestingZones(scope) {
+  (scope || document).querySelectorAll('.receipt-zone').forEach(function (zone) {
+    if (zone.classList.contains('has-file')) return;
+    var label = zone.querySelector('.zone-label');
+    if (label) label.textContent = ZONE_DEFAULT;
+  });
 }
 
 function removeRow(btn) {
@@ -565,9 +620,9 @@ function removeRow(btn) {
     if (noReceiptCb) noReceiptCb.checked = false;
     var zone = row.querySelector('.receipt-zone');
     zone.classList.remove('has-file');
-    zone.style.opacity = '1';
-    zone.style.pointerEvents = 'auto';
-    zone.querySelector('.zone-label').innerHTML = '&#x1F4F7; Upload receipt';
+    setReceiptControls(row.querySelector('td[data-label="Receipt"]') || row, true);
+    zone.querySelector('.zone-label').textContent = ZONE_DEFAULT;
+    row.querySelectorAll('input[type=file]').forEach(function (el) { el.value = ''; });
     row.querySelector('.row-flag').style.display = 'none';
     if (typeof expTargetRow !== 'undefined' && expTargetRow === row) clearPhoneTarget();
     recalcTotal();
@@ -580,11 +635,23 @@ function removeRow(btn) {
 
 function toggleNoReceiptMini(cb) {
   var td   = cb.closest('td');
-  var zone = td.querySelector('.receipt-zone');
   var mirror = td.querySelector('.f-no-receipt');
   if (mirror) mirror.value = cb.checked ? '1' : '0';
-  zone.style.opacity = cb.checked ? '.45' : '1';
-  zone.style.pointerEvents = cb.checked ? 'none' : 'auto';
+  setReceiptControls(td, !cb.checked);
+}
+
+/**
+ * Dim and disable every way of attaching a receipt to this item, or none.
+ *
+ * Both of them: the camera button sits above the picker, so greying out the
+ * picker alone leaves "Take a photo" live on a row marked "no receipt" — and
+ * the only confirmation would be printed inside the box that was just dimmed.
+ */
+function setReceiptControls(td, enabled) {
+  td.querySelectorAll('.receipt-zone, .receipt-cam').forEach(function (el) {
+    el.style.opacity = enabled ? '1' : '.45';
+    el.style.pointerEvents = enabled ? 'auto' : 'none';
+  });
 }
 
 function recalcTotal() {
@@ -854,6 +921,9 @@ function handleRowFile(input) {
   var file = input.files[0];
   if (!file) return;
   var td   = input.closest('td');
+  /* Cleared straight away, or "Upload failed — try again" is a dead end:
+   * picking the SAME file again fires no change event and nothing happens. */
+  input.value = '';
   var zone = td.querySelector('.receipt-zone');
   var spinner = zone.querySelector('.spinner');
   var label   = zone.querySelector('.zone-label');
@@ -902,6 +972,7 @@ function showToast(msg) {
   toastTimer = setTimeout(function() { t.classList.remove('show'); }, 3200);
 }
 
+labelRestingZones();
 recalcTotal();
 </script>
 </body>
@@ -956,6 +1027,7 @@ function renderItemRow(int $idx, array $row, array $catLabels): string {
         <input type="hidden" name="ext_flag[]"       class="f-ext-flag"       value="' . htmlspecialchars($row['extraction_flag'] ?? '') . '">
         <input type="hidden" name="ext_concerns[]"   class="f-ext-concerns"   value="' . htmlspecialchars($row['extraction_concerns'] ?? '') . '">
         <input type="hidden" name="no_receipt[]"     class="f-no-receipt"     value="' . ($noReceiptChecked ? '1' : '0') . '">
+        <label class="receipt-cam"' . $zoneStyle . '>&#x1F4F7; Take a photo<input type="file" accept="image/*" capture="environment" onchange="handleRowFile(this)"></label>
         <label class="receipt-zone' . $zoneClass . '"' . $zoneStyle . '>
           <div class="spinner"></div>
           <span class="zone-label">' . $zoneLabel . '</span>
