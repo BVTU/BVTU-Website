@@ -2,11 +2,16 @@
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/prod-db.php';
 require_once __DIR__ . '/lp-db.php';
+require_once __DIR__ . '/lp-dupes.php';
 require_once __DIR__ . '/exec-db.php';
 requireLogin();
 
 $member = getMember();
 lpEnsureTables();
+/* The duplicate-reminder columns, before anything writes to them. The save
+ * below deletes this voucher's rows and re-inserts them, so a missing column
+ * would throw between the two and take the voucher's expenses with it. */
+lpDupeEnsureColumns();
 lpEnsureApprovalColumns();
 
 $id = (int)($_GET['id'] ?? 0);
@@ -62,6 +67,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $grantIds    = $_POST['grant_id']      ?? [];
     $blIds       = $_POST['budget_line_id']?? [];
     $expNotes    = $_POST['exp_notes']     ?? [];
+    // The fingerprint behind the duplicate reminder. The scanner read these off
+    // the receipt and the editor has been holding them in the browser only.
+    $scanVendors = $_POST['scan_vendor'] ?? [];
+    $scanDates   = $_POST['scan_date']   ?? [];
+    $scanTotals  = $_POST['scan_total']  ?? [];
 
     if (!$voucherName) $errors[] = 'Please enter a voucher name.';
 
@@ -91,15 +101,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $upd = $db->prepare(
             "UPDATE lp_expenses SET expense_date=?, description=?, travel_km=?, travel_amt=?,
              meals=?, gifts=?, misc=?, office=?, phone=?,
-             receipt_path=?, receipt_filename=?, grant_id=?, budget_line_id=?, notes=?, sort_order=?
+             receipt_path=?, receipt_filename=?, grant_id=?, budget_line_id=?, notes=?, sort_order=?,
+             receipt_sha256=?, scan_vendor=?, scan_date=?, scan_total=?
              WHERE id=? AND voucher_id=?"
         );
         $ins = $db->prepare(
             "INSERT INTO lp_expenses
              (voucher_id, expense_date, description, travel_km, travel_amt,
               meals, gifts, misc, office, phone,
-              receipt_path, receipt_filename, grant_id, budget_line_id, notes, sort_order)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+              receipt_path, receipt_filename, grant_id, budget_line_id, notes, sort_order,
+              receipt_sha256, scan_vendor, scan_date, scan_total)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         );
 
         foreach ($descs as $i => $desc) {
@@ -129,6 +141,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ($expNotes[$i] ?? '') ?: null,
                 $i,
             ];
+
+            /* The hash is read off the file on disk, never taken from the
+             * browser: a client-supplied hash proves nothing about the bytes
+             * that were actually stored. */
+            list($sv, $sdt, $stot) = lpDupeScanFields(
+                $scanVendors[$i] ?? null, $scanDates[$i] ?? null, $scanTotals[$i] ?? 0
+            );
+            $params[] = lpDupeHashForSave($receiptPath[$i] ?? null);
+            $params[] = $sv;
+            $params[] = $sdt;
+            $params[] = $stot;
 
             $existingId = (int)($expIds[$i] ?? 0);
             if ($existingId && in_array($existingId, $keptIds)) {
@@ -539,6 +562,7 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
 </div>
 
 <script src="../js/sort-by-date.js?v=<?= @filemtime(__DIR__ . '/../js/sort-by-date.js') ?>"></script>
+<script src="../js/receipt-dupes.js?v=<?= @filemtime(__DIR__ . '/../js/receipt-dupes.js') ?>"></script>
 <script src="../js/qrcode.js?v=<?= @filemtime(__DIR__ . '/../js/qrcode.js') ?>"></script>
 <script src="../js/qr-img.js?v=<?= @filemtime(__DIR__ . '/../js/qr-img.js') ?>"></script>
 <script>
@@ -583,6 +607,9 @@ function addRow(data = {}) {
         <input type="hidden" name="receipt_path[]" id="rpath-${id}" value="${escHtml(data.receipt_path || '')}">
         <input type="hidden" name="receipt_orig[]" id="rorig-${id}" value="${escHtml(data.receipt_filename || '')}">
         <input type="hidden" name="exp_notes[]" value="${escHtml(data.notes || '')}">
+        <input type="hidden" name="scan_vendor[]" id="svend-${id}" value="${escHtml(data.scan_vendor || '')}">
+        <input type="hidden" name="scan_date[]"   id="sdate-${id}" value="${data.scan_date || ''}">
+        <input type="hidden" name="scan_total[]"  id="stot-${id}"  value="${data.scan_total || ''}">
       </td>
       <td data-label="Date"><input type="date" name="expense_date[]" class="cell-input" value="${data.expense_date || ''}" style="width:130px;"></td>
       <td data-label="Description"><input type="text" name="description[]" class="cell-input cell-desc" placeholder="Description" value="${escHtml(data.description || '')}"></td>
@@ -601,6 +628,16 @@ function addRow(data = {}) {
       <td><button type="button" class="btn-row-remove" onclick="removeRow(${id})">×</button></td>
     `;
     document.getElementById('expenseRows').appendChild(tr);
+    /* Only the hash is carried over from the database, and only the duplicate
+     * reminder reads it — nothing it touches changes a row.
+     *
+     * The same-bill fingerprint (billVendor/billDate/billAmount) is left unset
+     * on purpose. Seeding it would let the merge match a row that was saved
+     * weeks ago, and a merge replaces the row's receipt when the new figure is
+     * higher — detaching a receipt that is already part of the record and
+     * already counted in the year-end bundle. The merge stays what it was:
+     * about receipts arriving together. */
+    tr.dataset.billHash = data.receipt_sha256 || '';
     // Rows that arrive split across categories open their breakdown, or the
     // figures would be real, posted and invisible.
     if (document.getElementById('cat-' + id) &&
@@ -1028,7 +1065,15 @@ function showLocalPreview(rowId, file) {
         return;
     }
     const reader = new FileReader();
-    reader.onload = e => showThumb(rowId, null, e.target.result);
+    reader.onload = e => {
+        /* Reading the file is asynchronous, and the server's "you already have
+         * this one" answer is the fast path — no Vision call — so it can arrive
+         * first. Without this check a declined receipt reappears on the row as
+         * a thumbnail for a file the server never kept. */
+        const tr = document.getElementById('row-' + rowId);
+        if (tr && tr.dataset.receiptDeclined) return;
+        showThumb(rowId, null, e.target.result);
+    };
     reader.readAsDataURL(file);
 }
 
@@ -1061,15 +1106,41 @@ function showRowScanError(rowId, message) {
     else alert(message);
 }
 
-function uploadAndScan(file, rowId) {
+function voucherIdForScan() { return VOUCHER_ID || 0; }
+
+function uploadAndScan(file, rowId, allowDup) {
     const spinner = document.getElementById('spinner-' + rowId);
     if (spinner) spinner.style.display = 'block';
     const fd = new FormData();
     fd.append('receipt', file);
+    /* What the row held before this upload, so "skip it" can put it back
+     * rather than leaving the row stripped of a receipt it already had. */
+    var prevReceipt = bvtuSnapshotRowReceipt(rowId);
+    var scanTr = document.getElementById('row-' + rowId);
+    if (scanTr) delete scanTr.dataset.receiptDeclined;
+
+    /* The fingerprint the server compares against, and the row this upload
+     * belongs to so a row cannot be flagged as a duplicate of itself. */
+    if (voucherIdForScan()) fd.append('voucher_id', voucherIdForScan());
+    var scanRow = document.getElementById('row-' + rowId);
+    var ownId   = scanRow && scanRow.querySelector('[name="exp_id[]"]');
+    if (ownId && ownId.value) fd.append('exclude_expense_id', ownId.value);
+    if (allowDup) fd.append('allow_duplicate', '1');
+
     fetch('lp-scan.php', { method: 'POST', body: fd })
         .then(r => r.json())
         .then(data => {
             if (spinner) spinner.style.display = 'none';
+            /* The same file, already on a voucher. The server kept nothing and
+             * scanned nothing, so there is nothing to attach until the answer
+             * comes back. */
+            if (data && data.duplicate && data.duplicate.certain) {
+                bvtuRevertRowReceipt(rowId, prevReceipt);
+                bvtuDupeAsk(data.duplicate, {
+                    onProceed: function () { uploadAndScan(file, rowId, true); }
+                });
+                return;
+            }
             if (data && data.error) {
                 showRowScanError(rowId, data.error);
                 // "Scan failed, fill it in by hand" still returns a saved file;
@@ -1092,6 +1163,20 @@ function uploadAndScan(file, rowId) {
                 showThumb(rowId, data.saved_path, null);
             }
             syncRowFromHidden(rowId);
+            /* Kept with the row so the comparison still works next week, when
+             * this page has been closed and reopened twice. */
+            bvtuSetRowScanFields(rowId, data);
+
+            if (data && data.duplicate) {
+                bvtuDupeTell(data.duplicate, document.getElementById('row-' + rowId));
+            } else {
+                /* Two copies of one file in a single sitting: neither row has
+                 * been saved, so the server has no record of either. Told
+                 * rather than asked — it is already attached, and the row it
+                 * matches is on screen. */
+                var near = bvtuDupeLocal(data && data.sha256, rowId);
+                if (near) bvtuDupeTell(near, document.getElementById('row-' + rowId));
+            }
         })
         .catch(() => {
             if (spinner) spinner.style.display = 'none';
@@ -1395,7 +1480,14 @@ function putReceiptOnRow(id, receipt, sd) {
         tr.dataset.billVendor = normVendor(sd.vendor);
         tr.dataset.billDate   = sd.date || '';
         tr.dataset.billAmount = String(scanTotal(sd));
+        tr.dataset.billHash   = receipt.sha256 || '';
     }
+    var sv = document.getElementById('svend-' + id);
+    var sdd = document.getElementById('sdate-' + id);
+    var st = document.getElementById('stot-' + id);
+    if (sv)  sv.value  = sd.vendor || '';
+    if (sdd) sdd.value = sd.date || '';
+    if (st)  st.value  = scanTotal(sd) > 0 ? scanTotal(sd).toFixed(2) : '';
 }
 
 /** Note on the row, kept with it into the database. */
@@ -1448,9 +1540,35 @@ function addPendingCard(receipt) {
     receiptStore[receipt.id] = receipt;
     var sd = receipt.scan_data || {};
 
+    /* ── Seen this one before? ────────────────────────────────────────────────
+     *
+     * Asked before the receipt is filed, and asked here rather than on the
+     * phone: the phone is where the photograph is taken, the desktop is where
+     * the voucher is being built and where the answer is of any use.
+     *
+     * Checked ahead of the same-bill merge on purpose. Two halves of one bill
+     * differ by the tip; a receipt that matches to the cent is far more likely
+     * the same slip photographed twice. Only the certain signal interrupts —
+     * and 'skip it' still marks the receipt as filed, or the next poll would
+     * offer it again five seconds later, and keep offering it.
+     */
+    var dupe   = receipt.duplicate || bvtuDupeLocal(receipt.sha256, null);
+    var likely = (dupe && !dupe.certain) ? dupe : null;
+    if (dupe && dupe.certain && !receipt.dupeAllowed) {
+        bvtuDupeAsk(dupe, {
+            onSkip:    function () { claimPending(receipt.id); },
+            onProceed: function () { receipt.dupeAllowed = true; addPendingCard(receipt); }
+        });
+        return;
+    }
+
     // The second half of a bill already on the voucher.
     var same = findSameBillRow(sd);
-    if (same) { mergeIntoRow(same, receipt, sd); return; }
+    if (same) {
+        mergeIntoRow(same, receipt, sd);
+        if (likely) bvtuDupeTell(likely, same);
+        return;
+    }
 
     // A pinned row, else the first row without a receipt, else a new one — so a
     // photo never waits to be filed by hand.
@@ -1471,6 +1589,7 @@ function addPendingCard(receipt) {
     claimPending(receipt.id);
     flashRow(document.getElementById('row-' + id));
     showToast('\u2705 ' + (sd.description || sd.vendor || 'Receipt') + ' added');
+    if (likely) bvtuDupeTell(likely, document.getElementById('row-' + id));
 }
 
 // Populate the "Attach to row" dropdown with rows that have no receipt yet

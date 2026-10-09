@@ -6,11 +6,17 @@
  * Returns JSON: { vendor, date, description, travel_amount, meals_amount, gifts_amount,
  *                 misc_amount, office_amount, phone_amount, total_amount,
  *                 suggested_grant, suggested_budget_line, concerns, flag,
- *                 saved_path, original_name }
+ *                 saved_path, original_name, sha256, duplicate }
+ *
+ * Optional POST: voucher_id, exclude_expense_id, allow_duplicate=1
+ * An identical file already on this year's vouchers comes back as
+ * { duplicate: {...} } with nothing else and no file kept — the scan is not
+ * worth paying for until the person says they meant it. See lp-dupes.php.
  */
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/scan-concerns.php';
 require_once __DIR__ . '/lp-db.php';
+require_once __DIR__ . '/lp-dupes.php';
 
 header('Content-Type: application/json');
 
@@ -91,6 +97,41 @@ $savedPath = LP_RECEIPTS_DIR . $savedName;
 
 if (!move_uploaded_file($tmpPath, $savedPath)) {
     echo json_encode(['error' => 'Failed to save file. Check server write permissions.']); exit;
+}
+
+/* ── Have we had this exact file before? ──────────────────────────────────────
+ *
+ * Checked here, before the receipt is sent to be read, because identical bytes
+ * mean the answer is already in the database — there is nothing new to extract
+ * and no reason to pay for the call. The file is removed again so a declined
+ * upload leaves nothing behind.
+ *
+ * Only for someone who may see the President's vouchers: the reminder names a
+ * voucher, a description and an amount, and that is not for every member who
+ * can reach this endpoint.
+ */
+$dupeMember  = getMember();
+$mayCompare  = lpCanCreate($dupeMember['email']) || lpCanView($dupeMember['email']);
+$dupeVoucher = (int)($_POST['voucher_id'] ?? 0);
+$dupeExclude = (int)($_POST['exclude_expense_id'] ?? 0);
+$dupeYear    = lpCurrentYear();
+if ($dupeVoucher) {
+    $v = lpGetVoucher($dupeVoucher);
+    if ($v) $dupeYear = (int)$v['year'];
+}
+$sha = hash_file('sha256', $savedPath) ?: null;
+
+if ($mayCompare && empty($_POST['allow_duplicate'])) {
+    // Receipts uploaded before this check existed have no hash on them, and a
+    // check run against a column of nulls would pass every time while looking
+    // like it had worked. Fill them in first.
+    lpDupeBackfill();
+    $hit = lpDupeFind($dupeYear, $sha, null, null, 0.0, $dupeExclude);
+    if ($hit) {
+        @unlink($savedPath);
+        echo json_encode(['duplicate' => $hit]);
+        exit;
+    }
 }
 
 // Build grant and budget line lists for the prompt
@@ -182,6 +223,7 @@ if ($httpCode !== 200 || !$response) {
         'error'         => 'Receipt scan failed — fill in fields manually.',
         'saved_path'    => $savedName,
         'original_name' => $origName,
+        'sha256'        => $sha,
     ]);
     exit;
 }
@@ -199,6 +241,7 @@ if (!is_array($extracted)) {
         'error'         => 'Could not parse receipt — fill in fields manually.',
         'saved_path'    => $savedName,
         'original_name' => $origName,
+        'sha256'        => $sha,
     ]);
     exit;
 }
@@ -223,6 +266,23 @@ if (!empty($extracted['suggested_budget_line'])) {
             break;
         }
     }
+}
+
+/* The weaker signal: the same slip photographed twice gives different bytes,
+ * so this compares what was read off it. Reported, never acted on — two
+ * identical coffees on one day is a real thing. */
+$dupe = null;
+/* "Attach it anyway" is an answer to the whole question, not just to the
+ * byte-for-byte half of it: warning about the same row a second time, in
+ * weaker words, would read as a system that had not listened. */
+if ($mayCompare && empty($_POST['allow_duplicate'])) {
+    $scanTotal = 0.0;
+    foreach (['travel_amount','meals_amount','gifts_amount','misc_amount','office_amount','phone_amount'] as $k) {
+        $scanTotal += (float)($extracted[$k] ?? 0);
+    }
+    if ($scanTotal <= 0) $scanTotal = (float)($extracted['total_amount'] ?? 0);
+    $dupe = lpDupeFind($dupeYear, null, $extracted['vendor'] ?? null,
+                       $extracted['date'] ?? null, $scanTotal, $dupeExclude);
 }
 
 // Flag logic
@@ -254,4 +314,6 @@ echo json_encode([
     'flag'                  => $flag,
     'saved_path'            => $savedName,
     'original_name'         => $origName,
+    'sha256'                => $sha,
+    'duplicate'             => $dupe,
 ]);

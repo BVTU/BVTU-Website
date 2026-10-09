@@ -3,9 +3,14 @@
  * lp-poll-receipts.php — Returns unclaimed pending receipts for a voucher.
  * GET ?voucher_id=X
  * Returns JSON: { receipts: [...], count: N }
+ *
+ * Each receipt carries a 'duplicate' block when it matches something already
+ * on this year's vouchers — decided here rather than on the phone, because the
+ * desktop is where the receipt is filed and where the answer is of any use.
  */
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/lp-db.php';
+require_once __DIR__ . '/lp-dupes.php';
 require_once __DIR__ . '/prod-db.php';   // prodIsExec(), matching the editor's gate
 
 header('Content-Type: application/json; charset=utf-8');
@@ -34,9 +39,27 @@ if (!$isOwner && !lpCanView($member['email']) && !prodIsExec($member['email'])
 
 $rows = lpGetPendingReceipts($voucherId);
 
+$year = (int)($voucher['year'] ?? lpCurrentYear());
+
+/* The gate above is deliberately wide — a Pro-D exec or a reviewer must see
+ * this voucher's tray fill. The duplicate reminder is narrower: it names OTHER
+ * vouchers' descriptions, amounts and numbers, which is more than seeing this
+ * one. Same test lp-scan.php applies, for the same reason. */
+$mayCompare = lpCanCreate($member['email']) || lpCanView($member['email']);
+if ($rows && $mayCompare) lpDupeBackfill();
+
 // Build preview URLs and clean up for JS
 $out = [];
 foreach ($rows as $r) {
+    $sd    = is_array($r['scan_data'] ?? null) ? $r['scan_data'] : [];
+    $total = 0.0;
+    foreach (['travel_amount','meals_amount','gifts_amount','misc_amount','office_amount','phone_amount'] as $k) {
+        $total += (float)($sd[$k] ?? 0);
+    }
+    if ($total <= 0) $total = (float)($sd['total_amount'] ?? 0);
+
+    $hash = lpDupeHashOf($r['saved_path']);
+
     $out[] = [
         'id'            => (int)$r['id'],
         'saved_path'    => $r['saved_path'],
@@ -44,6 +67,12 @@ foreach ($rows as $r) {
         'preview_url'   => 'lp-receipt.php?f=' . urlencode($r['saved_path']),
         'scan_data'     => $r['scan_data'],
         'created_at'    => $r['created_at'],
+        // Carried so the page can also spot the same photo sent twice from the
+        // phone, which is on no voucher yet and so on no query's radar.
+        'sha256'        => $hash,
+        'duplicate'     => $mayCompare
+            ? lpDupeFind($year, $hash, $sd['vendor'] ?? null, $sd['date'] ?? null, $total)
+            : null,
     ];
 }
 
