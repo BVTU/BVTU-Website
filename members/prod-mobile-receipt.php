@@ -226,6 +226,7 @@ if ($tokenRow) {
 </div>
 
 <?php if ($req): ?>
+<script src="../js/camera-fallback.js?v=<?= @filemtime(__DIR__ . '/../js/camera-fallback.js') ?>"></script>
 <script>
 const TOKEN      = <?= json_encode($token) ?>;
 const REQUEST_ID = <?= (int)$req['id'] ?>;

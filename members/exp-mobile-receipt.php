@@ -235,6 +235,7 @@ $expense  = $tokenRow ? expGet((int)$tokenRow['expense_id']) : null;
 </div>
 
 <?php if ($expense): ?>
+<script src="../js/camera-fallback.js?v=<?= @filemtime(__DIR__ . '/../js/camera-fallback.js') ?>"></script>
 <script>
 var TOKEN       = <?= json_encode($token) ?>;
 var EXPENSE_ID  = <?= (int)$expense['id'] ?>;

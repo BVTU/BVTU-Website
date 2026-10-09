@@ -489,6 +489,7 @@ $rows = $items ?: [[
 
 <script src="../js/qrcode.js?v=<?= @filemtime(__DIR__ . '/../js/qrcode.js') ?>"></script>
 <script src="../js/qr-img.js?v=<?= @filemtime(__DIR__ . '/../js/qr-img.js') ?>"></script>
+<script src="../js/camera-fallback.js?v=<?= @filemtime(__DIR__ . '/../js/camera-fallback.js') ?>"></script>
 <script>
 /* ── Is this a phone? ────────────────────────────────────────────────────────
  *

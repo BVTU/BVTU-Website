@@ -230,6 +230,7 @@ $voucher  = $tokenRow ? lpGetVoucher((int)$tokenRow['voucher_id']) : null;
 </div>
 
 <?php if ($voucher): ?>
+<script src="../js/camera-fallback.js?v=<?= @filemtime(__DIR__ . '/../js/camera-fallback.js') ?>"></script>
 <script>
 const TOKEN       = <?= json_encode($token) ?>;
 const VOUCHER_ID  = <?= (int)$voucher['id'] ?>;

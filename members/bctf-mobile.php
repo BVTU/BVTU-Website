@@ -82,7 +82,8 @@ $row   = $token ? bctfValidateUploadToken($token) : null;
   <div id="list"></div>
   <div class="count" id="count"></div>
 
-  <script>
+  <script src="../js/camera-fallback.js?v=<?= @filemtime(__DIR__ . '/../js/camera-fallback.js') ?>"></script>
+<script>
   var TOKEN = <?= json_encode($token) ?>;
   var n = 0;
 
