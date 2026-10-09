@@ -27,6 +27,11 @@ $row   = $token ? bctfValidateUploadToken($token) : null;
              border-radius:12px; padding:1.1rem; font-size:1.05rem; font-weight:700;
              cursor:pointer; margin-bottom:1rem; }
     .shoot:active { background:#14532d; }
+    .pick { display:block; width:100%; background:#f0fdf4; color:#1a6b35;
+            border:2px solid #86efac; border-radius:12px; padding:.9rem;
+            font-size:.95rem; font-weight:700; font-family:inherit;
+            cursor:pointer; margin:0 0 1rem; }
+    .pick:active { background:#dcfce7; }
     input[type=file] { display:none; }
     .item { background:#fff; border:1px solid #e5e7eb; border-radius:10px;
             padding:.75rem .9rem; margin-bottom:.6rem; display:flex; gap:.7rem; align-items:center; }
@@ -57,9 +62,22 @@ $row   = $token ? bctfValidateUploadToken($token) : null;
   <div class="sub">Photograph each form. The surname is read automatically — check it before sending.</div>
 
   <button class="shoot" onclick="document.getElementById('cam').click();">
-    &#x1F4F7; Take a photo or choose one
+    &#x1F4F7; Take a photo
   </button>
-  <input type="file" id="cam" accept="image/*" onchange="send(this)">
+  <button class="pick" onclick="document.getElementById('saved').click();">
+    &#x1F5BC;&#xFE0F; Choose a saved photo
+  </button>
+  <!--
+    Two inputs, not one.
+
+    A single accept="image/*" input is a sheet with "Take Photo" on iOS, but on
+    Android it hands you straight to the photo picker with no way to reach the
+    camera. capture="environment" fixes that and breaks the other half: it
+    forces the camera and removes the ability to pick a photo already taken.
+    So the choice is made with two buttons instead of left to the browser.
+  -->
+  <input type="file" id="cam" accept="image/*" capture="environment" onchange="send(this)">
+  <input type="file" id="saved" accept="image/*" onchange="send(this)">
 
   <div id="list"></div>
   <div class="count" id="count"></div>

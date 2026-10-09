@@ -94,7 +94,7 @@ if ($tokenRow) {
     }
     .upload-btn-another:active { background: #dcfce7; }
 
-    #fileInput { display: none; }
+    #fileInput, #cameraInput { display: none; }
 
     /* Loading state */
     .loading { display: none; flex-direction: column; align-items: center; gap: 1rem; padding: 1rem 0; }
@@ -164,10 +164,28 @@ if ($tokenRow) {
 
     <!-- Default: camera button -->
     <div id="uploadState">
-      <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+      <button class="upload-btn" onclick="document.getElementById('cameraInput').click()">
         <span class="icon">📷</span>
-        Take Photo or Choose File
+        Take a photo
       </button>
+      <button class="upload-btn-another" onclick="document.getElementById('fileInput').click()">
+        <span class="icon">&#x1F5BC;&#xFE0F;</span>
+        Choose a saved photo or PDF
+      </button>
+      <!--
+        Two inputs, not one.
+
+        A single accept="image/*" input is a sheet with "Take Photo" on iOS, but
+        on Android it hands you straight to the photo picker with no way to
+        reach the camera — reported on an Android phone where the same page
+        worked on an iPhone. capture="environment" fixes that, and breaks the
+        other half: it forces the camera and removes the ability to pick a
+        photo already taken, which is the thing this page was fixed for once
+        before. So the choice is made with two buttons instead of left to the
+        browser, and both phones now behave the same way.
+      -->
+      <input type="file" id="cameraInput" accept="image/*" capture="environment"
+             onchange="handleFile(this)">
       <input type="file" id="fileInput" accept="image/*,.pdf"
              onchange="handleFile(this)">
       <p class="hint">Photo goes straight to your desktop claim form — no AirDrop needed.</p>
@@ -267,6 +285,12 @@ function handleFile(input) {
 function resetForAnother() {
     document.getElementById('scanDetails').style.display  = 'none';
     document.getElementById('concernsFlag').style.display = 'none';
+    /* Clear both inputs, or picking the SAME photo again fires no change event
+     * and the button does nothing at all — no spinner, no error, nothing. */
+    ['fileInput', 'cameraInput'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.value = '';
+    });
     show('uploadState');
 }
 </script>

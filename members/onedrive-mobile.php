@@ -64,6 +64,11 @@ $mayCreate = odTokenMayCreate($row);
              cursor:pointer; margin:.5rem 0 1rem; }
     .shoot:active { background:#14532d; }
     .shoot[disabled] { background:#9ca3af; }
+    .pick { display:block; width:100%; background:#f0fdf4; color:#1a6b35;
+            border:2px solid #86efac; border-radius:12px; padding:.9rem;
+            font-size:.95rem; font-weight:700; font-family:inherit;
+            cursor:pointer; margin:0 0 1rem; }
+    .pick:active { background:#dcfce7; }
     input[type=file] { display:none; }
     .cap { width:100%; border:1px solid #d1d5db; border-radius:8px; padding:.6rem .7rem;
            font-size:.92rem; font-family:inherit; margin-bottom:.6rem; }
@@ -104,8 +109,19 @@ $mayCreate = odTokenMayCreate($row);
   <div class="here" id="here"></div>
 
   <input class="cap" id="caption" placeholder="Name for the file (optional)">
-  <button class="shoot" onclick="document.getElementById('cam').click();">&#x1F4F7; Take a photo or choose one</button>
-  <input type="file" id="cam" accept="image/*" onchange="send(this)">
+  <button class="shoot" onclick="document.getElementById('cam').click();">&#x1F4F7; Take a photo</button>
+  <button class="pick" onclick="document.getElementById('saved').click();">&#x1F5BC;&#xFE0F; Choose a saved photo</button>
+  <!--
+    Two inputs, not one.
+
+    A single accept="image/*" input is a sheet with "Take Photo" on iOS, but on
+    Android it hands you straight to the photo picker with no way to reach the
+    camera. capture="environment" fixes that and breaks the other half: it
+    forces the camera and removes the ability to pick a photo already taken.
+    So the choice is made with two buttons instead of left to the browser.
+  -->
+  <input type="file" id="cam" accept="image/*" capture="environment" onchange="send(this)">
+  <input type="file" id="saved" accept="image/*" onchange="send(this)">
 
   <div id="log"></div>
 
