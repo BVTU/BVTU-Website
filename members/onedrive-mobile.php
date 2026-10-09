@@ -3,9 +3,10 @@
  * onedrive-mobile.php — phone capture, reached by scanning the QR.
  * Pick a folder by drilling down from the root, then photograph into it.
  */
+require_once __DIR__ . '/auth.php';          // reqStr()
 require_once __DIR__ . '/onedrive-db.php';
 
-$token = trim($_GET['token'] ?? '');
+$token = reqStr('token');
 $row   = $token ? odValidateUploadToken($token) : null;
 
 // Shared links are handed to someone who cannot open the admin page, so "scan
@@ -14,6 +15,11 @@ $shareLabel = $row && ($row['kind'] ?? 'self') === 'share' ? trim((string)$row['
 // From the database's seconds-remaining, the same clock that let this page open.
 $shareUntil = $row && isset($row['secs_left']) && $row['secs_left'] !== null
             ? time() + (int)$row['secs_left'] : 0;
+
+// Browsing and creating are not the same permission — see odTokenMayCreate().
+// The server decides this again on the POST; this only keeps the button off a
+// screen where pressing it could not work.
+$mayCreate = odTokenMayCreate($row);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -36,6 +42,21 @@ $shareUntil = $row && isset($row['secs_left']) && $row['secs_left'] !== null
     .folder .ic { font-size:1.1rem; }
     .folder .nm { font-weight:600; font-size:.92rem; flex:1; }
     .folder .ct { font-size:.75rem; color:#9ca3af; }
+    .newfolder { display:flex; align-items:center; gap:.6rem; background:#fff;
+                 border:1px dashed #bbf7d0; border-radius:10px; padding:.8rem .9rem;
+                 margin-bottom:.45rem; cursor:pointer; color:#166534; font-weight:600;
+                 font-size:.92rem; width:100%; text-align:left; font-family:inherit; }
+    .newfolder:active { background:#f0fdf4; }
+    .nfform { background:#fff; border:1px solid #bbf7d0; border-radius:10px;
+              padding:.8rem .9rem; margin-bottom:.45rem; }
+    .nfform input { width:100%; border:1px solid #d1d5db; border-radius:8px;
+                    padding:.6rem .7rem; font-size:.95rem; font-family:inherit; }
+    .nfform .row { display:flex; gap:.5rem; margin-top:.6rem; }
+    .nfform button { flex:1; border-radius:8px; padding:.6rem; font-size:.88rem;
+                     font-weight:700; font-family:inherit; cursor:pointer; }
+    .nfform .go { background:#1a6b35; color:#fff; border:none; }
+    .nfform .no { background:#fff; color:#374151; border:1px solid #d1d5db; }
+    .nferr { color:#991b1b; font-size:.82rem; margin-top:.5rem; }
     .here { background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px;
             padding:.8rem .9rem; margin:.75rem 0; font-size:.86rem; color:#166534; }
     .shoot { display:block; width:100%; background:#1a6b35; color:#fff; border:none;
@@ -77,6 +98,7 @@ $shareUntil = $row && isset($row['secs_left']) && $row['secs_left'] !== null
   <?php endif; ?>
 
   <div class="crumbs" id="crumbs"></div>
+  <div id="newfolder"></div>
   <div id="folders"></div>
 
   <div class="here" id="here"></div>
@@ -108,6 +130,8 @@ $shareUntil = $row && isset($row['secs_left']) && $row['secs_left'] !== null
     document.getElementById('here').innerHTML =
       '&#x2713; Uploads will go to <strong>' + esc(path()) + '</strong>';
 
+    newFolderButton();   // its label names the folder you are standing in
+
     var box = document.getElementById('folders');
     box.innerHTML = '';
     if (!folders.length) {
@@ -126,6 +150,116 @@ $shareUntil = $row && isset($row['secs_left']) && $row['secs_left'] !== null
 
   function up(i){ stack = stack.slice(0, i+1); load(); }
 
+  /* ── Making a folder ──────────────────────────────────────────────────────
+   *
+   * Without this the only way to file into a folder that does not exist yet is
+   * to stop, find a computer, make it in OneDrive, come back and reload.
+   *
+   * A new folder is stepped into straight away: you asked for it in order to
+   * put something in it, and leaving you on the level above to find and tap it
+   * is a step that exists only because it was easier to write.
+   */
+  var MAY_CREATE = <?= json_encode($mayCreate) ?>;
+
+  function newFolderButton() {
+    var box = document.getElementById('newfolder');
+    if (!MAY_CREATE) { box.innerHTML = ''; return; }
+    box.innerHTML = '';
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'newfolder';
+    b.innerHTML = '<span class="ic">&#x2795;</span><span>New folder in '
+                + esc(here().name) + '</span>';
+    b.onclick = newFolderForm;
+    box.appendChild(b);
+  }
+
+  function newFolderForm() {
+    var box = document.getElementById('newfolder');
+    box.innerHTML =
+      '<div class="nfform">'
+      + '<input id="nfname" placeholder="Folder name" autocomplete="off" '
+      +   'autocapitalize="words" enterkeyhint="done">'
+      + '<div class="nferr" id="nferr" style="display:none;"></div>'
+      + '<div class="row">'
+      +   '<button type="button" class="no" id="nfcancel">Cancel</button>'
+      +   '<button type="button" class="go" id="nfgo">Create</button>'
+      + '</div></div>';
+    var input = document.getElementById('nfname');
+    document.getElementById('nfcancel').onclick = newFolderButton;
+    document.getElementById('nfgo').onclick     = createFolder;
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); createFolder(); }
+    });
+    input.focus();
+  }
+
+  function nfError(msg, existing) {
+    var el = document.getElementById('nferr');
+    if (!el) return;
+    el.textContent = msg;
+    el.style.display = 'block';
+    // The folder is already there, so offer the thing that was wanted.
+    if (existing && existing.id) {
+      var a = document.createElement('div');
+      a.style.cssText = 'margin-top:.4rem;';
+      var open = document.createElement('button');
+      open.type = 'button';
+      open.className = 'go';
+      open.style.cssText = 'border-radius:8px;padding:.5rem .9rem;font-size:.85rem;'
+                         + 'font-weight:700;border:none;background:#1a6b35;color:#fff;';
+      open.textContent = 'Open ' + existing.name;
+      open.onclick = function () {
+        stack.push({ id: existing.id, name: existing.name });
+        load();
+      };
+      a.appendChild(open);
+      el.appendChild(a);
+    }
+  }
+
+  function createFolder() {
+    var input = document.getElementById('nfname');
+    var go    = document.getElementById('nfgo');
+    if (!input) return;
+    var name = input.value.trim();
+    if (!name) { nfError('Give the folder a name.'); return; }
+
+    go.disabled = true;
+    go.textContent = 'Creating\u2026';
+    var fd = new FormData();
+    fd.append('action', 'create');
+    fd.append('token', TOKEN);
+    fd.append('parent', here().id);
+    fd.append('name', name);
+
+    fetch('onedrive-folders.php', { method: 'POST', body: fd })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.ok) {
+          go.disabled = false;
+          go.textContent = 'Create';
+          nfError((d && (d.error || d.message)) || 'That did not work. Try again.',
+                  d && d.existing);
+          return;
+        }
+        /* The form goes now, not when the listing comes back.
+         *
+         * Re-enabling the button first left a form that looked untouched for
+         * as long as the next request took, and a second tap on a slow signal
+         * posted the same name again — this time into the folder just made,
+         * giving Receipts/Receipts. */
+        document.getElementById('newfolder').innerHTML = '';
+        stack.push({ id: d.folder.id, name: d.folder.name });
+        load();
+      })
+      .catch(function () {
+        go.disabled = false;
+        go.textContent = 'Create';
+        nfError('No answer from the server. Check your signal and try again.');
+      });
+  }
+
   function load() {
     document.getElementById('folders').innerHTML =
       '<div style="font-size:.82rem;color:#9ca3af;">Loading&hellip;</div>';
@@ -135,6 +269,9 @@ $shareUntil = $row && isset($row['secs_left']) && $row['secs_left'] !== null
         if (d.error) {
           document.getElementById('folders').innerHTML =
             '<div class="err">' + esc(d.error) + '</div>';
+          // Its label names a folder we failed to open; leaving it would
+          // invite making a folder somewhere other than it says.
+          document.getElementById('newfolder').innerHTML = '';
           return;
         }
         render(d.folders || []);

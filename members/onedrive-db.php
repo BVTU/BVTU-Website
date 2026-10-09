@@ -240,6 +240,96 @@ function odListFolders(string $itemId = 'root'): array {
     }));
 }
 
+/**
+ * Why a name will not do, or null if it will.
+ *
+ * Checked here rather than left to Graph, which answers a bad name with a bare
+ * 400 and a message written for a developer. On a phone, at a counter, that
+ * shows up as "it didn't work".
+ */
+function odFolderNameError(string $name): ?string {
+    $name = trim($name);
+    if ($name === '')              return 'Give the folder a name.';
+    if (mb_strlen($name) > 255)    return 'That name is too long for OneDrive.';
+    if (preg_match('~[\\\\/:*?"<>|]~', $name)) {
+        return 'A folder name cannot contain \\ / : * ? " < > |';
+    }
+    // OneDrive accepts these and then behaves oddly around them.
+    if (substr($name, -1) === '.') return 'A folder name cannot end with a full stop.';
+    if (strpos($name, '~$') === 0) return 'A folder name cannot start with ~$';
+
+    $reserved = ['.lock', 'con', 'prn', 'aux', 'nul', 'desktop.ini'];
+    // COM1-COM9 and LPT1-LPT9. There is no COM0, and refusing it would be wrong.
+    for ($i = 1; $i <= 9; $i++) { $reserved[] = 'com' . $i; $reserved[] = 'lpt' . $i; }
+    if (in_array(strtolower($name), $reserved, true)) {
+        return 'OneDrive keeps that name for itself. Pick another.';
+    }
+    if (stripos($name, '_vti_') !== false) {
+        return 'OneDrive keeps names containing _vti_ for itself. Pick another.';
+    }
+    return null;
+}
+
+/**
+ * Make a folder, and say plainly when the name is taken.
+ *
+ * conflictBehavior is 'fail', not Graph's default 'rename'. Asking for
+ * "Receipts" where one already exists would otherwise quietly produce
+ * "Receipts 1" — which is precisely the folder nobody thinks to look in, and
+ * the photographs would go there without anyone being told.
+ *
+ * Returns ['ok'=>true,'folder'=>[id,name]] or ['ok'=>false,'error'=>string]
+ * plus, on a clash, ['existing'=>[id,name]] so the caller can offer to open it.
+ */
+function odCreateFolder(string $parentId, string $name): array {
+    $name = trim($name);
+    $why  = odFolderNameError($name);
+    if ($why !== null) return ['ok' => false, 'error' => $why];
+
+    $path = ($parentId === '' || $parentId === 'root')
+        ? '/me/drive/root/children'
+        : '/me/drive/items/' . rawurlencode($parentId) . '/children';
+
+    [$code, $data] = odGraph('POST', $path, ['json' => [
+        'name'                              => $name,
+        'folder'                            => (object)[],
+        '@microsoft.graph.conflictBehavior' => 'fail',
+    ]]);
+
+    if ($code === 201 || $code === 200) {
+        return ['ok' => true, 'folder' => ['id' => $data['id'] ?? '', 'name' => $data['name'] ?? $name]];
+    }
+
+    if ($code === 409) {
+        // Hand back the folder that is in the way, so the answer can be "open
+        // that one" rather than "try a different name".
+        $existing = null;
+        foreach (odListFolders($parentId ?: 'root') as $f) {
+            if (strcasecmp((string)$f['name'], $name) === 0) {
+                $existing = ['id' => $f['id'], 'name' => $f['name']];
+                break;
+            }
+        }
+        /* The listing is capped and shows only folders, so the thing in the way
+         * is not always findable — it may be a file of that name, or sit past
+         * the cap. Say what is actually known rather than insisting on a
+         * folder we cannot then offer to open. */
+        return [
+            'ok'       => false,
+            'error'    => $existing
+                ? 'There is already a folder called "' . $name . '" here.'
+                : 'Something here is already called "' . $name . '". Pick a different name.',
+            'existing' => $existing,
+        ];
+    }
+
+    $msg = $data['error']['message'] ?? '';
+    odRecordError('createFolder ' . $code . ' ' . $msg);
+    return ['ok' => false, 'error' => $code === 401 || $code === 403
+        ? 'OneDrive needs reconnecting.'
+        : 'OneDrive would not create that folder' . ($msg ? ': ' . $msg : '.')];
+}
+
 function odLogUpload(string $name, string $folderPath, string $webUrl, int $size, string $by): void {
     odEnsureTables();
     getDB()->prepare(
@@ -305,6 +395,21 @@ function odValidateUploadToken(string $token): ?array {
          LIMIT 1");
     $s->execute([$token]);
     return $s->fetch() ?: null;
+}
+
+/**
+ * May the holder of this token make folders, as opposed to upload into them?
+ *
+ * A share link goes to someone outside the executive and lasts a few hours. It
+ * exists so they can put a document somewhere, not so they can rearrange the
+ * union's OneDrive. Folder creation is for the President's own QR — kind
+ * 'self' — and for an admin already signed in.
+ *
+ * On the pre-migration table there is no 'kind' column, and the only tokens
+ * that ever existed there were the President's own.
+ */
+function odTokenMayCreate(?array $row): bool {
+    return $row !== null && (($row['kind'] ?? 'self') === 'self');
 }
 
 /** Note that a share was used, for the list on the admin page. */

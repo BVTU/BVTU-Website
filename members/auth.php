@@ -83,6 +83,16 @@ function reqStr(string $key): string {
 }
 
 /**
+ * The same, for a posted field. Its own function rather than a fallback inside
+ * reqStr(): a page that reads a value from the query string should not quietly
+ * start accepting it in a form post as well.
+ */
+function reqPostStr(string $key): string {
+    $v = $_POST[$key] ?? '';
+    return is_scalar($v) ? trim((string)$v) : '';
+}
+
+/**
  * Headers for pages showing personal data: keep them out of caches and out of
  * search results. Authentication is the actual protection; this is hygiene.
  */
