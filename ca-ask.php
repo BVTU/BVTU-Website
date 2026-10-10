@@ -10,6 +10,8 @@
  * Optional: TOKEN_ALERT_THRESHOLD (default 500000), TOKEN_ALERT_EMAIL (default lp54@bctf.ca)
  */
 
+require_once __DIR__ . '/ca-search.php';
+
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 
@@ -57,19 +59,8 @@ if (!is_array($history)) $history = [];
 // Keep last 10 turns (20 messages) to control token usage
 $history = array_slice($history, -20);
 
-// ── Keyword extraction ────────────────────────────────────────────────────────
-$stopWords = ['the','and','for','are','was','that','this','with','have','from',
-              'they','will','been','has','its','not','but','can','you','your',
-              'our','their','what','how','much','many','who','when','where',
-              'why','does','did','get','tell','about','also','into','more',
-              'per','than','been','just','then','some','any'];
-
-$searchable = preg_replace(
-    '/\b(how much|how many|how do i|how can i|what is|what are|what does|can i|do i|am i|when can|when do|where is|who is|is there|is it|tell me about|explain|what about|does the|should i)\b/i',
-    ' ', $question
-);
-$words = preg_split('/\s+/', strtolower($searchable), -1, PREG_SPLIT_NO_EMPTY);
-$words = array_values(array_filter($words, fn($w) => strlen($w) >= 3 && !in_array($w, $stopWords)));
+// ── Keyword extraction (shared with ask.php — see ca-search.php) ────────────
+$words = caSearchTokens($question);
 
 // ── Search Collective Agreement ───────────────────────────────────────────────
 $hits    = [];
@@ -80,6 +71,7 @@ if (file_exists($caPath) && $words) {
     $caArticles = json_decode(file_get_contents($caPath), true) ?: [];
     $scored = [];
     foreach ($caArticles as $idx => $article) {
+        if (caIsIndexPage($article)) continue;
         $titleLower   = strtolower($article['title']   ?? '');
         $contentLower = strtolower($article['content'] ?? '');
         $score = 0;
@@ -142,11 +134,7 @@ if (file_exists($louPath) && $words) {
 // ── Build context string ──────────────────────────────────────────────────────
 $contextBlocks = [];
 foreach ($hits as $hit) {
-    $content = preg_replace('/\s+/', ' ', trim($hit['content'] ?? ''));
-    // Truncate very long blocks to keep token count manageable
-    if (mb_strlen($content) > 1800) {
-        $content = mb_substr($content, 0, 1800) . '...';
-    }
+    $content = caRelevantExtract((string)($hit['content'] ?? ''), $words);
     $contextBlocks[] = "[Source: {$hit['source']}] {$hit['title']}:\n{$content}";
 }
 $context = implode("\n\n---\n\n", $contextBlocks);

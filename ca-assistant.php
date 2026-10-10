@@ -275,6 +275,84 @@ $member   = $loggedIn ? getMember() : null;
       .suggestion-chip { white-space: normal; }
     }
 
+    /* ── Phones ────────────────────────────────────────────────────────────
+     *
+     * This page had one media query, and it only made a chip wrap. Everything
+     * else was desktop: 1.75rem of padding on a 375px screen, and a fixed
+     * max-height on the message list, which put a small scrolling box inside
+     * an already-scrolling page and pushed the text box below the fold. You
+     * had to scroll the page to find the question box, then scroll a second,
+     * inner thing to read the answer.
+     *
+     * So on a phone the conversation flows with the page like any other text,
+     * and the composer sticks to the bottom of the screen where a thumb is.
+     */
+    /* js/site.js pins a vote bar to the bottom of every page until the
+       election, at z-index 810 — over the top of the composer. It publishes
+       its own height as --vote-bar-h, and style.css already lifts the search
+       button the same way. */
+    body.has-vote-bar .chat-input-area { bottom: var(--vote-bar-h, 3rem); }
+
+    @media (max-width: 680px) {
+      .chat-window {
+        border-left: none; border-right: none;
+        border-radius: 0;
+        box-shadow: none;
+        /* The card clips its own rounded corners with overflow:hidden, and an
+         * overflow:hidden ancestor silently disables position:sticky on
+         * everything inside it — the composer stayed off screen. There are no
+         * rounded corners to clip here. */
+        overflow: visible;
+        /* .container is padding: 0 1.5rem at every width; pulling by less left
+           a sliver of page either side of a card with no side borders. */
+        margin-left: -1.5rem; margin-right: -1.5rem;
+      }
+      .chat-messages {
+        padding: 1rem 1rem .5rem;
+        gap: 1rem;
+        min-height: 0;
+        max-height: none;        /* no scroller inside a scroller */
+        overflow-y: visible;
+      }
+      .chat-toolbar { padding: .7rem 1rem .6rem; }
+
+      /* Always reachable, without hunting for it. */
+      .chat-input-area {
+        position: sticky;
+        bottom: 0;
+        background: #fff;
+        padding: .7rem 1rem;
+        border-top: 1px solid var(--gray-100);
+        box-shadow: 0 -4px 12px rgba(0,0,0,.05);
+        z-index: 5;
+      }
+      /* .chat-window is a column flexbox, so the chips can be put above the
+         composer without moving them in the markup. Left in source order the
+         opaque sticky composer painted straight over them. */
+      .chat-messages   { order: 1; }
+      .suggestion-area { order: 2; }
+      .chat-input-area { order: 3; }
+
+      /* The site's floating search button is 50x50 in the bottom-right corner
+         under 680px — exactly where the Send button now sits, and above it.
+         Tapping Send opened the search overlay instead of asking the question.
+         This page IS a question box; the search is still in the nav. */
+      .search-fab { display: none; }
+
+      .chat-form { gap: .5rem; }
+      /* 16px, because anything smaller makes iOS zoom the whole page in on
+         focus and the member then has to pinch back out to read the answer. */
+      #ca-question { font-size: 16px; padding: .65rem .8rem; min-height: 44px; }
+      #ca-send { padding: .7rem .9rem; }
+      #ca-send span { display: none; }   /* the arrow alone, to save the width */
+      .chat-char-count { display: none; }
+
+      .suggestion-area { padding: .6rem 1rem .9rem; }
+      .msg-bubble { max-width: 100%; }
+      /* Scrolling a message "just into view" must clear the sticky composer. */
+      .msg { scroll-margin-bottom: 6rem; }
+    }
+
     /* Disclaimer — soft footer note */
     .chat-disclaimer {
       text-align: center;
@@ -371,9 +449,9 @@ $member   = $loggedIn ? getMember() : null;
               ></textarea>
               <div class="chat-char-count"><span id="char-count">0</span>/600</div>
             </div>
-            <button type="submit" id="ca-send" disabled>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-              Send
+            <button type="submit" id="ca-send" aria-label="Send" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              <span>Send</span>
             </button>
           </form>
         </div>
@@ -575,7 +653,25 @@ $member   = $loggedIn ? getMember() : null;
       wrap.appendChild(avatar);
       wrap.appendChild(body);
       messagesEl.appendChild(wrap);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+      scrollToLatest(wrap);
+    }
+
+    /*
+     * Bring the newest message into view, in either layout.
+     *
+     * On a desktop the message list is its own scrolling box and setting
+     * scrollTop is right. On a phone it now flows with the page and does not
+     * scroll at all, so that line quietly did nothing: you asked a question
+     * and the page sat still while the answer arrived below the fold.
+     */
+    function scrollToLatest(el) {
+      if (messagesEl.scrollHeight > messagesEl.clientHeight + 2) {
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      } else if (el && el.scrollIntoView) {
+        // 'nearest' plus the scroll-margin-bottom set in CSS, so the message
+        // lands above the composer rather than behind it.
+        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
     }
 
     let thinkingCounter = 0;
@@ -592,7 +688,7 @@ $member   = $loggedIn ? getMember() : null;
           </div>
         </div>`;
       messagesEl.appendChild(wrap);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+      scrollToLatest(wrap);
       return id;
     }
 

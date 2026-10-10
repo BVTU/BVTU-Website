@@ -10,6 +10,8 @@
  *   define('CLAUDE_API_KEY', 'sk-ant-...');
  */
 
+require_once __DIR__ . '/ca-search.php';
+
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 
@@ -58,13 +60,11 @@ const ALGOLIA_APP_ID    = 'IUEMJN3YMB';
 const ALGOLIA_SEARCH_KEY = 'f743d9e8113b01fbb593d0d5ea592854';
 const ALGOLIA_INDEX     = 'bvtu_content';
 
-// Strip common question words to extract searchable keywords.
-// "how much prep time am I entitled to?" → "prep time entitled"
-$searchQuery = preg_replace(
-    '/\b(how much|how many|how do i|how can i|what is|what are|what does|can i|do i|am i|when can|when do|where is|who is|is there|is it|tell me about|explain)\b/i',
-    ' ', $q
-);
-$searchQuery = trim(preg_replace('/\s+/', ' ', $searchQuery)) ?: $q;
+// Keywords for the CA search, and the plain question for Algolia.
+// Tokenising lives in ca-search.php: ask.php and ca-ask.php were each doing it
+// slightly differently over the same file — see the note there about question
+// marks, which were being searched for as part of the word.
+$searchQuery = trim(preg_replace('/\s+/', ' ', $q)) ?: $q;
 
 $hits    = [];
 $sources = [];
@@ -75,17 +75,12 @@ $caPath = __DIR__ . '/ca-content.json';
 if (file_exists($caPath)) {
     $caArticles = json_decode(file_get_contents($caPath), true) ?: [];
 
-    // Build word list — keep words 3+ chars, skip generic stop words
-    $stopWords = ['the','and','for','are','was','that','this','with','have',
-                  'from','they','will','been','has','its','not','but','can',
-                  'you','your','our','their','what','how','much','many','who'];
-    $words = preg_split('/\s+/', strtolower($searchQuery), -1, PREG_SPLIT_NO_EMPTY);
-    $words = array_filter($words, fn($w) => strlen($w) >= 3 && !in_array($w, $stopWords));
-    $words = array_values($words);
+    $words = caSearchTokens($q);
 
     if ($words) {
         $scored = [];
         foreach ($caArticles as $idx => $article) {
+            if (caIsIndexPage($article)) continue;   // the PDF's own A-Z index
             $titleLower   = strtolower($article['title']   ?? '');
             $contentLower = strtolower($article['content'] ?? '');
             $score = 0;
@@ -104,7 +99,9 @@ if (file_exists($caPath)) {
             $art = $caArticles[$s['idx']];
             $hits[] = [
                 'title'       => $art['title'],
-                'content'     => $art['content'],
+                // The whole article used to go to the model, so one long
+                // article crowded out the other four sources.
+                'content'     => caRelevantExtract((string)$art['content'], $words),
                 'url'         => (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/collective-agreement.php',
                 'type'        => 'collective-agreement',
                 'members_only'=> false,
