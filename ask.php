@@ -11,6 +11,7 @@
  */
 
 require_once __DIR__ . '/ca-search.php';
+require_once __DIR__ . '/inc/site-url.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
@@ -102,7 +103,7 @@ if (file_exists($caPath)) {
                 // The whole article used to go to the model, so one long
                 // article crowded out the other four sources.
                 'content'     => caRelevantExtract((string)$art['content'], $words),
-                'url'         => (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/collective-agreement.php',
+                'url'         => '/collective-agreement.php',
                 'type'        => 'collective-agreement',
                 'members_only'=> false,
             ];
@@ -113,7 +114,7 @@ if (file_exists($caPath)) {
     if ($hits) {
         $sources[] = [
             'title' => 'Collective Agreement (SD54–BVTU)',
-            'url'   => (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca') . '/collective-agreement.php',
+            'url'   => '/collective-agreement.php',
             'type'  => 'collective-agreement',
         ];
     }
@@ -128,7 +129,7 @@ curl_setopt_array($algoliaCh, [
         'query'                => $searchQuery,
         'hitsPerPage'          => 3,
         'filters'              => 'NOT type:collective-agreement',
-        'attributesToRetrieve' => ['title', 'content', 'url', 'type', 'members_only'],
+        'attributesToRetrieve' => ['title', 'description', 'content', 'url', 'type', 'members_only'],
     ]),
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_TIMEOUT        => 8,
@@ -146,8 +147,9 @@ if ($algoliaResp) {
     $algoliaData = json_decode($algoliaResp, true);
     foreach (($algoliaData['hits'] ?? []) as $h) {
         $hits[] = $h;
-        $url = $h['url'] ?? '';
-        if ($url) {
+        // The index may still hold the host we moved off — see inc/site-url.php.
+        $url = bvtuLocalUrl($h['url'] ?? '');
+        if ($url !== '#') {
             $sources[] = ['title' => $h['title'] ?? '', 'url' => $url, 'type' => $h['type'] ?? 'page'];
         }
     }
@@ -164,6 +166,12 @@ foreach ($hits as $i => $hit) {
     }
     $content = strip_tags($content); // strip Algolia highlight <em> tags
     $content = preg_replace('/\s+/', ' ', trim($content));
+    /* A page record's 'content' is keyword soup for the search engine; its
+     * 'description' is the only prose about the page. Without it the model was
+     * being asked to describe a page from a list of nouns, and the prompt
+     * forbids filling gaps. */
+    $desc = trim(strip_tags((string)($hit['description'] ?? '')));
+    if ($desc !== '') $content = $desc . ' ' . $content;
     if ($title || $content) {
         $contextBlocks[] = "Source " . ($i + 1) . " — {$title}:\n{$content}";
     }

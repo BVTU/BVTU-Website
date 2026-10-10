@@ -7,6 +7,8 @@ require_once __DIR__ . '/members/auth.php';
 $loggedIn = isLoggedIn();
 $member   = $loggedIn ? getMember() : null;
 
+require_once __DIR__ . '/inc/site-url.php';
+
 $ALGOLIA_APP_ID    = 'IUEMJN3YMB';
 $ALGOLIA_SEARCH_KEY = 'f743d9e8113b01fbb593d0d5ea592854';
 $ALGOLIA_INDEX     = 'bvtu_content';
@@ -247,7 +249,8 @@ function snippetValue(array $hit, string $attr): string {
         <div class="search-results">
           <?php foreach ($hits as $hit):
             $type    = htmlspecialchars($hit['type'] ?? 'page');
-            $url     = htmlspecialchars($hit['url'] ?? '#');
+            // The host in the index may be the one we moved off — see inc/site-url.php.
+            $url     = htmlspecialchars(bvtuLocalUrl($hit['url'] ?? ''));
             $members = !empty($hit['members_only']);
             $title   = highlightValue($hit, 'title');
             $snippet = snippetValue($hit, 'content');
@@ -260,7 +263,7 @@ function snippetValue(array $hit, string $attr): string {
               <span class="<?= $iconClass ?>"><?= $icon ?></span>
               <div class="sr-body">
                 <a href="<?= $url ?>" class="sr-title"><?= $title ?></a>
-                <span class="sr-url"><?= $url ?></span>
+                <span class="sr-url"><?= htmlspecialchars($_SERVER['HTTP_HOST'] ?? 'bvtu.ca') ?><?= $url === '/' ? '' : $url ?></span>
                 <?php if ($snippet): ?>
                   <p class="sr-snippet"><?= $snippet ?></p>
                 <?php endif; ?>

@@ -121,6 +121,15 @@ $synonyms = [
     ['objectID' => 'syn-grievance', 'type' => 'synonym', 'synonyms' => ['grievance', 'complaint', 'dispute', 'remedy']],
     ['objectID' => 'syn-release',   'type' => 'synonym', 'synonyms' => ['release time', 'released time', 'release day', 'time release']],
     ['objectID' => 'syn-benefits',  'type' => 'synonym', 'synonyms' => ['benefits', 'extended health', 'dental', 'msp', 'health benefits']],
+    // What members type when they are looking for the collaboration grant.
+    // Almost nobody types its full name.
+    ['objectID' => 'syn-collab',    'type' => 'synonym', 'synonyms' => ['collaboration grant', 'collab grant', 'collaboration days', 'collab days', 'collaboration funding', 'mentorship grant']],
+    ['objectID' => 'syn-ca',        'type' => 'synonym', 'synonyms' => ['collective agreement', 'contract', 'the agreement', 'ca']],
+    ['objectID' => 'syn-lou',       'type' => 'synonym', 'synonyms' => ['lou', 'loa', 'letter of understanding', 'letter of agreement', 'memorandum of agreement']],
+    ['objectID' => 'syn-expense',   'type' => 'synonym', 'synonyms' => ['expense claim', 'reimbursement', 'expenses', 'mileage claim', 'receipt']],
+    ['objectID' => 'syn-seniority', 'type' => 'synonym', 'synonyms' => ['seniority', 'seniority list', 'years of service']],
+    ['objectID' => 'syn-layoff',    'type' => 'synonym', 'synonyms' => ['layoff', 'laid off', 'riffed', 'severance', 're-engagement']],
+    ['objectID' => 'syn-prep2',     'type' => 'synonym', 'synonyms' => ['staff meeting', 'staff meetings', 'school meetings']],
 ];
 $res  = algoliaRequest('POST', '/1/indexes/' . ALGOLIA_INDEX . '/synonyms/batch?replaceExistingSynonyms=true', $synonyms);
 $log .= ((strpos($res['status'], '200') !== false) || (strpos($res['status'], '201') !== false))
@@ -132,7 +141,19 @@ $log .= ((strpos($res['status'], '200') !== false) || (strpos($res['status'], '2
 // Update content here whenever a page's text changes significantly.
 $log .= "Indexing public pages...\n";
 
-$baseUrl = defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca';
+/*
+ * Paths, not absolute URLs.
+ *
+ * Records used to be written with SITE_URL baked in. The site moved from
+ * new.bvtu.ca to bvtu.ca and every result in the index went on pointing at
+ * the old host until someone remembered to re-run this — which nobody did,
+ * because nothing says to. A path cannot go stale when the domain changes,
+ * and the browser resolves it against whichever host the member is on.
+ *
+ * Records written before this still carry the old host; bvtuLocalUrl() in
+ * inc/site-url.php strips it at display time, so both shapes work.
+ */
+$baseUrl = '';
 
 $records = [
     [
@@ -219,10 +240,18 @@ $records = [
         'objectID'    => 'page_collab-grant',
         'type'        => 'page',
         'title'       => 'Collaboration Grant',
-        'description' => 'BVTU collaboration grant for teacher professional development projects.',
-        'content'     => 'collaboration grant professional development funding application teachers project',
+        // Taken from the page itself rather than invented, and carrying the
+        // words members search with: "collab days", "release time", "how many
+        // days", "apply". The old record said "funding application project"
+        // and was findable only by someone who already knew its name.
+        'description' => 'Apply for the BVTU Collaboration Grant — up to 3 release days a year for mentorship and professional collaboration between SD54 educators.',
+        'content'     => 'collaboration grant collab grant collaboration days collab days mentorship '
+                       . 'professional collaboration release time release days TTOC coverage three days '
+                       . 'per year who can apply what is covered how to apply application form deadline '
+                       . 'frequently asked questions professional development funding project partner '
+                       . 'co-teaching classroom visit peer observation',
         'url'         => $baseUrl . '/collab-grant.php',
-        'priority'    => 7,
+        'priority'    => 9,   // a thing members come looking for by name
         'members_only'=> false,
     ],
     [
@@ -305,6 +334,108 @@ $records = [
         'priority'    => 5,
         'members_only'=> false,
     ],
+
+    /* ── Pages that existed but were never indexed ────────────────────────
+     *
+     * The records in this file are written by hand, so a page is only
+     * findable if someone remembered to add it here. Ten were missing,
+     * including the collective agreement itself and the Contract Assistant —
+     * a member searching "collective agreement" could not reach either. */
+    [
+        'objectID'    => 'page_collective-agreement',
+        'type'        => 'page',
+        'title'       => 'Collective Agreement',
+        'description' => 'Download the SD54 Bulkley Valley Collective Agreement 2022–2025. Covers salary, leaves, working conditions, TTOC rights, and more.',
+        'content'     => 'collective agreement contract SD54 BVTU 2022 2025 download pdf articles salary '
+                       . 'leaves working conditions TTOC rights grievance seniority provincial local provisions',
+        'url'         => $baseUrl . '/collective-agreement.php',
+        'priority'    => 9,
+        'members_only'=> false,
+    ],
+    [
+        'objectID'    => 'page_ca-assistant',
+        'type'        => 'page',
+        'title'       => 'Contract Assistant',
+        'description' => 'Ask questions about the BVTU collective agreement and letters of understanding, and get a plain-language answer with the article number.',
+        'content'     => 'contract assistant ask a question collective agreement letters of understanding '
+                       . 'plain language answer article clause what does my contract say AI help',
+        'url'         => $baseUrl . '/ca-assistant.php',
+        'priority'    => 8,
+        'members_only'=> false,
+    ],
+    [
+        'objectID'    => 'page_library',
+        'type'        => 'page',
+        'title'       => 'Resource Library',
+        'description' => 'Teaching and union resources collected by BVTU, searchable and saveable.',
+        'content'     => 'resource library resources teaching materials saved bookmarks documents links',
+        'url'         => $baseUrl . '/library.php',
+        'priority'    => 6,
+        'members_only'=> false,
+    ],
+    [
+        'objectID'    => 'page_curated',
+        'type'        => 'page',
+        'title'       => 'Curated Resources',
+        'description' => 'Hand-picked teaching resources organised by grade band and subject — curated by BVTU educators.',
+        'content'     => 'curated resources teaching grade band subject elementary secondary lesson planning recommended',
+        'url'         => $baseUrl . '/curated.php',
+        'priority'    => 6,
+        'members_only'=> false,
+    ],
+    [
+        'objectID'    => 'page_newsletter-archive',
+        'type'        => 'page',
+        'title'       => 'Newsletter Archive',
+        'description' => 'Past issues of the BVTU newsletter.',
+        'content'     => 'newsletter archive past issues bulletin updates president report back issues',
+        'url'         => $baseUrl . '/newsletter-archive.php',
+        'priority'    => 5,
+        // It redirects a logged-out visitor to the login page, so without this
+        // the result carries no "Members" badge and bounces whoever taps it.
+        'members_only'=> true,
+    ],
+    [
+        'objectID'    => 'page_about',
+        'type'        => 'page',
+        'title'       => 'About BVTU',
+        'description' => 'About the Bulkley Valley Teachers\' Union — leadership, meetings, committees, and governance.',
+        'content'     => 'about BVTU leadership executive table officers meetings committees governance '
+                       . 'constitution bylaws general meeting staff representatives who we are',
+        'url'         => $baseUrl . '/about.php',
+        'priority'    => 6,
+        'members_only'=> false,
+    ],
+    [
+        'objectID'    => 'page_forum',
+        'type'        => 'page',
+        'title'       => 'All-Candidates Forum',
+        'description' => 'Watch the BVTU all-candidates forum for the School District 54 trustee election.',
+        'content'     => 'all candidates forum trustee election school district 54 video recording questions candidates debate',
+        'url'         => $baseUrl . '/forum.php',
+        'priority'    => 6,
+        'members_only'=> false,
+    ],
+    [
+        'objectID'    => 'page_trustee-candidates',
+        'type'        => 'page',
+        'title'       => 'Trustee Candidate Responses',
+        'description' => 'Responses from SD54 school trustee candidates to the BVTU survey, published as submitted.',
+        'content'     => 'trustee candidates responses survey school board election SD54 questionnaire positions',
+        'url'         => $baseUrl . '/trustee-candidates.php',
+        'priority'    => 6,
+        'members_only'=> false,
+    ],
+    [
+        'objectID'    => 'page_privacy',
+        'type'        => 'page',
+        'title'       => 'Privacy',
+        'description' => 'How the BVTU website handles personal information.',
+        'content'     => 'privacy policy personal information data collection cookies member accounts',
+        'url'         => $baseUrl . '/privacy.php',
+        'priority'    => 3,
+        'members_only'=> false,
+    ],
 ];
 
 foreach ($records as $r) {
@@ -317,6 +448,13 @@ if ($records) {
 
 // ── 4. Index public PDFs ──────────────────────────────────────────────────────
 $log .= "\nIndexing public documents...\n";
+
+/* $root was used by both document sections and never defined anywhere, so
+ * is_dir() was being asked about "/documents/" at the filesystem root, said
+ * no, and the loops indexed nothing. The seven PDFs in documents/ have never
+ * been in the search index — which is a large part of why searching for a
+ * specific thing turned up a page about it rather than the document itself. */
+$root = __DIR__;
 
 $publicDocsDir = $root . '/documents/';
 $pdfRecords    = [];

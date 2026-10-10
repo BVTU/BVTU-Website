@@ -229,10 +229,11 @@
         ? '<span class="so-members-badge">Members</span>'
         : '';
       const typeClass = esc(hit.type ?? 'page');
+      const href      = localUrl(hit.url);
 
       return `
         <li role="option">
-          <a href="${esc(hit.url ?? '#')}" class="so-result">
+          <a href="${esc(href)}" class="so-result">
             <span class="so-result-icon so-result-icon--${typeClass}">${icon}</span>
             <span class="so-result-body">
               <span class="so-result-title">${title}</span>
@@ -293,6 +294,23 @@
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
+  /*
+   * Ignore the host stored in the index and keep the path.
+   *
+   * Records were written with whatever SITE_URL said when the reindex last
+   * ran, and the site moved from new.bvtu.ca to bvtu.ca — every result kept
+   * pointing at the old host. A result found here should open here.
+   * The PHP twin is bvtuLocalUrl() in inc/site-url.php.
+   */
+  function localUrl(url) {
+    url = String(url || '').trim();
+    if (!url) return '#';
+    var m = /^https?:\/\/([^/]+)(\/.*)?$/i.exec(url);
+    if (!m) return url;
+    if (['bvtu.ca', 'www.bvtu.ca', 'new.bvtu.ca'].indexOf(m[1].toLowerCase()) === -1) return url;
+    return m[2] || '/';
+  }
+
   function esc(str) {
     const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
     return String(str ?? '').replace(/[&<>"']/g, c => map[c]);
