@@ -28,9 +28,64 @@ $reindexToken = defined('REINDEX_TOKEN')     ? REINDEX_TOKEN     : '';
 if (!$adminKey) {
     die("Error: ALGOLIA_ADMIN_KEY not set in members/config.php\n");
 }
-if ($reindexToken && ($_GET['token'] ?? '') !== $reindexToken) {
+
+/*
+ * Three ways in, in order of how pleasant they are.
+ *
+ * The token in a query string was the only way, and it is the worst of the
+ * three: it has to be looked up in config.php every time, it lands in the
+ * server's access log, and a token containing & + # or a space is mangled by
+ * the URL before it ever arrives — which looks exactly like a wrong token and
+ * is why one copied straight out of config.php can still be refused.
+ */
+$reindexWhy = '';
+$isCli = (PHP_SAPI === 'cli');
+
+if ($isCli) {
+    // Run by cron as `php reindex.php`. Being able to read the file at all
+    // means being able to read ALGOLIA_ADMIN_KEY out of it, so a second
+    // secret on top of that proves nothing.
+    $reindexWhy = 'command line';
+} else {
+    $sent = trim((string)($_GET['token'] ?? $_POST['token'] ?? ''));
+    if ($reindexToken !== '' && $sent !== '' && hash_equals($reindexToken, $sent)) {
+        $reindexWhy = 'token';
+    } else {
+        // A signed-in admin, so this can be a link rather than a secret.
+        require_once __DIR__ . '/members/auth.php';
+        require_once __DIR__ . '/members/exec-db.php';
+        if (isLoggedIn() && execIsAdmin(getMember()['email'] ?? '')) {
+            /* This empties the index and rebuilds it, and a session cookie
+             * travels with any request a browser can be talked into making.
+             * The token happened to prevent that; a plain link would not. So
+             * the link asks first, and the asking carries a CSRF token. */
+            if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrfValid()) {
+                $reindexWhy = 'signed in as ' . (getMember()['email'] ?? 'admin');
+            } else {
+                header('Content-Type: text/html; charset=utf-8');
+                echo '<!DOCTYPE html><meta charset="utf-8">'
+                   . '<meta name="viewport" content="width=device-width, initial-scale=1">'
+                   . '<title>Rebuild the search index</title>'
+                   . '<div style="font-family:system-ui,sans-serif;max-width:34rem;'
+                   . 'margin:3rem auto;padding:0 1.25rem;line-height:1.6;">'
+                   . '<h1 style="font-size:1.2rem;">Rebuild the search index</h1>'
+                   . '<p>This rebuilds the search index from the pages and documents on '
+                   . 'the site. Search returns nothing for a second or two while it runs.</p>'
+                   . '<form method="post">' . csrfField()
+                   . '<button type="submit" style="background:#1a6b35;color:#fff;border:none;'
+                   . 'border-radius:8px;padding:.7rem 1.2rem;font-size:1rem;font-weight:600;'
+                   . 'cursor:pointer;">Rebuild it now</button></form></div>';
+                exit;
+            }
+        }
+    }
+}
+
+if ($reindexWhy === '') {
     http_response_code(403);
-    die("403 Forbidden — wrong or missing token.\n");
+    die("403 Forbidden — sign in as an administrator, or pass ?token=…\n"
+      . "(If you pasted the token and still see this: a token containing & + # or\n"
+      . " a space is cut short by the URL. Sign in instead, or run it from cron.)\n");
 }
 
 // ── Algolia config ────────────────────────────────────────────────────────────
@@ -88,12 +143,22 @@ $log = '';
 $log .= "BVTU Algolia Reindex\n";
 $log .= str_repeat('=', 50) . "\n\n";
 
-// ── 1. Clear existing index ───────────────────────────────────────────────────
-$log .= "Clearing index '" . ALGOLIA_INDEX . "'...\n";
-$res  = algoliaRequest('POST', '/1/indexes/' . ALGOLIA_INDEX . '/clear', []);
-$log .= (strpos($res['status'], '200') !== false) ? "  ✓ Index cleared.\n\n" : "  ✗ Clear failed: {$res['status']}\n\n";
+/*
+ * The index is NOT cleared here.
+ *
+ * It used to be the first thing this did, which was fine when the records
+ * were twenty-six literals in this file. Building them now means fetching
+ * every page over HTTP, and anything that can take time can be cut short —
+ * by the proxy, by a timeout, by a page that hangs. Clearing first and then
+ * being killed would leave the index empty and the site unsearchable, with
+ * nothing on screen to say so.
+ *
+ * So: build everything first, and clear only once there is something to put
+ * back. See the clear immediately before the first batch is sent.
+ */
 
 // ── 2. Configure index settings ───────────────────────────────────────────────
+$log .= "Authorised by: {$reindexWhy}\n\n";
 $log .= "Configuring index settings...\n";
 $settings = [
     'searchableAttributes' => ['title', 'description', 'content'],
@@ -135,6 +200,99 @@ $res  = algoliaRequest('POST', '/1/indexes/' . ALGOLIA_INDEX . '/synonyms/batch?
 $log .= ((strpos($res['status'], '200') !== false) || (strpos($res['status'], '201') !== false))
     ? "  ✓ " . count($synonyms) . " synonym groups pushed.\n\n"
     : "  ✗ Synonyms failed: {$res['status']}\n\n";
+
+/* ── Finding the pages, instead of being told them ──────────────────────────
+ *
+ * The list below used to be the whole index. A page was findable only if
+ * someone remembered to add it here, and ten were missing — the collective
+ * agreement and the Contract Assistant among them.
+ *
+ * So the site is now asked what pages it has. Each one is fetched over HTTP
+ * and its real title, description and text are read: that is what a visitor
+ * sees, which is what should be searchable. Fetching rather than including
+ * also keeps the old warning in this file true — including a page here would
+ * start its session and run its auth.
+ *
+ * The hand-written entries stay, as overrides. Discovery answers "is this page
+ * in the index at all"; the overrides answer "and does it rank properly" —
+ * which is where the collaboration grant's extra keywords live.
+ */
+
+/** Pages that are endpoints, actions or fragments — never results. */
+function reindexSkipPage(string $file): bool {
+    $never = [
+        'reindex.php',            // would call itself
+        'ask.php', 'ca-ask.php', 'ca-search.php', 'search.php',
+        'go.php', 'track.php',
+        'trustee-candidates-data.php', 'trustee-zones.php',
+        'collab-grant-edit.php',  // reached by a private link from an email
+        'library-bookmark.php', 'library-edit.php', 'library-resource.php',
+        'library-saved.php', 'library-thumb-capture.php', 'library-upload.php',
+        'index-offline.php', 'default.php',
+        'newsletter.php',         // one issue; with no ?id= it bounces to the archive
+    ];
+    return in_array($file, $never, true);
+}
+
+/** Title, description and visible text of a fetched page. */
+function reindexParsePage(string $html): array {
+    $title = '';
+    if (preg_match('~<title[^>]*>(.*?)</title>~is', $html, $m)) {
+        $title = html_entity_decode(trim(strip_tags($m[1])), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        // Every page ends "… — BVTU"; the suffix is noise in a result list.
+        // preg_replace returns null on invalid UTF-8, and '' would pass the
+        // "did we get a title" test below and index a nameless page.
+        $title = (string)(preg_replace('~\s*[—–-]\s*(BVTU|Bulkley Valley Teachers.? Union)\s*$~iu', '', $title) ?? $title);
+    }
+    $desc = '';
+    /* The closing quote must be the SAME quote that opened it. Matching
+     * either one cut "About the Bulkley Valley Teachers' Union" down to
+     * "…Teachers", and almost every description here contains Teachers'. */
+    if (preg_match('~<meta[^>]+name=(["\'])description\1[^>]*content=(["\'])(.*?)\2~is', $html, $m)) {
+        $desc = html_entity_decode(trim($m[3]), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    }
+
+    // The words on the page, minus the furniture that is on every page.
+    $body = preg_replace('~<head\b.*?</head>~is', ' ', $html);   // title and meta have their own fields
+    $body = preg_replace('~<(script|style|svg|noscript)\b.*?</\1>~is', ' ', $body);
+    $body = preg_replace('~<(nav|header|footer)\b.*?</\1>~is', ' ', $body);
+    $body = html_entity_decode(strip_tags($body), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $body = trim((string)(preg_replace('~\s+~u', ' ', $body) ?? $body));
+    if (mb_strlen($body) > 2000) $body = mb_substr($body, 0, 2000);
+
+    return ['title' => $title, 'description' => $desc, 'content' => $body];
+}
+
+/**
+ * Fetch one page without following redirects.
+ *
+ * A redirect to the login page is not a failure — it is how a members-only
+ * page announces itself, and the record wants that flag so the result carries
+ * a Members badge instead of bouncing whoever taps it.
+ */
+function reindexFetch(string $url): array {
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HEADER         => true,
+        CURLOPT_FOLLOWLOCATION => false,
+        CURLOPT_TIMEOUT        => 12,
+        CURLOPT_USERAGENT      => 'BVTU-reindex/1.0',
+    ]);
+    $raw  = curl_exec($ch);
+    $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $hlen = (int)curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+    $type = (string)curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+    curl_close($ch);
+    if ($raw === false) return ['ok' => false];
+
+    $headers = substr($raw, 0, $hlen);
+    $body    = substr($raw, $hlen);
+    $gated   = $code >= 300 && $code < 400
+            && preg_match('~^location:\s*\S*login\.php~im', $headers) === 1;
+
+    return ['ok' => true, 'code' => $code, 'type' => $type, 'body' => $body, 'gated' => $gated];
+}
 
 // ── 3. Index public pages ─────────────────────────────────────────────────────
 // Hardcoded records — avoids including PHP files which causes session/auth side-effects.
@@ -438,11 +596,124 @@ $records = [
     ],
 ];
 
-foreach ($records as $r) {
-    $log .= "  + {$r['url']} — {$r['title']}\n";
+/* ── Merge what was found with what was written by hand ─────────────────────
+ *
+ * Discovery decides WHICH pages exist; the hand-written entry above decides
+ * how one of them should read and rank. A discovered page with no entry is
+ * indexed on what the page itself says — which is the whole point, because
+ * that is what happens to the next page anyone adds.
+ */
+$overrides = [];
+foreach ($records as $r) $overrides[$r['url']] = $r;
+
+/*
+ * The host serving this request, not the one in config.php.
+ *
+ * SITE_URL is exactly the setting that went stale when the site moved off
+ * new.bvtu.ca. Crawling it would make every fetch a redirect, every page
+ * "skipped", and the run would report success having discovered nothing.
+ * On the command line there is no request to learn from, so config decides.
+ */
+if (!$isCli && !empty($_SERVER['HTTP_HOST'])) {
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+           || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https') ? 'https' : 'http';
+    $crawlBase = $scheme . '://' . $_SERVER['HTTP_HOST'];
+} else {
+    $crawlBase = rtrim(defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca', '/');
+}
+$log .= "\nLooking for pages at {$crawlBase} …\n";
+
+$discovered = [];
+$files = glob(__DIR__ . '/*.php') ?: [];
+sort($files);
+foreach ($files as $path) {
+    $file = basename($path);
+    if (reindexSkipPage($file)) continue;
+
+    $res = reindexFetch($crawlBase . '/' . $file);
+    if (!$res['ok']) { $log .= "  ? {$file} — no answer\n"; continue; }
+
+    if ($res['gated']) {
+        // Behind a login. Indexed, flagged, and titled from the override if
+        // there is one — the page itself will not tell us from a redirect.
+        $url = '/' . $file;
+        $base = $overrides[$url] ?? null;
+        $discovered[$url] = [
+            'objectID'    => 'page_' . pathinfo($file, PATHINFO_FILENAME),
+            'type'        => 'page',
+            'title'       => $base['title'] ?? ucwords(str_replace('-', ' ', pathinfo($file, PATHINFO_FILENAME))),
+            'description' => $base['description'] ?? 'BVTU members-only page',
+            'content'     => $base['content'] ?? '',
+            'url'         => $url,
+            'priority'    => $base['priority'] ?? 5,
+            'members_only'=> true,
+        ];
+        $log .= "  + {$file} (members only)\n";
+        continue;
+    }
+
+    if ($res['code'] !== 200 || stripos($res['type'], 'html') === false) {
+        $log .= "  - {$file} — skipped (HTTP {$res['code']})\n";
+        continue;
+    }
+
+    $parsed = reindexParsePage($res['body']);
+    if ($parsed['title'] === '') { $log .= "  - {$file} — skipped (no title)\n"; continue; }
+
+    $url  = ($file === 'index.php') ? '/' : '/' . $file;
+    $base = $overrides[$url] ?? [];
+    $discovered[$url] = [
+        'objectID'    => 'page_' . ($file === 'index.php' ? 'index' : pathinfo($file, PATHINFO_FILENAME)),
+        'type'        => 'page',
+        'title'       => $base['title']       ?? $parsed['title'],
+        'description' => $base['description'] ?? $parsed['description'],
+        // Both: the page's own words, plus any search terms added by hand.
+        'content'     => trim(($base['content'] ?? '') . ' ' . $parsed['content']),
+        'url'         => $url,
+        'priority'    => $base['priority']     ?? 5,
+        'members_only'=> $base['members_only'] ?? false,
+    ];
+    $log .= "  + {$file} — {$discovered[$url]['title']}\n";
 }
 
-if ($records) {
+/*
+ * Anything written by hand that the crawl did not reach is kept as it was.
+ *
+ * This is the safety net, and it is the whole reason the hand-written list is
+ * still here: if the site cannot be fetched at all — DNS, a firewall, an
+ * outage — discovery returns nothing, and without this the index would be
+ * cleared and then filled with nothing, leaving the search dead until someone
+ * noticed. A thin index beats an empty one.
+ */
+$found = count($discovered);
+if ($found === 0) {
+    /* Loud, because the run would otherwise finish green having indexed the
+     * same twenty-six entries it indexed last time, and the one symptom —
+     * new pages never turning up — looks like a search problem for months. */
+    $log .= "\n  ✗ NOTHING was reachable at {$crawlBase}. Falling back to the\n"
+          . "    hand-written list, so nothing is lost, but no new page will be\n"
+          . "    found until this works. Check the address and that the site can\n"
+          . "    fetch itself.\n";
+}
+
+$kept = 0;
+foreach ($records as $r) {
+    if (!isset($discovered[$r['url']])) { $discovered[$r['url']] = $r; $kept++; }
+}
+if ($kept) $log .= "  ({$kept} hand-written entries kept for pages the crawl did not reach)\n";
+
+$records = array_values($discovered);
+$log .= "\n" . count($records) . " page records.\n";
+
+if (!$records) {
+    // Nothing to put back, so nothing is taken away.
+    $log .= "\n  ✗ No page records were built — the index has been left exactly as it was.\n";
+} else {
+    // Everything is in hand; now is the moment to empty the index.
+    $log .= "\nClearing index '" . ALGOLIA_INDEX . "'...\n";
+    $res  = algoliaRequest('POST', '/1/indexes/' . ALGOLIA_INDEX . '/clear', []);
+    $log .= (strpos($res['status'], '200') !== false)
+        ? "  ✓ Index cleared.\n" : "  ✗ Clear failed: {$res['status']}\n";
     algoliaAddBatch($records);
 }
 
