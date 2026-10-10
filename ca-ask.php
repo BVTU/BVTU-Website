@@ -60,30 +60,24 @@ if (!is_array($history)) $history = [];
 $history = array_slice($history, -20);
 
 // ── Keyword extraction (shared with ask.php — see ca-search.php) ────────────
-$words = caSearchTokens($question);
 
-// ── Search Collective Agreement ───────────────────────────────────────────────
+// ── What to search for ───────────────────────────────────────────────────────
+// Including the previous turns, so a follow-up like "what about part-time?"
+// is still about the thing being discussed. See ca-search.php.
+$terms = caTermsForTurn($question, $history);
+
 $hits    = [];
 $sources = [];
 
+// ── Search Collective Agreement ───────────────────────────────────────────────
 $caPath = __DIR__ . '/ca-content.json';
-if (file_exists($caPath) && $words) {
-    $caArticles = json_decode(file_get_contents($caPath), true) ?: [];
-    $scored = [];
-    foreach ($caArticles as $idx => $article) {
-        if (caIsIndexPage($article)) continue;
-        $titleLower   = strtolower($article['title']   ?? '');
-        $contentLower = strtolower($article['content'] ?? '');
-        $score = 0;
-        foreach ($words as $word) {
-            $score += substr_count($titleLower,   $word) * 5;
-            $score += substr_count($contentLower, $word);
-        }
-        if ($score > 0) $scored[] = ['score' => $score, 'idx' => $idx];
-    }
-    usort($scored, fn($a, $b) => $b['score'] - $a['score']);
-    foreach (array_slice($scored, 0, 4) as $s) {
-        $art    = $caArticles[$s['idx']];
+if (file_exists($caPath) && $terms) {
+    $caArticles = array_values(array_filter(
+        json_decode(file_get_contents($caPath), true) ?: [],
+        fn($a) => !caIsIndexPage($a)
+    ));
+    foreach (caRankDocuments($caArticles, $terms, 4) as $r) {
+        $art    = $caArticles[$r['i']];
         $hits[] = [
             'title'   => $art['title'],
             'content' => $art['content'],
@@ -97,44 +91,30 @@ if (file_exists($caPath) && $words) {
 
 // ── Search Letters of Understanding ──────────────────────────────────────────
 $louPath = __DIR__ . '/lou-content.json';
-if (file_exists($louPath) && $words) {
+if (file_exists($louPath) && $terms) {
     $louDocs = json_decode(file_get_contents($louPath), true) ?: [];
-    $scored  = [];
-    foreach ($louDocs as $idx => $doc) {
-        $titleLower   = strtolower($doc['title']    ?? '');
-        $contentLower = strtolower($doc['content']  ?? '');
-        $keywordStr   = strtolower(implode(' ', $doc['keywords'] ?? []));
-        $score = 0;
-        foreach ($words as $word) {
-            $score += substr_count($titleLower,   $word) * 5;
-            $score += substr_count($keywordStr,   $word) * 3;
-            $score += substr_count($contentLower, $word);
-        }
-        if ($score > 0) $scored[] = ['score' => $score, 'idx' => $idx];
-    }
-    usort($scored, fn($a, $b) => $b['score'] - $a['score']);
-    $louAdded = 0;
-    foreach (array_slice($scored, 0, 3) as $s) {
-        if ($louAdded >= 3) break;
-        $doc    = $louDocs[$s['idx']];
+    /* An LOU carries hand-written keywords. They are metadata about what the
+     * document is, which is what a title is, so they are ranked as one. */
+    $louRank = array_map(fn($d) => [
+        'title'   => trim(($d['title'] ?? '') . ' ' . implode(' ', $d['keywords'] ?? [])),
+        'content' => $d['content'] ?? '',
+    ], $louDocs);
+
+    foreach (caRankDocuments($louRank, $terms, 3) as $r) {
+        $doc    = $louDocs[$r['i']];
         $hits[] = [
             'title'   => $doc['title'],
             'content' => $doc['content'],
             'source'  => 'Letter of Understanding / Settlement',
         ];
-        $sources[] = [
-            'title' => $doc['title'],
-            'url'   => $doc['file'],
-            'type'  => 'lou',
-        ];
-        $louAdded++;
+        $sources[] = ['title' => $doc['title'], 'url' => $doc['file'], 'type' => 'lou'];
     }
 }
 
 // ── Build context string ──────────────────────────────────────────────────────
 $contextBlocks = [];
 foreach ($hits as $hit) {
-    $content = caRelevantExtract((string)($hit['content'] ?? ''), $words);
+    $content = caRelevantExtract((string)($hit['content'] ?? ''), $terms);
     $contextBlocks[] = "[Source: {$hit['source']}] {$hit['title']}:\n{$content}";
 }
 $context = implode("\n\n---\n\n", $contextBlocks);
@@ -177,11 +157,25 @@ $currentMsg = $context
 $messages[] = ['role' => 'user', 'content' => $currentMsg];
 
 // ── Call Claude API ───────────────────────────────────────────────────────────
+/*
+ * Reading a contract is the kind of question this model is for, and the
+ * cheapest one was answering vaguely even when the right article was in
+ * front of it.
+ *
+ * max_tokens is a ceiling for the whole response and thinking is always on,
+ * so 600 would have been spent reasoning with nothing left to say. It is a
+ * cap, not a target — the system prompt still asks for a short answer.
+ *
+ * fallbacks: a refused request otherwise just stops; "default" routes it on
+ * by refusal category so there is no model list here to go stale.
+ */
 $claudePayload = json_encode([
-    'model'      => 'claude-haiku-4-5',
-    'max_tokens' => 600,
-    'system'     => $systemPrompt,
-    'messages'   => $messages,
+    'model'         => 'claude-opus-5-5',
+    'max_tokens'    => 8000,
+    'system'        => $systemPrompt,
+    'messages'      => $messages,
+    'output_config' => ['effort' => 'medium'],
+    'fallbacks'     => 'default',
 ]);
 
 $claudeCh = curl_init('https://api.anthropic.com/v1/messages');
@@ -189,12 +183,16 @@ curl_setopt_array($claudeCh, [
     CURLOPT_POST           => true,
     CURLOPT_POSTFIELDS     => $claudePayload,
     CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_TIMEOUT        => 30,
+    // Thinking takes time; 30s cut off answers that were still being written.
+    CURLOPT_TIMEOUT        => 120,
     CURLOPT_CONNECTTIMEOUT => 10,
     CURLOPT_HTTPHEADER     => [
         'Content-Type: application/json',
         "x-api-key: {$claudeKey}",
         'anthropic-version: 2023-06-01',
+        // Over raw HTTP the beta goes in this header; 'betas' in the body is
+        // the SDKs' way of setting the same thing.
+        'anthropic-beta: server-side-fallback-2026-07-01',
     ],
 ]);
 $claudeResp = curl_exec($claudeCh);
@@ -214,11 +212,38 @@ if (isset($claudeData['error'])) {
     exit;
 }
 
-$answer = $claudeData['content'][0]['text'] ?? '';
-if (!$answer) {
-    http_response_code(503);
-    echo json_encode(['error' => 'AI returned an empty response.']);
-    exit;
+/*
+ * The first TEXT block, not the first block.
+ *
+ * Thinking is on, so content[0] is a thinking block and reading ['text'] off
+ * it gives nothing — which would have turned every single answer into "AI
+ * returned an empty response".
+ */
+$answer = '';
+foreach (($claudeData['content'] ?? []) as $block) {
+    if (($block['type'] ?? '') === 'text' && trim((string)($block['text'] ?? '')) !== '') {
+        $answer = $block['text'];
+        break;
+    }
+}
+
+/* A refusal and a hit ceiling are both HTTP 200 with nothing to show, and
+ * both are billed — so the answer is decided here and the tokens are still
+ * counted below, where the monthly alert is. */
+$stop     = $claudeData['stop_reason'] ?? '';
+$failNote = '';
+if ($answer === '' && $stop === 'refusal') {
+    $answer = "I can't answer that one. Please ask the BVTU president directly "
+            . "— lp54@bctf.ca — and they will help.";
+} elseif ($answer === '' && $stop === 'max_tokens') {
+    // Thinking used the whole ceiling. Say what happened rather than "empty".
+    $answer = "That question took more working out than I have room for. Try "
+            . "asking it in two shorter parts, or contact the BVTU president.";
+    $failNote = 'max_tokens';
+}
+
+if ($answer === '') {
+    $failNote = 'empty';
 }
 
 // ── Token usage tracking & alert ──────────────────────────────────────────────
@@ -293,6 +318,15 @@ if ($totalTokens > 0 && defined('DB_HOST')) {
 }
 
 // ── Return result ─────────────────────────────────────────────────────────────
+/* Below the usage block on purpose: a response with nothing in it was still
+ * paid for, and the monthly alert should see those tokens. */
+if ($answer === '') {
+    error_log('BVTU ca-ask: no answer (' . ($failNote ?: $stop ?: 'unknown') . ')');
+    http_response_code(503);
+    echo json_encode(['error' => 'AI returned an empty response.']);
+    exit;
+}
+
 echo json_encode([
     'answer'  => $answer,
     'sources' => array_values(array_unique($sources, SORT_REGULAR)),

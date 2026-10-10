@@ -1,0 +1,31 @@
+{
+  "_comment": "Questions a BVTU member would actually type, each with the article that should be found. 'expect' matches against the document title, case-insensitively; any one of the listed strings counts. Used by tools/ca-eval.php. Add to it whenever a member asks something the assistant gets wrong — that is what makes the next change measurable.",
+  "questions": [
+    { "q": "how much prep time do I have",                               "expect": ["D.4:PREPARATION TIME", "Preparation Time"] },
+    { "q": "How much preparation time am I entitled to as an elementary teacher?", "expect": ["D.4:PREPARATION TIME", "Elementary Preparation Time"] },
+    { "q": "what is the process for filing a grievance?",                "expect": ["A.6:GRIEVANCE PROCEDURE"] },
+    { "q": "how long do I have to file a grievance",                     "expect": ["A.6:GRIEVANCE PROCEDURE"] },
+    { "q": "what happens if I am laid off",                              "expect": ["C.21:LAYOFF"] },
+    { "q": "how is severance pay calculated",                            "expect": ["C.21:LAYOFF"] },
+    { "q": "what are my rights if I am being harassed at work",          "expect": ["E.2:HARASSMENT"] },
+    { "q": "who do I report sexual harassment to",                       "expect": ["E.2:HARASSMENT"] },
+    { "q": "how do I get my experience recognized for salary placement", "expect": ["B.21:SALARY SCHEDULE PLACEMENT"] },
+    { "q": "when do I move up a step on the salary grid",                "expect": ["B.21:SALARY SCHEDULE PLACEMENT", "B.1:SALARY"] },
+    { "q": "how many sick days do I get",                                "expect": ["G.22:TEACHER ILLNESS", "SICK LEAVE", "G.1:PORTABILITY OF SICK LEAVE"] },
+    { "q": "can I carry my sick leave to another district",              "expect": ["G.1:PORTABILITY OF SICK LEAVE"] },
+    { "q": "how is seniority calculated",                                "expect": ["SENIORITY"] },
+    { "q": "what are the rules for maternity leave",                     "expect": ["MATERNITY", "PREGNANCY", "G.2"] },
+    { "q": "how much notice do I need to give for a leave of absence",   "expect": ["LEAVE"] },
+    { "q": "what are TTOC pay rules for less than a full day",           "expect": ["TTOC", "C.4"] },
+    { "q": "how does a teacher on call get paid",                        "expect": ["TTOC", "C.4"] },
+    { "q": "what class size limits apply",                               "expect": ["CLASS SIZE", "D.2", "CLASS COMPOSITION"] },
+    { "q": "how are vacancies posted and filled",                        "expect": ["E.22:POSTING AND FILLING VACANT POSITIONS"] },
+    { "q": "what is the procedure if I am disciplined",                  "expect": ["C.23:PROCEDURES FOR DISCIPLINE", "DISCIPLINE"] },
+    { "q": "am I entitled to professional development days",            "expect": ["PROFESSIONAL DEVELOPMENT", "PRO-D", "D.3"] },
+    { "q": "what benefits am I covered for",                             "expect": ["B.11:BENEFITS", "BENEFIT"] },
+    { "q": "how long is the regular work year",                          "expect": ["D.28:REGULAR WORK YEAR", "WORK YEAR"] },
+    { "q": "what happens to my seniority if I am laid off and rehired",  "expect": ["SENIORITY", "C.21:LAYOFF", "PORTING OF SENIORITY"] },
+    { "q": "can I request to go part time",                              "expect": ["C.25:PART TIME", "PART TIME"] },
+    { "q": "what is the mileage rate for using my own car",              "expect": ["MILEAGE", "TRAVEL", "EXPENSE"] }
+  ]
+}

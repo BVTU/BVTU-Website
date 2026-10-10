@@ -79,25 +79,15 @@ if (file_exists($caPath)) {
     $words = caSearchTokens($q);
 
     if ($words) {
-        $scored = [];
-        foreach ($caArticles as $idx => $article) {
-            if (caIsIndexPage($article)) continue;   // the PDF's own A-Z index
-            $titleLower   = strtolower($article['title']   ?? '');
-            $contentLower = strtolower($article['content'] ?? '');
-            $score = 0;
-            foreach ($words as $word) {
-                // Title matches are worth 5×, content matches 1×
-                $score += substr_count($titleLower,   $word) * 5;
-                $score += substr_count($contentLower, $word);
-            }
-            if ($score > 0) {
-                $scored[] = ['score' => $score, 'idx' => $idx];
-            }
-        }
-        usort($scored, fn($a, $b) => $b['score'] - $a['score']);
+        /* The same ranking the Contract Assistant uses. Counting keyword hits
+         * here put "PART TIME TEACHERS' RIGHTS" above "PREPARATION TIME" for
+         * "how much prep time do I have" — the shared module exists so these
+         * two cannot answer the same question differently. */
+        $caArticles = array_values(array_filter($caArticles, fn($a) => !caIsIndexPage($a)));
+        $ranked = caRankDocuments($caArticles, caExpandTerms($words), 5);
 
-        foreach (array_slice($scored, 0, 5) as $s) {
-            $art = $caArticles[$s['idx']];
+        foreach ($ranked as $s) {
+            $art = $caArticles[$s['i']];
             $hits[] = [
                 'title'       => $art['title'],
                 // The whole article used to go to the model, so one long
