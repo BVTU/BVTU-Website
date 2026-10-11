@@ -24,7 +24,47 @@ require_once __DIR__ . '/lib/phpmailer/Exception.php';
 require_once __DIR__ . '/lib/phpmailer/PHPMailer.php';
 require_once __DIR__ . '/lib/phpmailer/SMTP.php';
 
+/**
+ * Where an account's mail actually goes.
+ *
+ * The one place that decides it, because every email the site sends passes
+ * through here. The President signs in with a personal address and reads
+ * union mail at lp54@bctf.ca; expense claims were arriving in the wrong
+ * inbox. This changes the envelope only — the account's email is still its
+ * identity everywhere else, so who may sign what does not move.
+ */
+function siteDeliveryAddress(string $account): string {
+    static $cache = [];
+    $key = strtolower(trim($account));
+    if ($key === '') return $account;
+    if (array_key_exists($key, $cache)) return $cache[$key];
+
+    $to = $account;
+    try {
+        require_once __DIR__ . '/db.php';
+        $s = getDB()->prepare("SELECT notify_email FROM members WHERE LOWER(email)=? LIMIT 1");
+        $s->execute([$key]);
+        $alt = trim((string)$s->fetchColumn());
+        if ($alt !== '' && filter_var($alt, FILTER_VALIDATE_EMAIL)) $to = $alt;
+    } catch (\Throwable $e) {
+        /* \Throwable, not Exception: this file aliases PHPMailer's own
+         * Exception at the top, so `catch (Exception $e)` here catches that
+         * class and NOT the PDOException this exists to swallow — which would
+         * escape siteMail() altogether and 500 the password-reset page on any
+         * database where the column has not been added yet. */
+        error_log('siteDeliveryAddress: ' . $e->getMessage());
+    }
+    return $cache[$key] = $to;
+}
+
 function _siteMailLog(string $to, string $subject, bool $ok, string $err = ''): void {
+    /* Only a bare address can be resolved; the CC path hands this a composed
+     * label ("someone@x (cc ...)"), which is not an account and must be left
+     * as written rather than looked up and silently not annotated. */
+    if (strpos($to, ' ') === false) {
+        $delivered = siteDeliveryAddress($to);
+        if (strcasecmp($delivered, $to) !== 0) $to .= ' -> ' . $delivered;
+    }
     static $tableReady = false;
     try {
         require_once __DIR__ . '/db.php';
@@ -99,9 +139,11 @@ function siteMailWithAttachments(
         } else {
             $mail->addReplyTo($user, $fromName);
         }
-        $mail->addAddress($to);
+        $mail->addAddress(siteDeliveryAddress($to));
         foreach ($cc as $addr) {
-            if (filter_var($addr, FILTER_VALIDATE_EMAIL)) $mail->addCC($addr);
+            // Redirected the same way as the To: line. bctf-forms.php CCs the
+            // President, which is the very inbox this feature exists to fix.
+            if (filter_var($addr, FILTER_VALIDATE_EMAIL)) $mail->addCC(siteDeliveryAddress($addr));
         }
 
         foreach ($attachments as $a) {
@@ -118,7 +160,10 @@ function siteMailWithAttachments(
         $mail->send();
         // The log is keyed on one recipient, so record the copies in the subject
         // rather than leaving them invisible.
-        _siteMailLog($to . ($cc ? ' (cc ' . implode(', ', $cc) . ')' : ''), $subject, true);
+        $logTo = $to;
+        $dest  = siteDeliveryAddress($to);
+        if (strcasecmp($dest, $to) !== 0) $logTo .= ' -> ' . $dest;
+        _siteMailLog($logTo . ($cc ? ' (cc ' . implode(', ', $cc) . ')' : ''), $subject, true);
         return true;
     } catch (Exception $e) {
         $err = $mail->ErrorInfo;
@@ -157,7 +202,7 @@ function siteMail(string $to, string $subject, string $body, bool $isHtml = fals
 
         $mail->setFrom($fromAddr, $fromName);
         $mail->addReplyTo($fromAddr, $fromName);
-        $mail->addAddress($to);
+        $mail->addAddress(siteDeliveryAddress($to));
 
         $mail->isHTML($isHtml);
         $mail->CharSet = 'UTF-8';

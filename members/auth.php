@@ -156,6 +156,27 @@ function ensureMembersColumns(): void {
             getDB()->exec("ALTER TABLE members ADD COLUMN active TINYINT(1) NOT NULL DEFAULT 1");
         }
 
+        /* Where this person's mail should actually go.
+         *
+         * An account's email is its identity — it is what you sign in with,
+         * what the signing rules compare against, and what "never the
+         * claimant" is decided on. Where a person reads their mail is a
+         * different question: the President signs in as themselves and wants
+         * union business at lp54@bctf.ca, not in a personal inbox. Keeping
+         * the two apart means nobody has to change their login to fix their
+         * inbox, and no permission check moves when they do.
+         *
+         * Empty or NULL means "send to the account address", which is what
+         * every existing row says. */
+        $hasNotify = getDB()->query(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+             AND TABLE_NAME = 'members' AND COLUMN_NAME = 'notify_email'"
+        )->fetchColumn();
+        if (!$hasNotify) {
+            getDB()->exec("ALTER TABLE members ADD COLUMN notify_email VARCHAR(255) DEFAULT NULL");
+        }
+
         // Drop FK on employee_number so invite-based registration (no employee number) works.
         // Find and drop any FK referencing valid_employee_numbers from members.
         $fkName = getDB()->query(

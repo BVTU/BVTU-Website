@@ -13,23 +13,57 @@ $notice = '';
 $error  = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $name = trim($_POST['name'] ?? '');
+    // This page had no CSRF token, and now it can redirect a person's mail.
+    csrfCheck();
 
-    if (strlen($name) < 2) {
-        $error = 'Please enter your full name (at least 2 characters).';
-    } else {
-        getDB()->prepare("UPDATE members SET name=? WHERE id=?")
-               ->execute([$name, $member['id']]);
+    $action = $_POST['action'] ?? 'name';
 
-        // Update session so the dashboard greeting changes immediately
-        $_SESSION['member_name'] = $name;
-        $member['name'] = $name;
-        $notice = 'Name updated successfully.';
+    if ($action === 'name') {
+        $name = trim($_POST['name'] ?? '');
+        if (strlen($name) < 2) {
+            $error = 'Please enter your full name (at least 2 characters).';
+        } else {
+            getDB()->prepare("UPDATE members SET name=? WHERE id=?")
+                   ->execute([$name, $member['id']]);
+
+            // Update session so the dashboard greeting changes immediately
+            $_SESSION['member_name'] = $name;
+            $member['name'] = $name;
+            $notice = 'Name updated successfully.';
+        }
+    } elseif ($action === 'notify') {
+        $notify  = trim($_POST['notify_email'] ?? '');
+        $confirm = (string)($_POST['current_password'] ?? '');
+
+        /* The password, because this decides where password resets go.
+         * Someone who got hold of a signed-in tab could otherwise point this
+         * account's mail at themselves and then ask for a reset. */
+        $chk = getDB()->prepare("SELECT password_hash FROM members WHERE id=?");
+        $chk->execute([$member['id']]);
+        $hash = (string)$chk->fetchColumn();
+
+        if (!$hash || !password_verify($confirm, $hash)) {
+            $error = 'That password is not right, so nothing was changed.';
+        } elseif ($notify !== '' && !filter_var($notify, FILTER_VALIDATE_EMAIL)) {
+            $error = 'That does not look like an email address.';
+        } elseif (strlen($notify) > 255) {
+            // The column is VARCHAR(255); longer is either a hard error or a
+            // silent truncation into an address that goes nowhere.
+            $error = 'That email address is too long.';
+        } else {
+            // Blank means "no redirect" — back to the account's own address.
+            getDB()->prepare("UPDATE members SET notify_email=? WHERE id=?")
+                   ->execute([$notify !== '' ? $notify : null, $member['id']]);
+            // Escaped once, where it is printed — not here as well.
+            $notice = $notify !== ''
+                ? 'Mail from the portal will now go to ' . $notify . '.'
+                : 'Mail from the portal will go to your account address again.';
+        }
     }
 }
 
 // Fetch current details fresh from DB
-$row = getDB()->prepare("SELECT name, email, created_at FROM members WHERE id=?");
+$row = getDB()->prepare("SELECT name, email, created_at, notify_email FROM members WHERE id=?");
 $row->execute([$member['id']]);
 $row = $row->fetch();
 ?>
@@ -105,6 +139,8 @@ $row = $row->fetch();
   <div class="pcard">
     <h2>Update Name</h2>
     <form method="POST">
+      <?= csrfField() ?>
+      <input type="hidden" name="action" value="name">
       <div class="field">
         <label>Full Name</label>
         <input type="text" name="name" required minlength="2"
@@ -118,6 +154,38 @@ $row = $row->fetch();
       </div>
       <button type="submit" class="btn btn-primary" style="padding:.55rem 1.1rem;font-size:.9rem;">
         Save Name
+      </button>
+    </form>
+  </div>
+
+  <!-- ── Where portal mail goes ───────────────────────────────────────────────── -->
+  <div class="pcard">
+    <h2>Where Portal Email Goes</h2>
+    <p style="font-size:.85rem;color:var(--gray-500);line-height:1.55;margin:0 0 1rem;">
+      By default the portal emails you at your account address.
+      If you read union mail somewhere else &mdash; a work address, say &mdash;
+      put it here and everything the portal sends will go there instead.
+      You still sign in with
+      <strong><?= htmlspecialchars($row['email']) ?></strong>, and this changes
+      nothing about what you are allowed to do.
+    </p>
+    <form method="POST">
+      <?= csrfField() ?>
+      <input type="hidden" name="action" value="notify">
+      <div class="field">
+        <label>Send portal email to</label>
+        <input type="email" name="notify_email"
+               value="<?= htmlspecialchars((string)($row['notify_email'] ?? '')) ?>"
+               placeholder="<?= htmlspecialchars($row['email']) ?>">
+        <div class="field-hint">Leave this empty to go back to your account address.</div>
+      </div>
+      <div class="field">
+        <label>Your password</label>
+        <input type="password" name="current_password" required autocomplete="current-password">
+        <div class="field-hint">Asked for because this is also where password resets are sent.</div>
+      </div>
+      <button type="submit" class="btn btn-primary" style="padding:.55rem 1.1rem;font-size:.9rem;">
+        Save Email Address
       </button>
     </form>
   </div>
