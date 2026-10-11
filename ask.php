@@ -118,7 +118,10 @@ curl_setopt_array($algoliaCh, [
     CURLOPT_POSTFIELDS     => json_encode([
         'query'                => $searchQuery,
         'hitsPerPage'          => 3,
-        'filters'              => 'NOT type:collective-agreement',
+                // The agreement PDFs come in as documents, so the type filter alone
+        // no longer keeps them out; this endpoint reads the agreement from
+        // ca-content.json, where the extracts are built per clause.
+        'filters'              => 'NOT type:collective-agreement AND NOT is_agreement:true',
         'attributesToRetrieve' => ['title', 'description', 'content', 'url', 'type', 'members_only'],
     ]),
     CURLOPT_RETURNTRANSFER => true,

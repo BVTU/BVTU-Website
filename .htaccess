@@ -10,6 +10,12 @@ RewriteRule ^trustee-zones\.html$ /trustee-zones.php [R=301,L]
 
 # Configuration files are not for visitors. .user.ini would otherwise be served
 # as plain text, and members/config.php holds the database password.
-<FilesMatch "^\.user\.ini$|^config\.php$">
+#
+# documents-text.json joins them. It holds the extracted text of the public
+# PDFs, so nothing in it is secret today — but it is read off disk by
+# reindex.php and was never meant to be an endpoint, and if anything that
+# needs a login is ever added to it by mistake, this is what stops it being
+# handed to whoever asks.
+<FilesMatch "^\.user\.ini$|^config\.php$|^documents-text\.json$">
   Require all denied
 </FilesMatch>

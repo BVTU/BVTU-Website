@@ -162,7 +162,7 @@ $log .= "Authorised by: {$reindexWhy}\n\n";
 $log .= "Configuring index settings...\n";
 $settings = [
     'searchableAttributes' => ['title', 'description', 'content'],
-    'attributesForFaceting'=> ['type', 'members_only'],
+    'attributesForFaceting'=> ['type', 'members_only', 'is_agreement'],
     'attributesToHighlight'=> ['title', 'content'],
     'attributesToSnippet'  => ['content:40'],
     'snippetEllipsisText'  => '…',
@@ -170,6 +170,23 @@ $settings = [
     'removeStopWords'      => true,
     'minWordSizefor1Typo'  => 4,
     'minWordSizefor2Typos' => 8,
+
+    /* A page and a document are now several records each, one per chunk.
+     * Without this the same page would fill the results list with its own
+     * chunks; with it, the chunks compete and the page appears once. */
+    'attributeForDistinct' => 'url',
+    'distinct'             => 1,
+
+    /* "trustees" found nothing that "trustee" found. Stemming English needs
+     * the language to be declared — which removeStopWords also wants, and
+     * was switched on without. */
+    'queryLanguages'       => ['en'],
+    'ignorePlurals'        => true,
+
+    /* Every word had to match, so "sick leave" returned nothing at all
+     * rather than the pages about leave. Words are dropped one at a time,
+     * last first, only when the full query finds nothing. */
+    'removeWordsIfNoResults' => 'lastWords',
 ];
 $res  = algoliaRequest('PUT', '/1/indexes/' . ALGOLIA_INDEX . '/settings', $settings);
 $log .= (strpos($res['status'], '200') !== false) ? "  ✓ Settings saved.\n\n" : "  ✗ Settings failed: {$res['status']}\n\n";
@@ -218,6 +235,95 @@ $log .= ((strpos($res['status'], '200') !== false) || (strpos($res['status'], '2
  * which is where the collaboration grant's extra keywords live.
  */
 
+/**
+ * A document's name as a person would write it.
+ *
+ * The filename was being title-cased, which gave results like "Collective
+ * Agreement 2022 2025" and "Ttoc Experience Credit" — findable, but they read
+ * like a directory listing rather than the union's documents.
+ */
+function reindexDocTitle(string $filename): string {
+    $named = [
+        'collective-agreement-2022-2025.pdf'            => 'Collective Agreement 2022–2025 (local)',
+        'provincial-collective-agreement-2025-2029.pdf' => 'Provincial Collective Agreement 2025–2029',
+        'BVTU-Constitution-and-Bylaws-2026.pdf'         => 'BVTU Constitution and Bylaws',
+        'BVTU-Trustee-Candidate-Responses-2026-09-28.pdf'=> 'Trustee Candidate Responses (2026)',
+        'medical-referral-travel-claim-form.pdf'        => 'Medical Referral Travel Benefit — claim form',
+        'student-loan-forgiveness-application.pdf'      => 'Student Loan Forgiveness — application',
+        'ttoc-experience-credit.pdf'                    => 'TTOC Experience Credit',
+    ];
+    if (isset($named[$filename])) return $named[$filename];
+
+    $label = ucwords(str_replace(['-', '_'], ' ', pathinfo($filename, PATHINFO_FILENAME)));
+    // Acronyms this union uses, which title case mangles into "Ttoc".
+    return preg_replace_callback('/\b(Ttoc|Bctf|Bvtu|Sd54|Lou|Loa|Pro D)\b/i',
+        fn($m) => strtoupper(str_replace(' ', '-', $m[1])), $label) ?? $label;
+}
+
+/**
+ * Split long text into records a search engine can hold.
+ *
+ * A page used to be truncated at 2000 characters — twelve of the site's
+ * twenty-six were cut — and a document was indexed by its filename alone, so
+ * a word past the cut, or anywhere inside a PDF, simply could not be found.
+ *
+ * Chunks overlap slightly so a phrase that straddles a boundary is still
+ * matched in one of them, and every chunk of one page keeps that page's URL,
+ * which is what the index's "distinct" setting collapses on — several chunks
+ * compete, one result is shown.
+ */
+function reindexChunks(string $text, int $size = 3500, int $overlap = 250): array {
+    $text = trim(preg_replace('/\s+/u', ' ', $text) ?? $text);
+    if ($text === '') return [];
+    if (mb_strlen($text) <= $size) return [$text];
+
+    $chunks = [];
+    $start  = 0;
+    $len    = mb_strlen($text);
+    while ($start < $len) {
+        $piece  = mb_substr($text, $start, $size);
+        /* The tail has to end the loop explicitly. Stepping forward by
+         * "chunk length minus overlap" collapses to one character once the
+         * remainder is shorter than the overlap, and the last few hundred
+         * characters of every document came out as hundreds of near-identical
+         * fragments — 1441 records where 180 were wanted. */
+        $isLast = ($start + $size) >= $len;
+
+        if (!$isLast) {
+            // Break at a sentence, else at a space, so no chunk ends mid-word.
+            $cut = max(
+                (int)mb_strrpos($piece, '. '),
+                (int)mb_strrpos($piece, '? '),
+                (int)mb_strrpos($piece, '! ')
+            );
+            if ($cut < $size * 0.5) $cut = (int)mb_strrpos($piece, ' ');
+            if ($cut > $size * 0.5) $piece = mb_substr($piece, 0, $cut + 1);
+        }
+
+        $trimmed = trim($piece);
+        if ($trimmed !== '') $chunks[] = $trimmed;
+        if ($isLast) break;
+
+        $start += max(1, mb_strlen($piece) - $overlap);
+        if (count($chunks) >= 400) break;   // a runaway document is still bounded
+    }
+    return $chunks;
+}
+
+/** One record per chunk, all sharing a URL so results collapse to one entry. */
+function reindexChunkRecords(array $base, string $text, int $size = 3500): array {
+    $chunks = reindexChunks($text, $size);
+    if (!$chunks) return [$base];
+    $out = [];
+    foreach ($chunks as $n => $chunk) {
+        $r = $base;
+        $r['objectID'] = $base['objectID'] . ($n ? '_c' . ($n + 1) : '');
+        $r['content']  = trim(($n === 0 ? ($base['content'] ?? '') . ' ' : '') . $chunk);
+        $out[] = $r;
+    }
+    return $out;
+}
+
 /** Pages that are endpoints, actions or fragments — never results. */
 function reindexSkipPage(string $file): bool {
     $never = [
@@ -258,7 +364,8 @@ function reindexParsePage(string $html): array {
     $body = preg_replace('~<(nav|header|footer)\b.*?</\1>~is', ' ', $body);
     $body = html_entity_decode(strip_tags($body), ENT_QUOTES | ENT_HTML5, 'UTF-8');
     $body = trim((string)(preg_replace('~\s+~u', ' ', $body) ?? $body));
-    if (mb_strlen($body) > 2000) $body = mb_substr($body, 0, 2000);
+    // No truncation here any more: the caller chunks it. Cutting at 2000
+    // characters silently lost the back half of twelve of the site's pages.
 
     return ['title' => $title, 'description' => $desc, 'content' => $body];
 }
@@ -668,10 +775,13 @@ foreach ($files as $path) {
         'title'       => $base['title']       ?? $parsed['title'],
         'description' => $base['description'] ?? $parsed['description'],
         // Both: the page's own words, plus any search terms added by hand.
-        'content'     => trim(($base['content'] ?? '') . ' ' . $parsed['content']),
+        // The hand-written search terms; the page's own words are chunked in
+        // below so a long page is not cut off halfway.
+        'content'     => trim((string)($base['content'] ?? '')),
         'url'         => $url,
         'priority'    => $base['priority']     ?? 5,
         'members_only'=> $base['members_only'] ?? false,
+        '_text'       => $parsed['content'],
     ];
     $log .= "  + {$file} — {$discovered[$url]['title']}\n";
 }
@@ -702,8 +812,16 @@ foreach ($records as $r) {
 }
 if ($kept) $log .= "  ({$kept} hand-written entries kept for pages the crawl did not reach)\n";
 
-$records = array_values($discovered);
-$log .= "\n" . count($records) . " page records.\n";
+/* One record per page becomes one per chunk, all keeping the page's URL so
+ * the index collapses them back to a single result. */
+$pageRecords = [];
+foreach ($discovered as $r) {
+    $text = (string)($r['_text'] ?? '');
+    unset($r['_text']);
+    $pageRecords = array_merge($pageRecords, $text === '' ? [$r] : reindexChunkRecords($r, $text));
+}
+$records = $pageRecords;
+$log .= "\n" . count($discovered) . " pages -> " . count($records) . " records.\n";
 
 if (!$records) {
     // Nothing to put back, so nothing is taken away.
@@ -718,14 +836,27 @@ if (!$records) {
 }
 
 // ── 4. Index public PDFs ──────────────────────────────────────────────────────
-$log .= "\nIndexing public documents...\n";
-
-/* $root was used by both document sections and never defined anywhere, so
- * is_dir() was being asked about "/documents/" at the filesystem root, said
- * no, and the loops indexed nothing. The seven PDFs in documents/ have never
- * been in the search index — which is a large part of why searching for a
- * specific thing turned up a page about it rather than the document itself. */
+/* $root is defined HERE, above its first use.
+ *
+ * It was once used by both document loops and never defined at all, so
+ * is_dir() asked about "/documents/" at the filesystem root, said no, and
+ * nothing was indexed. Defining it below the document-text load repeated the
+ * same mistake one line higher up: the text file was looked for at "/" and
+ * the PDFs silently went back to being searchable by filename only. */
 $root = __DIR__;
+
+/* Written by tools/extract-doc-text.php on a machine with pdftotext, and
+ * committed — the web host has none and should not need one. */
+$docTextPath = $root . '/documents-text.json';
+$docText = file_exists($docTextPath)
+    ? (json_decode(file_get_contents($docTextPath), true) ?: [])
+    : [];
+if (!$docText) {
+    $log .= "\n  ! documents-text.json is missing or empty — documents will be\n"
+          . "    searchable by title only. Run: php tools/extract-doc-text.php\n";
+}
+
+$log .= "\nIndexing public documents...\n";
 
 $publicDocsDir = $root . '/documents/';
 $pdfRecords    = [];
@@ -735,17 +866,32 @@ if (is_dir($publicDocsDir)) {
         if ($f->isDot() || strtolower($f->getExtension()) !== 'pdf') continue;
         $name   = $f->getBasename('.pdf');
         $label  = ucwords(str_replace(['-', '_'], ' ', $name));
-        $pdfRecords[] = [
+        $key  = 'documents/' . $f->getFilename();
+        $text = (string)($docText[$key] ?? '');
+        $base = [
             'objectID'    => 'doc_public_' . $f->getBasename('.pdf'),
             'type'        => 'document',
-            'title'       => $label,
+            'title'       => reindexDocTitle($f->getFilename()),
             'description' => 'BVTU public document',
             'content'     => $label,
             'url'         => $baseUrl . '/documents/' . $f->getFilename(),
             'priority'    => 5,
             'members_only'=> false,
         ];
-        $log .= "  + {$f->getFilename()}\n";
+        /* The two collective agreements are 165 chunks of raw PDF between
+         * them. They belong in site search — "harassment" has no other home
+         * on this site — but not in ask.php's context, which already builds
+         * better extracts from ca-content.json and would be crowded out by
+         * slabs of the same text. Flagged rather than typed, so site search
+         * can still show them. */
+        $base['is_agreement'] = (bool)preg_match('/collective-agreement/i', $f->getFilename());
+
+        $parts = reindexChunkRecords($base, $text);
+        $pdfRecords = array_merge($pdfRecords, $parts);
+        $log .= $text === ''
+            ? "  ! {$f->getFilename()} — title only, no extracted text (run tools/extract-doc-text.php)\n"
+            : sprintf("  + %s — %s chars in %d part%s\n", $f->getFilename(),
+                      number_format(mb_strlen($text)), count($parts), count($parts) === 1 ? '' : 's');
     }
 } else {
     $log .= "  (no /documents/ directory found)\n";
@@ -766,17 +912,23 @@ if (is_dir($protectedDocsDir)) {
         if ($f->isDot() || strtolower($f->getExtension()) !== 'pdf') continue;
         $name   = $f->getBasename('.pdf');
         $label  = ucwords(str_replace(['-', '_'], ' ', $name));
-        $memberRecords[] = [
+        /* Title only, on purpose. Their text is never extracted — see the
+         * note in tools/extract-doc-text.php — because documents-text.json
+         * is served from the web root and these files need a login. Putting
+         * their body into a public index would hand out, in snippets and in
+         * the AI's context, exactly what serve-doc.php exists to gate. */
+        $base = [
             'objectID'    => 'doc_members_' . $name,
             'type'        => 'document',
-            'title'       => $label,
+            'title'       => reindexDocTitle($f->getFilename()),
             'description' => 'BVTU members-only document',
             'content'     => $label,
             'url'         => $baseUrl . '/members/serve-doc.php?file=' . urlencode($f->getFilename()),
             'priority'    => 5,
             'members_only'=> true,
         ];
-        $log .= "  + {$f->getFilename()} (members only)\n";
+        $memberRecords[] = $base;
+        $log .= "  + {$f->getFilename()} (members only, title only)\n";
     }
 } else {
     $log .= "  (no /members/protected-docs/ directory found)\n";
