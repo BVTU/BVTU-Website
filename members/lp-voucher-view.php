@@ -2,6 +2,7 @@
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/prod-db.php';
 require_once __DIR__ . '/lp-db.php';
+require_once __DIR__ . '/lp-share.php';
 requireLogin();
 
 $member = getMember();
@@ -97,10 +98,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'resen
             siteMail($to, $subject, $body);
         }
         $notice = $treasurerEmails
-            ? 'Treasurer notification re-sent to ' . htmlspecialchars(implode(', ', $treasurerEmails)) . '.'
+            ? 'Treasurer notification re-sent to ' . implode(', ', $treasurerEmails) . '.'
             : 'No Treasurer is assigned — nothing was sent. Assign one in the Roles &amp; Directory first.';
     }
 }
+
+// ── Share for review ──────────────────────────────────────────────────────────
+// Only the people who can already see this voucher may hand it to someone else.
+$mayShare  = $isOwner || lpCanView($member['email']) || lpCanReview($member['email']);
+$newShare  = null;   // just created, so the dialog can open on it
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'share-create' && $mayShare) {
+    $who   = trim($_POST['shared_with'] ?? '');
+    $token = lpShareCreate($id, $who, $member['email']);
+    $newShare = $token;
+
+    // Sending it from here saves copying a long URL into a mail client by hand,
+    // which is where links get truncated.
+    if ($who !== '' && filter_var($who, FILTER_VALIDATE_EMAIL) && ($_POST['send'] ?? '') === '1') {
+        require_once __DIR__ . '/smtp.php';
+        $url  = lpShareUrl($token);
+        $body = $member['name'] . " has shared an expense voucher with you for review.\n\n"
+              . "Voucher: " . $voucher['name'] . "\n\n"
+              . "Open it here — no account or password needed:\n" . $url . "\n\n"
+              . "The page is read-only. You can read every line and its receipt, and save\n"
+              . "a PDF copy from the button at the top. The link stops working in "
+              . LP_SHARE_DAYS . " days.\n\n"
+              . "— Bulkley Valley Teachers' Union";
+        siteMail($who, 'For your review: ' . $voucher['name'], $body);
+        $notice = 'Link created and emailed to ' . $who . '.';
+    } elseif (($_POST['send'] ?? '') === '1' && $who !== '') {
+        // Asked for it to be sent, but the address could not be used.
+        $notice = 'Link created, but "' . $who . '" is not an email address we could '
+                . 'send to — copy the link from the Share box instead.';
+    } else {
+        $notice = 'Link created. Copy it from the Share box below.';
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'share-revoke' && $mayShare) {
+    lpShareRevoke((int)($_POST['share_id'] ?? 0), $id);
+    $notice = 'Access removed. That link no longer opens.';
+}
+
+$shares = $mayShare ? lpSharesFor($id) : [];
 
 // Export as CSV
 if (($_GET['export'] ?? '') === 'csv') {
@@ -326,6 +367,9 @@ arsort($blSummary);
           <?php endif; ?>
           <?php endif; ?>
         <?php endif; ?>
+<?php if ($mayShare): ?>
+        <button type="button" onclick="shareOpen()" class="btn btn-outline" style="padding:.45rem .85rem;font-size:.83rem;">&#128279; Share</button>
+        <?php endif; ?>
         <a href="?id=<?= $id ?>&export=csv" class="btn btn-outline" style="padding:.45rem .85rem;font-size:.83rem;">⬇ CSV</a>
         <button onclick="window.print()" class="btn btn-outline" style="padding:.45rem .85rem;font-size:.83rem;">🖨 Print</button>
       </div>
@@ -535,5 +579,137 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbo
 </script>
 <script src="../js/sort-by-date.js?v=<?= @filemtime(__DIR__ . '/../js/sort-by-date.js') ?>"></script>
 <script>bvtuSortByDate({ body: '#expenseRows', header: '#thDate' });</script>
+
+<?php if ($mayShare):
+      $liveShares = array_values(array_filter($shares, function ($r) {
+          return empty($r['revoked_at'])
+              && (empty($r['expires_at']) || strtotime($r['expires_at']) >= time());
+      })); ?>
+<div class="share-veil" id="shareVeil" onclick="if(event.target===this)shareClose()">
+  <div class="share-box" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
+    <div class="share-head">
+      <h2 id="shareTitle">Share &ldquo;<?= htmlspecialchars($voucher['name']) ?>&rdquo;</h2>
+      <button type="button" class="share-x" onclick="shareClose()" aria-label="Close">&times;</button>
+    </div>
+
+    <form method="POST" class="share-add">
+      <?= csrfField() ?>
+      <input type="hidden" name="action" value="share-create">
+      <input type="email" name="shared_with" placeholder="Email address" aria-label="Email address">
+      <label class="share-send"><input type="checkbox" name="send" value="1" checked> Email them the link</label>
+      <button type="submit" class="btn btn-primary" style="font-size:.85rem;padding:.45rem 1rem;">Share</button>
+    </form>
+
+    <div class="share-gen">
+      <div class="share-gen-ico">&#128279;</div>
+      <div style="flex:1 1 auto;min-width:0;">
+        <div style="font-weight:700;font-size:.9rem;">Anyone with the link can view</div>
+        <div style="font-size:.8rem;color:var(--gray-500);">
+          No account needed. They can read every line and receipt, and save a PDF.
+          Links stop working after <?= LP_SHARE_DAYS ?> days.
+        </div>
+      </div>
+    </div>
+
+    <?php if ($liveShares): ?>
+    <div class="share-list">
+      <div class="share-list-h">People with access</div>
+      <?php foreach ($liveShares as $sh): ?>
+      <div class="share-row">
+        <div style="flex:1 1 auto;min-width:0;">
+          <div class="share-who"><?= htmlspecialchars($sh['shared_with'] ?: 'Anyone with this link') ?></div>
+          <div class="share-when">
+            <?php if ($sh['last_viewed_at']): ?>
+              Opened <?= htmlspecialchars(date('M j', strtotime($sh['last_viewed_at']))) ?>
+              <?= (int)$sh['view_count'] > 1 ? '· ' . (int)$sh['view_count'] . ' times' : '' ?>
+            <?php else: ?>
+              Not opened yet
+            <?php endif; ?>
+            · expires <?= htmlspecialchars(date('M j, Y', strtotime($sh['expires_at']))) ?>
+          </div>
+        </div>
+        <div class="share-act">
+          <input type="text" class="share-url" readonly value="<?= htmlspecialchars(lpShareUrl($sh['token'])) ?>"
+                 onfocus="this.select()" aria-label="Review link">
+          <button type="button" class="share-copy" onclick="shareCopy(this)">Copy</button>
+          <form method="POST" style="display:inline;" onsubmit="return confirm('Remove access? That link will stop working immediately.');">
+            <?= csrfField() ?>
+            <input type="hidden" name="action" value="share-revoke">
+            <input type="hidden" name="share_id" value="<?= (int)$sh['id'] ?>">
+            <button type="submit" class="share-rm" title="Remove access">Remove</button>
+          </form>
+        </div>
+      </div>
+      <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+
+    <div class="share-foot">
+      <span style="font-size:.78rem;color:var(--gray-500);">
+        Viewing only &mdash; nobody with a link can edit, approve or sign.
+      </span>
+      <button type="button" class="btn btn-outline" style="font-size:.85rem;padding:.4rem .95rem;" onclick="shareClose()">Done</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  .share-veil { display:none; position:fixed; inset:0; background:rgba(20,24,20,.45); z-index:900;
+                align-items:flex-start; justify-content:center; padding:4vh 1rem; overflow:auto; }
+  .share-veil.open { display:flex; }
+  .share-box { background:#fff; border-radius:12px; width:100%; max-width:34rem;
+               box-shadow:0 12px 40px rgba(0,0,0,.25); padding:1.4rem 1.5rem 1.1rem; }
+  .share-head { display:flex; align-items:flex-start; gap:1rem; margin-bottom:1.1rem; }
+  .share-head h2 { font-size:1.08rem; margin:0; flex:1 1 auto; color:var(--primary); }
+  .share-x { background:none; border:0; font-size:1.5rem; line-height:1; color:var(--gray-400);
+             cursor:pointer; padding:0 .2rem; }
+  .share-add { display:flex; gap:.55rem; align-items:center; flex-wrap:wrap; margin-bottom:1.1rem; }
+  .share-add input[type=email] { flex:1 1 12rem; padding:.55rem .7rem; border:1px solid var(--border);
+                                 border-radius:7px; font:inherit; font-size:.9rem; }
+  .share-send { font-size:.8rem; color:var(--gray-600); display:flex; align-items:center; gap:.3rem; }
+  .share-gen { display:flex; gap:.8rem; align-items:flex-start; background:var(--off-white);
+               border-radius:8px; padding:.8rem .9rem; margin-bottom:1.1rem; }
+  .share-gen-ico { font-size:1.1rem; }
+  .share-list-h { font-size:.74rem; font-weight:800; text-transform:uppercase; letter-spacing:.05em;
+                  color:var(--gray-500); margin-bottom:.5rem; }
+  .share-row { padding:.7rem 0; border-top:1px solid var(--gray-100); }
+  .share-act { display:flex; gap:.45rem; align-items:center; margin-top:.4rem; }
+  .share-who  { font-weight:700; font-size:.9rem; }
+  .share-when { font-size:.76rem; color:var(--gray-500); }
+  .share-url  { flex:1 1 auto; min-width:0; font-size:.74rem; padding:.35rem .5rem;
+                border:1px solid var(--border); border-radius:5px; color:var(--gray-600); background:var(--off-white); }
+  .share-copy { background:var(--primary); color:#fff; border:0; border-radius:5px;
+                font-size:.78rem; font-weight:700; padding:.38rem .7rem; cursor:pointer; }
+  .share-rm   { background:none; border:0; color:#b3261e; font-size:.78rem; cursor:pointer;
+                text-decoration:underline; padding:.38rem .2rem; }
+  .share-foot { display:flex; justify-content:space-between; align-items:center; gap:1rem;
+                flex-wrap:wrap; border-top:1px solid var(--gray-100); margin-top:1rem; padding-top:.9rem; }
+</style>
+
+<script>
+  function shareOpen()  { document.getElementById('shareVeil').classList.add('open'); }
+  function shareClose() { document.getElementById('shareVeil').classList.remove('open'); }
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') shareClose();
+  });
+  function shareCopy(btn) {
+    var box = btn.parentNode.querySelector('.share-url');
+    var done = function () { btn.textContent = 'Copied'; setTimeout(function(){ btn.textContent = 'Copy'; }, 1800); };
+    // Clipboard access needs a secure context and can still be refused; the
+    // select-and-copy fallback works everywhere and leaves the link selected
+    // so it can be copied by hand if even that fails.
+    box.select();
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(box.value).then(done, function () {
+        try { document.execCommand('copy'); done(); } catch (err) {}
+      });
+    } else {
+      try { document.execCommand('copy'); done(); } catch (err) {}
+    }
+  }
+  <?php if ($newShare): ?>shareOpen();<?php endif; ?>
+</script>
+<?php endif; ?>
+
 </body>
 </html>
