@@ -19,42 +19,39 @@ if (!$path) {
 
 expEnsureTables();
 
-// Find which expense owns this receipt — check saved expenses first
-$s = getDB()->prepare(
-    "SELECT user_email FROM exp_expenses WHERE receipt_path = ? LIMIT 1"
-);
-$s->execute([$path]);
-$row = $s->fetch();
-
-// Phone-uploaded receipts live in exp_pending_receipts until claimed
-if (!$row) {
-    $s2 = getDB()->prepare(
-        "SELECT e.user_email
-         FROM exp_pending_receipts pr
-         JOIN exp_expenses e ON e.id = pr.expense_id
-         WHERE pr.saved_path = ? LIMIT 1"
-    );
-    $s2->execute([$path]);
-    $row = $s2->fetch();
+// basename() already blocks traversal, but it leaves "..", and it leaves the
+// .htaccess this directory is protected by — neither of which has an owning
+// row, so both would otherwise reach a reviewer.
+if ($path[0] === '.') {
+    http_response_code(400);
+    exit('Invalid request.');
 }
 
-if (!$row) {
-    http_response_code(404);
-    exit('Receipt not found.');
-}
+$filePath = EXP_RECEIPTS_DIR . $path;
+$access   = expReceiptAccess($path, $member['email']);
 
-$isOwner   = strtolower($row['user_email']) === strtolower($member['email']);
-$canReview = expCanReview($member['email']);
-
-if (!$isOwner && !$canReview) {
+// Authorization first, then existence. Answering "is this file here?" before
+// the access check would let any logged-in member probe the receipts folder
+// and learn which claims exist.
+//
+// Reviewers can open every receipt in the system anyway, so a file whose owner
+// cannot be established is still theirs to read. This is what keeps the next
+// table that stores a receipt_path from silently 404ing all of its receipts,
+// the way exp_batch_items did and lp_direct_expenses did before it.
+if (!$access['owned'] && !expCanReview($member['email'])) {
     http_response_code(403);
     exit('Access denied.');
 }
 
-$filePath = EXP_RECEIPTS_DIR . $path;
-if (!file_exists($filePath)) {
+// The old code answered "Receipt not found." whenever the filename matched no
+// database row, which reads as "nothing was uploaded" even when the photo is
+// sitting safely in exp-receipts/. Said separately now, because a reviewer
+// chasing a missing receipt needs to know which of the two it is.
+if (!is_file($filePath)) {
     http_response_code(404);
-    exit('File not found on server.');
+    exit($access['row']
+        ? 'This receipt is recorded, but its file is missing from the server. Please ask the member to upload it again.'
+        : 'Receipt not found.');
 }
 
 $mimeMap = [

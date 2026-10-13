@@ -757,6 +757,75 @@ function expCanReview(string $email): bool {
     return expIsTreasurer($email) || expIsEligibleSigner2($email) || expIsAdmin($email);
 }
 
+/**
+ * Does any record reference the receipt saved under this filename, and does one
+ * of them belong to this viewer?
+ *
+ * Receipts are identified only by their filename, so every table that stores
+ * one has to be listed here. Two separate answers come back because they mean
+ * different things: "no record references this file" is not the same as "this
+ * file is not yours", and neither is the same as the file being absent.
+ *
+ * The ownership test asks whether ANY matching row belongs to the viewer, not
+ * who the first matching row belongs to. A filename arrives from a form field
+ * (exp-submit.php) and is not proof of who uploaded it, so two rows can name
+ * the same file; picking one of them would hand access to whoever happened to
+ * be listed first.
+ *
+ * Returns ['row' => bool, 'owned' => bool].
+ */
+function expReceiptAccess(string $file, string $viewerEmail): array {
+    $db     = getDB();
+    $viewer = strtolower(trim($viewerEmail));
+
+    $lookups = [
+        ['SELECT LOWER(TRIM(user_email)) FROM exp_expenses
+          WHERE receipt_path = ?', 'exp_expenses'],
+
+        // Phone-uploaded receipts live here until the browser claims them. The
+        // placeholder expense they hang off is swept after 24 hours, so this
+        // stops matching the day after an upload.
+        ['SELECT LOWER(TRIM(e.user_email)) FROM exp_pending_receipts pr
+          JOIN exp_expenses e ON e.id = pr.expense_id
+          WHERE pr.saved_path = ?', 'exp_pending_receipts'],
+
+        // Multi-item claims. Their receipts are written straight to disk by
+        // exp-scan.php and recorded only here — they never touch exp_expenses,
+        // so leaving this out made every receipt on a claim unviewable.
+        // submitted_by_email counts as well: someone filing on another
+        // member's behalf uploaded the photo and is not a reviewer.
+        ['SELECT LOWER(TRIM(b.user_email)) FROM exp_batch_items i
+          JOIN exp_batches b ON b.id = i.batch_id
+          WHERE i.receipt_path = ?
+          UNION
+          SELECT LOWER(TRIM(b.submitted_by_email)) FROM exp_batch_items i
+          JOIN exp_batches b ON b.id = i.batch_id
+          WHERE i.receipt_path = ?', 'exp_batch_items'],
+    ];
+
+    $row   = false;
+    $owned = false;
+
+    foreach ($lookups as [$sql, $label]) {
+        try {
+            $s = $db->prepare($sql);
+            $s->execute(array_fill(0, substr_count($sql, '?'), $file));
+            foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $email) {
+                if ($email === null || $email === '') continue;
+                $row = true;
+                if ($email === $viewer) $owned = true;
+            }
+        } catch (\Throwable $e) {
+            // A table that does not exist yet must not stop us asking the
+            // others — but a real failure here silently makes a receipt
+            // ownerless, so it does not get to pass unnoticed.
+            error_log('expReceiptAccess: ' . $label . ' lookup failed: ' . $e->getMessage());
+        }
+    }
+
+    return ['row' => $row, 'owned' => $owned];
+}
+
 // ── Expense CRUD ───────────────────────────────────────────────────────────────
 
 function expCreate(
