@@ -56,6 +56,131 @@ $member   = $loggedIn ? getMember() : null;
 
   if ($electionPromoOn):
   ?>
+
+  <?php
+  /*
+   * Four questions from the forum, ahead of the election block.
+   *
+   * The full recording runs two hours eleven. These are the same questions put
+   * to every candidate, about a minute each, so somebody deciding how to vote
+   * on the way out the door has a way in that is not a two-hour commitment.
+   *
+   * Thumbnails are served from this site, not from Google. Four YouTube
+   * iframes would load about a megabyte of their JavaScript and set their
+   * cookies on every visit to the front page, before anyone asked for a video
+   * — the same reason forum-promo below shows a picture and leaves playback to
+   * forum.php. Pressing play is what loads a player, and nothing earlier.
+   *
+   * These four pictures are committed rather than fetched on demand, which is
+   * why they are the exception to the images/forum-thumb-* ignore rule. The
+   * rule exists so the editor can paste a new forum link and have its picture
+   * appear without a deploy; these ids are written here in the source, so
+   * changing one is a deploy anyway and there is nothing to gain. What there
+   * is to lose: forumEnsureThumb() would make index.php's first ever outbound
+   * request, and three sizes at a six-second timeout is a long time to hold
+   * the front page when ytimg is unreachable.
+   *
+   * Gated with the election block: the whole promotion comes down together on
+   * 18 October. These stay on forum.php, which remains as the record.
+   */
+  $forumClips = [
+      ['id' => 'zFxRE1fccIo', 'len' => '1:00',
+       'q'  => 'How will you speak for teachers, SEAs and students?'],
+      ['id' => 'xhao8Un1UhY', 'len' => '0:58',
+       'q'  => 'What is one strength of SD54 you would want the board to protect?'],
+      ['id' => 'Efx9oFighQE', 'len' => '1:08',
+       'q'  => 'What would you do to make sure 2SLGBTQ+ students feel safe at school?'],
+      ['id' => 'Yfsxe-oDLVU', 'len' => '0:56',
+       'q'  => 'After four years, what would you want students, staff and families to say about you?'],
+  ];
+  ?>
+  <section class="clips">
+    <div class="container">
+      <span class="clips-eyebrow">In short</span>
+      <h2>Four questions, four answers from every candidate</h2>
+      <p class="clips-lead">
+        About a minute each.<?php
+          /* $fs is read below for the forum band; on a fresh deploy the state
+             file may not exist yet, and then there is no "below" to point at. */
+          if (forumState()): ?> The full forum is below if you want all of it.<?php endif; ?>
+      </p>
+
+      <ul class="clips-grid">
+        <?php foreach ($forumClips as $c): $thumb = forumThumbUrl($c['id']); ?>
+        <li class="clip">
+          <?php /* A real link, so it works with JavaScript off and can be opened
+                   in a new tab. The script turns it into an in-page player. */ ?>
+          <a class="clip-link" href="https://www.youtube.com/watch?v=<?= htmlspecialchars($c['id']) ?>"
+             data-clip="<?= htmlspecialchars($c['id']) ?>"
+             target="_blank" rel="noopener">
+            <span class="clip-shot">
+              <?php if ($thumb !== ''): ?>
+              <img src="<?= htmlspecialchars($thumb) ?>" alt="" width="640" height="360" loading="lazy" decoding="async">
+              <?php endif; ?>
+              <span class="clip-play" aria-hidden="true"></span>
+              <span class="clip-len"><?= htmlspecialchars($c['len']) ?></span>
+            </span>
+            <span class="clip-q"><?= htmlspecialchars($c['q']) ?></span>
+          </a>
+        </li>
+        <?php endforeach; ?>
+      </ul>
+
+      <?php /* privacy.php says nothing on this site reports to Google, and
+               forum.php says the same thing where it plays video. Said here
+               too, because this is where most people will meet it first. */ ?>
+      <p class="clips-note">Nothing is requested from YouTube until you press play.</p>
+    </div>
+  </section>
+
+  <script>
+  /* Swap the picture for a player in place. Nothing contacts YouTube until
+     this runs, and it only runs on a click. */
+  (function () {
+    var links = document.querySelectorAll('.clip-link[data-clip]');
+    for (var i = 0; i < links.length; i++) {
+      links[i].addEventListener('click', function (ev) {
+        if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.button) return; // let new-tab work
+        ev.preventDefault();
+
+        var li = this.closest('li.clip');
+        if (!li || li.querySelector('iframe')) return;
+        var question = this.querySelector('.clip-q').textContent;
+
+        var f = document.createElement('iframe');
+        f.src = 'https://www.youtube-nocookie.com/embed/' + this.getAttribute('data-clip')
+              + '?autoplay=1&rel=0&modestbranding=1';
+        f.title = question;
+        f.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture';
+        f.setAttribute('allowfullscreen', '');
+        f.setAttribute('frameborder', '0');
+
+        /*
+         * The whole link is replaced rather than emptied and reused. Stripping
+         * href off an <a> leaves something that is no longer focusable, so the
+         * keyboard user who just pressed Enter on it is dropped back to the top
+         * of the document — and an <iframe> inside an <a> is not valid anyway.
+         */
+        var shot = document.createElement('span');
+        shot.className = 'clip-shot';
+        shot.appendChild(f);
+
+        var cap = document.createElement('span');
+        cap.className = 'clip-q';
+        cap.textContent = question;
+
+        var box = document.createElement('div');
+        box.className = 'clip-playing';
+        box.appendChild(shot);
+        box.appendChild(cap);
+
+        li.replaceChild(box, this);
+        f.focus();
+      });
+    }
+  })();
+  </script>
+
   <section class="vote-promo">
     <div class="container">
       <a class="vote-promo-map" href="trustee-zones.php"
