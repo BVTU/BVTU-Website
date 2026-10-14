@@ -61,9 +61,11 @@ $member   = $loggedIn ? getMember() : null;
   /*
    * Four questions from the forum, ahead of the election block.
    *
-   * The full recording runs two hours eleven. These are the same questions put
-   * to every candidate, about a minute each, so somebody deciding how to vote
-   * on the way out the door has a way in that is not a two-hour commitment.
+   * The full recording runs two hours eleven. These are four questions from
+   * it, about a minute each, so somebody deciding how to vote on the way out
+   * the door has a way in that is not a two-hour commitment. A clip does not
+   * necessarily carry every candidate, so nothing here says it does — the full
+   * forum sits directly below for the complete answer.
    *
    * Thumbnails are served from this site, not from Google. Four YouTube
    * iframes would load about a megabyte of their JavaScript and set their
@@ -97,7 +99,7 @@ $member   = $loggedIn ? getMember() : null;
   <section class="clips">
     <div class="container">
       <span class="clips-eyebrow">In short</span>
-      <h2>Four questions, four answers from every candidate</h2>
+      <h2>Four questions from the forum</h2>
       <p class="clips-lead">
         About a minute each.<?php
           /* $fs is read below for the forum band; on a fresh deploy the state
@@ -126,10 +128,6 @@ $member   = $loggedIn ? getMember() : null;
         <?php endforeach; ?>
       </ul>
 
-      <?php /* privacy.php says nothing on this site reports to Google, and
-               forum.php says the same thing where it plays video. Said here
-               too, because this is where most people will meet it first. */ ?>
-      <p class="clips-note">Nothing is requested from YouTube until you press play.</p>
     </div>
   </section>
 
@@ -180,6 +178,56 @@ $member   = $loggedIn ? getMember() : null;
     }
   })();
   </script>
+
+  <?php
+  /*
+   * The forum, under the clips and above the map. The clips are the way in;
+   * this is the whole thing, for anyone a clip did not answer. Shown only
+   * once there is a recording to watch —
+   * read from a small file rather than the database, because this page has
+   * never needed one and a database outage should not take the front page down.
+   */
+  $fs = forumState();
+  // Gated on the same date as the election block below, so the whole promotion
+  // comes down together on 18 October. The forum page itself stays up as a
+  // record; what ends is advertising a finished election from the front page.
+  if ($fs && $electionPromoOn):
+  ?>
+  <section class="forum-promo">
+    <div class="container">
+      <?php
+      // Same 2 KB floor forumThumbUrl() uses: a truncated file passes is_file()
+      // and then renders as a broken image instead of falling back cleanly.
+      $thumbFile = __DIR__ . '/' . $fs['thumb'];
+      if ($fs['thumb'] !== '' && is_file($thumbFile) && filesize($thumbFile) > 2048): ?>
+        <?php // Served from this site, not from Google — nothing here contacts
+              // YouTube until someone presses play on the forum page. ?>
+        <a class="forum-promo-thumb" href="forum.php" aria-hidden="true" tabindex="-1">
+          <img src="<?= htmlspecialchars($fs['thumb']) ?>" alt="" width="320" height="180" loading="lazy">
+          <span class="forum-promo-play-sm"><span></span></span>
+        </a>
+      <?php else: ?>
+        <div class="forum-promo-play" aria-hidden="true"><span></span></div>
+      <?php endif; ?>
+      <div class="forum-promo-text">
+        <span class="forum-promo-eyebrow">Watch</span>
+        <h2><?= htmlspecialchars($fs['title'] !== '' ? $fs['title'] : 'All-Candidates Forum') ?></h2>
+        <p>
+          Every candidate, in their own words.
+          <?php if ($fs['event_date'] !== ''): ?>
+            Recorded <?= htmlspecialchars(date('j F', strtotime($fs['event_date']))) ?>.
+          <?php endif; ?>
+          <?php if ($fs['chapters'] > 0): ?>
+            It runs about three hours, so it is split into
+            <?= (int)$fs['chapters'] ?> parts &mdash; jump straight to the candidate or the
+            question you care about.
+          <?php endif; ?>
+        </p>
+      </div>
+      <a href="forum.php" class="btn btn-primary forum-promo-btn">Watch the forum</a>
+    </div>
+  </section>
+  <?php endif; ?>
 
   <section class="vote-promo">
     <div class="container">
@@ -236,53 +284,6 @@ $member   = $loggedIn ? getMember() : null;
   </section>
   <?php endif; ?>
 
-  <?php
-  /*
-   * The forum, under the map. Shown only once there is a recording to watch —
-   * read from a small file rather than the database, because this page has
-   * never needed one and a database outage should not take the front page down.
-   */
-  $fs = forumState();
-  // Gated on the same date as the election block above, so the whole promotion
-  // comes down together on 18 October. The forum page itself stays up as a
-  // record; what ends is advertising a finished election from the front page.
-  if ($fs && $electionPromoOn):
-  ?>
-  <section class="forum-promo">
-    <div class="container">
-      <?php
-      // Same 2 KB floor forumThumbUrl() uses: a truncated file passes is_file()
-      // and then renders as a broken image instead of falling back cleanly.
-      $thumbFile = __DIR__ . '/' . $fs['thumb'];
-      if ($fs['thumb'] !== '' && is_file($thumbFile) && filesize($thumbFile) > 2048): ?>
-        <?php // Served from this site, not from Google — nothing here contacts
-              // YouTube until someone presses play on the forum page. ?>
-        <a class="forum-promo-thumb" href="forum.php" aria-hidden="true" tabindex="-1">
-          <img src="<?= htmlspecialchars($fs['thumb']) ?>" alt="" width="320" height="180" loading="lazy">
-          <span class="forum-promo-play-sm"><span></span></span>
-        </a>
-      <?php else: ?>
-        <div class="forum-promo-play" aria-hidden="true"><span></span></div>
-      <?php endif; ?>
-      <div class="forum-promo-text">
-        <span class="forum-promo-eyebrow">Watch</span>
-        <h2><?= htmlspecialchars($fs['title'] !== '' ? $fs['title'] : 'All-Candidates Forum') ?></h2>
-        <p>
-          Every candidate, in their own words.
-          <?php if ($fs['event_date'] !== ''): ?>
-            Recorded <?= htmlspecialchars(date('j F', strtotime($fs['event_date']))) ?>.
-          <?php endif; ?>
-          <?php if ($fs['chapters'] > 0): ?>
-            It runs about three hours, so it is split into
-            <?= (int)$fs['chapters'] ?> parts &mdash; jump straight to the candidate or the
-            question you care about.
-          <?php endif; ?>
-        </p>
-      </div>
-      <a href="forum.php" class="btn btn-primary forum-promo-btn">Watch the forum</a>
-    </div>
-  </section>
-  <?php endif; ?>
 
   <!-- Quick Access Cards -->
   <section class="cards-section">

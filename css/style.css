@@ -1098,4 +1098,3 @@ body.has-vote-bar .search-fab { bottom: calc(1.75rem + var(--vote-bar-h, 3rem));
 }
 /* The card once it is playing: same shape as the link it replaced. */
 .clip-playing { display: block; }
-.clips-note { margin: 1.1rem 0 0; font-size: .78rem; color: var(--gray-500); }
