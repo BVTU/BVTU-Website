@@ -10,6 +10,7 @@
 require_once __DIR__ . '/members/db.php';
 require_once __DIR__ . '/members/lp-db.php';
 require_once __DIR__ . '/members/lp-share.php';
+require_once __DIR__ . '/members/lp-checks.php';
 
 $share = lpShareByToken((string)($_GET['t'] ?? ''));
 $state = lpShareState($share);
@@ -209,9 +210,7 @@ $pageCount = count($pages) + 2;   // checklist + lines + sign-off
       <tbody>
         <?php foreach ($pages as $p): $e = $p['e'];
               $hasFile = trim((string)$e['receipt_path']) !== '';
-              $rowKm   = (float)$e['travel_km'] > 0 ? (float)$e['travel_amt'] : 0.0;
-              $isKm    = !$hasFile && (float)$e['travel_km'] > 0
-                         && abs(lpRowTotal($e) - $rowKm) < 0.01; ?>
+              $isKm    = !$hasFile && lpIsMileageOnly($e); ?>
         <tr>
           <td class="tik"><span class="box"></span></td>
           <td class="n"><?= $p['n'] ?></td>
@@ -240,16 +239,13 @@ $pageCount = count($pages) + 2;   // checklist + lines + sign-off
         $rowTotal = lpRowTotal($e);
         $file     = trim((string)$e['receipt_path']);
         $ext      = $extOf($file);
-        // Mileage is claimed by distance, not against a receipt, so it is taken
-        // out before the two totals are compared — otherwise every row that
-        // mixes a drive with a purchase looks like a discrepancy.
-        $kmPortion   = (float)$e['travel_km'] > 0 ? (float)$e['travel_amt'] : 0.0;
-        $receiptPart = $rowTotal - $kmPortion;
-        $scanTot  = isset($e['scan_total']) && $e['scan_total'] !== null ? (float)$e['scan_total'] : null;
-        $differs  = $scanTot !== null && abs($scanTot - $receiptPart) >= 0.01;
-        // "Mileage, no receipt needed" is only true when mileage is all there
-        // is on the row. Anything else on it genuinely has no receipt.
-        $isKm     = $file === '' && (float)$e['travel_km'] > 0 && abs($receiptPart) < 0.01; ?>
+        // Mileage comes out before the totals are compared — shared with the
+        // pre-submit reviewer so the two can never disagree about a line.
+        $receiptPart = lpReceiptPortion($e);
+        $kmPortion   = $rowTotal - $receiptPart;
+        $scanTot     = lpScanTotal($e);
+        $differs     = lpTotalDiffers($e) === true;
+        $isKm        = $file === '' && lpIsMileageOnly($e); ?>
   <div class="sheet">
     <div class="lineno">Line <?= $p['n'] ?> of <?= count($pages) ?></div>
     <div class="lined"><?= $e['expense_date'] ? $h(date('F j, Y', strtotime($e['expense_date']))) : 'Date not given' ?></div>
