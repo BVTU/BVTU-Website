@@ -2,6 +2,8 @@
 require_once __DIR__ . '/members/auth.php';
 // Filesystem only — no database. See members/forum-state.php.
 require_once __DIR__ . '/members/forum-state.php';
+// Same reason, same shape: what is coming up, without a database.
+require_once __DIR__ . '/members/event-state.php';
 $loggedIn = isLoggedIn();
 $member   = $loggedIn ? getMember() : null;
 ?>
@@ -349,6 +351,43 @@ $member   = $loggedIn ? getMember() : null;
       </div>
     </div>
   </section>
+
+  <?php
+  /*
+   * What is on, under the member cards. Read from a small file the seminar
+   * tools write, never from the database — see members/event-state.php.
+   *
+   * Nothing is shown when nothing is open, rather than an empty heading
+   * announcing that the union is running nothing.
+   */
+  $surts = evStateUpcoming(3);
+  if ($surts):
+  ?>
+  <section class="surts">
+    <div class="container">
+      <h2>Upcoming SURTs</h2>
+      <p class="surts-lead">Union rep training and seminars you can sign up for.</p>
+
+      <ul class="surt-list">
+        <?php foreach ($surts as $e): ?>
+        <li>
+          <a href="event.php?s=<?= htmlspecialchars(urlencode($e['slug']), ENT_QUOTES, 'UTF-8') ?>">
+            <span class="surt-when"><?= htmlspecialchars(evStateWhen($e), ENT_QUOTES, 'UTF-8') ?></span>
+            <span class="surt-title"><?= htmlspecialchars((string)($e['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+            <?php if (trim((string)($e['summary'] ?? '')) !== ''): ?>
+            <span class="surt-sum"><?= htmlspecialchars((string)($e['summary'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+            <?php endif; ?>
+            <?php if (trim((string)($e['location'] ?? '')) !== ''): ?>
+            <span class="surt-where"><?= htmlspecialchars((string)($e['location'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+            <?php endif; ?>
+            <span class="surt-go">Details &amp; sign up &rarr;</span>
+          </a>
+        </li>
+        <?php endforeach; ?>
+      </ul>
+    </div>
+  </section>
+  <?php endif; ?>
 
   <!-- Quick External Links -->
   <section class="quick-links">

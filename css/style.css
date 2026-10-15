@@ -1098,3 +1098,28 @@ body.has-vote-bar .search-fab { bottom: calc(1.75rem + var(--vote-bar-h, 3rem));
 }
 /* The card once it is playing: same shape as the link it replaced. */
 .clip-playing { display: block; }
+
+/* ── Upcoming SURTs on the home page ───────────────────────────────────────────
+   Sits under the member cards. Tinted, so it reads as its own thing against the
+   white card grid above it without introducing a colour of its own. */
+.surts { background: var(--accent); padding: 2.75rem 0; }
+.surts h2 { font-size: 1.5rem; margin: 0 0 .3rem; color: var(--primary-dk); }
+.surts-lead { margin: 0 0 1.6rem; color: var(--gray-700); font-size: .95rem; }
+
+.surt-list { list-style: none; margin: 0; padding: 0;
+             display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem; }
+.surt-list a { display: flex; flex-direction: column; gap: .25rem; height: 100%;
+               background: #fff; border: 1px solid #c6e3d2; border-radius: 10px;
+               padding: 1.1rem 1.2rem; text-decoration: none; color: inherit;
+               transition: border-color .15s ease, transform .15s ease; }
+.surt-list a:hover { border-color: var(--primary); transform: translateY(-2px); text-decoration: none; }
+
+.surt-when  { font-size: .74rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+              color: var(--primary); }
+.surt-title { font-size: 1.05rem; font-weight: 700; color: var(--gray-800); line-height: 1.35; }
+.surt-sum   { font-size: .88rem; color: var(--gray-600); line-height: 1.55; }
+.surt-where { font-size: .82rem; color: var(--gray-500); }
+.surt-go    { margin-top: auto; padding-top: .6rem; font-size: .82rem; font-weight: 700;
+              color: var(--primary); }
+
+@media (prefers-reduced-motion: reduce) { .surt-list a:hover { transform: none; } }

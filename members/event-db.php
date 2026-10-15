@@ -9,6 +9,7 @@
  */
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/smtp.php';
+require_once __DIR__ . '/event-state.php';
 date_default_timezone_set('America/Vancouver');
 
 /**
@@ -333,7 +334,9 @@ function evCreate(string $title, string $createdBy): int {
          VALUES (?,?,'draft',?,?)"
     )->execute([evUniqueSlug($title), evFit($title, 200), evFit($createdBy, 255),
                 evFit($createdBy, 255)]);
-    return (int)$db->lastInsertId();
+    $newId = (int)$db->lastInsertId();
+    evStateRebuild();
+    return $newId;
 }
 
 function evGet(int $id): ?array {
@@ -385,12 +388,14 @@ function evUpdate(int $id, array $d): void {
     $args[] = $id;
 
     getDB()->prepare($sql)->execute($args);
+    evStateRebuild();
 }
 
 function evSetStatus(int $id, string $status): void {
     if (!in_array($status, ['draft', 'open', 'closed'], true)) return;
     getDB()->prepare("UPDATE ev_events SET status = ?, updated_at = NOW() WHERE id = ?")
            ->execute([$status, $id]);
+    evStateRebuild();
 }
 
 function evDelete(int $id): void {
@@ -399,6 +404,7 @@ function evDelete(int $id): void {
     $db->prepare("DELETE FROM ev_registrations WHERE event_id = ?")->execute([$id]);
     $db->prepare("DELETE FROM ev_questions     WHERE event_id = ?")->execute([$id]);
     $db->prepare("DELETE FROM ev_events        WHERE id = ?")->execute([$id]);
+    evStateRebuild();
 }
 
 /** Can someone sign up for this right now, and if not, why not? */
