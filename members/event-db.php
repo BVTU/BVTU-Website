@@ -364,6 +364,25 @@ function evAll(): array {
     return getDB()->query($sql)->fetchAll();
 }
 
+/**
+ * Every seminar a member is allowed to see — open or closed, never drafts.
+ *
+ * Closed ones stay listed: a seminar that has run is a record of what the
+ * local offered, and its handouts are still worth reaching.
+ */
+function evPublished(): array {
+    try {
+        return getDB()->query(
+            "SELECT * FROM ev_events
+             WHERE status IN ('open','closed')
+             ORDER BY (starts_at IS NULL) ASC, starts_at DESC, id DESC"
+        )->fetchAll();
+    } catch (\Throwable $e) {
+        error_log('evPublished: ' . $e->getMessage());
+        return [];
+    }
+}
+
 function evUpdate(int $id, array $d): void {
     $withMap = evMapColumnsOk();
 
@@ -990,7 +1009,14 @@ function evClock(int $ts): string {
 
 function evIsPast(array $event): bool {
     $when = $event['ends_at'] ?: $event['starts_at'];
-    return $when ? strtotime($when) < time() : false;
+    if (!$when) return false;
+    $t = strtotime((string)$when);
+    // strtotime returns false on a date it cannot read, and false < time() is
+    // true — which filed a seminar with a malformed date under "already run"
+    // and dropped it off the listing. Unreadable is treated as undated, so it
+    // stays visible and can still be signed up for.
+    if ($t === false) return false;
+    return $t < time();
 }
 
 /** The public link to an event, absolute so it can go in an email or a QR. */
