@@ -1013,13 +1013,20 @@ function evCancelUrl(array $reg): string {
 // ── Email ─────────────────────────────────────────────────────────────────────
 
 function evSendConfirmation(array $event, array $reg, array $answers): void {
-    $lines = [
-        'Hi ' . $reg['name'] . ',',
-        '',
-        "You're registered for " . $event['title'] . '.',
-        '',
-        'When:  ' . evWhen($event),
+    require_once __DIR__ . '/email-templates-db.php';
+
+    // Only the prose is editable. The date, the organiser's own note, what the
+    // person answered and the link they need are printed here, so wording that
+    // drifts can never cost somebody the link to cancel.
+    $vars = [
+        '{{name}}'  => (string)$reg['name'],
+        '{{title}}' => (string)$event['title'],
+        '{{when}}'  => evWhen($event),
     ];
+
+    $lines = [emailTplBlock('event_registered', 'intro', $vars), ''];
+
+    $lines[] = 'When:  ' . evWhen($event);
     if ($event['location']) $lines[] = 'Where: ' . $event['location'];
 
     $custom = trim((string)($event['confirm_message'] ?? ''));
@@ -1038,12 +1045,12 @@ function evSendConfirmation(array $event, array $reg, array $answers): void {
     }
 
     $lines[] = '';
-    $lines[] = 'Need to change your answers or cancel? Use this link:';
+    $lines[] = emailTplBlock('event_registered', 'change', $vars);
     $lines[] = evCancelUrl($reg);
     $lines[] = '';
-    $lines[] = 'Bulkley Valley Teachers\' Union';
+    $lines[] = emailTplBlock('event_registered', 'signoff', $vars);
 
-    siteMail($reg['email'], 'Registered: ' . $event['title'], implode("\n", $lines));
+    siteMail($reg['email'], emailTplSubject('event_registered', $vars), implode("\n", $lines));
 }
 
 /**

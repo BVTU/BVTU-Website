@@ -59,6 +59,8 @@ function tplSample(string $key): array {
         '{{days}}'        => '2',
         '{{day_word}}'    => 'days',
         '{{collab_line}}' => 'Please also give Sam a heads-up so they can submit their own absence.',
+        '{{title}}'       => 'Mental Health First Aid',
+        '{{when}}'        => 'Thursday, November 12, 2026 at 9 am – Friday, November 13, 2026 at 3:30 pm',
     ];
     $out = [];
     foreach (array_keys($t['vars']) as $v) $out[$v] = $samples[$v] ?? $v;

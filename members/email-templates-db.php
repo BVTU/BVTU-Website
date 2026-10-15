@@ -121,6 +121,28 @@ const EMAIL_TEMPLATES = [
         ],
     ],
 
+    'event_registered' => [
+        'label'   => 'Seminar — you are registered',
+        'when'    => 'Sent the moment someone registers for a seminar, and again if they '
+                   . 'come back and change their answers.',
+        'format'  => 'text',
+        'subject' => 'Registered: {{title}}',
+        'vars'    => ['{{name}}'  => 'the person who registered',
+                      '{{title}}' => 'the seminar’s name',
+                      '{{when}}'  => 'the date and time, written out'],
+        'blocks'  => [
+            'intro'   => ['label' => 'Opening',
+                          'text'  => "Hi {{name}},\n\nYou're registered for {{title}}."],
+            // The details, the organiser's own note and the answers they gave
+            // are printed by the code between these two blocks, and the link
+            // follows this one — see evSendConfirmation().
+            'change'  => ['label' => 'Changing or cancelling',
+                          'text'  => "Need to change your answers or cancel? Use this link:"],
+            'signoff' => ['label' => 'Sign-off',
+                          'text'  => "Bulkley Valley Teachers' Union"],
+        ],
+    ],
+
     'collab_received' => [
         'label'   => 'Collaboration grant — application received',
         'when'    => 'Sent to the applicant as soon as they submit.',
