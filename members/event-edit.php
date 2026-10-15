@@ -77,6 +77,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $notice = 'Details saved.';
             $event  = evGet($id);
         }
+    } elseif ($action === 'doc-add') {
+        $res = evDocAdd($id, $_FILES['doc'] ?? [], evStr($_POST['doc_title'] ?? ''),
+                        evStr($_POST['doc_note'] ?? ''), $member['email']);
+        if ($res['ok']) $notice = 'Handout uploaded.';
+        else            $errors[] = $res['error'];
+    } elseif ($action === 'doc-del') {
+        evDocDelete((int)($_POST['doc_id'] ?? 0), $id);
+        $notice = 'Handout removed.';
+    } elseif ($action === 'doc-attach') {
+        evDocSetAttach((int)($_POST['doc_id'] ?? 0), $id, ($_POST['on'] ?? '') === '1');
+        $notice = 'Saved.';
     } elseif ($action === 'q-add') {
         $label = evStr($_POST['label'] ?? '');
         $type  = evStr($_POST['qtype'] ?? '') ?: 'short';
@@ -123,6 +134,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $questions = evQuestions($id);
+$documents = evDocuments($id);
 $signups   = count(evRegistrations($id));
 $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); };
 
@@ -410,6 +422,110 @@ $forInput = function ($v) {
         health or accessibility details, collect it because you will act on it, not
         just because it is interesting.
       </p>
+    </div>
+
+    <!-- ── Handouts ──────────────────────────────────────────────────────── -->
+    <div class="pcard">
+      <h2>Handouts</h2>
+      <p class="sub">
+        Shown on the seminar page so people can read them beforehand, and sent
+        with the reminder email from the registrations page.
+      </p>
+
+      <?php if (!$documents): ?>
+      <p class="empty">Nothing uploaded yet.</p>
+      <?php endif; ?>
+
+      <?php foreach ($documents as $d):
+            $missing = !is_file(EV_DOCS_DIR . $d['stored_name']); ?>
+      <div class="q-item" style="<?= $missing ? 'border-color:#f5c6c2;' : '' ?>">
+        <div class="q-head">
+          <div class="q-label">
+            <?= $h(evDocLabel($d)) ?>
+            <div class="q-type">
+              <?= $h(strtoupper($d['ext'])) ?> · <?= $h(evHumanBytes((int)$d['bytes'])) ?>
+              <?php if ($missing): ?> · <span style="color:#b3261e;">file missing on server</span><?php endif; ?>
+            </div>
+          </div>
+          <div class="q-acts">
+            <?php if (!$missing): ?>
+            <a href="../event-doc.php?s=<?= $h(urlencode($event['slug'])) ?>&amp;d=<?= (int)$d['id'] ?>"
+               target="_blank" rel="noopener" class="btn btn-outline btn-sm">Open</a>
+            <?php endif; ?>
+            <form method="POST" style="display:inline;">
+              <?= csrfField() ?>
+              <input type="hidden" name="action" value="doc-attach">
+              <input type="hidden" name="id"     value="<?= $id ?>">
+              <input type="hidden" name="doc_id" value="<?= (int)$d['id'] ?>">
+              <input type="hidden" name="on"     value="<?= $d['attach'] ? '0' : '1' ?>">
+              <button type="submit" class="btn btn-outline btn-sm">
+                <?= $d['attach'] ? 'Attached to email' : 'Not emailed' ?>
+              </button>
+            </form>
+          </div>
+        </div>
+        <?php if (trim((string)$d['note']) !== ''): ?>
+        <p class="q-opts"><em><?= $h($d['note']) ?></em></p>
+        <?php endif; ?>
+        <form method="POST" style="margin-top:.6rem;"
+              onsubmit="return confirm('Remove this handout? The file is deleted from the server.');">
+          <?= csrfField() ?>
+          <input type="hidden" name="action" value="doc-del">
+          <input type="hidden" name="id"     value="<?= $id ?>">
+          <input type="hidden" name="doc_id" value="<?= (int)$d['id'] ?>">
+          <button type="submit" class="lnk-danger">Remove</button>
+        </form>
+      </div>
+      <?php endforeach; ?>
+
+      <div class="q-item" style="background:#fff;border-style:dashed;">
+        <form method="POST" enctype="multipart/form-data">
+          <?= csrfField() ?>
+          <input type="hidden" name="action" value="doc-add">
+          <input type="hidden" name="id" value="<?= $id ?>">
+
+          <div class="fld">
+            <label class="lbl" for="d-file">Add a handout</label>
+            <p class="hint">
+              PDF reads on any phone without downloading, so it is the one to use
+              if you have a choice. Up to <?= $h(evHumanBytes(EV_DOC_MAX_BYTES)) ?> each.
+            </p>
+            <input type="file" id="d-file" name="doc" required
+                   accept="<?= $h('.' . implode(',.', array_keys(EV_DOC_TYPES))) ?>">
+          </div>
+          <div class="fld">
+            <label class="lbl" for="d-title">Call it</label>
+            <p class="hint">Optional. Defaults to the file's own name.</p>
+            <input type="text" id="d-title" name="doc_title" maxlength="255"
+                   placeholder="e.g. Pre-reading: Article E.2">
+          </div>
+          <div class="fld">
+            <label class="lbl" for="d-note">Note</label>
+            <p class="hint">Optional. Shown under the handout on the seminar page.</p>
+            <input type="text" id="d-note" name="doc_note" maxlength="400">
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-sm">Upload</button>
+        </form>
+      </div>
+
+      <?php
+        $att   = evAttachableDocs($id);
+        $bytes = evDocBytes($att);
+      ?>
+      <?php if ($att): ?>
+      <p class="privacy" style="<?= $bytes > EV_MAIL_MAX_BYTES ? '' : 'background:var(--off-white);border-color:var(--border);color:var(--gray-600);' ?>">
+        <?php if ($bytes > EV_MAIL_MAX_BYTES): ?>
+          <strong>Too much to attach.</strong> <?= count($att) ?> handouts come to
+          <?= $h(evHumanBytes($bytes)) ?>, over the <?= $h(evHumanBytes(EV_MAIL_MAX_BYTES)) ?>
+          an email will reliably carry. The reminder will link to them instead of
+          attaching them — switch some to "Not emailed" to get back under.
+        <?php else: ?>
+          <?= count($att) ?> handout<?= count($att) === 1 ? '' : 's' ?> will be attached to
+          the reminder email, <?= $h(evHumanBytes($bytes)) ?> in total.
+        <?php endif; ?>
+      </p>
+      <?php endif; ?>
     </div>
 
   </div>

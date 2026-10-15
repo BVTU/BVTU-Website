@@ -23,6 +23,59 @@ if (!$event) {
     exit;
 }
 
+$notice    = '';
+$errors    = [];
+$failedTo  = [];
+
+// ── Send the handouts ─────────────────────────────────────────────────────────
+// A real send to real people, so it is a POST, it is confirmed in the browser,
+// what happened is written down, and the result is read back after a redirect
+// rather than rendered straight from the POST — otherwise a refresh mails
+// everybody a second time.
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrfCheck();
+    if (($_POST['action'] ?? '') === 'send-materials') {
+        $live = evRegistrations($id);
+
+        if (($event['status'] ?? '') === 'draft') {
+            // Links in the email resolve against the public page, and a draft
+            // is 404 to everyone but an organiser. Every recipient would get a
+            // dead link.
+            $errors[] = 'This seminar is back in draft, so the links in the email would not '
+                      . 'work for anyone. Publish it first.';
+        } elseif (!$live) {
+            $errors[] = 'Nobody is registered yet, so there is nobody to send to.';
+        } else {
+            $res = evSendMaterials($event, $member['email'], evStr($_POST['message'] ?? ''));
+
+            $bits = ['Sent to ' . $res['sent'] . ' ' . ($res['sent'] === 1 ? 'person' : 'people')];
+            if ($res['docs'] > 0) {
+                $bits[] = $res['attached']
+                    ? $res['docs'] . ' handout' . ($res['docs'] === 1 ? '' : 's') . ' attached'
+                    : 'handouts linked rather than attached — too large to send';
+            }
+
+            startSession();
+            $_SESSION['ev_sent'] = [
+                'notice'    => implode(' · ', $bits) . '.',
+                'failed_to' => $res['failed_to'],
+            ];
+            header('Location: event-signups.php?id=' . $id . '&sent=1');
+            exit;
+        }
+    }
+}
+
+// The outcome of a send that has just redirected back here.
+if (($_GET['sent'] ?? '') === '1') {
+    startSession();
+    if (!empty($_SESSION['ev_sent'])) {
+        $notice   = (string)$_SESSION['ev_sent']['notice'];
+        $failedTo = (array)($_SESSION['ev_sent']['failed_to'] ?? []);
+        unset($_SESSION['ev_sent']);
+    }
+}
+
 $showCancelled = ($_GET['all'] ?? '') === '1';
 $questions     = evQuestions($id);
 
@@ -74,6 +127,10 @@ if (($_GET['csv'] ?? '') === '1') {
 
 $rows      = evRegistrations($id, $showCancelled);
 $liveCount = count(evRegistrations($id));
+$docs      = evDocuments($id);
+$attach    = evAttachableDocs($id);
+$attBytes  = evDocBytes($attach);
+$sends     = evSends($id);
 $allCount  = count(evRegistrations($id, true));
 $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); };
 ?>
@@ -105,6 +162,19 @@ $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
     .pill-off { font-size: .68rem; font-weight: 800; text-transform: uppercase; color: #8a6d3b; background: #fff8e1; border: 1px solid #f0d58c; border-radius: 4px; padding: .1rem .4rem; }
     .empty { color: var(--gray-400); text-align: center; padding: 2.5rem 0; font-size: .95rem; }
     .mailto-note { font-size: .82rem; color: var(--gray-500); margin-top: .9rem; line-height: 1.5; }
+    .alert-ok  { background:#eef7f1; border:1px solid #b8ddc5; border-radius:8px; padding:.85rem 1.1rem; margin-bottom:1.25rem; font-size:.92rem; }
+    .alert-bad { background:#fdecea; border:1px solid #f5c6c2; border-radius:8px; padding:.85rem 1.1rem; margin-bottom:1.25rem; font-size:.92rem; }
+    .send-docs { list-style:none; margin:0 0 1rem; padding:0; }
+    .send-docs li { display:flex; gap:.6rem; align-items:center; font-size:.9rem; padding:.4rem 0;
+                    border-bottom:1px solid var(--gray-100); }
+    .send-docs li:last-child { border-bottom:0; }
+    .send-ext  { font-size:.62rem; font-weight:800; letter-spacing:.05em; background:var(--primary);
+                 color:#fff; border-radius:3px; padding:.15rem .35rem; }
+    .send-size { margin-left:auto; font-size:.8rem; color:var(--gray-500); white-space:nowrap; }
+    .send-warn { background:#fff8e1; border:1px solid #f0d58c; border-radius:7px; padding:.7rem .9rem;
+                 font-size:.85rem; color:#6b4a00; line-height:1.55; margin:0 0 1rem; }
+    .send-last { font-size:.83rem; color:var(--gray-600); background:var(--off-white);
+                 border-radius:6px; padding:.6rem .8rem; margin:0 0 1rem; line-height:1.55; }
   </style>
 </head>
 <body style="background:var(--off-white);min-height:100vh;">
@@ -123,6 +193,101 @@ $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
     <p class="adm-sub">
       <?= $h(evWhen($event)) ?><?php if ($event['location']): ?> · <?= $h($event['location']) ?><?php endif; ?>
     </p>
+
+    <?php if ($notice): ?>
+    <div class="alert-ok">&#10003; <?= $h($notice) ?></div>
+    <?php endif; ?>
+    <?php foreach ($errors as $e): ?>
+    <div class="alert-bad"><?= $h($e) ?></div>
+    <?php endforeach; ?>
+
+    <?php if ($failedTo): ?>
+    <div class="alert-bad">
+      <strong><?= count($failedTo) ?> message<?= count($failedTo) === 1 ? '' : 's' ?> could not be
+      delivered.</strong> Sending again goes to everyone, so for one or two it is usually quicker
+      to email them yourself:
+      <ul style="margin:.5rem 0 0;padding-left:1.2rem;">
+        <?php foreach ($failedTo as $addr): ?>
+        <li><a href="mailto:<?= $h($addr) ?>"><?= $h($addr) ?></a></li>
+        <?php endforeach; ?>
+      </ul>
+    </div>
+    <?php endif; ?>
+
+    <!-- ── Reminder with the handouts ────────────────────────────────────── -->
+    <div class="pcard">
+      <h2 style="font-size:1rem;margin:0 0 .3rem;color:var(--primary);">Send everyone the handouts</h2>
+      <p style="font-size:.86rem;color:var(--gray-600);margin:0 0 1rem;line-height:1.6;">
+        One email each &mdash; separately, so nobody sees anyone else's address, and
+        everyone keeps their own link to cancel.
+      </p>
+
+      <?php if (!$docs): ?>
+        <p style="font-size:.9rem;color:var(--gray-500);margin:0 0 1rem;">
+          No handouts uploaded yet. You can still send a reminder, or
+          <a href="event-edit.php?id=<?= $id ?>">add handouts first</a>.
+        </p>
+      <?php elseif (!$attach): ?>
+        <p style="font-size:.9rem;color:var(--gray-500);margin:0 0 1rem;">
+          <?= count($docs) ?> handout<?= count($docs) === 1 ? ' is' : 's are' ?> uploaded but
+          marked "Not emailed", so the reminder will carry none of them.
+        </p>
+      <?php else: ?>
+        <ul class="send-docs">
+          <?php foreach ($attach as $d): ?>
+          <li>
+            <span class="send-ext"><?= $h(strtoupper($d['ext'])) ?></span>
+            <?= $h(evDocLabel($d)) ?>
+            <span class="send-size"><?= $h(evHumanBytes((int)$d['bytes'])) ?></span>
+          </li>
+          <?php endforeach; ?>
+        </ul>
+        <?php if ($attBytes > EV_MAIL_MAX_BYTES): ?>
+        <p class="send-warn">
+          Together these are <?= $h(evHumanBytes($attBytes)) ?>, over the
+          <?= $h(evHumanBytes(EV_MAIL_MAX_BYTES)) ?> an email will reliably carry.
+          Everyone will get a <strong>link</strong> to the handouts rather than the files
+          themselves &mdash; so the message arrives for everybody instead of bouncing for some.
+        </p>
+        <?php endif; ?>
+      <?php endif; ?>
+
+      <?php if ($sends): $last = $sends[0]; ?>
+      <p class="send-last">
+        Last sent <?= $h(date('M j \a\t g:i a', strtotime($last['sent_at']))) ?>
+        to <?= (int)$last['recipients'] ?>
+        <?= (int)$last['recipients'] === 1 ? 'person' : 'people' ?><?php
+          if ((int)$last['failures'] > 0): ?>, <?= (int)$last['failures'] ?> failed<?php endif; ?>.
+        Sending again sends to everyone registered now, including anyone who has signed up since.
+      </p>
+      <?php endif; ?>
+
+      <form method="POST" onsubmit="return confirm('Send this to <?= (int)$liveCount ?> <?= $liveCount === 1 ? 'person' : 'people' ?> now? This cannot be undone.');">
+        <?= csrfField() ?>
+        <input type="hidden" name="action" value="send-materials">
+        <div style="margin-bottom:.8rem;">
+          <label for="sendmsg" style="display:block;font-weight:700;font-size:.84rem;margin-bottom:.3rem;">
+            Anything to add?
+          </label>
+          <p style="font-size:.79rem;color:var(--gray-500);margin:-.1rem 0 .35rem;">
+            Optional. Goes near the top, above the handouts. Parking, what to bring, a change of room.
+          </p>
+          <textarea id="sendmsg" name="message" maxlength="400"
+                    style="width:100%;min-height:4.5rem;padding:.55rem .65rem;border:1px solid var(--border);border-radius:6px;font:inherit;font-size:.92rem;resize:vertical;"></textarea>
+        </div>
+        <?php $isDraft = ($event['status'] ?? '') === 'draft'; ?>
+        <button type="submit" class="btn btn-primary"<?= ($liveCount === 0 || $isDraft) ? ' disabled' : '' ?>>
+          Send to <?= (int)$liveCount ?> registered
+        </button>
+        <?php if ($isDraft): ?>
+        <span style="font-size:.82rem;color:var(--gray-500);margin-left:.6rem;">
+          Publish the seminar first — the links would not work.
+        </span>
+        <?php elseif ($liveCount === 0): ?>
+        <span style="font-size:.82rem;color:var(--gray-500);margin-left:.6rem;">Nobody registered yet.</span>
+        <?php endif; ?>
+      </form>
+    </div>
 
     <div class="pcard">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.6rem;margin-bottom:1rem;">

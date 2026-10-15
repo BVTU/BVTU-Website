@@ -34,6 +34,13 @@ if (!$event || (($event['status'] ?? '') === 'draft' && !$isAdmin)) {
 }
 
 $questions = $notFound ? [] : evQuestions((int)$event['id']);
+$documents = $notFound ? [] : evDocuments((int)$event['id']);
+// Only the ones actually on disk. A row whose file has gone would otherwise
+// print the heading and the promise over an empty list.
+$documents = array_values(array_filter($documents, function ($d) {
+    return is_file(EV_DOCS_DIR . $d['stored_name']);
+}));
+$docsEmailed = (bool)array_filter($documents, function ($d) { return !empty($d['attach']); });
 $state     = $notFound ? ['open' => false, 'why' => ''] : evRegistrationState($event);
 
 // An organiser previewing a draft is shown the form exactly as members will
@@ -198,6 +205,23 @@ $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
     .ev-body { font-size: 1.02rem; line-height: 1.7; }
     .ev-body p { margin: 0 0 1rem; }
 
+    .ev-docs { margin-top: 2rem; border-top: 1px solid var(--gray-100); padding-top: 1.5rem; }
+    .ev-docs h2 { font-size: 1.05rem; margin: 0 0 .3rem; color: var(--primary); }
+    .ev-docs-lead { font-size: .9rem; color: var(--gray-600); margin: 0 0 1rem; line-height: 1.6; }
+    .ev-doc-list { list-style: none; margin: 0; padding: 0; }
+    .ev-doc-list li { margin-bottom: .6rem; }
+    .ev-doc-list a { display: flex; gap: .85rem; align-items: flex-start; text-decoration: none;
+                     border: 1px solid var(--border); border-radius: 8px; padding: .8rem .9rem;
+                     background: #fff; color: inherit; transition: border-color .15s ease, background .15s ease; }
+    .ev-doc-list a:hover { border-color: var(--primary); background: var(--accent); text-decoration: none; }
+    .ev-doc-ext { flex: 0 0 auto; font-size: .64rem; font-weight: 800; letter-spacing: .06em;
+                  background: var(--primary); color: #fff; border-radius: 4px; padding: .22rem .4rem;
+                  margin-top: .1rem; }
+    .ev-doc-main { flex: 1 1 auto; min-width: 0; }
+    .ev-doc-name { display: block; font-weight: 700; font-size: .95rem; }
+    .ev-doc-note { display: block; font-size: .85rem; color: var(--gray-600); margin-top: .15rem; }
+    .ev-doc-meta { display: block; font-size: .78rem; color: var(--gray-500); margin-top: .2rem; }
+
     .ev-form { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 1.5rem; position: sticky; top: 1.5rem; }
     @media (max-width: 880px) { .ev-form { position: static; } }
     .ev-form h2 { font-size: 1.05rem; margin: 0 0 1.1rem; color: var(--primary); }
@@ -276,6 +300,40 @@ $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
             <?php foreach (preg_split('/\n\s*\n/', trim($event['description'])) as $para): ?>
             <p><?= nl2br($h(trim($para))) ?></p>
             <?php endforeach; ?>
+          </div>
+          <?php endif; ?>
+
+          <?php if ($documents): ?>
+          <div class="ev-docs">
+            <h2>Before you come</h2>
+            <p class="ev-docs-lead">
+              <?php $one = count($documents) === 1; ?>
+              <?= $one ? 'This is the handout' : 'These are the handouts' ?> for this seminar.
+              You can read <?= $one ? 'it' : 'them' ?> now<?php
+                /* Only promised when something is actually set to go out. */
+                if ($docsEmailed): ?>, and we will email
+              <?= $one ? 'it' : 'them' ?> to you before the day<?php endif; ?>.
+            </p>
+            <ul class="ev-doc-list">
+              <?php foreach ($documents as $d):
+                    $isPdf = strtolower((string)$d['ext']) === 'pdf'; ?>
+              <li>
+                <a href="event-doc.php?s=<?= $h(urlencode($event['slug'])) ?>&amp;d=<?= (int)$d['id'] ?>"
+                   <?= $isPdf ? 'target="_blank" rel="noopener"' : '' ?>>
+                  <span class="ev-doc-ext"><?= $h(strtoupper($d['ext'])) ?></span>
+                  <span class="ev-doc-main">
+                    <span class="ev-doc-name"><?= $h(evDocLabel($d)) ?></span>
+                    <?php if (trim((string)$d['note']) !== ''): ?>
+                    <span class="ev-doc-note"><?= $h($d['note']) ?></span>
+                    <?php endif; ?>
+                    <span class="ev-doc-meta">
+                      <?= $h(evHumanBytes((int)$d['bytes'])) ?><?= $isPdf ? ' · opens in your browser' : ' · downloads' ?>
+                    </span>
+                  </span>
+                </a>
+              </li>
+              <?php endforeach; ?>
+            </ul>
           </div>
           <?php endif; ?>
         </div>

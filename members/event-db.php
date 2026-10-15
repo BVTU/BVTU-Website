@@ -11,6 +11,49 @@ require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/smtp.php';
 date_default_timezone_set('America/Vancouver');
 
+/**
+ * Where seminar handouts live.
+ *
+ * Behind a deny rule like the receipt folders, and served through event-doc.php
+ * instead. A handout on a draft seminar is not public yet, and a direct path
+ * into a world-readable folder would be.
+ */
+define('EV_DOCS_DIR', __DIR__ . '/event-docs/');
+
+/** Per file, and the ceiling on what one email will carry. */
+define('EV_DOC_MAX_BYTES',  12 * 1024 * 1024);
+define('EV_MAIL_MAX_BYTES', 15 * 1024 * 1024);
+
+/**
+ * What a set of attachments actually weighs once sent.
+ *
+ * Attachments travel base64-encoded, which is four bytes for every three, so
+ * raw size understates the message by a third. Comparing raw bytes to a mail
+ * server's limit is how a "14 MB" send arrives as 19 MB and bounces.
+ */
+function evEncodedBytes(int $raw): int {
+    return (int)ceil($raw / 3) * 4;
+}
+
+/**
+ * What may be uploaded, extension => media type.
+ *
+ * A PDF is the one that previews in the browser on every device, which is why
+ * it is the format the send encourages. The rest download.
+ */
+const EV_DOC_TYPES = [
+    'pdf'  => 'application/pdf',
+    'doc'  => 'application/msword',
+    'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'ppt'  => 'application/vnd.ms-powerpoint',
+    'pptx' => 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'xls'  => 'application/vnd.ms-excel',
+    'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'png'  => 'image/png',
+    'jpg'  => 'image/jpeg',
+    'jpeg' => 'image/jpeg',
+];
+
 /** The question types the builder offers. Keys are stored in the database. */
 const EV_QUESTION_TYPES = [
     'short'  => 'Short answer',
@@ -56,6 +99,39 @@ function evEnsureTables(): void {
         required    TINYINT(1)   NOT NULL DEFAULT 0,
         INDEX idx_event (event_id, sort_order)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $db->exec("CREATE TABLE IF NOT EXISTS ev_documents (
+        id            INT AUTO_INCREMENT PRIMARY KEY,
+        event_id      INT          NOT NULL,
+        stored_name   VARCHAR(255) NOT NULL,
+        original_name VARCHAR(255) NOT NULL,
+        title         VARCHAR(255),
+        note          VARCHAR(400),
+        bytes         INT          NOT NULL DEFAULT 0,
+        ext           VARCHAR(10)  NOT NULL DEFAULT '',
+        attach        TINYINT(1)   NOT NULL DEFAULT 1,
+        sort_order    INT          NOT NULL DEFAULT 0,
+        uploaded_by   VARCHAR(255),
+        created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_event (event_id, sort_order)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // One row per send, so the page can say what went out and to how many, and
+    // nobody has to guess whether they already sent the handouts.
+    $db->exec("CREATE TABLE IF NOT EXISTS ev_sends (
+        id          INT AUTO_INCREMENT PRIMARY KEY,
+        event_id    INT          NOT NULL,
+        sent_by     VARCHAR(255),
+        sent_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+        recipients  INT          NOT NULL DEFAULT 0,
+        failures    INT          NOT NULL DEFAULT 0,
+        doc_count   INT          NOT NULL DEFAULT 0,
+        attached    TINYINT(1)   NOT NULL DEFAULT 1,
+        note        VARCHAR(400),
+        INDEX idx_event (event_id, sent_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    evDocsDirReady();
 
     $db->exec("CREATE TABLE IF NOT EXISTS ev_registrations (
         id            INT AUTO_INCREMENT PRIMARY KEY,
@@ -333,6 +409,160 @@ function evCsvCell($v): string {
     return $v;
 }
 
+// ── Documents ─────────────────────────────────────────────────────────────────
+
+/**
+ * Make the handouts folder, and make sure it is closed.
+ *
+ * The deny rule is not decoration: a direct path to a file in here would
+ * bypass event-doc.php and with it the check that a draft seminar's handouts
+ * are not public yet. Anything that creates this folder must write the rule in
+ * the same breath, or the first upload after a folder is lost reopens it.
+ */
+function evDocsDirReady(): bool {
+    if (!is_dir(EV_DOCS_DIR)) @mkdir(EV_DOCS_DIR, 0750, true);
+    if (!is_dir(EV_DOCS_DIR)) return false;
+    $ht = EV_DOCS_DIR . '.htaccess';
+    if (!is_file($ht)) @file_put_contents($ht, "Require all denied\n");
+    return is_file($ht);
+}
+
+function evDocuments(int $eventId): array {
+    try {
+        $s = getDB()->prepare(
+            "SELECT * FROM ev_documents WHERE event_id = ? ORDER BY sort_order ASC, id ASC"
+        );
+        $s->execute([$eventId]);
+        return $s->fetchAll();
+    } catch (\Throwable $e) {
+        error_log('evDocuments: ' . $e->getMessage());
+        return [];
+    }
+}
+
+function evDocument(int $id, int $eventId): ?array {
+    // event-doc.php is public; a missing table here should be a 404, not a 500.
+    try {
+        $s = getDB()->prepare("SELECT * FROM ev_documents WHERE id = ? AND event_id = ? LIMIT 1");
+        $s->execute([$id, $eventId]);
+        return $s->fetch() ?: null;
+    } catch (\Throwable $e) {
+        error_log('evDocument: ' . $e->getMessage());
+        return null;
+    }
+}
+
+/** The handouts that go into the email, in order, skipping any missing file. */
+function evAttachableDocs(int $eventId): array {
+    $out = [];
+    foreach (evDocuments($eventId) as $d) {
+        if (empty($d['attach'])) continue;
+        if (!is_file(EV_DOCS_DIR . $d['stored_name'])) continue;
+        $out[] = $d;
+    }
+    return $out;
+}
+
+function evDocBytes(array $docs): int {
+    $n = 0;
+    foreach ($docs as $d) $n += (int)$d['bytes'];
+    return $n;
+}
+
+function evHumanBytes(int $n): string {
+    if ($n >= 1048576) return number_format($n / 1048576, 1) . ' MB';
+    if ($n >= 1024)    return number_format($n / 1024) . ' KB';
+    return $n . ' bytes';
+}
+
+/**
+ * Take one uploaded handout.
+ *
+ * Returns ['ok' => bool, 'error' => string]. The stored name is ours, not
+ * theirs: the name a browser sends is attacker-controlled and ends up in a
+ * filesystem path.
+ */
+function evDocAdd(int $eventId, array $file, string $title, string $note, string $by): array {
+    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        return ['ok' => false, 'error' => 'Choose a file to upload.'];
+    }
+    if (($file['error'] ?? 0) === UPLOAD_ERR_INI_SIZE || ($file['error'] ?? 0) === UPLOAD_ERR_FORM_SIZE) {
+        return ['ok' => false, 'error' => 'That file is larger than the server will accept.'];
+    }
+    if (($file['error'] ?? 0) !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name'] ?? '')) {
+        return ['ok' => false, 'error' => 'That upload did not arrive in one piece. Try again.'];
+    }
+    if ((int)$file['size'] > EV_DOC_MAX_BYTES) {
+        return ['ok' => false, 'error' => 'That file is ' . evHumanBytes((int)$file['size'])
+              . '. The limit is ' . evHumanBytes(EV_DOC_MAX_BYTES) . '.'];
+    }
+
+    $orig = (string)($file['name'] ?? 'document');
+    $ext  = strtolower(pathinfo($orig, PATHINFO_EXTENSION));
+    if (!isset(EV_DOC_TYPES[$ext])) {
+        return ['ok' => false, 'error' => 'That kind of file cannot be uploaded. Allowed: '
+              . implode(', ', array_keys(EV_DOC_TYPES)) . '.'];
+    }
+
+    if (!evDocsDirReady()) {
+        return ['ok' => false, 'error' => 'The handouts folder could not be prepared on the '
+              . 'server, so nothing was uploaded.'];
+    }
+    if (!is_writable(EV_DOCS_DIR)) {
+        return ['ok' => false, 'error' => 'The handouts folder is not writable on the server.'];
+    }
+
+    $stored = date('Ymd-His') . '-' . bin2hex(random_bytes(4)) . '.' . $ext;
+    if (!move_uploaded_file($file['tmp_name'], EV_DOCS_DIR . $stored)) {
+        return ['ok' => false, 'error' => 'The file could not be saved. Check server permissions.'];
+    }
+    @chmod(EV_DOCS_DIR . $stored, 0640);
+
+    $db   = getDB();
+    $next = (int)$db->query(
+        "SELECT COALESCE(MAX(sort_order), 0) + 1 FROM ev_documents WHERE event_id = " . (int)$eventId
+    )->fetchColumn();
+
+    try {
+        $db->prepare(
+            "INSERT INTO ev_documents
+             (event_id, stored_name, original_name, title, note, bytes, ext, attach, sort_order, uploaded_by)
+             VALUES (?,?,?,?,?,?,?,1,?,?)"
+        )->execute([
+            $eventId, $stored, evFit($orig, 255), evFit($title, 255), evFit($note, 400),
+            (int)$file['size'], $ext, $next, evFit($by, 255),
+        ]);
+    } catch (\Throwable $e) {
+        // The file is already on disk. Without this it stays there referenced
+        // by nothing, and the organiser gets a 500 rather than a sentence.
+        @unlink(EV_DOCS_DIR . $stored);
+        error_log('evDocAdd: ' . $e->getMessage());
+        return ['ok' => false, 'error' => 'The handout could not be recorded, so it was not kept. '
+              . 'Try again, and tell the site admin if it keeps happening.'];
+    }
+
+    return ['ok' => true, 'error' => ''];
+}
+
+function evDocDelete(int $id, int $eventId): void {
+    $d = evDocument($id, $eventId);
+    if (!$d) return;
+    getDB()->prepare("DELETE FROM ev_documents WHERE id = ? AND event_id = ?")->execute([$id, $eventId]);
+    $path = EV_DOCS_DIR . $d['stored_name'];
+    if (is_file($path)) @unlink($path);
+}
+
+function evDocSetAttach(int $id, int $eventId, bool $on): void {
+    getDB()->prepare("UPDATE ev_documents SET attach = ? WHERE id = ? AND event_id = ?")
+           ->execute([$on ? 1 : 0, $id, $eventId]);
+}
+
+/** What a reader should see this called. */
+function evDocLabel(array $d): string {
+    $t = trim((string)($d['title'] ?? ''));
+    return $t !== '' ? $t : (string)$d['original_name'];
+}
+
 // ── Registrations ─────────────────────────────────────────────────────────────
 
 /**
@@ -535,6 +765,14 @@ function evPublicUrl(array $event, bool $absolute = true): string {
     return $scheme . '://' . $host . '/' . $path;
 }
 
+/** A link straight to one handout, so nobody has to go hunting for it. */
+function evDocUrl(array $event, array $doc): string {
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $host   = $_SERVER['HTTP_HOST'] ?? 'bvtu.ca';
+    return $scheme . '://' . $host . '/event-doc.php?s=' . urlencode($event['slug'])
+         . '&d=' . (int)$doc['id'];
+}
+
 function evCancelUrl(array $reg): string {
     $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
     $host   = $_SERVER['HTTP_HOST'] ?? 'bvtu.ca';
@@ -655,4 +893,139 @@ function evSendOrganiserNotice(array $event, array $reg, array $answers, bool $i
 
     siteMail($to, ($isUpdate ? 'Updated' : 'New') . ' registration: ' . $event['title'],
              implode("\n", $lines));
+}
+
+// ── Sending the handouts ──────────────────────────────────────────────────────
+
+function evSends(int $eventId): array {
+    try {
+        $s = getDB()->prepare("SELECT * FROM ev_sends WHERE event_id = ? ORDER BY sent_at DESC, id DESC");
+        $s->execute([$eventId]);
+        return $s->fetchAll();
+    } catch (\Throwable $e) {
+        error_log('evSends: ' . $e->getMessage());
+        return [];
+    }
+}
+
+/**
+ * Email everyone still registered, with the handouts.
+ *
+ * Sent one message at a time rather than one message to everybody: each
+ * registrant gets their own link to change or cancel, and a shared To line
+ * would hand every attendee's address to every other attendee.
+ *
+ * Attachments are dropped — not the email — when the handouts together exceed
+ * what mail will carry. The message then links to them instead, because an
+ * email that silently fails to arrive is worse than one without a PDF on it.
+ *
+ * Returns ['sent' => int, 'failed' => int, 'attached' => bool, 'docs' => int].
+ */
+function evSendMaterials(array $event, string $sentBy, string $message = ''): array {
+    $people = evRegistrations((int)$event['id']);
+    $docs   = evAttachableDocs((int)$event['id']);
+    $bytes  = evDocBytes($docs);
+
+    // Over the ceiling, everyone gets links rather than some people getting a
+    // bounce. All or nothing, so two registrants never receive different things.
+    $attach = $docs && evEncodedBytes($bytes) <= EV_MAIL_MAX_BYTES;
+
+    $files = [];
+    if ($attach) {
+        foreach ($docs as $d) {
+            $files[] = ['path' => EV_DOCS_DIR . $d['stored_name'],
+                        'name' => evDocFileName($d)];
+        }
+    }
+
+    $sent = 0; $failedTo = [];
+    foreach ($people as $r) {
+        $body = evMaterialsBody($event, $r, $docs, $attach, $message);
+        $subj = 'Before ' . $event['title'];
+        try {
+            $ok = $files
+                ? siteMailWithAttachments($r['email'], $subj, $body, $files)
+                : siteMail($r['email'], $subj, $body);
+        } catch (\Throwable $e) {
+            error_log('evSendMaterials: ' . $r['email'] . ' — ' . $e->getMessage());
+            $ok = false;
+        }
+        if ($ok) { $sent++; } else { $failedTo[] = (string)$r['email']; }
+    }
+    $failed = count($failedTo);
+
+    try {
+        getDB()->prepare(
+            "INSERT INTO ev_sends (event_id, sent_by, recipients, failures, doc_count, attached, note)
+             VALUES (?,?,?,?,?,?,?)"
+        )->execute([(int)$event['id'], evFit($sentBy, 255), $sent, $failed,
+                    count($docs), $attach ? 1 : 0, evFit($message, 400)]);
+    } catch (\Throwable $e) {
+        error_log('evSendMaterials log: ' . $e->getMessage());
+    }
+
+    return ['sent' => $sent, 'failed' => $failed, 'failed_to' => $failedTo,
+            'attached' => $attach, 'docs' => count($docs)];
+}
+
+/** A readable filename for the attachment, not our storage name. */
+function evDocFileName(array $d): string {
+    $label = evDocLabel($d);
+    $ext   = strtolower((string)$d['ext']);
+    $base  = preg_replace('/[^A-Za-z0-9 ._-]+/', '', $label);
+    $base  = trim(preg_replace('/\s+/', ' ', (string)$base));
+    if ($base === '') $base = 'handout';
+    if (strtolower(pathinfo($base, PATHINFO_EXTENSION)) === $ext) {
+        $base = (string)pathinfo($base, PATHINFO_FILENAME);
+    }
+    // Trim the name, then add the extension. The other order ate it: a long
+    // title came back as "....p" or with no extension at all, and an
+    // attachment that has lost its .pdf opens in nothing.
+    $base = rtrim(mb_substr($base, 0, 100));
+    if ($base === '') $base = 'handout';
+    return $base . '.' . $ext;
+}
+
+function evMaterialsBody(array $event, array $reg, array $docs, bool $attach, string $message): string {
+    $lines = [
+        'Hi ' . $reg['name'] . ',',
+        '',
+        $event['title'] . ' is coming up.',
+        '',
+        'When:  ' . evWhen($event),
+    ];
+    if ($event['location']) $lines[] = 'Where: ' . $event['location'];
+
+    if (trim($message) !== '') {
+        $lines[] = '';
+        $lines[] = trim($message);
+    }
+
+    if ($docs) {
+        $lines[] = '';
+        $lines[] = $attach
+            ? (count($docs) === 1 ? 'The handout is attached.' : 'The handouts are attached.')
+            : 'Too large to attach, so here they are — one link each:';
+        foreach ($docs as $d) {
+            $lines[] = '';
+            $lines[] = '  ' . evDocLabel($d);
+            if (trim((string)$d['note']) !== '') $lines[] = '    ' . $d['note'];
+            // A link to the file itself, not to the page it is listed on. The
+            // whole point is not having to go looking for it.
+            $lines[] = '    ' . evDocUrl($event, $d);
+        }
+        $lines[] = '';
+        $lines[] = 'Seminar details: ' . evPublicUrl($event);
+    } else {
+        $lines[] = '';
+        $lines[] = 'Seminar details: ' . evPublicUrl($event);
+    }
+
+    $lines[] = '';
+    $lines[] = 'Cannot make it after all? Let us know here:';
+    $lines[] = evCancelUrl($reg);
+    $lines[] = '';
+    $lines[] = 'Bulkley Valley Teachers\' Union';
+
+    return implode("\n", $lines);
 }
