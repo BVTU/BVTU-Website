@@ -28,7 +28,20 @@ $notice = ($_GET['new'] ?? '') === '1'
     : '';
 $errors = [];
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+/*
+ * A selection bigger than post_max_size is discarded by PHP before any of this
+ * runs — $_POST and $_FILES both arrive empty. The next thing to notice would
+ * be csrfCheck(), which would report that the request could not be verified:
+ * true, useless, and nothing to do with what went wrong.
+ */
+if ($_SERVER['REQUEST_METHOD'] === 'POST'
+    && !$_POST && !$_FILES
+    && (int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+    $cap = evMaxPostBytes();
+    $errors[] = 'That was ' . evHumanBytes((int)$_SERVER['CONTENT_LENGTH']) . ' in one go'
+              . ($cap > 0 ? ', and this server accepts ' . evHumanBytes($cap) . ' at a time' : '')
+              . '. Nothing was uploaded — send them in smaller batches.';
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrfCheck();
     $action = evStr($_POST['action'] ?? '');
 
@@ -78,10 +91,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $event  = evGet($id);
         }
     } elseif ($action === 'doc-add') {
-        $res = evDocAdd($id, $_FILES['doc'] ?? [], evStr($_POST['doc_title'] ?? ''),
-                        evStr($_POST['doc_note'] ?? ''), $member['email']);
-        if ($res['ok']) $notice = 'Handout uploaded.';
-        else            $errors[] = $res['error'];
+        $res = evDocAddMany($id, $_FILES['doc'] ?? [], evStr($_POST['doc_title'] ?? ''),
+                            evStr($_POST['doc_note'] ?? ''), $member['email']);
+        if ($res['added'] > 0) {
+            $notice = $res['added'] . ' handout' . ($res['added'] === 1 ? '' : 's') . ' uploaded.';
+        }
+        foreach ($res['errors'] as $e) $errors[] = $e;
+    } elseif ($action === 'doc-rename') {
+        evDocRename((int)($_POST['doc_id'] ?? 0), $id,
+                    evStr($_POST['doc_title'] ?? ''), evStr($_POST['doc_note'] ?? ''));
+        $notice = 'Handout renamed.';
     } elseif ($action === 'doc-del') {
         evDocDelete((int)($_POST['doc_id'] ?? 0), $id);
         $notice = 'Handout removed.';
@@ -186,6 +205,8 @@ $forInput = function ($v) {
 
     .alert-ok  { background:#eef7f1; border:1px solid #b8ddc5; border-radius:8px; padding:.85rem 1.1rem; margin-bottom:1.25rem; font-size:.92rem; }
     .alert-bad { background:#fdecea; border:1px solid #f5c6c2; border-radius:8px; padding:.85rem 1.1rem; margin-bottom:1.25rem; font-size:.92rem; }
+    .doc-rename { margin-top:.6rem; }
+    .doc-rename summary { cursor:pointer; font-size:.8rem; color:var(--primary); font-weight:700; }
     .privacy { font-size:.82rem; color:var(--gray-600); background:#fff8e1; border:1px solid #f0d58c; border-radius:6px; padding:.7rem .9rem; line-height:1.55; }
     .empty { color: var(--gray-400); font-size: .92rem; padding: .5rem 0 1rem; }
   </style>
@@ -467,6 +488,28 @@ $forInput = function ($v) {
         <?php if (trim((string)$d['note']) !== ''): ?>
         <p class="q-opts"><em><?= $h($d['note']) ?></em></p>
         <?php endif; ?>
+
+        <details class="doc-rename">
+          <summary>Rename</summary>
+          <form method="POST" style="margin-top:.6rem;">
+            <?= csrfField() ?>
+            <input type="hidden" name="action" value="doc-rename">
+            <input type="hidden" name="id"     value="<?= $id ?>">
+            <input type="hidden" name="doc_id" value="<?= (int)$d['id'] ?>">
+            <div class="fld" style="margin-bottom:.6rem;">
+              <label class="lbl">Call it</label>
+              <input type="text" name="doc_title" maxlength="255"
+                     value="<?= $h($d['title']) ?>"
+                     placeholder="<?= $h($d['original_name']) ?>">
+            </div>
+            <div class="fld" style="margin-bottom:.6rem;">
+              <label class="lbl">Note</label>
+              <input type="text" name="doc_note" maxlength="400" value="<?= $h($d['note']) ?>">
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">Save</button>
+          </form>
+        </details>
+
         <form method="POST" style="margin-top:.6rem;"
               onsubmit="return confirm('Remove this handout? The file is deleted from the server.');">
           <?= csrfField() ?>
@@ -479,29 +522,40 @@ $forInput = function ($v) {
       <?php endforeach; ?>
 
       <div class="q-item" style="background:#fff;border-style:dashed;">
-        <form method="POST" enctype="multipart/form-data">
+        <?php /* The id is in the action, not only in a hidden field. A selection
+                 over post_max_size is thrown away whole — body, token and all —
+                 and a page that then cannot tell which seminar it is editing
+                 bounces to the list with nothing uploaded and nothing said. */ ?>
+        <form method="POST" enctype="multipart/form-data" action="?id=<?= $id ?>">
           <?= csrfField() ?>
           <input type="hidden" name="action" value="doc-add">
           <input type="hidden" name="id" value="<?= $id ?>">
 
           <div class="fld">
-            <label class="lbl" for="d-file">Add a handout</label>
+            <label class="lbl" for="d-file">Add handouts</label>
             <p class="hint">
-              PDF reads on any phone without downloading, so it is the one to use
-              if you have a choice. Up to <?= $h(evHumanBytes(EV_DOC_MAX_BYTES)) ?> each.
+              Pick as many as you like. PDF reads on any phone without downloading,
+              so it is the one to use if you have a choice.
+              Up to <?= $h(evHumanBytes(evMaxUploadBytes())) ?> each<?php
+                $post = evMaxPostBytes();
+                if ($post > 0): ?>, <?= $h(evHumanBytes($post)) ?> in one go<?php endif; ?>,
+              <?= (int)evMaxFiles() ?> files at a time.
             </p>
-            <input type="file" id="d-file" name="doc" required
-                   accept="<?= $h('.' . implode(',.', array_keys(EV_DOC_TYPES))) ?>">
+            <input type="file" id="d-file" name="doc[]" multiple required
+                   accept="<?= $h('.' . implode(',.', array_keys(EV_DOC_TYPES))) ?>"
+                   onchange="docPicked(this)">
+            <p class="hint" id="d-picked" style="display:none;margin-top:.4rem;"></p>
           </div>
-          <div class="fld">
+          <div class="fld" id="d-naming">
             <label class="lbl" for="d-title">Call it</label>
-            <p class="hint">Optional. Defaults to the file's own name.</p>
+            <p class="hint">
+              Optional, and only when you pick a single file — several at once each
+              keep their own filename, and you can rename them afterwards.
+            </p>
             <input type="text" id="d-title" name="doc_title" maxlength="255"
                    placeholder="e.g. Pre-reading: Article E.2">
-          </div>
-          <div class="fld">
-            <label class="lbl" for="d-note">Note</label>
-            <p class="hint">Optional. Shown under the handout on the seminar page.</p>
+            <label class="lbl" for="d-note" style="margin-top:.8rem;">Note</label>
+            <p class="hint">Shown under the handout on the seminar page.</p>
             <input type="text" id="d-note" name="doc_note" maxlength="400">
           </div>
 
@@ -529,6 +583,33 @@ $forInput = function ($v) {
     </div>
 
   </div>
+
+  <script>
+  /* A title cannot be spread across six files, so the box goes away as soon as
+     more than one is picked rather than sitting there being quietly ignored. */
+  function docPicked(input) {
+    var n    = input.files ? input.files.length : 0;
+    var note = document.getElementById('d-picked');
+    var name = document.getElementById('d-naming');
+    if (!note || !name) return;
+    name.style.display = (n > 1) ? 'none' : '';
+    if (n > 1) {
+      var total = 0;
+      for (var i = 0; i < input.files.length; i++) total += input.files[i].size;
+      var msg = n + ' files selected · ' + (total / 1048576).toFixed(1) + ' MB in total';
+      /* Said before they press Upload, rather than after the server has
+         quietly kept the first <?= (int)evMaxFiles() ?> and dropped the rest. */
+      if (n > <?= (int)evMaxFiles() ?>) {
+        msg += ' — that is more than the ' + <?= (int)evMaxFiles() ?> + ' this server takes at once.'
+             + ' Upload them in smaller batches.';
+      }
+      note.textContent = msg;
+      note.style.display = '';
+    } else {
+      note.style.display = 'none';
+    }
+  }
+  </script>
 
   <script>
   // Options only matter for the two types that offer a list. Hide the box for

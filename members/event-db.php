@@ -22,6 +22,44 @@ define('EV_DOCS_DIR', __DIR__ . '/event-docs/');
 
 /** Per file, and the ceiling on what one email will carry. */
 define('EV_DOC_MAX_BYTES',  12 * 1024 * 1024);
+
+/**
+ * "8M" and friends as a number of bytes.
+ */
+function evIniBytes(string $v): int {
+    $v = trim($v);
+    if ($v === '') return 0;
+    $n = (int)$v;
+    switch (strtolower(substr($v, -1))) {
+        case 'g': return $n * 1024 * 1024 * 1024;
+        case 'm': return $n * 1024 * 1024;
+        case 'k': return $n * 1024;
+    }
+    return $n;
+}
+
+/**
+ * What this server will actually take, not what we would like it to.
+ *
+ * EV_DOC_MAX_BYTES is our own rule; upload_max_filesize is the host's, and the
+ * host wins. Telling somebody the limit is 12 MB on a server that stops at 2
+ * sends them away to compress a file for a limit that was never real.
+ */
+function evMaxUploadBytes(): int {
+    $ini = evIniBytes((string)ini_get('upload_max_filesize'));
+    return $ini > 0 ? min(EV_DOC_MAX_BYTES, $ini) : EV_DOC_MAX_BYTES;
+}
+
+/** The ceiling on one submission — everything selected, together. */
+function evMaxPostBytes(): int {
+    return evIniBytes((string)ini_get('post_max_size'));
+}
+
+/** How many files this server accepts in a single upload. */
+function evMaxFiles(): int {
+    $n = (int)ini_get('max_file_uploads');
+    return $n > 0 ? $n : 20;
+}
 define('EV_MAIL_MAX_BYTES', 15 * 1024 * 1024);
 
 /**
@@ -484,37 +522,40 @@ function evHumanBytes(int $n): string {
  */
 function evDocAdd(int $eventId, array $file, string $title, string $note, string $by): array {
     if (($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
-        return ['ok' => false, 'error' => 'Choose a file to upload.'];
+        return ['ok' => false, 'error' => 'was not sent.'];
     }
     if (($file['error'] ?? 0) === UPLOAD_ERR_INI_SIZE || ($file['error'] ?? 0) === UPLOAD_ERR_FORM_SIZE) {
-        return ['ok' => false, 'error' => 'That file is larger than the server will accept.'];
+        return ['ok' => false, 'error' => 'is larger than the server will accept ('
+              . evHumanBytes(evMaxUploadBytes()) . ').'];
     }
     if (($file['error'] ?? 0) !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name'] ?? '')) {
-        return ['ok' => false, 'error' => 'That upload did not arrive in one piece. Try again.'];
+        return ['ok' => false, 'error' => 'did not arrive in one piece.'];
     }
-    if ((int)$file['size'] > EV_DOC_MAX_BYTES) {
-        return ['ok' => false, 'error' => 'That file is ' . evHumanBytes((int)$file['size'])
-              . '. The limit is ' . evHumanBytes(EV_DOC_MAX_BYTES) . '.'];
+    $cap = evMaxUploadBytes();
+    if ((int)$file['size'] > $cap) {
+        return ['ok' => false, 'error' => 'is ' . evHumanBytes((int)$file['size'])
+              . ' — the limit is ' . evHumanBytes($cap) . '.'];
     }
 
     $orig = (string)($file['name'] ?? 'document');
     $ext  = strtolower(pathinfo($orig, PATHINFO_EXTENSION));
     if (!isset(EV_DOC_TYPES[$ext])) {
-        return ['ok' => false, 'error' => 'That kind of file cannot be uploaded. Allowed: '
+        return ['ok' => false, 'error' => 'is not a kind of file we take. Allowed: '
               . implode(', ', array_keys(EV_DOC_TYPES)) . '.'];
     }
 
     if (!evDocsDirReady()) {
-        return ['ok' => false, 'error' => 'The handouts folder could not be prepared on the '
-              . 'server, so nothing was uploaded.'];
+        return ['ok' => false, 'error' => 'could not be saved — the handouts folder could not '
+              . 'be prepared on the server.'];
     }
     if (!is_writable(EV_DOCS_DIR)) {
-        return ['ok' => false, 'error' => 'The handouts folder is not writable on the server.'];
+        return ['ok' => false, 'error' => 'could not be saved — the handouts folder is not '
+              . 'writable on the server.'];
     }
 
     $stored = date('Ymd-His') . '-' . bin2hex(random_bytes(4)) . '.' . $ext;
     if (!move_uploaded_file($file['tmp_name'], EV_DOCS_DIR . $stored)) {
-        return ['ok' => false, 'error' => 'The file could not be saved. Check server permissions.'];
+        return ['ok' => false, 'error' => 'could not be saved. Check server permissions.'];
     }
     @chmod(EV_DOCS_DIR . $stored, 0640);
 
@@ -537,11 +578,88 @@ function evDocAdd(int $eventId, array $file, string $title, string $note, string
         // by nothing, and the organiser gets a 500 rather than a sentence.
         @unlink(EV_DOCS_DIR . $stored);
         error_log('evDocAdd: ' . $e->getMessage());
-        return ['ok' => false, 'error' => 'The handout could not be recorded, so it was not kept. '
-              . 'Try again, and tell the site admin if it keeps happening.'];
+        return ['ok' => false, 'error' => 'could not be recorded, so it was not kept.'];
     }
 
     return ['ok' => true, 'error' => ''];
+}
+
+/**
+ * PHP hands a multiple-file field back inside out: ['name' => [a, b], 'size'
+ * => [1, 2]] rather than a list of files. Turn it the right way round.
+ */
+function evNormaliseUploads(array $field): array {
+    if (!isset($field['name'])) return [];
+    if (!is_array($field['name'])) return [$field];   // single-file field
+
+    $out = [];
+    foreach (array_keys($field['name']) as $i) {
+        $out[] = [
+            'name'     => $field['name'][$i]     ?? '',
+            'type'     => $field['type'][$i]     ?? '',
+            'tmp_name' => $field['tmp_name'][$i] ?? '',
+            'error'    => $field['error'][$i]    ?? UPLOAD_ERR_NO_FILE,
+            'size'     => $field['size'][$i]     ?? 0,
+        ];
+    }
+    return $out;
+}
+
+/**
+ * Take a whole selection at once.
+ *
+ * Each file stands or falls on its own: one that is too big or of the wrong
+ * kind is reported and skipped, and the rest still land. Rejecting the batch
+ * because of one file would mean re-picking the other nine.
+ *
+ * A title and note are only applied when a single file was chosen — there is
+ * no sensible way to spread one title across six documents, and each keeps its
+ * own filename instead.
+ *
+ * Returns ['added' => int, 'errors' => string[]].
+ */
+function evDocAddMany(int $eventId, array $field, string $title, string $note, string $by): array {
+    $files = array_values(array_filter(evNormaliseUploads($field), function ($f) {
+        return ($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE || ($f['name'] ?? '') !== '';
+    }));
+
+    if (!$files) return ['added' => 0, 'errors' => ['Choose at least one file to upload.']];
+
+    /*
+     * PHP keeps the first max_file_uploads files and drops the rest without a
+     * word — no error entry, nothing. Landing exactly on the cap is the only
+     * sign we get, so it is worth saying out loud rather than reporting "20
+     * uploaded" over a selection of twenty-five.
+     */
+    $cap     = evMaxFiles();
+    $atCap   = count($files) >= $cap;
+    $single  = count($files) === 1;
+    $added  = 0;
+    $errors = [];
+
+    foreach ($files as $f) {
+        $res = evDocAdd(
+            $eventId, $f,
+            $single ? $title : '',
+            $single ? $note  : '',
+            $by
+        );
+        if ($res['ok']) {
+            $added++;
+        } else {
+            $shown = trim((string)($f['name'] ?? 'That file'));
+            if ($shown === '') $shown = 'That file';
+            $errors[] = mb_substr($shown, 0, 80) . ' ' . $res['error'];
+        }
+    }
+
+    if ($atCap) {
+        $errors[] = 'This server takes at most ' . $cap . ' files at a time, and that many '
+                  . 'arrived. If you picked more, the rest were not received — add them in '
+                  . 'a second batch and check the list above.';
+    }
+
+    return ['added' => $added, 'errors' => $errors];
 }
 
 function evDocDelete(int $id, int $eventId): void {
@@ -550,6 +668,12 @@ function evDocDelete(int $id, int $eventId): void {
     getDB()->prepare("DELETE FROM ev_documents WHERE id = ? AND event_id = ?")->execute([$id, $eventId]);
     $path = EV_DOCS_DIR . $d['stored_name'];
     if (is_file($path)) @unlink($path);
+}
+
+/** Rename a handout after the fact — the way a batch upload gets tidied up. */
+function evDocRename(int $id, int $eventId, string $title, string $note): void {
+    getDB()->prepare("UPDATE ev_documents SET title = ?, note = ? WHERE id = ? AND event_id = ?")
+           ->execute([evFit($title, 255), evFit($note, 400), $id, $eventId]);
 }
 
 function evDocSetAttach(int $id, int $eventId, bool $on): void {
