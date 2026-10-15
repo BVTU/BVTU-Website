@@ -76,8 +76,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
             $errors[] = 'That notification address does not look like an email address.';
         }
 
+        // Empty clears the pin; anything we cannot read is reported rather than
+        // silently dropped, or the organiser would never learn the map is blank.
+        $pinRaw = evStr($_POST['map_pin'] ?? '');
+        $pin    = $pinRaw === '' ? null : evParseLatLng($pinRaw);
+        if ($pinRaw !== '' && $pin === null) {
+            $errors[] = 'That map link had no coordinates in it. Paste the address bar from '
+                      . 'Google Maps, Apple Maps or OpenStreetMap after dropping a pin — or '
+                      . 'type the latitude and longitude separated by a comma.';
+        }
+
         if (!$errors) {
             evUpdate($id, [
+                'map_lat'         => $pin['lat'] ?? null,
+                'map_lng'         => $pin['lng'] ?? null,
                 'title'           => $title,
                 'summary'         => evStr($_POST['summary'] ?? ''),
                 'description'     => evStr($_POST['description'] ?? ''),
@@ -264,6 +276,24 @@ $forInput = function ($v) {
           <label class="lbl" for="f-location">Location</label>
           <input type="text" id="f-location" name="location" value="<?= $h($event['location']) ?>"
                  placeholder="e.g. BVTU Office, 3764 Fourth Ave, Smithers">
+        </div>
+
+        <div class="fld">
+          <label class="lbl" for="f-map">Map pin</label>
+          <p class="hint">
+            Optional. Find the place in Google Maps, Apple Maps or OpenStreetMap and paste
+            the address from your browser's bar here &mdash; or type
+            <code>54.7801, -127.1686</code>. Leave it empty for no map.
+          </p>
+          <input type="text" id="f-map" name="map_pin" maxlength="500"
+                 value="<?= evHasMap($event) ? $h($event['map_lat'] . ', ' . $event['map_lng']) : '' ?>"
+                 placeholder="Paste a maps link, or latitude, longitude">
+          <?php if (evHasMap($event)): ?>
+          <p class="hint" style="margin-top:.35rem;">
+            Pinned at <?= $h($event['map_lat']) ?>, <?= $h($event['map_lng']) ?> &mdash;
+            <a href="<?= $h(evMapsLink($event)) ?>" target="_blank" rel="noopener">check it</a>.
+          </p>
+          <?php endif; ?>
         </div>
 
         <div class="fld">

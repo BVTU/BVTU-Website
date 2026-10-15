@@ -170,6 +170,7 @@ function evEnsureTables(): void {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
     evDocsDirReady();
+    evEnsureMapColumns();
 
     $db->exec("CREATE TABLE IF NOT EXISTS ev_registrations (
         id            INT AUTO_INCREMENT PRIMARY KEY,
@@ -190,6 +191,102 @@ function evEnsureTables(): void {
         INDEX idx_email  (email),
         INDEX idx_rate   (ip_hash, created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+}
+
+/**
+ * Latitude and longitude, added after the table existed.
+ */
+function evEnsureMapColumns(): bool {
+    static $ok = null;
+    if ($ok !== null) return $ok;
+
+    $ok = true;
+    foreach (['map_lat' => 'DECIMAL(10,7) DEFAULT NULL',
+              'map_lng' => 'DECIMAL(10,7) DEFAULT NULL'] as $col => $type) {
+        try {
+            $has = (int)getDB()->query(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ev_events'
+                   AND COLUMN_NAME = '{$col}'"
+            )->fetchColumn();
+            if (!$has) {
+                getDB()->exec("ALTER TABLE ev_events ADD COLUMN {$col} {$type}");
+            }
+        } catch (\Throwable $e) {
+            // No ALTER grant, a locked table, a check that threw. The pin is
+            // then unavailable — but saving a seminar's title and times must
+            // not go with it, so this is remembered and evUpdate leaves the
+            // two columns alone rather than dying on "Unknown column".
+            error_log('evEnsureMapColumns ' . $col . ': ' . $e->getMessage());
+            $ok = false;
+        }
+    }
+    return $ok;
+}
+
+/** True when the pin columns are actually there to be written. */
+function evMapColumnsOk(): bool {
+    return evEnsureMapColumns();
+}
+
+/**
+ * Coordinates out of whatever the organiser pasted.
+ *
+ * Accepts a bare "54.7801, -127.1686" or a link copied from Google, Apple or
+ * OpenStreetMap. Parsing a pasted link rather than geocoding an address keeps
+ * this free of an API key, a rate limit and a service that can be down when
+ * somebody is trying to publish a seminar.
+ *
+ * Returns ['lat' => float, 'lng' => float] or null.
+ */
+function evParseLatLng(string $text): ?array {
+    $t = trim($text);
+    if ($t === '') return null;
+
+    // The fraction is optional: "54, -127" is a coordinate, and a Google link
+    // sitting on a whole degree reads as @54,-127,17z. Rejecting those told the
+    // organiser to paste exactly what they had just pasted.
+    $n = '(-?\d{1,3}(?:\.\d+)?)';
+    $patterns = [
+        '/@' . $n . ',\s*' . $n . '/',                        // google  /@54.78,-127.16,17z
+        '/[?&]q=' . $n . ',\s*' . $n . '/',                   // google  ?q=lat,lng
+        '/[?&]ll=' . $n . ',\s*' . $n . '/',                  // apple   ?ll=lat,lng
+        '/[?&]mlat=' . $n . '.*?[?&]mlon=' . $n . '/',         // osm pin
+        '/#map=\d+\/' . $n . '\/' . $n . '/',                  // osm     #map=17/lat/lng
+        '/^\s*' . $n . '\s*,\s*' . $n . '\s*$/',               // plain pair
+    ];
+    foreach ($patterns as $re) {
+        if (preg_match($re, $t, $m)) {
+            $lat = (float)$m[1];
+            $lng = (float)$m[2];
+            if ($lat >= -90 && $lat <= 90 && $lng >= -180 && $lng <= 180
+                && !($lat == 0.0 && $lng == 0.0)) {
+                return ['lat' => $lat, 'lng' => $lng];
+            }
+        }
+    }
+    return null;
+}
+
+function evHasMap(array $event): bool {
+    return isset($event['map_lat'], $event['map_lng'])
+        && $event['map_lat'] !== null && $event['map_lng'] !== null;
+}
+
+/**
+ * A link that opens the location in whatever maps app the reader has.
+ *
+ * Coordinates when we have them, the typed address otherwise — so the link is
+ * useful even on a seminar nobody has pinned.
+ */
+function evMapsLink(array $event): string {
+    if (evHasMap($event)) {
+        return 'https://www.google.com/maps/search/?api=1&query='
+             . rawurlencode($event['map_lat'] . ',' . $event['map_lng']);
+    }
+    $where = trim((string)($event['location'] ?? ''));
+    if ($where === '') return '';
+    return 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($where);
 }
 
 // ── Slugs ─────────────────────────────────────────────────────────────────────
@@ -265,19 +362,29 @@ function evAll(): array {
 }
 
 function evUpdate(int $id, array $d): void {
-    getDB()->prepare(
-        "UPDATE ev_events SET
-            title = ?, summary = ?, description = ?, starts_at = ?, ends_at = ?,
-            location = ?, confirm_message = ?, notify_email = ?,
-            updated_at = NOW()
-         WHERE id = ?"
-    )->execute([
+    $withMap = evMapColumnsOk();
+
+    $sql = "UPDATE ev_events SET
+                title = ?, summary = ?, description = ?, starts_at = ?, ends_at = ?,
+                location = ?, confirm_message = ?, notify_email = ?"
+         . ($withMap ? ", map_lat = ?, map_lng = ?" : "")
+         . ", updated_at = NOW()
+            WHERE id = ?";
+
+    $args = [
         evFit($d['title'], 200), evFit($d['summary'] ?? '', 400),
         ($d['description'] ?? '') ?: null,
         $d['starts_at'] ?: null, $d['ends_at'] ?: null,
         evFit($d['location'] ?? '', 255), ($d['confirm_message'] ?? '') ?: null,
-        evFit($d['notify_email'] ?? '', 255), $id,
-    ]);
+        evFit($d['notify_email'] ?? '', 255),
+    ];
+    if ($withMap) {
+        $args[] = $d['map_lat'] ?? null;
+        $args[] = $d['map_lng'] ?? null;
+    }
+    $args[] = $id;
+
+    getDB()->prepare($sql)->execute($args);
 }
 
 function evSetStatus(int $id, string $status): void {

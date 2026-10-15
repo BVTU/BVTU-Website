@@ -202,6 +202,18 @@ $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
     .ev-facts .k { flex: 0 0 5.5rem; font-weight: 700; color: var(--gray-500); font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; padding-top: .15rem; }
     .ev-facts .v { flex: 1 1 auto; }
 
+    .ev-maps-out { display: inline-block; font-size: .82rem; margin-left: .4rem; white-space: nowrap; }
+    .ev-map { display: block; margin-top: .6rem; }
+    .ev-map-ask { display: flex; align-items: center; gap: .5rem; width: 100%; cursor: pointer;
+                  background: var(--off-white); border: 1px dashed var(--border); border-radius: 8px;
+                  padding: .7rem .8rem; font: inherit; font-size: .88rem; font-weight: 600;
+                  color: var(--gray-700); text-align: left; }
+    .ev-map-ask:hover { border-color: var(--primary); color: var(--primary); }
+    .ev-map-ask small { font-weight: 400; color: var(--gray-500); font-size: .76rem; margin-left: auto; }
+    .ev-map-pin { width: 10px; height: 10px; border-radius: 50%; background: var(--primary);
+                  box-shadow: 0 0 0 4px rgba(27,107,66,.18); flex: 0 0 auto; }
+    .ev-map-live { height: 220px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+
     .ev-body { font-size: 1.02rem; line-height: 1.7; }
     .ev-body p { margin: 0 0 1rem; }
 
@@ -291,7 +303,36 @@ $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
           <ul class="ev-facts">
             <li><span class="k">When</span><span class="v"><?= $h(evWhen($event)) ?></span></li>
             <?php if ($event['location']): ?>
-            <li><span class="k">Where</span><span class="v"><?= $h($event['location']) ?></span></li>
+            <li>
+              <span class="k">Where</span>
+              <span class="v">
+                <?= $h($event['location']) ?>
+                <?php $maps = evMapsLink($event); if ($maps !== ''): ?>
+                <a class="ev-maps-out" href="<?= $h($maps) ?>" target="_blank" rel="noopener">
+                  Open in maps
+                </a>
+                <?php endif; ?>
+
+                <?php if (evHasMap($event)): ?>
+                <?php /*
+                  A picture of a map, not a map, until someone asks for one.
+                  Leaflet and its tiles come from other people's servers, and
+                  privacy.php promises nothing on this site reports to anyone
+                  as you browse — the same bargain the forum video makes.
+                */ ?>
+                <span class="ev-map" id="evMap"
+                      data-lat="<?= $h($event['map_lat']) ?>"
+                      data-lng="<?= $h($event['map_lng']) ?>"
+                      data-label="<?= $h($event['location']) ?>">
+                  <button type="button" class="ev-map-ask" onclick="evShowMap(this)">
+                    <span class="ev-map-pin" aria-hidden="true"></span>
+                    Show a map
+                    <small>Loads from OpenStreetMap</small>
+                  </button>
+                </span>
+                <?php endif; ?>
+              </span>
+            </li>
             <?php endif; ?>
           </ul>
 
@@ -466,5 +507,45 @@ $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 
 <?php endif; ?>
 
+<script>
+/* Leaflet is fetched on the first press and not before. Nothing here contacts
+   another server until someone asks to see the map. */
+function evShowMap(btn) {
+  var box = btn.parentNode;
+  if (box.dataset.loading) return;
+  box.dataset.loading = '1';
+  btn.textContent = 'Loading the map\u2026';
+
+  var lat = parseFloat(box.getAttribute('data-lat'));
+  var lng = parseFloat(box.getAttribute('data-lng'));
+
+  var css = document.createElement('link');
+  css.rel = 'stylesheet';
+  css.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
+  document.head.appendChild(css);
+
+  var js = document.createElement('script');
+  js.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+  js.onload = function () {
+    box.innerHTML = '';
+    var el = document.createElement('div');
+    el.className = 'ev-map-live';
+    box.appendChild(el);
+    var map = L.map(el, { scrollWheelZoom: false }).setView([lat, lng], 16);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
+    }).addTo(map);
+    var label = document.createElement('span');
+    label.textContent = box.getAttribute('data-label') || '';
+    L.marker([lat, lng]).addTo(map).bindPopup(label);
+  };
+  js.onerror = function () {
+    // Say so rather than leaving a button that looks stuck.
+    box.innerHTML = '<p style="font-size:.85rem;color:var(--gray-500);margin:0;">'
+      + 'The map could not be loaded. Use "Open in maps" above.</p>';
+  };
+  document.head.appendChild(js);
+}
+</script>
 </body>
 </html>
