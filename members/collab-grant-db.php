@@ -55,6 +55,13 @@ function cgEnsureTable(): void {
         // apart, and would leave a genuinely free release permanently counted
         // as outstanding.
         'release_cost'         => 'DECIMAL(10,2) DEFAULT NULL',
+        // Reaching the collaborator. Their days come out of their own three,
+        // so being named has a cost to them and they are owed the telling.
+        'collaborator_email'   => "VARCHAR(255) NOT NULL DEFAULT ''",
+        'collab_notified_at'   => 'DATETIME DEFAULT NULL',
+        'collab_token'         => 'VARCHAR(64) DEFAULT NULL',
+        'collab_disputed_at'   => 'DATETIME DEFAULT NULL',
+        'collab_dispute_note'  => 'TEXT',
     ] as $col => $type) {
         try {
             $has = $db->query(
@@ -74,25 +81,58 @@ function cgEnsureTable(): void {
     } catch (Exception $e) { /* column already exists — safe to ignore */ }
 }
 
+/**
+ * Is the collaborator_email column actually there?
+ *
+ * Its ALTER is best-effort like the rest, and naming a missing column in the
+ * INSERT would take down the public application form — which is a far worse
+ * outcome than losing one optional address.
+ */
+function cgHasCollabColumn(string $col): bool {
+    static $seen = [];
+    if (array_key_exists($col, $seen)) return $seen[$col];
+    try {
+        $s = getDB()->prepare(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'collab_grant_applications'
+               AND COLUMN_NAME = ?"
+        );
+        $s->execute([$col]);
+        $seen[$col] = (bool)$s->fetchColumn();
+    } catch (\Throwable $e) {
+        error_log('cgHasCollabColumn ' . $col . ': ' . $e->getMessage());
+        $seen[$col] = false;
+    }
+    return $seen[$col];
+}
+
+function cgHasCollabEmail(): bool { return cgHasCollabColumn('collaborator_email'); }
+
 function cgSubmitApplication(array $d): int {
     cgEnsureTable();
+    cgEnsureEditSupport();
     $db = getDB();
     $s  = $db->prepare("INSERT INTO collab_grant_applications
         (applicant_name, applicant_email, school, position, years_in_role,
-         has_collaborator, collaborator_name, collaborator_school, needs_partner,
-         collaboration_desc, goals, proposed_dates, days_requested, school_year)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
-    $s->execute([
+         has_collaborator, collaborator_name, collaborator_school,"
+        . (cgHasCollabEmail() ? " collaborator_email," : "") . "
+         needs_partner, collaboration_desc, goals, proposed_dates, days_requested, school_year)
+        VALUES (?,?,?,?,?,?,?,?," . (cgHasCollabEmail() ? "?," : "") . "?,?,?,?,?,?)");
+    $args = [
         $d['name'], $d['email'], $d['school'], $d['position'], $d['years_in_role'],
         $d['has_collaborator'] ? 1 : 0,
         $d['collaborator_name'] ?? null,
         $d['collaborator_school'] ?? null,
+    ];
+    if (cgHasCollabEmail()) $args[] = $d['collaborator_email'] ?? '';
+    $args = array_merge($args, [
         $d['needs_partner'] ? 1 : 0,
         $d['collaboration_desc'], $d['goals'],
         $d['proposed_dates'] ?? null,
         (int)$d['days_requested'],
         cgCurrentYear(),
     ]);
+    $s->execute($args);
     return (int)$db->lastInsertId();
 }
 
@@ -130,17 +170,263 @@ function cgUpdateStatus(int $id, string $status, string $reviewedBy, string $not
 }
 
 // Sent to applicant when their application is approved
+/**
+ * The address we would write to for this application's collaborator.
+ *
+ * What the applicant typed wins. Failing that we try to match the name against
+ * contacts — the same lookup the days ledger uses — but only when that match is
+ * unambiguous: two people share a name often enough that guessing would
+ * eventually hand someone else's release day to the wrong person.
+ *
+ * Returns ['email' => string, 'source' => 'typed'|'matched'|'none', 'why' => string].
+ */
+function cgCollaboratorAddress(array $app): array {
+    if (empty($app['collaborator_name'])) {
+        return ['email' => '', 'source' => 'none', 'why' => 'No collaborator was named.'];
+    }
+
+    $typed = trim((string)($app['collaborator_email'] ?? ''));
+    if ($typed !== '' && filter_var($typed, FILTER_VALIDATE_EMAIL)) {
+        return ['email' => $typed, 'source' => 'typed', 'why' => ''];
+    }
+
+    $key = cgNameKey((string)$app['collaborator_name']);
+    $map = cgContactsByName();
+    if ($key !== '' && isset($map[$key])) {
+        if (!empty($map[$key]['ambiguous'])) {
+            return ['email' => '', 'source' => 'none',
+                    'why'   => 'More than one contact goes by that name, so we did not guess.'];
+        }
+        if (!empty($map[$key]['archived'])) {
+            return ['email' => '', 'source' => 'none',
+                    'why'   => 'The only contact with that name has left, so we did not write '
+                             . 'to their old address.'];
+        }
+        $found = trim((string)$map[$key]['email']);
+        if ($found === '' || !filter_var($found, FILTER_VALIDATE_EMAIL)) {
+            return ['email' => '', 'source' => 'none',
+                    'why'   => 'The contact we matched has no usable email address.'];
+        }
+        return ['email' => $found, 'source' => 'matched', 'why' => ''];
+    }
+
+    return ['email' => '', 'source' => 'none',
+            'why'   => 'That name does not match anyone in Contacts.'];
+}
+
+/** True when an approved application still has a collaborator nobody has told. */
+function cgCollaboratorNeedsAttention(array $app): bool {
+    if (($app['status'] ?? '') !== 'approved') return false;
+    if (empty($app['collaborator_name']))      return false;
+    if (empty($app['has_collaborator']))       return false;
+    if (!empty($app['collab_notified_at']))    return false;
+    return true;
+}
+
+/**
+ * Every application, whatever school year it belongs to.
+ *
+ * cgGetApplications(0) means "the current year", not "all of them" — so the
+ * two collaborator lists need their own query or a June approval disappears
+ * from them on 1 September.
+ */
+function cgApplicationsAllYears(): array {
+    cgEnsureEditSupport();
+    try {
+        return getDB()->query(
+            "SELECT * FROM collab_grant_applications ORDER BY submitted_at DESC"
+        )->fetchAll();
+    } catch (\Throwable $e) {
+        error_log('cgApplicationsAllYears: ' . $e->getMessage());
+        return [];
+    }
+}
+
+/** Approved applications whose collaborator could not be reached. */
+function cgCollaboratorsToFix(): array {
+    $out = [];
+    // Across every year: somebody never told about a day off their allowance
+    // is still owed the telling after 1 September.
+    foreach (cgApplicationsAllYears() as $a) {
+        if (!cgCollaboratorNeedsAttention($a)) continue;
+        $addr = cgCollaboratorAddress($a);
+        // Including the ones we DO have an address for: if the send failed,
+        // this is the only place it can be tried again, and filtering them out
+        // left no retry anywhere.
+        $a['_why'] = $addr['email'] !== ''
+            ? 'We have ' . $addr['email'] . ' for them, but the email did not go.'
+            : $addr['why'];
+        $out[] = $a;
+    }
+    return $out;
+}
+
+function cgSetCollaboratorEmail(int $id, string $email): bool {
+    cgEnsureEditSupport();
+    if (!cgHasCollabEmail()) return false;
+    $email = trim($email);
+    if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) return false;
+    getDB()->prepare("UPDATE collab_grant_applications SET collaborator_email = ? WHERE id = ?")
+           ->execute([mb_substr($email, 0, 255), $id]);
+    return true;
+}
+
+/** The token on the collaborator's "this is not me" link. */
+function cgCollabToken(int $id): string {
+    cgEnsureEditSupport();
+    if (!cgHasCollabColumn('collab_token')) return '';
+    $db = getDB();
+    $s  = $db->prepare("SELECT collab_token FROM collab_grant_applications WHERE id = ?");
+    $s->execute([$id]);
+    $row = $s->fetch();
+    if (!$row) return '';
+    if (trim((string)($row['collab_token'] ?? '')) !== '') return (string)$row['collab_token'];
+
+    $t = bin2hex(random_bytes(24));
+    $db->prepare("UPDATE collab_grant_applications SET collab_token = ? WHERE id = ?")
+       ->execute([$t, $id]);
+    return $t;
+}
+
+function cgAppByCollabToken(string $token): ?array {
+    if (strlen($token) < 20) return null;
+    cgEnsureEditSupport();
+    $s = getDB()->prepare("SELECT * FROM collab_grant_applications WHERE collab_token = ? LIMIT 1");
+    $s->execute([$token]);
+    return $s->fetch() ?: null;
+}
+
+function cgCollabDisputeUrl(int $id): string {
+    $base = defined('SITE_URL') && SITE_URL ? rtrim(SITE_URL, '/') : 'https://bvtu.ca';
+    return $base . '/collab-not-me.php?t=' . urlencode(cgCollabToken($id));
+}
+
+/**
+ * Record that the named collaborator says it is not them, and tell the
+ * president. Nothing on the application is changed — whether the days still
+ * stand is a decision for a person, not for a link in an email.
+ */
+function cgCollabDispute(int $id, string $note): void {
+    cgEnsureEditSupport();
+    getDB()->prepare(
+        "UPDATE collab_grant_applications
+         SET collab_disputed_at = NOW(), collab_dispute_note = ? WHERE id = ?"
+    )->execute([mb_substr(trim($note), 0, 2000), $id]);
+
+    $app = cgGetApplication($id);
+    if (!$app) return;
+
+    $to = defined('CG_ADMIN_EMAIL') && CG_ADMIN_EMAIL ? CG_ADMIN_EMAIL : 'lp54@bctf.ca';
+    $body = "The person named as a collaborator on a Collaboration Grant application says "
+          . "it is not them.\n\n"
+          . "Application: #" . (int)$app['id'] . "\n"
+          . "Applicant:   " . $app['applicant_name'] . ' (' . $app['applicant_email'] . ")\n"
+          . "Named:       " . $app['collaborator_name'] . "\n"
+          . "Written to:  " . (string)($app['collaborator_email'] ?? '') . "\n\n"
+          . ($note !== '' ? "What they said:\n" . trim($note) . "\n\n" : '')
+          . "Nothing on the application has been changed. The days are still counted "
+          . "against that name until you decide otherwise.";
+
+    siteMail($to, 'Collaborator says it is not them — application #' . (int)$app['id'], $body);
+}
+
+/**
+ * Mark a dispute as dealt with. The note stays on the application — clearing
+ * the flag means "I have seen this", not "it did not happen".
+ */
+function cgCollabDisputeAck(int $id): bool {
+    cgEnsureEditSupport();
+    if (!cgHasCollabColumn('collab_disputed_at')) return false;
+    getDB()->prepare(
+        "UPDATE collab_grant_applications SET collab_disputed_at = NULL WHERE id = ?"
+    )->execute([$id]);
+    return true;
+}
+
+/**
+ * Tell the collaborator, on approval.
+ *
+ * Returns ['sent' => bool, 'why' => string]. A failure here never stops an
+ * approval: the applicant has been told and the grant stands, and the gap is
+ * surfaced on the admin page instead.
+ */
+function cgSendCollaboratorEmail(array $app, bool $force = false): array {
+    if (empty($app['collaborator_name'])) return ['sent' => false, 'why' => 'No collaborator named.'];
+    // The form hides these inputs rather than disabling them, so a name typed
+    // and then "not yet" chosen still arrives. Telling that person a day is
+    // coming off their three would be simply wrong.
+    if (empty($app['has_collaborator'])) {
+        return ['sent' => false, 'why' => 'This application is not down as having a collaborator.'];
+    }
+    // ── 3: approving twice must not write to them twice.
+    if (!$force && !empty($app['collab_notified_at'])) {
+        return ['sent' => false, 'why' => 'They were already emailed on '
+              . date('M j', strtotime((string)$app['collab_notified_at'])) . '.'];
+    }
+
+    $addr = cgCollaboratorAddress($app);
+    if ($addr['email'] === '') return ['sent' => false, 'why' => $addr['why']];
+
+    $days    = cgEffectiveDays($app);
+    $dayWord = $days === 1 ? 'day' : 'days';
+
+    $tv = [
+        '{{collaborator}}' => (string)$app['collaborator_name'],
+        '{{applicant}}'    => (string)$app['applicant_name'],
+        '{{days}}'         => (string)$days,
+        '{{day_word}}'     => $dayWord,
+    ];
+
+    $body = emailTplBlock('collab_collaborator', 'intro', $tv) . "\n\n"
+          . "─── NEXT STEP: BOOKING YOUR ABSENCE IN ATRIEVE ────────────────────\n\n"
+          // The same block the applicant is sent, so the two accounts of how to
+          // book can never drift apart.
+          . emailTplBlock('collab_approved', 'booking',
+                          ['{{name}}' => (string)$app['collaborator_name'],
+                           '{{days}}' => (string)$days, '{{day_word}}' => $dayWord,
+                           '{{collab_line}}' => '']) . "\n\n"
+          . "─────────────────────────────────────────────────────────────────────\n\n"
+          . emailTplBlock('collab_collaborator', 'signoff', $tv) . "\n"
+          . "\n─────────────────────────────────────────────────────────────────────\n"
+          . "Not you, or not something you agreed to? Say so here and nothing will\n"
+          . "be booked in your name:\n"
+          . cgCollabDisputeUrl((int)$app['id']) . "\n";
+
+    $ok = siteMail($addr['email'], emailTplSubject('collab_collaborator', $tv), $body);
+    if ($ok && cgHasCollabColumn('collab_notified_at')) {
+        $sql = cgHasCollabEmail()
+            ? "UPDATE collab_grant_applications SET collab_notified_at = NOW(), collaborator_email = ? WHERE id = ?"
+            : "UPDATE collab_grant_applications SET collab_notified_at = NOW() WHERE id = ?";
+        $args = cgHasCollabEmail() ? [$addr['email'], (int)$app['id']] : [(int)$app['id']];
+        getDB()->prepare($sql)->execute($args);
+    }
+    return ['sent' => (bool)$ok, 'why' => $ok ? '' : 'The email could not be sent.'];
+}
+
 function cgSendApprovalEmail(array $app): void {
     $name      = $app['applicant_name'];
     $email     = $app['applicant_email'];
     $days      = cgEffectiveDays($app);
     $dayWord   = $days === 1 ? 'day' : 'days';
-    $hasCollab = !empty($app['collaborator_name']);
+    // has_collaborator as well as a name: the form hides its collaborator
+    // inputs rather than disabling them, so a name typed and then "not yet"
+    // chosen still arrives, and talking about a collaborator they said they do
+    // not have is nonsense.
+    $hasCollab = !empty($app['collaborator_name']) && !empty($app['has_collaborator']);
     $collab    = $app['collaborator_name'] ?? '';
 
-    $collabLine = $hasCollab
-        ? "Please also give {$collab} a heads-up so they can submit their own absence in Atrieve for the days you'll be working together."
-        : '';
+    // What this says depends on whether we could actually reach them. Telling
+    // somebody we have it covered when we have not is how a collaborator ends
+    // up never hearing about a day booked against their name.
+    $collabLine = '';
+    if ($hasCollab) {
+        // Keyed on the send having happened, not on an address existing. A
+        // failed send used to tell the applicant it was handled, and then
+        // nobody told the collaborator at all.
+        $collabLine = !empty($app['collab_notified_at'])
+            ? "We have emailed {$collab} as well, so they know to submit their own absence in Atrieve for the days you'll be working together."
+            : "We do not have an email address for {$collab}, so we could not write to them — please forward this to them so they can submit their own absence in Atrieve for the days you'll be working together.";
+    }
 
     $tv = ['{{name}}' => $name, '{{days}}' => (string)$days,
            '{{day_word}}' => $dayWord, '{{collab_line}}' => $collabLine];
@@ -634,8 +920,11 @@ function cgContactsByName(): array {
     if ($map !== null) return $map;
     $map = [];
     try {
-        $rows = getDB()->query(
-            "SELECT first_name, last_name, preferred_name, email FROM contacts")->fetchAll();
+        // SELECT * rather than naming status: the days ledger depends on this
+        // map, and a host without that column would throw, return an empty map
+        // and quietly split one person into two ledger rows — which is how the
+        // three-day cap stops firing without anyone noticing.
+        $rows = getDB()->query("SELECT * FROM contacts")->fetchAll();
     } catch (Exception $e) {
         return $map;   // no contacts table yet: every collaborator stays unmatched
     }
@@ -651,8 +940,17 @@ function cgContactsByName(): array {
                 $map[$k]['ambiguous'] = true;
                 continue;
             }
+            // Keep an ambiguity once found. Writing the entry fresh here let a
+            // third contact with the same name clear the flag, and a shared
+            // name would then resolve confidently to one address.
+            $already = $map[$k]['ambiguous'] ?? false;
             $map[$k] = ['email' => $r['email'], 'name' => trim($r['first_name'] . ' ' . $r['last_name']),
-                        'ambiguous' => false];
+                        'ambiguous' => $already,
+                        // Carried, not filtered. The days ledger needs every
+                        // contact so one person stays one row in the 3-day
+                        // count; only the notification lookup cares that they
+                        // have left.
+                        'archived'  => ((string)($r['status'] ?? 'active') === 'archived')];
         }
     }
     return $map;

@@ -142,6 +142,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
     }
 }
 
+// ── Clearing a dispute once it has been dealt with ───────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'collab-dispute-ack') {
+    csrfCheck();
+    $aid = (int)($_POST['app_id'] ?? 0);
+    if ($aid && cgCollabDisputeAck($aid)) {
+        $notice = 'Flag cleared. What they said is still on the application.';
+    } else {
+        $notice = 'Could not clear that flag.';
+    }
+    $apps = cgGetApplications($year);
+}
+
+// ── Reaching a collaborator we could not write to ─────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'collab-email') {
+    csrfCheck();
+    $cid  = (int)($_POST['app_id'] ?? 0);
+    $addr = reqPostStr('collaborator_email');
+    $app  = $cid ? cgGetApplication($cid) : null;
+
+    if (!$app) {
+        $notice = 'Could not find that application.';
+    } elseif ($addr !== '' && !filter_var($addr, FILTER_VALIDATE_EMAIL)) {
+        $notice = 'That does not look like an email address.';
+    } elseif ($addr !== '' && !cgSetCollaboratorEmail($cid, $addr)) {
+        // The address was fine; we simply have nowhere to keep it. Saying
+        // "that is not an email" would have them retyping a good one for ever.
+        $notice = 'That address could not be saved — the collaborator_email column '
+                . 'is missing on this server. Tell the site admin.';
+    } else {
+        try {
+            $res = cgSendCollaboratorEmail(cgGetApplication($cid) ?: $app, true);
+            $notice = $res['sent']
+                ? $app['collaborator_name'] . ' has been emailed.'
+                : 'Still could not send — ' . lcfirst($res['why']);
+        } catch (\Throwable $e) {
+            error_log('collab resend: ' . $e->getMessage());
+            $notice = 'Something went wrong sending that. It has been logged.';
+        }
+    }
+    $apps = cgGetApplications($year);
+}
+
 // ── Status updates ────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_id'])
     && in_array($_POST['action'] ?? '', ['approved', 'declined', 'waitlisted', 'pending'], true)) {
@@ -163,8 +205,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_id'])
 
     if ($action === 'approved') {
         $target = cgGetApplication($id);
-        if ($target) cgSendApprovalEmail($target);
         $notice = 'Application approved — notification email sent to the applicant.';
+        if ($target) {
+            // The collaborator first, so the applicant's email can say truthfully
+            // whether we reached them — but never at the cost of the approval
+            // itself. The status is already committed; a throw here would leave
+            // the grant approved, the applicant untold and a 500 on screen.
+            try {
+                $collab = cgSendCollaboratorEmail($target);
+            } catch (\Throwable $e) {
+                error_log('collab notify: ' . $e->getMessage());
+                $collab = ['sent' => false, 'why' => 'Something went wrong sending it.'];
+            }
+            if (!empty($target['collaborator_name']) && !empty($target['has_collaborator'])) {
+                if ($collab['sent']) {
+                    $notice .= ' ' . $target['collaborator_name'] . ' has been emailed too.';
+                } elseif (!empty($target['collab_notified_at'])) {
+                    // Re-approving to change the day count is a normal thing to
+                    // do. Reporting it as a failure, with a pointer to a panel
+                    // row that does not exist, reads as something gone wrong.
+                    $notice .= ' ' . $target['collaborator_name'] . ' was already emailed on '
+                             . date('M j', strtotime((string)$target['collab_notified_at']))
+                             . ' — use "Send again" on the application if the details have changed.';
+                } else {
+                    $notice .= ' We could not email ' . $target['collaborator_name']
+                             . ' — ' . lcfirst($collab['why'])
+                             . ' Add an address below and send it.';
+                }
+            }
+            try {
+                cgSendApprovalEmail(cgGetApplication($id) ?: $target);
+            } catch (\Throwable $e) {
+                error_log('approval email: ' . $e->getMessage());
+                $notice .= ' The applicant\'s own email did not send — check the mail settings.';
+            }
+        }
     } else {
         $notice = 'Status updated to ' . ucfirst($action) . '.';
     }
@@ -589,6 +664,98 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
     <?php if ($notice): ?>
       <div class="notice"><?= htmlspecialchars($notice) ?></div>
     <?php endif; ?>
+
+    <?php
+    // Collaborators nobody could write to, and anyone who has said it is not
+    // them. Both are things only a person can settle, so they sit at the top
+    // rather than inside an application nobody has a reason to reopen.
+    $toFix    = cgCollaboratorsToFix();
+    $disputed = array_values(array_filter(cgApplicationsAllYears(), function ($a) {
+        return !empty($a['collab_disputed_at']);
+    }));
+    ?>
+
+    <?php if ($disputed): ?>
+    <div class="cg-flag cg-flag-hot">
+      <h2>&#9888; Someone says they were named by mistake</h2>
+      <?php foreach ($disputed as $a): ?>
+      <div class="cg-flag-row">
+        <div>
+          <strong><?= htmlspecialchars($a['collaborator_name']) ?></strong>
+          was named by <?= htmlspecialchars($a['applicant_name']) ?>
+          on application #<?= (int)$a['id'] ?>, and says it is not them.
+          <?php if (trim((string)$a['collab_dispute_note']) !== ''): ?>
+          <div class="cg-flag-note">&ldquo;<?= htmlspecialchars($a['collab_dispute_note']) ?>&rdquo;</div>
+          <?php endif; ?>
+          <div class="cg-flag-when">
+            Told us <?= htmlspecialchars(date('M j', strtotime($a['collab_disputed_at']))) ?>.
+            Nothing has been changed — the days still stand against that name until you decide.
+          </div>
+        </div>
+        <form method="POST" style="flex:0 0 auto;"
+              onsubmit="return confirm('Clear this flag? The note is kept on the application.');">
+          <?= csrfField() ?>
+          <input type="hidden" name="action" value="collab-dispute-ack">
+          <input type="hidden" name="app_id" value="<?= (int)$a['id'] ?>">
+          <button type="submit" class="btn btn-outline" style="font-size:.82rem;padding:.38rem .8rem;">
+            I have dealt with this
+          </button>
+        </form>
+      </div>
+      <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+
+    <?php if ($toFix): ?>
+    <div class="cg-flag">
+      <h2>Collaborators we could not email</h2>
+      <p class="cg-flag-lead">
+        These grants are approved and the applicant has been told. The person they named
+        has not &mdash; so they do not know a release day is counted against their three.
+        Where we already have an address, the send simply did not go; press Send to try again.
+      </p>
+      <?php foreach ($toFix as $a): ?>
+      <form method="POST" class="cg-flag-row">
+        <?= csrfField() ?>
+        <input type="hidden" name="action" value="collab-email">
+        <input type="hidden" name="app_id" value="<?= (int)$a['id'] ?>">
+        <div style="flex:1 1 14rem;min-width:0;">
+          <strong><?= htmlspecialchars($a['collaborator_name']) ?></strong>
+          <?php if (trim((string)$a['collaborator_school']) !== ''): ?>
+          <span class="cg-flag-when">&middot; <?= htmlspecialchars($a['collaborator_school']) ?></span>
+          <?php endif; ?>
+          <div class="cg-flag-when">
+            Named by <?= htmlspecialchars($a['applicant_name']) ?> &middot; #<?= (int)$a['id'] ?>
+            &middot; <?= htmlspecialchars($a['_why']) ?>
+          </div>
+        </div>
+        <?php $known = trim((string)($a['collaborator_email'] ?? '')); ?>
+        <input type="email" name="collaborator_email" class="cg-flag-input"
+               value="<?= htmlspecialchars($known) ?>"
+               placeholder="their email address"<?= $known === '' ? ' required' : '' ?>>
+        <button type="submit" class="btn btn-primary" style="font-size:.84rem;padding:.42rem .9rem;">
+          <?= $known === '' ? 'Save &amp; send' : 'Send' ?>
+        </button>
+      </form>
+      <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+
+    <style>
+      .cg-flag { background:#fffdf7; border:1px solid #ecd9a8; border-radius:10px;
+                 padding:1.1rem 1.25rem; margin-bottom:1.5rem; }
+      .cg-flag-hot { background:#fdecea; border-color:#f5c6c2; }
+      .cg-flag h2 { font-size:1rem; margin:0 0 .35rem; color:#6b4a00; }
+      .cg-flag-hot h2 { color:#9c3a1e; }
+      .cg-flag-lead { font-size:.86rem; color:#7a6333; margin:0 0 .9rem; line-height:1.55; }
+      .cg-flag-row { display:flex; gap:.6rem; align-items:center; flex-wrap:wrap;
+                     padding:.7rem 0; border-top:1px solid #f0e3c4; font-size:.9rem; }
+      .cg-flag-hot .cg-flag-row { border-top-color:#f5c6c2; }
+      .cg-flag-input { flex:1 1 13rem; min-width:0; padding:.45rem .6rem; font:inherit;
+                       font-size:.88rem; border:1px solid var(--border); border-radius:6px; }
+      .cg-flag-when { font-size:.78rem; color:var(--gray-500); margin-top:.1rem; }
+      .cg-flag-note { font-size:.86rem; color:var(--gray-700); font-style:italic; margin-top:.3rem; }
+    </style>
 
     <?php $rc = cgYearReleaseCost($year); ?>
     <?php // Three figures, not five. "Total applications" and "Approved" are both

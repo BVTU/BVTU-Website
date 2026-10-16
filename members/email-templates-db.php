@@ -167,6 +167,25 @@ const EMAIL_TEMPLATES = [
         ],
     ],
 
+    'collab_collaborator' => [
+        'label'   => 'Collaboration grant — you were named as the collaborator',
+        'when'    => 'Sent to the person named as a collaborator when the grant is approved. '
+                   . 'The Atrieve booking paragraph is shared with the applicant’s own email, '
+                   . 'so it is edited above and not here.',
+        'format'  => 'text',
+        'subject' => 'You have been named on a BVTU Collaboration Grant',
+        'vars'    => ['{{collaborator}}' => 'the person being written to',
+                      '{{applicant}}'    => 'who named them',
+                      '{{days}}'         => 'how many release days',
+                      '{{day_word}}'     => '“day” or “days”, to match'],
+        'blocks'  => [
+            'intro' => ['label' => 'Opening',
+                        'text'  => "Hi {{collaborator}},\n\n{{applicant}} named you as their collaborator on a BVTU Collaboration Grant, and it has been approved.\n\nThat means {{days}} release {{day_word}} for each of you. Your {{day_word}} come out of your own three for the year, so this is worth knowing about even though you did not apply."],
+            'signoff' => ['label' => 'Sign-off',
+                          'text'  => "If anything here looks wrong, or you would rather not take part, just say so — nothing is held against you either way.\n\nCody Lind\nPresident, Bulkley Valley Teachers' Union"],
+        ],
+    ],
+
     'collab_approved' => [
         'label'   => 'Collaboration grant — approved',
         'when'    => 'Sent to the applicant when their grant is approved.',

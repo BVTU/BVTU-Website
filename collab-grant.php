@@ -30,6 +30,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
         'has_collaborator'  => ($f('has_collaborator') === 'yes'),
         'collaborator_name' => $f('collaborator_name'),
         'collaborator_school'=> $f('collaborator_school'),
+        'collaborator_email' => (function (string $v): string {
+            $v = mb_substr(trim($v), 0, 255);
+            return ($v !== '' && filter_var($v, FILTER_VALIDATE_EMAIL)) ? $v : '';
+        })($f('collaborator_email')),
         'needs_partner'     => isset($_POST['needs_partner']),
         'collaboration_desc'=> $f('collaboration_desc'),
         'goals'             => $f('goals'),
@@ -743,6 +747,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
                 <input type="text" id="cg-collab-school" name="collaborator_school"
                   value="<?= htmlspecialchars($formData['collaborator_school'] ?? '') ?>"
                   placeholder="e.g. Houston Secondary">
+              </div>
+              <div class="grant-form-group">
+                <label for="cg-collab-email">Collaborator's email</label>
+                <input type="email" id="cg-collab-email" name="collaborator_email"
+                  value="<?= htmlspecialchars($formData['collaborator_email'] ?? '') ?>"
+                  placeholder="So we can tell them too">
+                <p style="font-size:.82rem;color:var(--gray-500);margin:.35rem 0 0;line-height:1.5;">
+                  If your grant is approved we will email them the Atrieve booking steps, so
+                  you are not left passing it on. Their release days come out of their own
+                  three for the year, so it is worth them hearing it from us. Leave it blank
+                  if you do not know it &mdash; we will look them up, and ask you if we cannot.
+                </p>
               </div>
             </div>
 
