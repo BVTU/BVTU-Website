@@ -351,7 +351,7 @@ function evSlugify(string $text): string {
     }
     $s = preg_replace('/[^a-z0-9]+/', '-', $s);
     $s = trim((string)$s, '-');
-    if ($s === '') $s = 'seminar';
+    if ($s === '') $s = 'event';
     return substr($s, 0, 70);
 }
 
@@ -485,18 +485,18 @@ function evRegistrationState(array $event): array {
     // this is — a meeting that has already happened should say so rather than
     // "just come along".
     if (($event['status'] ?? '') === 'draft') {
-        return ['open' => false, 'why' => 'This has not been published yet.'];
+        return ['open' => false, 'why' => 'This event has not been published yet.'];
     }
     // Checked here rather than only in the page, so a stale form posted after
     // the event cannot still add someone to the list.
     if (evIsPast($event)) {
-        return ['open' => false, 'why' => 'This has already taken place.'];
+        return ['open' => false, 'why' => 'This event has already taken place.'];
     }
     if (!evTakesSignups($event)) {
         return ['open' => false, 'why' => '', 'nosignup' => true];
     }
     if (($event['status'] ?? '') === 'closed') {
-        return ['open' => false, 'why' => 'Registration for this seminar has closed.'];
+        return ['open' => false, 'why' => 'Registration for this event has closed.'];
     }
     return ['open' => true, 'why' => ''];
 }
@@ -1344,10 +1344,10 @@ function evMaterialsBody(array $event, array $reg, array $docs, bool $attach, st
             $lines[] = '    ' . evDocUrl($event, $d);
         }
         $lines[] = '';
-        $lines[] = 'Seminar details: ' . evPublicUrl($event);
+        $lines[] = 'Event details: ' . evPublicUrl($event);
     } else {
         $lines[] = '';
-        $lines[] = 'Seminar details: ' . evPublicUrl($event);
+        $lines[] = 'Event details: ' . evPublicUrl($event);
     }
 
     $lines[] = '';

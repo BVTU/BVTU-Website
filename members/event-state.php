@@ -70,6 +70,10 @@ function evStateUpcoming(int $limit = 3): array {
         // ?? falls back on null, and these are written as strings — a seminar
         // with no end time stores "", which is present, so the coalesce kept
         // every past event that had only a start.
+        // Absent means yes, matching evTakesSignups(): an older cache written
+        // before this column existed should show its events, not hide them.
+        if (array_key_exists('signup', $e) && !$e['signup']) continue;
+
         $ends = trim((string)($e['ends_at'] ?? ''));
         if ($ends === '') $ends = trim((string)($e['starts_at'] ?? ''));
         $m = $ends === '' ? null : evStateMoment($ends);
@@ -90,8 +94,11 @@ function evStateUpcoming(int $limit = 3): array {
 function evStateRebuild(): bool {
     require_once __DIR__ . '/db.php';
     try {
+        // SELECT * rather than naming signup: the column is added best-effort,
+        // and a host without it would throw here and leave the front page with
+        // no events at all.
         $rows = getDB()->query(
-            "SELECT slug, title, summary, starts_at, ends_at, location
+            "SELECT *
              FROM ev_events
              WHERE status = 'open'
              ORDER BY (starts_at IS NULL) ASC, starts_at ASC
@@ -111,6 +118,10 @@ function evStateRebuild(): bool {
             'starts_at' => (string)($r['starts_at'] ?? ''),
             'ends_at'   => (string)($r['ends_at'] ?? ''),
             'location'  => (string)($r['location'] ?? ''),
+            // Carried so the home-page box can keep its promise: it is headed
+            // "SURTs you can sign up for", and a grant deadline under that is
+            // a claim that was never true.
+            'signup'    => array_key_exists('signup', $r) ? (int)!empty($r['signup']) : 1,
         ];
     }
 

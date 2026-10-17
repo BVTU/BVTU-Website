@@ -18,7 +18,10 @@ try {
     error_log('events.php: ' . $e->getMessage());
 }
 
-$all      = evPublished();
+// Only things there is something to sign up for. A meeting or a deadline is
+// a real event and belongs on What's On, but it has no place on a page whose
+// whole promise is "and how to sign up".
+$all      = array_values(array_filter(evPublished(), 'evTakesSignups'));
 $upcoming = [];
 $past     = [];
 foreach ($all as $e) {
@@ -40,7 +43,7 @@ $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="site-root" content="">
   <title>SURTs &amp; Seminars — BVTU</title>
-  <meta name="description" content="Union rep training and seminars run by the Bulkley Valley Teachers' Union — what is coming up, and how to sign up.">
+  <meta name="description" content="Union rep training, seminars and anything else from the Bulkley Valley Teachers' Union you can sign up for — what is coming up, and how to join.">
   <link rel="stylesheet" href="css/style.css?v=<?= @filemtime(__DIR__ . '/css/style.css') ?>">
   <link rel="icon" href="favicon.ico">
   <style>
@@ -91,13 +94,14 @@ $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 
       <div class="ev-group">
         <h2>Coming up</h2>
-        <p class="sub">Click through for the details, the handouts and the sign-up form.</p>
+        <p class="sub">Everything you can sign up for. Click through for the details,
+           the handouts and the form.</p>
 
         <?php if (!$upcoming): ?>
         <div class="ev-none">
-          Nothing scheduled at the moment. When something is booked it will appear here and on
-          the <a href="index.php">home page</a> &mdash; and if you have registered for anything
-          before, you will get an email.
+          Nothing to sign up for at the moment. When something is booked it will appear here.
+          Meetings, deadlines and everything else the union has on are over on
+          <a href="whats-on.php">What's On</a>.
         </div>
         <?php else: ?>
         <ul class="ev-cards">

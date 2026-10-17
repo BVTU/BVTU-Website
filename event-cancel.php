@@ -36,7 +36,7 @@ if ($reg && $event && $_SERVER['REQUEST_METHOD'] === 'POST') {
         // spot somebody had given up.
         $errors[] = 'This registration has already been cancelled.';
     } elseif (evIsPast($event)) {
-        $errors[] = 'This seminar has already taken place, so it can no longer be changed.';
+        $errors[] = 'This event has already taken place, so it can no longer be changed.';
     } elseif ($action === 'cancel') {
         evCancel((int)$reg['id']);
         evSendCancelNotice($event, $reg);
@@ -120,7 +120,7 @@ foreach ($saved as $a) { $byAns[(int)$a['qid']] = $a; }
       <p><?= $gone ? 'You have cancelled your spot at' : 'This registration was cancelled for' ?>
          <strong><?= $h($event['title']) ?></strong>.</p>
       <p>Changed your mind? You can register again from
-         <a href="<?= $h(evPublicUrl($event, false)) ?>">the seminar page</a>.</p>
+         <a href="<?= $h(evPublicUrl($event, false)) ?>">the event page</a>.</p>
 
 <?php else: ?>
 
@@ -143,7 +143,7 @@ foreach ($saved as $a) { $byAns[(int)$a['qid']] = $a; }
         <?php endif; ?>
 
         <?php if (evIsPast($event)): ?>
-          <p style="color:var(--gray-600);font-size:.95rem;">This seminar has already taken
+          <p style="color:var(--gray-600);font-size:.95rem;">This event has already taken
              place, so there is nothing left to change.</p>
         <?php else: ?>
 
@@ -209,7 +209,7 @@ foreach ($saved as $a) { $byAns[(int)$a['qid']] = $a; }
         </form>
 
         <div class="evc-danger">
-          <form method="POST" onsubmit="return confirm('Cancel your spot at this seminar?');">
+          <form method="POST" onsubmit="return confirm('Cancel your spot at this event?');">
             <?= csrfField() ?>
             <input type="hidden" name="t" value="<?= $h($token) ?>">
             <p style="font-size:.88rem;color:var(--gray-600);margin:0 0 .6rem;">

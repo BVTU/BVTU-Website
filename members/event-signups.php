@@ -41,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Links in the email resolve against the public page, and a draft
             // is 404 to everyone but an organiser. Every recipient would get a
             // dead link.
-            $errors[] = 'This seminar is back in draft, so the links in the email would not '
+            $errors[] = 'This event is back in draft, so the links in the email would not '
                       . 'work for anyone. Publish it first.';
         } elseif (!$live) {
             $errors[] = 'Nobody is registered yet, so there is nobody to send to.';
@@ -91,7 +91,7 @@ if (($_GET['csv'] ?? '') === '1') {
     $rows = evRegistrations($id, $showCancelled);
 
     $name = preg_replace('/[^a-z0-9]+/', '-', strtolower($event['title']));
-    $name = trim((string)$name, '-') ?: 'seminar';
+    $name = trim((string)$name, '-') ?: 'event';
 
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="' . $name . '-registrations-'
@@ -185,9 +185,9 @@ $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
         <h1><?= $h($event['title']) ?></h1>
       </div>
       <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
-        <a href="event-edit.php?id=<?= $id ?>" class="btn btn-outline btn-sm">Edit seminar</a>
+        <a href="event-edit.php?id=<?= $id ?>" class="btn btn-outline btn-sm">Edit event</a>
         <a href="?id=<?= $id ?>&csv=1<?= $showCancelled ? '&all=1' : '' ?>" class="btn btn-outline btn-sm">Download CSV</a>
-        <a href="event-admin.php" class="btn btn-primary btn-sm">All seminars</a>
+        <a href="event-admin.php" class="btn btn-primary btn-sm">All events</a>
       </div>
     </div>
     <p class="adm-sub">
@@ -281,7 +281,7 @@ $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
         </button>
         <?php if ($isDraft): ?>
         <span style="font-size:.82rem;color:var(--gray-500);margin-left:.6rem;">
-          Publish the seminar first — the links would not work.
+          Publish the event first — the links would not work.
         </span>
         <?php elseif ($liveCount === 0): ?>
         <span style="font-size:.82rem;color:var(--gray-500);margin-left:.6rem;">Nobody registered yet.</span>

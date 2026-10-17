@@ -189,7 +189,7 @@ $subscribeUrl = (defined('SITE_URL') && SITE_URL ? rtrim(SITE_URL, '/') : 'https
         <?php if ($next !== null): ?>
         <a href="?m=<?= $h($next) ?>">Look at <?= $h($nextD->format('F')) ?></a>, or
         <?php endif; ?>
-        <a href="events.php">see every seminar</a>.
+        <a href="events.php">see what you can sign up for</a>.
       </div>
       <?php else: ?>
 

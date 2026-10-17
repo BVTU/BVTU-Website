@@ -24,7 +24,7 @@ if (!$event) {
 }
 
 $notice = ($_GET['new'] ?? '') === '1'
-    ? 'Draft created. Fill in the details, add your questions, then publish.'
+    ? 'Draft created. Fill in the details, then publish.'
     : '';
 $errors = [];
 
@@ -47,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
 
     if ($action === 'details') {
         $title = evStr($_POST['title'] ?? '');
-        if ($title === '') $errors[] = 'A seminar needs a title.';
+        if ($title === '') $errors[] = 'An event needs a title.';
 
         // datetime-local gives "2026-11-12T16:00"; MySQL wants a space. The
         // field is only a hint — a browser that does not support it sends free
@@ -235,7 +235,7 @@ $forInput = function ($v) {
           <?= $event['status'] === 'draft' ? 'Preview' : 'View page' ?>
         </a>
         <a href="event-signups.php?id=<?= $id ?>" class="btn btn-outline btn-sm"><?= $signups ?> registered</a>
-        <a href="event-admin.php" class="btn btn-primary btn-sm">All seminars</a>
+        <a href="event-admin.php" class="btn btn-primary btn-sm">All events</a>
       </div>
     </div>
 
@@ -245,7 +245,7 @@ $forInput = function ($v) {
     <!-- ── Details ───────────────────────────────────────────────────────── -->
     <div class="pcard">
       <h2>Details</h2>
-      <p class="sub">What people see on the seminar page.</p>
+      <p class="sub">What people see on the event's own page.</p>
 
       <form method="POST">
         <?= csrfField() ?>
@@ -505,7 +505,7 @@ $forInput = function ($v) {
     <div class="pcard">
       <h2>Handouts</h2>
       <p class="sub">
-        Shown on the seminar page so people can read them beforehand, and sent
+        Shown on the event's page so people can read them beforehand, and sent
         with the reminder email from the registrations page.
       </p>
 
@@ -611,7 +611,7 @@ $forInput = function ($v) {
             <input type="text" id="d-title" name="doc_title" maxlength="255"
                    placeholder="e.g. Pre-reading: Article E.2">
             <label class="lbl" for="d-note" style="margin-top:.8rem;">Note</label>
-            <p class="hint">Shown under the handout on the seminar page.</p>
+            <p class="hint">Shown under the handout on the event's page.</p>
             <input type="text" id="d-note" name="doc_note" maxlength="400">
           </div>
 

@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'create') {
         $title = trim($_POST['title'] ?? '');
         if ($title === '') {
-            $errors[] = 'Give the seminar a title to start with — you can change it later.';
+            $errors[] = 'Give the event a title to start with — you can change it later.';
         } else {
             $newId = evCreate($title, $member['email']);
             header('Location: event-edit.php?id=' . $newId . '&new=1');
@@ -48,13 +48,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // records with it, which is exactly what we promised to keep.
         $signups = $ev ? count(evRegistrations($id, true)) : 0;
         if ($signups > 0) {
-            $errors[] = 'That seminar has ' . $signups . ' registration'
+            $errors[] = 'That event has ' . $signups . ' registration'
                       . ($signups === 1 ? '' : 's') . ' on record, including any that were '
                       . 'cancelled. Close it instead — deleting it would take their answers '
                       . 'with it.';
         } else {
             evDelete($id);
-            $notice = 'Seminar deleted.';
+            $notice = 'Event deleted.';
         }
     }
 }
@@ -73,7 +73,7 @@ $badge = [
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Seminars &amp; Registration — BVTU</title>
+  <title>Events &amp; Registration — BVTU</title>
   <link rel="stylesheet" href="../css/style.css?v=<?= @filemtime(__DIR__ . '/../css/style.css') ?>">
   <link rel="icon" href="../favicon.ico">
   <style>
@@ -107,7 +107,7 @@ $badge = [
 
   <div class="adm-wrap">
     <div class="adm-header">
-      <h1>Seminars &amp; Registration</h1>
+      <h1>Events &amp; Registration</h1>
       <a href="dashboard.php" class="btn btn-primary btn-sm">Dashboard</a>
     </div>
 
@@ -115,11 +115,11 @@ $badge = [
     <?php foreach ($errors as $e): ?><div class="alert-bad"><?= $h($e) ?></div><?php endforeach; ?>
 
     <div class="pcard">
-      <h2>Start a new seminar</h2>
+      <h2>Start a new event</h2>
       <form method="POST" class="new-form">
         <?= csrfField() ?>
         <input type="hidden" name="action" value="create">
-        <input type="text" name="title" placeholder="e.g. Mental Health First Aid" required>
+        <input type="text" name="title" placeholder="e.g. Mental Health First Aid, or Exec meeting" required>
         <button type="submit" class="btn btn-primary">Create draft</button>
       </form>
       <p style="font-size:.82rem;color:var(--gray-500);margin:.8rem 0 0;">
@@ -128,10 +128,10 @@ $badge = [
     </div>
 
     <div class="pcard">
-      <h2><?= count($events) ?> seminar<?= count($events) === 1 ? '' : 's' ?></h2>
+      <h2><?= count($events) ?> event<?= count($events) === 1 ? '' : 's' ?></h2>
 
       <?php if (!$events): ?>
-      <p class="empty">Nothing here yet. Create your first seminar above.</p>
+      <p class="empty">Nothing here yet. Create your first event above.</p>
       <?php endif; ?>
 
       <?php foreach ($events as $ev):
@@ -163,23 +163,30 @@ $badge = [
             <button type="submit" class="btn btn-primary btn-sm">Publish</button>
           </form>
           <?php elseif ($ev['status'] === 'open'): ?>
+          <?php /* "Close signups" on a deadline or a meeting is a button for
+                   something that was never open. Taking it off the calendar is
+                   the only thing that means anything there. */ ?>
           <form method="POST" style="display:inline;">
             <?= csrfField() ?>
-            <input type="hidden" name="action" value="close">
+            <input type="hidden" name="action" value="<?= evTakesSignups($ev) ? 'close' : 'unpublish' ?>">
             <input type="hidden" name="id" value="<?= (int)$ev['id'] ?>">
-            <button type="submit" class="btn btn-outline btn-sm">Close signups</button>
+            <button type="submit" class="btn btn-outline btn-sm">
+              <?= evTakesSignups($ev) ? 'Close signups' : 'Unpublish' ?>
+            </button>
           </form>
           <?php else: ?>
           <form method="POST" style="display:inline;">
             <?= csrfField() ?>
             <input type="hidden" name="action" value="publish">
             <input type="hidden" name="id" value="<?= (int)$ev['id'] ?>">
-            <button type="submit" class="btn btn-outline btn-sm">Reopen</button>
+            <button type="submit" class="btn btn-outline btn-sm">
+              <?= evTakesSignups($ev) ? 'Reopen' : 'Publish again' ?>
+            </button>
           </form>
           <?php endif; ?>
 
           <?php if ((int)$ev['signups'] === 0 && count(evRegistrations((int)$ev['id'], true)) === 0): ?>
-          <form method="POST" style="display:inline;" onsubmit="return confirm('Delete this seminar? It has no registrations.');">
+          <form method="POST" style="display:inline;" onsubmit="return confirm('Delete this event? It has no registrations.');">
             <?= csrfField() ?>
             <input type="hidden" name="action" value="delete">
             <input type="hidden" name="id" value="<?= (int)$ev['id'] ?>">

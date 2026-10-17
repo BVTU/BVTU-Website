@@ -93,7 +93,7 @@ if (!$notFound && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ev_subm
         $errors[] = 'This page was open too long to submit safely. Please reload and try again.';
     }
     if ($previewing) {
-        $errors[] = 'This is a preview of a draft. Publish the seminar before registering.';
+        $errors[] = 'This is a preview of a draft. Publish the event before registering.';
     } elseif (!$state['open']) {
         // nosignup carries no reason — there is nothing wrong, there is just
         // nothing to submit. An empty bullet would say otherwise.
@@ -189,7 +189,7 @@ $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="site-root" content="">
-  <title><?= $notFound ? 'Seminar not found' : $h($event['title']) ?> — BVTU</title>
+  <title><?= $notFound ? 'Event not found' : $h($event['title']) ?> — BVTU</title>
   <?php if (!$notFound): ?>
   <meta name="description" content="<?= $h($event['summary'] ?: ($event['title'] . ' — register with the Bulkley Valley Teachers\' Union.')) ?>">
   <?php endif; ?>
@@ -272,11 +272,11 @@ $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 <?php if ($notFound): ?>
 
   <section class="page-hero">
-    <div class="container"><h1>Seminar not found</h1></div>
+    <div class="container"><h1>Event not found</h1></div>
   </section>
   <main class="page-content">
     <div class="container">
-      <p>That link does not match a seminar we have listed. It may have been taken down,
+      <p>That link does not match an event we have listed. It may have been taken down,
          or the address may be mistyped.</p>
       <p><a href="contact.php">Get in touch</a> and we will point you the right way.</p>
     </div>
@@ -352,7 +352,7 @@ $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
             <h2>Before you come</h2>
             <p class="ev-docs-lead">
               <?php $one = count($documents) === 1; ?>
-              <?= $one ? 'This is the handout' : 'These are the handouts' ?> for this seminar.
+              <?= $one ? 'This is the handout' : 'These are the handouts' ?> for this event.
               You can read <?= $one ? 'it' : 'them' ?> now<?php
                 /* Only promised when something is actually set to go out. */
                 if ($docsEmailed): ?>, and we will email
@@ -511,7 +511,7 @@ $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
               <?php endif; ?>
 
               <p class="ev-note">
-                We use your answers to run this seminar and nothing else. You will get a
+                We use your answers to run this event and nothing else. You will get a
                 confirmation email with a link to change your answers or cancel your spot.
               </p>
             </form>

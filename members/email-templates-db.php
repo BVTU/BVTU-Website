@@ -122,13 +122,13 @@ const EMAIL_TEMPLATES = [
     ],
 
     'event_registered' => [
-        'label'   => 'Seminar — you are registered',
-        'when'    => 'Sent the moment someone registers for a seminar, and again if they '
+        'label'   => 'Event — you are registered',
+        'when'    => 'Sent the moment someone registers for an event, and again if they '
                    . 'come back and change their answers.',
         'format'  => 'text',
         'subject' => 'Registered: {{title}}',
         'vars'    => ['{{name}}'  => 'the person who registered',
-                      '{{title}}' => 'the seminar’s name',
+                      '{{title}}' => 'the event’s name',
                       '{{when}}'  => 'the date and time, written out'],
         'blocks'  => [
             'intro'   => ['label' => 'Opening',
