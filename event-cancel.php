@@ -229,5 +229,7 @@ foreach ($saved as $a) { $byAns[(int)$a['qid']] = $a; }
     </div>
   </main>
 
+  <?php require_once __DIR__ . '/inc/footer.php'; bvtuFooter(); ?>
+
 </body>
 </html>

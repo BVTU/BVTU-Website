@@ -275,6 +275,8 @@ $subscribeUrl = (defined('SITE_URL') && SITE_URL ? rtrim(SITE_URL, '/') : 'https
     </div>
   </main>
 
+  <?php require_once __DIR__ . '/inc/footer.php'; bvtuFooter(); ?>
+
   <script>
   function woCopy(btn) {
     var box = document.getElementById('woFeed');

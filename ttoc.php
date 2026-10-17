@@ -381,43 +381,7 @@ $member   = $loggedIn ? getMember() : null;
     </div>
   </main>
 
-  <footer class="site-footer">
-    <div class="container footer-grid">
-      <div>
-        <h3>Bulkley Valley Teachers' Union</h3>
-        <p>Local of the BC Teachers' Federation</p>
-        <p>Representing educators in<br>Houston, Telkwa, and Smithers</p>
-      </div>
-      <div>
-        <h3>Contact</h3>
-        <p><strong style="color:rgba(255,255,255,.9)">President:</strong> Cody Lind</p>
-        <p>3772-C 1st Ave<br>Smithers, BC V0J 2N0</p>
-        <p><a href="contact.php">Contact Us</a></p>
-      </div>
-      <div>
-        <h3>Navigate</h3>
-        <ul class="footer-nav-list">
-          
-          <li><a href="documents.php">Documents</a></li>
-          <li><a href="members.php">Members</a></li>
-          <li><a href="prod.php">PRO-D</a></li>
-          <li class="has-dropdown"><a href="health-safety.php">Health &amp; Safety</a><ul class="dropdown"><li><a href="health-safety.php">Health &amp; Safety</a></li><li><a href="https://www.worksafebc.com" target="_blank" rel="noopener">WorkSafe BC</a></li><li><a href="https://sd54.lifeworks.com/" target="_blank" rel="noopener">Counselling &amp; support</a></li></ul></li>
-          <li class="has-dropdown"><a href="bctf.php">BCTF</a><ul class="dropdown"><li><a href="bctf.php">BCTF Resources</a></li><li><a href="https://bctf.ca" target="_blank" rel="noopener">BCTF Website</a></li><li><a href="https://www.bctf.ca/topics/services-information/benefits/view-member-discounts-bctf-advantage" target="_blank" rel="noopener">Benefits &amp; Discounts</a></li></ul></li>
-          <li class="has-dropdown"><a href="library.php">Resources</a><ul class="dropdown"><li><a href="library.php">Resource Library</a></li><li><a href="curated.php">Curated Resources</a></li></ul></li><li><a href="newsletter-archive.php">Newsletters</a></li>
-        </ul>
-      </div>
-      <div>
-        <h3>Connect</h3>
-        <a href="#" target="_blank" rel="noopener" class="btn btn-outline-white">Facebook Group</a>
-      </div>
-    </div>
-    <div class="footer-bottom">
-      <div class="container">
-        <p>© 2026 Bulkley Valley Teachers' Union · Local of the BC Teachers' Federation
-           · <a href="privacy.php" style="color:inherit;text-decoration:underline;">Privacy</a></p>
-      </div>
-    </div>
-  </footer>
+  <?php require_once __DIR__ . '/inc/footer.php'; bvtuFooter(); ?>
 
   <script src="js/site.js"></script>
   <script src="js/search.js"></script>
