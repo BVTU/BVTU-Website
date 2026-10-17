@@ -9,7 +9,7 @@ $member   = $loggedIn ? getMember() : null;
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="site-root" content="">
-  <title>Release Time &amp; Atrieve Entries — Bulkley Valley Teachers' Union</title>
+  <title>Booking Time Off (Atrieve) — Bulkley Valley Teachers' Union</title>
   <meta name="description" content="How to enter union-paid release time in Atrieve for SD54 teachers — BCTF and BVTU events, codes, approval process.">
   <link rel="stylesheet" href="css/style.css?v=<?= @filemtime(__DIR__ . '/css/style.css') ?>">
   <link rel="icon" href="favicon.ico">
@@ -184,9 +184,9 @@ $member   = $loggedIn ? getMember() : null;
       <div class="breadcrumb">
         <a href="index.php">Home</a> <span>›</span>
         <a href="members.php">Members</a> <span>›</span>
-        <span>Release Time &amp; Atrieve</span>
+        <span>Booking Time Off</span>
       </div>
-      <h1>Release Time &amp; Atrieve Entries</h1>
+      <h1>Booking Time Off</h1>
       <p class="hero-sub">How to enter union-paid release time in SD54's Atrieve system for BCTF and BVTU events.</p>
     </div>
   </section>
@@ -420,7 +420,7 @@ $member   = $loggedIn ? getMember() : null;
           <li><a href="documents.php">Documents</a></li>
           <li><a href="members.php">Members</a></li>
           <li><a href="prod.php">PRO-D</a></li>
-          <li class="has-dropdown"><a href="health-safety.php">Health &amp; Safety</a><ul class="dropdown"><li><a href="health-safety.php">H&amp;S Resources</a></li><li><a href="https://www.worksafebc.com" target="_blank" rel="noopener">WorkSafe BC</a></li><li><a href="https://sd54.lifeworks.com/" target="_blank" rel="noopener">EFAP</a></li></ul></li>
+          <li class="has-dropdown"><a href="health-safety.php">Health &amp; Safety</a><ul class="dropdown"><li><a href="health-safety.php">Health &amp; Safety</a></li><li><a href="https://www.worksafebc.com" target="_blank" rel="noopener">WorkSafe BC</a></li><li><a href="https://sd54.lifeworks.com/" target="_blank" rel="noopener">Counselling &amp; support</a></li></ul></li>
           <li class="has-dropdown"><a href="bctf.php">BCTF</a><ul class="dropdown"><li><a href="bctf.php">BCTF Resources</a></li><li><a href="https://bctf.ca" target="_blank" rel="noopener">BCTF Website</a></li><li><a href="https://www.bctf.ca/topics/services-information/benefits/view-member-discounts-bctf-advantage" target="_blank" rel="noopener">Benefits &amp; Discounts</a></li></ul></li>
           <li class="has-dropdown"><a href="library.php">Resources</a><ul class="dropdown"><li><a href="library.php">Resource Library</a></li><li><a href="curated.php">Curated Resources</a></li></ul></li><li><a href="newsletter-archive.php">Newsletters</a></li>
         </ul>

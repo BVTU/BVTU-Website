@@ -198,6 +198,7 @@ ul { list-style: none; }
   position: absolute;
   top: 100%;
   left: 50%;
+  max-width: min(38rem, calc(100vw - 2rem));
   transform: translateX(-50%);
   background: var(--white);
   border: 1px solid var(--border);
@@ -215,14 +216,33 @@ ul { list-style: none; }
 .has-dropdown:hover .dropdown { display: block; }
 .dropdown li a {
   display: block;
-  padding: .62rem 1.1rem;
+  padding: .55rem 1.1rem;
   color: var(--text);
   font-size: .88rem;
   font-weight: 500;
-  white-space: nowrap;
+  /* Was nowrap, which a two-line item cannot honour. */
+  white-space: normal;
   border-radius: 0;
   background: none;
 }
+.dropdown .nav-label { display: block; font-weight: 600; }
+.dropdown .nav-desc  { display: block; font-size: .76rem; font-weight: 400; line-height: 1.4;
+                       color: var(--gray-500); margin-top: .1rem; }
+.dropdown li a:hover .nav-desc,
+.dropdown li a.active .nav-desc { color: var(--primary); opacity: .85; }
+
+/* Opened by keyboard as well as by mouse: without this a Tab user can reach
+   the section link and never its children.
+   Desktop only — in the hamburger the submenu is toggled by tapping its
+   heading, and a focus-based rule outranks the JS one, so the heading that
+   opened it could never close it again. */
+@media (min-width: 1281px) {
+  .has-dropdown:focus-within .dropdown { display: block; }
+}
+
+/* Past six items a single column runs off the bottom of a laptop screen. */
+.dropdown-wide { min-width: 34rem; columns: 2; column-gap: 0; padding-bottom: .5rem; }
+.dropdown-wide li { break-inside: avoid; }
 .dropdown li a:hover,
 .dropdown li a.active {
   background: var(--accent);
@@ -1123,3 +1143,35 @@ body.has-vote-bar .search-fab { bottom: calc(1.75rem + var(--vote-bar-h, 3rem));
               color: var(--primary); }
 
 @media (prefers-reduced-motion: reduce) { .surt-list a:hover { transform: none; } }
+
+/* ── Menu descriptions in the collapsed (hamburger) menu ──────────────────────
+   Same markup as the desktop dropdown, so the one-line explanations come along;
+   they just need colours that work on the dark panel. */
+@media (max-width: 1280px) {
+  .dropdown-wide { min-width: 0; columns: 1; }
+  .main-nav .dropdown .nav-label { font-weight: 600; }
+  .main-nav .dropdown .nav-desc  { color: rgba(255,255,255,.62); font-size: .78rem; }
+  .main-nav .dropdown li a       { padding: .55rem 1rem; }
+  .main-nav .dropdown li a:hover .nav-desc,
+  .main-nav .dropdown li a.active .nav-desc { color: rgba(255,255,255,.8); }
+}
+
+/* ── Home page: the lead card and the browse row ──────────────────────────────
+   The collective agreement answers more member questions than anything else on
+   the site, so it gets the width rather than sitting fifth in a row of equals. */
+/* Six cards, three to a row, so none is left stranded on a row of its own.
+   The lead gets its weight from colour and position rather than width — a card
+   spanning two columns made seven units in a grid of three or four, and the
+   last card always ended up alone. */
+.cards-section .cards { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 1000px) { .cards-section .cards { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 640px)  { .cards-section .cards { grid-template-columns: 1fr; } }
+
+.card-lead { background: var(--accent); border-color: #c6e3d2; }
+.card-lead h3 { font-size: 1.22rem; }
+.card-lead .card-icon { background: #fff; }
+
+.browse-row { margin: 1.75rem 0 0; font-size: .9rem; color: var(--gray-500);
+              display: flex; gap: .2rem 1.1rem; flex-wrap: wrap; align-items: baseline; }
+.browse-row a { color: var(--gray-700); text-decoration: none; border-bottom: 1px solid var(--border); }
+.browse-row a:hover { color: var(--primary); border-bottom-color: var(--primary); text-decoration: none; }

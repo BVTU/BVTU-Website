@@ -287,68 +287,70 @@ $member   = $loggedIn ? getMember() : null;
   <?php endif; ?>
 
 
-  <!-- Quick Access Cards -->
+  <!-- The six things members most often arrive wanting. Destinations, not
+       categories: the menu already carries the shape of the site, and a card
+       that repeats a menu word tells nobody anything twice. -->
   <section class="cards-section">
     <div class="container">
-      <h2 class="section-title">What are you looking for?</h2>
-      <p class="section-sub">Resources, documents, and information for BVTU members.</p>
+      <h2 class="section-title">What do you need?</h2>
+      <p class="section-sub">The things members look for most. Everything else is in the menu, or search.</p>
       <div class="cards">
 
-<a href="documents.php" class="card">
-          <div class="card-icon">
-            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-          </div>
-          <h3>Documents</h3>
-          <p>Collective agreements, settlements, provincial regulations, and more.</p>
-          <span class="card-arrow">View documents →</span>
+        <a href="collective-agreement.php" class="card card-lead">
+          <div class="card-icon"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>
+          <h3>Your Collective Agreement</h3>
+          <p>Prep time, sick leave, class size, seniority, leaves — what you are entitled to, and the article that says so.</p>
+          <span class="card-arrow">Read the agreement &rarr;</span>
         </a>
 
-        <a href="members.php" class="card">
-          <div class="card-icon">
-            <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          </div>
-          <h3>Members</h3>
-          <p>Release time, salary grids, certification fees, grants, and TTOC resources.</p>
-          <span class="card-arrow">Member info →</span>
+        <a href="collab-grant.php" class="card">
+          <div class="card-icon"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+          <h3>Collaboration Grant</h3>
+          <p>Up to three release days a year to plan or work alongside a colleague. Apply online.</p>
+          <span class="card-arrow">Apply now &rarr;</span>
         </a>
 
-        <a href="prod.php" class="card">
-          <div class="card-icon">
-            <svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-          </div>
-          <h3>PRO-D</h3>
-          <p>Professional development policies, committee info, and training opportunities.</p>
-          <span class="card-arrow">PRO-D info →</span>
+        <a href="salary.php" class="card">
+          <div class="card-icon"><svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+          <h3>Salary Grids</h3>
+          <p>What you are paid this year, and how experience and qualifications move you up.</p>
+          <span class="card-arrow">See the grids &rarr;</span>
         </a>
 
-        <a href="health-safety.php" class="card">
-          <div class="card-icon">
-            <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-          </div>
-          <h3>Health &amp; Safety</h3>
-          <p>Workplace safety committees, WorkSafe forms, and employee assistance programs.</p>
-          <span class="card-arrow">H&amp;S resources →</span>
+        <a href="benefits.php" class="card">
+          <div class="card-icon"><svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+          <h3>Health &amp; Dental</h3>
+          <p>Pacific Blue Cross — dental, vision, prescriptions, paramedical, and how to claim.</p>
+          <span class="card-arrow">What is covered &rarr;</span>
         </a>
 
-        <a href="bctf.php" class="card">
-          <div class="card-icon">
-            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-          </div>
-          <h3>BCTF</h3>
-          <p>Provincial collective agreements, member discounts, and bargaining updates.</p>
-          <span class="card-arrow">BCTF info →</span>
+        <a href="whats-on.php" class="card">
+          <div class="card-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+          <h3>What's On</h3>
+          <p>Seminars, meetings and deadlines on one calendar — and a feed you can add to your phone.</p>
+          <span class="card-arrow">See the calendar &rarr;</span>
         </a>
 
         <a href="library.php" class="card">
-          <div class="card-icon">
-            <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-          </div>
+          <div class="card-icon"><svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></div>
           <h3>Resource Library</h3>
-          <p>Lesson plans, unit plans, rubrics, and activities shared by BVTU teachers.</p>
-          <span class="card-arrow">Browse resources →</span>
+          <p>Lesson plans, units, rubrics and activities shared by BVTU members. Take what you need, add what you have.</p>
+          <span class="card-arrow">Browse the library &rarr;</span>
         </a>
 
       </div>
+
+      <?php // The sections these cards displaced. Still reachable, no longer
+            // competing with the six things people came for. ?>
+      <p class="browse-row">
+        Or browse:
+        <a href="documents.php">Documents</a>
+        <a href="members.php">Member resources</a>
+        <a href="prod.php">Pro-D</a>
+        <a href="health-safety.php">Health &amp; Safety</a>
+        <a href="bctf.php">BCTF</a>
+        <a href="about.php">About the union</a>
+      </p>
     </div>
   </section>
 
@@ -422,10 +424,10 @@ $member   = $loggedIn ? getMember() : null;
         <h3>Navigate</h3>
         <ul class="footer-nav-list">
           
-          <li class="has-dropdown"><a href="documents.php">Documents</a><ul class="dropdown"><li><a href="documents.php">All Documents</a></li><li><a href="collective-agreement.php">Collective Agreement</a></li><li><a href="lous.php">Letters of Understanding</a></li><li><a href="ca-assistant.php">Contract Assistant</a></li><li><a href="documents/BVTU-Constitution-and-Bylaws-2026.pdf" target="_blank">Constitution &amp; Bylaws</a></li><li><a href="calendars.php">School Calendars</a></li><li><a href="trustee-zones.php">Trustee Zone Map</a></li><li><a href="trustee-candidates.php">Trustee Candidate Responses</a></li></ul></li>
+          <li class="has-dropdown"><a href="documents.php">Documents</a><ul class="dropdown"><li><a href="documents.php">All Documents</a></li><li><a href="collective-agreement.php">Collective Agreement</a></li><li><a href="lous.php">Side agreements (LOUs)</a></li><li><a href="ca-assistant.php">Contract Assistant</a></li><li><a href="documents/BVTU-Constitution-and-Bylaws-2026.pdf" target="_blank">Constitution &amp; Bylaws</a></li><li><a href="calendars.php">School Calendars</a></li><li><a href="trustee-zones.php">Trustee Zone Map</a></li><li><a href="trustee-candidates.php">Trustee Candidate Responses</a></li></ul></li>
           <li><a href="members.php">Members</a></li>
           <li><a href="prod.php">PRO-D</a></li>
-          <li class="has-dropdown"><a href="health-safety.php">Health &amp; Safety</a><ul class="dropdown"><li><a href="health-safety.php">H&amp;S Resources</a></li><li><a href="https://www.worksafebc.com" target="_blank" rel="noopener">WorkSafe BC</a></li><li><a href="https://sd54.lifeworks.com/" target="_blank" rel="noopener">EFAP</a></li></ul></li>
+          <li class="has-dropdown"><a href="health-safety.php">Health &amp; Safety</a><ul class="dropdown"><li><a href="health-safety.php">Health &amp; Safety</a></li><li><a href="https://www.worksafebc.com" target="_blank" rel="noopener">WorkSafe BC</a></li><li><a href="https://sd54.lifeworks.com/" target="_blank" rel="noopener">Counselling &amp; support</a></li></ul></li>
           <li class="has-dropdown"><a href="bctf.php">BCTF</a><ul class="dropdown"><li><a href="bctf.php">BCTF Resources</a></li><li><a href="https://bctf.ca" target="_blank" rel="noopener">BCTF Website</a></li><li><a href="https://www.bctf.ca/topics/services-information/benefits/view-member-discounts-bctf-advantage" target="_blank" rel="noopener">Benefits &amp; Discounts</a></li></ul></li>
           <li class="has-dropdown"><a href="library.php">Resources</a><ul class="dropdown"><li><a href="library.php">Resource Library</a></li><li><a href="curated.php">Curated Resources</a></li></ul></li><li><a href="newsletter-archive.php">Newsletters</a></li>
         </ul>

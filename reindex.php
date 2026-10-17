@@ -456,7 +456,9 @@ $records = [
         'type'        => 'page',
         'title'       => 'Member Resources',
         'description' => 'Resources for BVTU members — benefits, salary grids, TTOC, release time, and more.',
-        'content'     => 'member resources health dental benefits life insurance loan forgiveness salary grids TTOC teacher on call release time atrieve remedy tracker collaboration grant',
+        'content'     => 'member resources health dental benefits life insurance loan forgiveness salary grids '
+                       . 'TTOC teacher on call booking time off release time atrieve class size remedy '
+                       . 'collaboration grant training workshops SURT what is on calendar',
         'url'         => $baseUrl . '/members.php',
         'priority'    => 8,
         'members_only'=> false,
@@ -542,9 +544,12 @@ $records = [
     [
         'objectID'    => 'page_remedy-tracker',
         'type'        => 'page',
-        'title'       => 'Remedy Tracker',
-        'description' => 'Track BVTU remedy requests and grievance outcomes.',
-        'content'     => 'remedy tracker grievance dispute resolution outcome arbitration',
+        'title'       => 'Class Size & Remedy',
+        'description' => 'Work out what you are owed when your class is over size or over the '
+                       . 'composition limits in the collective agreement.',
+        'content'     => 'class size composition remedy over size too many students IEP '
+                       . 'designations ministry designation overage compensation what am I owed '
+                       . 'remedy tracker calculator collective agreement limits',
         'url'         => $baseUrl . '/remedy-tracker.php',
         'priority'    => 6,
         'members_only'=> false,
@@ -552,9 +557,11 @@ $records = [
     [
         'objectID'    => 'page_atrieve',
         'type'        => 'page',
-        'title'       => 'Release Time / Atrieve',
-        'description' => 'Information on release time and the Atrieve system for BVTU members.',
-        'content'     => 'release time atrieve system union leave pro-d days scheduling',
+        'title'       => 'Booking Time Off (Atrieve)',
+        'description' => 'How to book release time and enter an absence in Atrieve.',
+        'content'     => 'booking time off release time absence absences atrieve system union '
+                       . 'leave pro-d days scheduling book a day out of class BVTU business '
+                       . 'how do I enter my absence',
         'url'         => $baseUrl . '/atrieve.php',
         'priority'    => 6,
         'members_only'=> false,

@@ -122,7 +122,7 @@ $member   = $loggedIn ? getMember() : null;
           <div class="member-page-card-icon">
             <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           </div>
-          <h3>Release Time &amp; Atrieve</h3>
+          <h3>Booking Time Off</h3>
           <p>How to enter union-paid release time in Atrieve — approval process, BCTF and BVTU event codes, and leave entry instructions.</p>
           <div class="member-page-card-arrow">View Atrieve guide →</div>
         </a>
@@ -131,9 +131,9 @@ $member   = $loggedIn ? getMember() : null;
           <div class="member-page-card-icon">
             <svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
           </div>
-          <h3>Remedy Tracker</h3>
-          <p>Track outstanding remedies and settlements owed to BVTU members under the collective agreement.</p>
-          <div class="member-page-card-arrow">Open tracker →</div>
+          <h3>Class Size &amp; Remedy</h3>
+          <p>When your class is over size, or over the composition limits, work out what the collective agreement says you are owed.</p>
+          <div class="member-page-card-arrow">Work out what you are owed →</div>
         </a>
 
         <a href="salary.php" class="member-page-card">
@@ -158,7 +158,7 @@ $member   = $loggedIn ? getMember() : null;
           <div class="member-page-card-icon">
             <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           </div>
-          <h3>SURTs &amp; Seminars</h3>
+          <h3>Training &amp; Workshops</h3>
           <p>Union rep training and other sessions run by your local &mdash; what is coming up, the handouts, and how to sign up.</p>
           <div class="member-page-card-arrow">See what's on →</div>
         </a>
@@ -194,10 +194,10 @@ $member   = $loggedIn ? getMember() : null;
         <h3>Navigate</h3>
         <ul class="footer-nav-list">
           
-          <li class="has-dropdown"><a href="documents.php">Documents</a><ul class="dropdown"><li><a href="documents.php">All Documents</a></li><li><a href="collective-agreement.php">Collective Agreement</a></li><li><a href="lous.php">Letters of Understanding</a></li><li><a href="ca-assistant.php">Contract Assistant</a></li><li><a href="documents/BVTU-Constitution-and-Bylaws-2026.pdf" target="_blank">Constitution &amp; Bylaws</a></li><li><a href="calendars.php">School Calendars</a></li><li><a href="trustee-zones.php">Trustee Zone Map</a></li><li><a href="trustee-candidates.php">Trustee Candidate Responses</a></li></ul></li>
+          <li class="has-dropdown"><a href="documents.php">Documents</a><ul class="dropdown"><li><a href="documents.php">All Documents</a></li><li><a href="collective-agreement.php">Collective Agreement</a></li><li><a href="lous.php">Side agreements (LOUs)</a></li><li><a href="ca-assistant.php">Contract Assistant</a></li><li><a href="documents/BVTU-Constitution-and-Bylaws-2026.pdf" target="_blank">Constitution &amp; Bylaws</a></li><li><a href="calendars.php">School Calendars</a></li><li><a href="trustee-zones.php">Trustee Zone Map</a></li><li><a href="trustee-candidates.php">Trustee Candidate Responses</a></li></ul></li>
           <li><a href="members.php">Members</a></li>
           <li><a href="prod.php">PRO-D</a></li>
-          <li class="has-dropdown"><a href="health-safety.php">Health &amp; Safety</a><ul class="dropdown"><li><a href="health-safety.php">H&amp;S Resources</a></li><li><a href="https://www.worksafebc.com" target="_blank" rel="noopener">WorkSafe BC</a></li><li><a href="https://sd54.lifeworks.com/" target="_blank" rel="noopener">EFAP</a></li></ul></li>
+          <li class="has-dropdown"><a href="health-safety.php">Health &amp; Safety</a><ul class="dropdown"><li><a href="health-safety.php">Health &amp; Safety</a></li><li><a href="https://www.worksafebc.com" target="_blank" rel="noopener">WorkSafe BC</a></li><li><a href="https://sd54.lifeworks.com/" target="_blank" rel="noopener">Counselling &amp; support</a></li></ul></li>
           <li class="has-dropdown"><a href="bctf.php">BCTF</a><ul class="dropdown"><li><a href="bctf.php">BCTF Resources</a></li><li><a href="https://bctf.ca" target="_blank" rel="noopener">BCTF Website</a></li><li><a href="https://www.bctf.ca/topics/services-information/benefits/view-member-discounts-bctf-advantage" target="_blank" rel="noopener">Benefits &amp; Discounts</a></li></ul></li>
           <li class="has-dropdown"><a href="library.php">Resources</a><ul class="dropdown"><li><a href="library.php">Resource Library</a></li><li><a href="curated.php">Curated Resources</a></li></ul></li><li><a href="newsletter-archive.php">Newsletters</a></li>
         </ul>

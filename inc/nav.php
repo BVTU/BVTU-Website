@@ -20,48 +20,93 @@
  * step by hand; pass 'active' only to override it.
  */
 
-/** Every item, in order. 'url' is relative to the site root unless it is absolute. */
+/**
+ * Every item, in order.
+ *
+ * Children are [label, url, external, description]. The description is one
+ * short line of plain English shown under the label, because several of these
+ * names are ours rather than the member's — "Atrieve", "remedy", "LOU", "SURT"
+ * mean nothing in your first year, and a menu that needs insider knowledge to
+ * read is a menu that sends people to search instead.
+ *
+ * Labels name the member's problem, not our tool. "Remedy Tracker" is what we
+ * call the calculator; "Class size & remedy" is what they came to find out.
+ */
 function bvtuNavItems(): array {
     return [
-        'about'     => ['label' => 'About', 'url' => 'about.php', 'children' => []],
+        'about' => ['label' => 'About', 'url' => 'about.php', 'children' => []],
+
         'documents' => ['label' => 'Documents', 'url' => 'documents.php', 'children' => [
-            ['All Documents',              'documents.php'],
-            ['Collective Agreement',       'collective-agreement.php'],
-            ['Letters of Understanding',   'lous.php'],
-            ['Contract Assistant',         'ca-assistant.php'],
-            ['Constitution &amp; Bylaws',  'documents/BVTU-Constitution-and-Bylaws-2026.pdf', true],
-            ['School Calendars',           'calendars.php'],
-            ['Trustee Zone Map',           'trustee-zones.php'],
-            ['Trustee Candidate Responses','trustee-candidates.php'],
+            ['All Documents', 'documents.php', false,
+             'Everything we hold, in one searchable list'],
+            ['Collective Agreement', 'collective-agreement.php', false,
+             'Your contract with School District 54'],
+            ['Side agreements (LOUs)', 'lous.php', false,
+             'What has been agreed since the contract was signed'],
+            ['Contract Assistant', 'ca-assistant.php', false,
+             'Ask a question, get the article that answers it'],
+            ['Constitution &amp; Bylaws', 'documents/BVTU-Constitution-and-Bylaws-2026.pdf', true,
+             'How the local is run'],
+            ['School Calendars', 'calendars.php', false,
+             'SD54 instructional days and Pro-D days'],
+            ['Trustee Zone Map', 'trustee-zones.php', false,
+             'Which zone you vote in'],
+            ['Trustee Candidate Responses', 'trustee-candidates.php', false,
+             'What the candidates told us'],
         ]],
+
         'members' => ['label' => 'Members', 'url' => 'members.php', 'children' => [
-            ['Member Resources',           'members.php'],
-            ['SURTs &amp; Seminars',       'events.php'],
-            ["What's On (calendar)",     'whats-on.php'],
-            ['Health &amp; Dental',        'benefits.php'],
-            ['Life Insurance',             'life-insurance.php'],
-            ['Student Loan Forgiveness',   'loan-forgiveness.php'],
-            ['Salary Grids',               'salary.php'],
-            ['TTOC Resources',             'ttoc.php'],
-            ['Release Time / Atrieve',     'atrieve.php'],
-            ['Remedy Tracker',             'remedy-tracker.php'],
-            ['Collaboration Grant',        'collab-grant.php'],
+            ['Member Resources', 'members.php', false,
+             'Everything for members, in one place'],
+            ['Salary Grids', 'salary.php', false,
+             'What you are paid, and how you move up'],
+            ['Health &amp; Dental', 'benefits.php', false,
+             'Pacific Blue Cross — what is covered, and how to claim'],
+            ['Life Insurance', 'life-insurance.php', false,
+             'Your coverage, beneficiaries and conversion rights'],
+            ['Student Loan Forgiveness', 'loan-forgiveness.php', false,
+             'Up to $30,000 forgiven for teaching in the north'],
+            ['Booking time off', 'atrieve.php', false,
+             'Release time and absences, and how to enter them in Atrieve'],
+            ['Class size &amp; remedy', 'remedy-tracker.php', false,
+             'When your class is over size — work out what you are owed'],
+            ['Collaboration Grant', 'collab-grant.php', false,
+             'Release days to plan with a colleague'],
+            ['Training &amp; workshops', 'events.php', false,
+             'SURTs and other sessions you can sign up for'],
+            ["What's On", 'whats-on.php', false,
+             'Union events, meetings and deadlines on one calendar'],
+            ['TTOC Resources', 'ttoc.php', false,
+             'Pay, seniority and call-out for teachers on call'],
         ]],
-        'prod'   => ['label' => 'PRO-D', 'url' => 'prod.php', 'children' => []],
+
+        'prod' => ['label' => 'PRO-D', 'url' => 'prod.php', 'children' => []],
+
         'health' => ['label' => 'Health &amp; Safety', 'url' => 'health-safety.php', 'children' => [
-            ['H&amp;S Resources', 'health-safety.php'],
-            ['WorkSafe BC',       'https://www.worksafebc.com', true],
-            ['EFAP',              'https://sd54.lifeworks.com/', true],
+            ['Health &amp; Safety', 'health-safety.php', false,
+             'Committees, reporting, and your right to refuse unsafe work'],
+            ['WorkSafe BC', 'https://www.worksafebc.com', true,
+             'Claims and workplace injury'],
+            ['Counselling &amp; support', 'https://sd54.lifeworks.com/', true,
+             'Free and confidential, through the employee assistance plan'],
         ]],
+
         'bctf' => ['label' => 'BCTF', 'url' => 'bctf.php', 'children' => [
-            ['BCTF Resources',          'bctf.php'],
-            ['BCTF Website',            'https://bctf.ca', true],
-            ['Benefits &amp; Discounts','https://www.bctf.ca/topics/services-information/benefits/view-member-discounts-bctf-advantage', true],
+            ['BCTF Resources', 'bctf.php', false,
+             'What the provincial federation offers members'],
+            ['BCTF Website', 'https://bctf.ca', true,
+             'bctf.ca'],
+            ['Benefits &amp; Discounts', 'https://www.bctf.ca/topics/services-information/benefits/view-member-discounts-bctf-advantage', true,
+             'Member discounts through BCTF Advantage'],
         ]],
+
         'resources' => ['label' => 'Resources', 'url' => 'library.php', 'children' => [
-            ['Resource Library',   'library.php'],
-            ['Curated Resources',  'curated.php'],
+            ['Resource Library', 'library.php', false,
+             'Lesson plans, units and rubrics shared by BVTU members'],
+            ['Curated Resources', 'curated.php', false,
+             'Picked out by the BVTU'],
         ]],
+
         'newsletters' => ['label' => 'Newsletters', 'url' => 'newsletter-archive.php', 'children' => []],
     ];
 }
@@ -79,7 +124,10 @@ function bvtuNavSection(string $file): string {
                           'calendars.php', 'trustee-zones.php', 'trustee-candidates.php'],
         'members'     => ['members.php', 'benefits.php', 'life-insurance.php', 'loan-forgiveness.php',
                           'salary.php', 'ttoc.php', 'atrieve.php', 'remedy-tracker.php',
-                          'collab-grant.php', 'collab-grant-edit.php'],
+                          'collab-grant.php', 'collab-grant-edit.php',
+                          // Added with the events work; without them neither page
+                          // lights up its section in the bar.
+                          'events.php', 'whats-on.php', 'event.php', 'event-cancel.php'],
         'prod'        => ['prod.php'],
         'health'      => ['health-safety.php'],
         'bctf'        => ['bctf.php', 'bctf-forms.php'],
@@ -155,10 +203,22 @@ function bvtuNav(array $o = []): void {
             <?php else: ?>
               <li class="has-dropdown">
                 <a href="<?= $base . $item['url'] ?>"<?= $isActive ? ' class="active"' : '' ?>><?= $item['label'] ?></a>
-                <ul class="dropdown">
+                <?php // Past six, one column runs off the bottom of a laptop screen. ?>
+                <ul class="dropdown<?= count($kids) > 6 ? ' dropdown-wide' : '' ?>">
                   <?php foreach ($kids as $kid): ?>
-                    <?php [$label, $url] = $kid; $ext = !empty($kid[2]); ?>
-                    <li><a href="<?= $h(bvtuNavHref($url, $base)) ?>"<?= $ext ? ' target="_blank" rel="noopener"' : '' ?>><?= $label ?></a></li>
+                    <?php
+                      [$label, $url] = $kid;
+                      $ext  = !empty($kid[2]);
+                      $desc = $kid[3] ?? '';
+                    ?>
+                    <li>
+                      <a href="<?= $h(bvtuNavHref($url, $base)) ?>"<?= $ext ? ' target="_blank" rel="noopener"' : '' ?>>
+                        <span class="nav-label"><?= $label ?></span>
+                        <?php if ($desc !== ''): ?>
+                        <span class="nav-desc"><?= $desc ?></span>
+                        <?php endif; ?>
+                      </a>
+                    </li>
                   <?php endforeach; ?>
                 </ul>
               </li>
