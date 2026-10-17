@@ -115,9 +115,15 @@ $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
               <span class="ev-where"><?= $h($e['location']) ?></span>
               <?php endif; ?>
               <span class="ev-tags">
+                <?php /* "Registration closed" on a deadline or a meeting is a
+                         claim that was never true — there was never any. */ ?>
+                <?php if (!empty($open['nosignup'])): ?>
+                <span class="ev-tag shut">No sign-up needed</span>
+                <?php else: ?>
                 <span class="ev-tag <?= $open['open'] ? 'open' : 'shut' ?>">
                   <?= $open['open'] ? 'Registration open' : 'Registration closed' ?>
                 </span>
+                <?php endif; ?>
                 <?php if ($docs): ?>
                 <span class="ev-tag docs"><?= $docs ?> handout<?= $docs === 1 ? '' : 's' ?></span>
                 <?php endif; ?>

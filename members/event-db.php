@@ -197,13 +197,37 @@ function evEnsureTables(): void {
 /**
  * Latitude and longitude, added after the table existed.
  */
+/** Is this column actually on ev_events? Asked per column, cached per request. */
+function evHasEventColumn(string $col): bool {
+    static $seen = [];
+    if (array_key_exists($col, $seen)) return $seen[$col];
+    evEnsureMapColumns();
+    try {
+        $s = getDB()->prepare(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ev_events' AND COLUMN_NAME = ?"
+        );
+        $s->execute([$col]);
+        $seen[$col] = (bool)$s->fetchColumn();
+    } catch (\Throwable $e) {
+        error_log('evHasEventColumn ' . $col . ': ' . $e->getMessage());
+        $seen[$col] = false;
+    }
+    return $seen[$col];
+}
+
 function evEnsureMapColumns(): bool {
     static $ok = null;
     if ($ok !== null) return $ok;
 
     $ok = true;
     foreach (['map_lat' => 'DECIMAL(10,7) DEFAULT NULL',
-              'map_lng' => 'DECIMAL(10,7) DEFAULT NULL'] as $col => $type) {
+              'map_lng' => 'DECIMAL(10,7) DEFAULT NULL',
+              // Not everything on the calendar is a seminar, and not everything
+              // takes sign-ups: an exec meeting or a Pro-D deadline is worth
+              // knowing about and has nothing to register for.
+              'kind'    => "VARCHAR(20) NOT NULL DEFAULT 'seminar'",
+              'signup'  => 'TINYINT(1) NOT NULL DEFAULT 1'] as $col => $type) {
         try {
             $has = (int)getDB()->query(
                 "SELECT COUNT(*) FROM information_schema.COLUMNS
@@ -288,6 +312,26 @@ function evMapsLink(array $event): string {
     $where = trim((string)($event['location'] ?? ''));
     if ($where === '') return '';
     return 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($where);
+}
+
+/** What an entry on the calendar is, and how it reads. */
+const EV_KINDS = [
+    'seminar'  => ['label' => 'SURT or seminar', 'short' => 'Seminar',  'colour' => '#1b6b42'],
+    'meeting'  => ['label' => 'Meeting',         'short' => 'Meeting',  'colour' => '#2b5fa8'],
+    'deadline' => ['label' => 'Deadline',        'short' => 'Deadline', 'colour' => '#9c3a1e'],
+    'social'   => ['label' => 'Social',          'short' => 'Social',   'colour' => '#7a4fa3'],
+    'giveaway' => ['label' => 'Tickets or draw', 'short' => 'Tickets',  'colour' => '#8a6d00'],
+    'other'    => ['label' => 'Other',           'short' => 'Event',    'colour' => '#555555'],
+];
+
+function evKind(array $e): array {
+    $k = (string)($e['kind'] ?? 'seminar');
+    return EV_KINDS[$k] ?? EV_KINDS['other'];
+}
+
+/** Does this one have anything to sign up for? */
+function evTakesSignups(array $e): bool {
+    return !array_key_exists('signup', $e) || !empty($e['signup']);
 }
 
 // ── Slugs ─────────────────────────────────────────────────────────────────────
@@ -384,12 +428,16 @@ function evPublished(): array {
 }
 
 function evUpdate(int $id, array $d): void {
-    $withMap = evMapColumnsOk();
+    $withMap  = evHasEventColumn('map_lat') && evHasEventColumn('map_lng');
+    // Its own check, not the map's. Sharing one flag meant a failed kind ALTER
+    // silently stopped map pins being saved too.
+    $withKind = evHasEventColumn('kind') && evHasEventColumn('signup');
 
     $sql = "UPDATE ev_events SET
                 title = ?, summary = ?, description = ?, starts_at = ?, ends_at = ?,
                 location = ?, confirm_message = ?, notify_email = ?"
-         . ($withMap ? ", map_lat = ?, map_lng = ?" : "")
+         . ($withMap  ? ", map_lat = ?, map_lng = ?" : "")
+         . ($withKind ? ", kind = ?, signup = ?" : "")
          . ", updated_at = NOW()
             WHERE id = ?";
 
@@ -403,6 +451,11 @@ function evUpdate(int $id, array $d): void {
     if ($withMap) {
         $args[] = $d['map_lat'] ?? null;
         $args[] = $d['map_lng'] ?? null;
+    }
+    if ($withKind) {
+        $kind   = (string)($d['kind'] ?? 'seminar');
+        $args[] = isset(EV_KINDS[$kind]) ? $kind : 'other';
+        $args[] = !empty($d['signup']) ? 1 : 0;
     }
     $args[] = $id;
 
@@ -428,16 +481,22 @@ function evDelete(int $id): void {
 
 /** Can someone sign up for this right now, and if not, why not? */
 function evRegistrationState(array $event): array {
+    // Draft and past come first, because they are true whatever kind of thing
+    // this is — a meeting that has already happened should say so rather than
+    // "just come along".
     if (($event['status'] ?? '') === 'draft') {
-        return ['open' => false, 'why' => 'This seminar has not been published yet.'];
+        return ['open' => false, 'why' => 'This has not been published yet.'];
+    }
+    // Checked here rather than only in the page, so a stale form posted after
+    // the event cannot still add someone to the list.
+    if (evIsPast($event)) {
+        return ['open' => false, 'why' => 'This has already taken place.'];
+    }
+    if (!evTakesSignups($event)) {
+        return ['open' => false, 'why' => '', 'nosignup' => true];
     }
     if (($event['status'] ?? '') === 'closed') {
         return ['open' => false, 'why' => 'Registration for this seminar has closed.'];
-    }
-    // Checked here rather than only in the page, so a stale form posted after
-    // the seminar cannot still add someone to the list.
-    if (evIsPast($event)) {
-        return ['open' => false, 'why' => 'This seminar has already taken place.'];
     }
     return ['open' => true, 'why' => ''];
 }

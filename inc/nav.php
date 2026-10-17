@@ -37,6 +37,7 @@ function bvtuNavItems(): array {
         'members' => ['label' => 'Members', 'url' => 'members.php', 'children' => [
             ['Member Resources',           'members.php'],
             ['SURTs &amp; Seminars',       'events.php'],
+            ["What's On (calendar)",     'whats-on.php'],
             ['Health &amp; Dental',        'benefits.php'],
             ['Life Insurance',             'life-insurance.php'],
             ['Student Loan Forgiveness',   'loan-forgiveness.php'],

@@ -88,6 +88,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
 
         if (!$errors) {
             evUpdate($id, [
+                'kind'            => evStr($_POST['kind'] ?? 'seminar'),
+                'signup'          => !empty($_POST['signup']) ? 1 : 0,
                 'map_lat'         => $pin['lat'] ?? null,
                 'map_lng'         => $pin['lng'] ?? null,
                 'title'           => $title,
@@ -253,6 +255,30 @@ $forInput = function ($v) {
         <div class="fld">
           <label class="lbl" for="f-title">Title</label>
           <input type="text" id="f-title" name="title" value="<?= $h($event['title']) ?>" required>
+        </div>
+
+        <div class="two">
+          <div class="fld">
+            <label class="lbl" for="f-kind">What is it?</label>
+            <p class="hint">Sets its colour on the What's On calendar.</p>
+            <select id="f-kind" name="kind">
+              <?php foreach (EV_KINDS as $slug => $k): ?>
+              <option value="<?= $h($slug) ?>"<?= ($event['kind'] ?? 'seminar') === $slug ? ' selected' : '' ?>>
+                <?= $h($k['label']) ?>
+              </option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="fld" style="padding-top:1.9rem;">
+            <label class="chk">
+              <input type="checkbox" name="signup" value="1"<?= evTakesSignups($event) ? ' checked' : '' ?>>
+              People can sign up
+            </label>
+            <p class="hint" style="margin-top:.3rem;">
+              Leave off for a meeting or a deadline &mdash; it still appears on the calendar,
+              there is just nothing to register for.
+            </p>
+          </div>
         </div>
 
         <div class="fld">

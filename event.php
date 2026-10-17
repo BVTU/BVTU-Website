@@ -95,7 +95,10 @@ if (!$notFound && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ev_subm
     if ($previewing) {
         $errors[] = 'This is a preview of a draft. Publish the seminar before registering.';
     } elseif (!$state['open']) {
-        $errors[] = $state['why'];
+        // nosignup carries no reason — there is nothing wrong, there is just
+        // nothing to submit. An empty bullet would say otherwise.
+        if (trim((string)$state['why']) !== '') $errors[] = $state['why'];
+        else $errors[] = 'There is nothing to sign up for on this one.';
     }
     if ($form['name'] === '')  $errors[] = 'Please give your name.';
     if ($form['email'] === '') {
@@ -397,6 +400,12 @@ $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
                 </p>
               <?php endif; ?>
             </div>
+          <?php elseif (!empty($state['nosignup'])): ?>
+            <div class="ev-shut">
+              <p style="margin:0 0 .9rem;">There is nothing to sign up for &mdash; just come along.</p>
+              <a class="btn btn-primary" style="width:100%;text-align:center;"
+                 href="event-ics.php?s=<?= $h(urlencode($event['slug'])) ?>">Add to my calendar</a>
+            </div>
           <?php elseif (!$state['open']): ?>
             <div class="ev-shut"><?= $h($state['why']) ?></div>
           <?php else: ?>
@@ -491,6 +500,15 @@ $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
               <button type="submit" name="ev_submit" value="1" class="btn btn-primary" style="width:100%;">
                 Register
               </button>
+
+              <?php /* Not while previewing a draft: event-ics.php 404s one,
+                       so the link would be dead in the one place it is shown. */ ?>
+              <?php if (!$previewing): ?>
+              <p style="margin:.9rem 0 0;text-align:center;">
+                <a href="event-ics.php?s=<?= $h(urlencode($event['slug'])) ?>"
+                   style="font-size:.84rem;">Add to my calendar</a>
+              </p>
+              <?php endif; ?>
 
               <p class="ev-note">
                 We use your answers to run this seminar and nothing else. You will get a
