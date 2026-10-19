@@ -383,6 +383,78 @@ function evCreate(string $title, string $createdBy): int {
     return $newId;
 }
 
+/**
+ * Put something on the calendar in one go.
+ *
+ * The long way round — create a draft, open the editor, fill it in, save,
+ * publish — is right for a seminar with handouts and a sign-up form. It is far
+ * too much for "exec meeting, Tuesday, 4:30", which is most of what a calendar
+ * actually holds.
+ *
+ * Published straight away, deliberately: a quick-add that left a draft would
+ * put nothing on the calendar, and the person who just typed it would
+ * reasonably think it had failed. Anything else it needs — a description,
+ * handouts, a map pin — is added afterwards in the editor.
+ *
+ * Returns ['ok' => bool, 'id' => int, 'error' => string].
+ */
+function evQuickAdd(array $d, string $createdBy): array {
+    $title = trim((string)($d['title'] ?? ''));
+    if ($title === '') {
+        return ['ok' => false, 'id' => 0, 'error' => 'Give it a name.'];
+    }
+
+    $date = trim((string)($d['date'] ?? ''));
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+        return ['ok' => false, 'id' => 0, 'error' => 'That date could not be read.'];
+    }
+    $time = trim((string)($d['time'] ?? ''));
+    if ($time !== '' && !preg_match('/^\d{1,2}:\d{2}$/', $time)) {
+        return ['ok' => false, 'id' => 0, 'error' => 'That time could not be read.'];
+    }
+    $starts = $date . ' ' . ($time !== '' ? sprintf('%05s', $time) : '09:00') . ':00';
+    $check  = DateTime::createFromFormat('Y-m-d H:i:s', $starts, new DateTimeZone('America/Vancouver'));
+    if (!$check || $check->format('Y-m-d H:i:s') !== $starts) {
+        return ['ok' => false, 'id' => 0, 'error' => 'That date and time do not make a real moment.'];
+    }
+
+    $kind = (string)($d['kind'] ?? 'meeting');
+    if (!isset(EV_KINDS[$kind])) $kind = 'other';
+
+    $id = 0;
+    try {
+        $id = evCreate($title, $createdBy);
+        evUpdate($id, [
+            'title'           => $title,
+            'summary'         => '',
+            'description'     => '',
+            'starts_at'       => $starts,
+            'ends_at'         => '',
+            'location'        => trim((string)($d['location'] ?? '')),
+            'confirm_message' => '',
+            'notify_email'    => $createdBy,
+            'kind'            => $kind,
+            // Most of what goes on a calendar this way is a meeting or a
+            // deadline. A seminar wanting registration is added the long way.
+            'signup'          => !empty($d['signup']) ? 1 : 0,
+            'map_lat'         => null,
+            'map_lng'         => null,
+        ]);
+        evSetStatus($id, 'open');
+    } catch (\Throwable $e) {
+        error_log('evQuickAdd: ' . $e->getMessage());
+        // evCreate commits on its own, so a throw in either later step would
+        // leave a dated-nowhere draft sitting on the good slug with nothing
+        // able to reach it. Take it back out.
+        if ($id > 0) {
+            try { evDelete($id); } catch (\Throwable $ignore) {}
+        }
+        return ['ok' => false, 'id' => 0, 'error' => 'It could not be saved. The problem has been logged.'];
+    }
+
+    return ['ok' => true, 'id' => $id, 'error' => ''];
+}
+
 function evGet(int $id): ?array {
     $s = getDB()->prepare("SELECT * FROM ev_events WHERE id = ? LIMIT 1");
     $s->execute([$id]);

@@ -73,6 +73,9 @@ function evStateUpcoming(int $limit = 3): array {
         // Absent means yes, matching evTakesSignups(): an older cache written
         // before this column existed should show its events, not hide them.
         if (array_key_exists('signup', $e) && !$e['signup']) continue;
+        // And only training. Ticking "people can sign up" on an exec meeting
+        // should not put it on the front page under "SURTs and seminars".
+        if (array_key_exists('kind', $e) && $e['kind'] !== '' && $e['kind'] !== 'seminar') continue;
 
         $ends = trim((string)($e['ends_at'] ?? ''));
         if ($ends === '') $ends = trim((string)($e['starts_at'] ?? ''));
@@ -97,12 +100,18 @@ function evStateRebuild(): bool {
         // SELECT * rather than naming signup: the column is added best-effort,
         // and a host without it would throw here and leave the front page with
         // no events at all.
+        // Upcoming, not simply the first twenty. Ordering by start and taking
+        // twenty kept the OLDEST open events, so once twenty meetings had been
+        // and gone the box would filter them all out as past and show nothing
+        // — with real seminars sitting open behind them.
         $rows = getDB()->query(
             "SELECT *
              FROM ev_events
              WHERE status = 'open'
+               AND (starts_at IS NULL
+                    OR COALESCE(ends_at, starts_at) >= DATE_SUB(NOW(), INTERVAL 1 DAY))
              ORDER BY (starts_at IS NULL) ASC, starts_at ASC
-             LIMIT 20"
+             LIMIT 200"
         )->fetchAll();
     } catch (\Throwable $e) {
         error_log('evStateRebuild: ' . $e->getMessage());
@@ -111,6 +120,15 @@ function evStateRebuild(): bool {
 
     $events = [];
     foreach ($rows as $r) {
+        // The box is headed "SURTs you can sign up for", so only those are
+        // kept. Done here, not in the WHERE clause: naming a column that a
+        // failed ALTER never created would throw and leave the front page
+        // with nothing at all.
+        $kind = (string)($r['kind'] ?? 'seminar');
+        if ($kind !== '' && $kind !== 'seminar') continue;
+        if (array_key_exists('signup', $r) && empty($r['signup'])) continue;
+        if (count($events) >= 20) break;
+
         $events[] = [
             'slug'      => (string)$r['slug'],
             'title'     => (string)$r['title'],
@@ -122,6 +140,7 @@ function evStateRebuild(): bool {
             // "SURTs you can sign up for", and a grant deadline under that is
             // a claim that was never true.
             'signup'    => array_key_exists('signup', $r) ? (int)!empty($r['signup']) : 1,
+            'kind'       => (string)($r['kind'] ?? 'seminar'),
         ];
     }
 

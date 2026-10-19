@@ -8,6 +8,7 @@
  */
 require_once __DIR__ . '/members/auth.php';
 require_once __DIR__ . '/members/event-db.php';
+require_once __DIR__ . '/members/exec-db.php';
 
 try {
     evEnsureTables();
@@ -16,6 +17,64 @@ try {
 }
 
 date_default_timezone_set('America/Vancouver');
+
+// Only an organiser gets the add affordances, and the check is repeated on the
+// POST: hiding a button is a courtesy to the reader, never a control.
+$canAdd = false;
+// Tested before anything else runs: this page is public, and an anonymous
+// reader has no business triggering the exec_roles table setup.
+if (isLoggedIn()) {
+    try {
+        execEnsureTables();
+        // The same gate requireLogin() applies on the editor. An account an
+        // admin has just reset must not be able to publish to the public
+        // calendar, or to everybody's subscribed feed, before setting a
+        // password of its own.
+        $canAdd = !mustChangePassword()
+               && execIsAdmin(getMember()['email'] ?? '');
+    } catch (\Throwable $e) {
+        error_log('whats-on admin check: ' . $e->getMessage());
+    }
+}
+
+$addErr  = '';
+$addBack = [];   // what they typed, so a refusal does not make them retype it
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'quick-add') {
+    if (!$canAdd) {
+        http_response_code(403);
+        exit('Only an organiser can add to the calendar.');
+    }
+    csrfCheck();
+    $addBack = [
+        'title'    => evStr($_POST['title'] ?? ''),
+        'date'     => evStr($_POST['date'] ?? ''),
+        'time'     => evStr($_POST['time'] ?? ''),
+        'location' => evStr($_POST['location'] ?? ''),
+        'kind'     => evStr($_POST['kind'] ?? 'meeting'),
+        'signup'   => !empty($_POST['signup']),
+    ];
+    $res = evQuickAdd($addBack, getMember()['email'] ?? '');
+
+    if ($res['ok']) {
+        // Redirect so a refresh does not add it twice, landing on the month
+        // the event is in rather than wherever they happened to be.
+        startSession();
+        $_SESSION['wo_added'] = $res['id'];
+        $landOn = substr(evStr($_POST['date'] ?? ''), 0, 7);
+        header('Location: whats-on.php?m=' . urlencode($landOn) . '&added=1');
+        exit;
+    }
+    $addErr = $res['error'];
+}
+
+$addedId = 0;
+if (($_GET['added'] ?? '') === '1') {
+    startSession();
+    if (!empty($_SESSION['wo_added'])) {
+        $addedId = (int)$_SESSION['wo_added'];
+        unset($_SESSION['wo_added']);
+    }
+}
 
 // Which month we are looking at. Clamped to a few years either side so a
 // crafted ?m= cannot walk the page off into year 9999.
@@ -132,6 +191,37 @@ $subscribeUrl = (defined('SITE_URL') && SITE_URL ? rtrim(SITE_URL, '/') : 'https
                letter-spacing:.05em; color:#fff; border-radius:4px; padding:.1rem .38rem;
                margin-top:.3rem; }
 
+    /* ── Organiser-only: adding straight from the grid ─────────────────── */
+    .wo-cell.can-add { cursor:pointer; position:relative; }
+    .wo-cell.can-add:hover { background:var(--accent); }
+    .wo-plus { position:absolute; top:.35rem; right:.45rem; font-size:.95rem; line-height:1;
+               color:var(--primary); opacity:0; transition:opacity .12s ease; }
+    .wo-cell.can-add:hover .wo-plus { opacity:.75; }
+    .wo-addbtn { background:var(--primary); color:#fff; border:0; border-radius:7px;
+                 font:inherit; font-size:.85rem; font-weight:700; padding:.5rem .95rem; cursor:pointer; }
+
+    .wo-note { border-radius:8px; padding:.85rem 1.1rem; margin-bottom:1.25rem; font-size:.92rem; }
+    .wo-note-ok  { background:#eef7f1; border:1px solid #b8ddc5; }
+    .wo-note-bad { background:#fdecea; border:1px solid #f5c6c2; }
+
+    .wo-veil { display:none; position:fixed; inset:0; background:rgba(20,24,20,.45); z-index:900;
+               align-items:flex-start; justify-content:center; padding:5vh 1rem; overflow:auto; }
+    .wo-veil.open { display:flex; }
+    .wo-box { background:#fff; border-radius:12px; width:100%; max-width:28rem; padding:1.4rem 1.5rem 1.2rem;
+              box-shadow:0 12px 40px rgba(0,0,0,.25); }
+    .wo-box-head { display:flex; align-items:flex-start; gap:1rem; margin-bottom:1.1rem; }
+    .wo-box-head h2 { font-size:1.05rem; margin:0; flex:1 1 auto; color:var(--primary); }
+    .wo-x { background:none; border:0; font-size:1.5rem; line-height:1; color:var(--gray-400); cursor:pointer; }
+    .wo-f { display:block; margin-bottom:.9rem; }
+    .wo-f > span { display:block; font-weight:700; font-size:.84rem; margin-bottom:.3rem; }
+    .wo-f > span em { font-weight:400; font-style:normal; color:var(--gray-500); }
+    .wo-f input, .wo-f select { width:100%; padding:.55rem .65rem; border:1px solid var(--border);
+                                border-radius:7px; font:inherit; font-size:.94rem; background:#fff; }
+    .wo-two { display:grid; grid-template-columns:1fr 1fr; gap:.8rem; }
+    .wo-check { display:flex; gap:.5rem; align-items:center; font-size:.9rem; margin-bottom:.9rem; }
+    .wo-hint { font-size:.8rem; color:var(--gray-500); line-height:1.5; margin:0 0 1.1rem; }
+    .wo-box-foot { display:flex; gap:.6rem; justify-content:flex-end; }
+
     .wo-empty { background:var(--off-white); border:1px solid var(--border); border-radius:10px;
                 padding:2rem 1.5rem; color:var(--gray-600); font-size:.95rem; text-align:center; }
 
@@ -170,8 +260,27 @@ $subscribeUrl = (defined('SITE_URL') && SITE_URL ? rtrim(SITE_URL, '/') : 'https
   <main class="page-content">
     <div class="container">
 
+      <?php if ($addErr !== ''): ?>
+      <div class="wo-note wo-note-bad"><?= $h($addErr) ?></div>
+      <?php endif; ?>
+      <?php if ($addedId): ?>
+      <div class="wo-note wo-note-ok">
+        &#10003; Added to the calendar.
+        <a href="members/event-edit.php?id=<?= (int)$addedId ?>">Add a description, handouts or a map pin</a>
+        if it needs them.
+      </div>
+      <?php endif; ?>
+
       <div class="wo-bar">
         <h2><?= $h($first->format('F Y')) ?></h2>
+        <?php if ($canAdd): ?>
+        <?php /* The grid is hidden on a phone, so the only way in there is a
+                 button. Defaults to today when today is in the month shown. */ ?>
+        <button type="button" class="wo-addbtn"
+                onclick="woAdd('<?= $h(date('Y-m-d') >= $first->format('Y-m-d') && date('Y-m-d') <= $last->format('Y-m-d') ? date('Y-m-d') : $first->format('Y-m-d')) ?>', event)">
+          + Add an event
+        </button>
+        <?php endif; ?>
         <div class="wo-nav">
           <?php if ($prev !== null): ?>
           <a href="?m=<?= $h($prev) ?>" aria-label="Previous month">&larr;</a>
@@ -205,11 +314,19 @@ $subscribeUrl = (defined('SITE_URL') && SITE_URL ? rtrim(SITE_URL, '/') : 'https
 
         <?php for ($d = 1; $d <= $days; $d++):
               $key = $first->format('Y-m-') . str_pad((string)$d, 2, '0', STR_PAD_LEFT); ?>
-        <div class="wo-cell<?= $key === $today ? ' is-today' : '' ?>">
+        <div class="wo-cell<?= $key === $today ? ' is-today' : '' ?><?= $canAdd ? ' can-add' : '' ?>"
+             <?= $canAdd ? 'onclick="woAdd(\'' . $h($key) . '\', event)" title="Add something on this day"' : '' ?>>
           <span class="wo-num"><?= $d ?></span>
+          <?php if ($canAdd): ?><span class="wo-plus" aria-hidden="true">+</span><?php endif; ?>
           <?php foreach ($byDay[$key] ?? [] as $e): $k = evKind($e); ?>
+          <?php /* The cell behind this opens the add dialog, so the link has to
+                   stop the click reaching it — otherwise opening an event also
+                   opened "add something", and a middle-click left the dialog
+                   sitting there over a tab that had not navigated. */ ?>
           <a class="wo-ev" style="background:<?= $h($k['colour']) ?>;"
              href="event.php?s=<?= $h(urlencode($e['slug'])) ?>"
+             onclick="event.stopPropagation()"
+             onauxclick="event.stopPropagation()"
              title="<?= $h($e['title']) ?>">
             <span class="t"><?= $h($e['title']) ?></span>
             <span class="w"><?= $h(evClock(strtotime($e['starts_at']))) ?></span>
@@ -276,6 +393,88 @@ $subscribeUrl = (defined('SITE_URL') && SITE_URL ? rtrim(SITE_URL, '/') : 'https
   </main>
 
   <?php require_once __DIR__ . '/inc/footer.php'; bvtuFooter(); ?>
+
+  <?php if ($canAdd): ?>
+  <div class="wo-veil" id="woVeil" onclick="if(event.target===this)woClose()">
+    <form class="wo-box" method="POST" action="whats-on.php?m=<?= $h($first->format('Y-m')) ?>">
+      <?= csrfField() ?>
+      <input type="hidden" name="action" value="quick-add">
+      <input type="hidden" name="date" id="woDate">
+
+      <div class="wo-box-head">
+        <h2 id="woHeading">Add to the calendar</h2>
+        <button type="button" class="wo-x" onclick="woClose()" aria-label="Close">&times;</button>
+      </div>
+
+      <label class="wo-f">
+        <span>What is it?</span>
+        <input type="text" name="title" id="woTitle" maxlength="200" required
+               value="<?= $h($addBack['title'] ?? '') ?>"
+               placeholder="e.g. Exec meeting">
+      </label>
+
+      <div class="wo-two">
+        <label class="wo-f">
+          <span>Starts</span>
+          <input type="time" name="time" value="<?= $h($addBack['time'] ?? '16:30') ?>">
+        </label>
+        <label class="wo-f">
+          <span>Kind</span>
+          <select name="kind">
+            <?php foreach (EV_KINDS as $slug => $k): ?>
+            <?php $chosen = $addBack['kind'] ?? 'meeting'; ?>
+            <option value="<?= $h($slug) ?>"<?= $slug === $chosen ? ' selected' : '' ?>><?= $h($k['label']) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </label>
+      </div>
+
+      <label class="wo-f">
+        <span>Where <em>(optional)</em></span>
+        <input type="text" name="location" maxlength="255"
+               value="<?= $h($addBack['location'] ?? '') ?>" placeholder="e.g. BVTU Office">
+      </label>
+
+      <label class="wo-check">
+        <input type="checkbox" name="signup" value="1"<?= !empty($addBack['signup']) ? ' checked' : '' ?>>
+        <span>People can sign up for this</span>
+      </label>
+
+      <p class="wo-hint">
+        It goes on the calendar straight away. Anything else &mdash; a description,
+        handouts, a map pin &mdash; you can add afterwards.
+      </p>
+
+      <div class="wo-box-foot">
+        <button type="button" class="btn btn-outline" onclick="woClose()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Add it</button>
+      </div>
+    </form>
+  </div>
+
+  <script>
+  function woAdd(date, ev) {
+    if (ev) ev.stopPropagation();
+    var d = new Date(date + 'T12:00:00');
+    if (!date || isNaN(d.getTime())) {
+      date = <?= json_encode($first->format('Y-m-') . '01') ?>;
+      d = new Date(date + 'T12:00:00');
+    }
+    document.getElementById('woDate').value = date;
+    document.getElementById('woHeading').textContent =
+      'Add something on ' + d.toLocaleDateString(undefined, { weekday:'long', day:'numeric', month:'long' });
+    document.getElementById('woVeil').classList.add('open');
+    document.getElementById('woTitle').focus();
+  }
+  function woClose() { document.getElementById('woVeil').classList.remove('open'); }
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') woClose(); });
+  <?php if ($addErr !== ''): ?>
+  // Refused: reopen it with what they typed still in place, rather than
+  // closing and making them start again.
+  woAdd(<?= json_encode($addBack['date'] ?? '') ?>);
+  <?php endif; ?>
+  </script>
+  <?php endif; ?>
 
   <script>
   function woCopy(btn) {
