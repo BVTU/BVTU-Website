@@ -227,7 +227,11 @@ function evEnsureMapColumns(): bool {
               // takes sign-ups: an exec meeting or a Pro-D deadline is worth
               // knowing about and has nothing to register for.
               'kind'    => "VARCHAR(20) NOT NULL DEFAULT 'seminar'",
-              'signup'  => 'TINYINT(1) NOT NULL DEFAULT 1'] as $col => $type) {
+              'signup'  => 'TINYINT(1) NOT NULL DEFAULT 1',
+              // A deadline or a Pro-D day is not a 4:30 appointment. Stored as
+              // a flag rather than by convention on the times, so "all day" and
+              // "happens to start at midnight" stay different things.
+              'all_day' => 'TINYINT(1) NOT NULL DEFAULT 0'] as $col => $type) {
         try {
             $has = (int)getDB()->query(
                 "SELECT COUNT(*) FROM information_schema.COLUMNS
@@ -329,6 +333,11 @@ function evKind(array $e): array {
     return EV_KINDS[$k] ?? EV_KINDS['other'];
 }
 
+/** Does it run all day, rather than at a time? */
+function evAllDay(array $e): bool {
+    return !empty($e['all_day']);
+}
+
 /** Does this one have anything to sign up for? */
 function evTakesSignups(array $e): bool {
     return !array_key_exists('signup', $e) || !empty($e['signup']);
@@ -408,14 +417,80 @@ function evQuickAdd(array $d, string $createdBy): array {
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
         return ['ok' => false, 'id' => 0, 'error' => 'That date could not be read.'];
     }
-    $time = trim((string)($d['time'] ?? ''));
-    if ($time !== '' && !preg_match('/^\d{1,2}:\d{2}$/', $time)) {
-        return ['ok' => false, 'id' => 0, 'error' => 'That time could not be read.'];
+    $allDay = !empty($d['all_day']);
+    if ($allDay && !evHasEventColumn('all_day')) {
+        // Without the column the flag is dropped and midnight-to-midnight is
+        // stored as a real instant — a zero-length 12 am entry in everybody's
+        // calendar. Say so rather than quietly producing that.
+        return ['ok' => false, 'id' => 0,
+                'error' => 'All-day events are not available on this server yet. '
+                         . 'Give it a start and finish time, or tell the site admin.'];
     }
-    $starts = $date . ' ' . ($time !== '' ? sprintf('%05s', $time) : '09:00') . ':00';
-    $check  = DateTime::createFromFormat('Y-m-d H:i:s', $starts, new DateTimeZone('America/Vancouver'));
-    if (!$check || $check->format('Y-m-d H:i:s') !== $starts) {
-        return ['ok' => false, 'id' => 0, 'error' => 'That date and time do not make a real moment.'];
+
+    $clock = function (string $t): ?string {
+        $t = trim($t);
+        if ($t === '' || !preg_match('/^\d{1,2}:\d{2}$/', $t)) return null;
+        return sprintf('%05s', $t);
+    };
+    $real = function (string $dt): bool {
+        $c = DateTime::createFromFormat('Y-m-d H:i:s', $dt, new DateTimeZone('America/Vancouver'));
+        return $c && $c->format('Y-m-d H:i:s') === $dt;
+    };
+
+    if ($allDay) {
+        // Midnight to midnight. Any times sent are ignored rather than
+        // refused: the boxes holding them are hidden the moment all-day is
+        // ticked, and whatever was left in them is not a mistake.
+        $starts = $date . ' 00:00:00';
+        $endDay = trim((string)($d['end_date'] ?? '')) ?: $date;
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $endDay)) {
+            return ['ok' => false, 'id' => 0, 'error' => 'That finishing date could not be read.'];
+        }
+        $ends = $endDay . ' 00:00:00';
+        if (!$real($starts) || !$real($ends)) {
+            return ['ok' => false, 'id' => 0, 'error' => 'Those dates do not make real days.'];
+        }
+        if (strtotime($ends) < strtotime($starts)) {
+            return ['ok' => false, 'id' => 0, 'error' => 'It cannot finish before it starts.'];
+        }
+    } else {
+        $from = $clock((string)($d['time'] ?? ''));
+        if (trim((string)($d['time'] ?? '')) !== '' && $from === null) {
+            return ['ok' => false, 'id' => 0, 'error' => 'That start time could not be read.'];
+        }
+        $from = $from ?? '09:00';
+
+        $to = $clock((string)($d['end_time'] ?? ''));
+        if (trim((string)($d['end_time'] ?? '')) !== '' && $to === null) {
+            return ['ok' => false, 'id' => 0, 'error' => 'That finishing time could not be read.'];
+        }
+
+        $starts = $date . ' ' . $from . ':00';
+        if (!$real($starts)) {
+            return ['ok' => false, 'id' => 0, 'error' => 'That date and time do not make a real moment.'];
+        }
+
+        // An hour, when they do not say. Leaving it open-ended draws a sliver
+        // in a calendar that is easy to miss, and the .ics had to invent an
+        // hour anyway — better to invent it once, here, where it is visible.
+        if ($to === null) {
+            $ends = (new DateTime($starts, new DateTimeZone('America/Vancouver')))
+                        ->modify('+1 hour')->format('Y-m-d H:i:s');
+            // A typed end past midnight is refused below, so an invented one
+            // must not sneak across either: a 23:30 start would otherwise land
+            // on tomorrow and draw in two grid cells.
+            if (substr($ends, 0, 10) !== $date) $ends = $date . ' 23:59:00';
+        } else {
+            $ends = $date . ' ' . $to . ':00';
+            if (!$real($ends)) {
+                return ['ok' => false, 'id' => 0, 'error' => 'That finishing time is not a real time.'];
+            }
+            if (strtotime($ends) <= strtotime($starts)) {
+                return ['ok' => false, 'id' => 0,
+                        'error' => 'It has to finish after it starts. For something that runs past '
+                                 . 'midnight, add it and set the dates in the editor.'];
+            }
+        }
     }
 
     $kind = (string)($d['kind'] ?? 'meeting');
@@ -429,7 +504,8 @@ function evQuickAdd(array $d, string $createdBy): array {
             'summary'         => '',
             'description'     => '',
             'starts_at'       => $starts,
-            'ends_at'         => '',
+            'ends_at'         => $ends,
+            'all_day'         => $allDay ? 1 : 0,
             'location'        => trim((string)($d['location'] ?? '')),
             'confirm_message' => '',
             'notify_email'    => $createdBy,
@@ -504,14 +580,32 @@ function evUpdate(int $id, array $d): void {
     // Its own check, not the map's. Sharing one flag meant a failed kind ALTER
     // silently stopped map pins being saved too.
     $withKind = evHasEventColumn('kind') && evHasEventColumn('signup');
+    $withDay  = evHasEventColumn('all_day');
 
     $sql = "UPDATE ev_events SET
                 title = ?, summary = ?, description = ?, starts_at = ?, ends_at = ?,
                 location = ?, confirm_message = ?, notify_email = ?"
          . ($withMap  ? ", map_lat = ?, map_lng = ?" : "")
          . ($withKind ? ", kind = ?, signup = ?" : "")
+         . ($withDay  ? ", all_day = ?" : "")
          . ", updated_at = NOW()
             WHERE id = ?";
+
+    // All day means midnight to midnight, whoever is doing the writing. The
+    // editor offers a datetime field and a tick box independently, so without
+    // this the flag could be set on an event that still says 16:30 — true in
+    // the database and false on the page. Gated on $withDay: if the column is
+    // missing the flag cannot be stored, and rewriting the times to midnight
+    // without it would leave a zero-length 12 am event nobody asked for.
+    if ($withDay && !empty($d['all_day'])) {
+        foreach (['starts_at', 'ends_at'] as $f) {
+            $v = trim((string)($d[$f] ?? ''));
+            if ($v !== '') {
+                $t = strtotime($v);
+                if ($t !== false) $d[$f] = date('Y-m-d', $t) . ' 00:00:00';
+            }
+        }
+    }
 
     $args = [
         evFit($d['title'], 200), evFit($d['summary'] ?? '', 400),
@@ -529,6 +623,7 @@ function evUpdate(int $id, array $d): void {
         $args[] = isset(EV_KINDS[$kind]) ? $kind : 'other';
         $args[] = !empty($d['signup']) ? 1 : 0;
     }
+    if ($withDay) $args[] = !empty($d['all_day']) ? 1 : 0;
     $args[] = $id;
 
     getDB()->prepare($sql)->execute($args);
@@ -1122,12 +1217,28 @@ function evOrphanAnswers(array $questions, array $rows): array {
 function evWhen(array $event): string {
     $start = $event['starts_at'] ?? null;
     if (!$start) return 'Date to be confirmed';
-    $s   = strtotime($start);
+    $s = strtotime($start);
+    if ($s === false) return 'Date to be confirmed';
+
+    $end = trim((string)($event['ends_at'] ?? ''));
+    $e   = $end !== '' ? strtotime($end) : false;
+    $sameDay = $e !== false && date('Y-m-d', $e) === date('Y-m-d', $s);
+
+    // All day: no clock at all, because printing "12 am" for a deadline is
+    // worse than printing nothing.
+    if (evAllDay($event)) {
+        if ($e !== false && !$sameDay) {
+            // The year on both ends when they differ, or 30 December to
+            // 2 January reads as one week rather than one year and a bit.
+            $startFmt = date('Y', $s) === date('Y', $e) ? 'l, F j' : 'l, F j, Y';
+            return date($startFmt, $s) . ' – ' . date('l, F j, Y', $e) . ', all day';
+        }
+        return date('l, F j, Y', $s) . ', all day';
+    }
+
     $out = date('l, F j, Y', $s) . ' at ' . evClock($s);
-    $end = $event['ends_at'] ?? null;
-    if ($end) {
-        $e = strtotime($end);
-        $out .= (date('Y-m-d', $e) === date('Y-m-d', $s))
+    if ($e !== false) {
+        $out .= $sameDay
             ? ' – ' . evClock($e)
             : ' – ' . date('l, F j, Y', $e) . ' at ' . evClock($e);
     }
@@ -1142,6 +1253,13 @@ function evIsPast(array $event): bool {
     $when = $event['ends_at'] ?: $event['starts_at'];
     if (!$when) return false;
     $t = strtotime((string)$when);
+    // An all-day event stores midnight at the START of its last day, so
+    // comparing that to now made it "past" for the whole day it was running:
+    // filed under Already run, sign-ups refused, cancellation blocked. It is
+    // over at the end of that day.
+    if ($t !== false && evAllDay($event)) {
+        $t = strtotime('+1 day', strtotime(date('Y-m-d', $t)));
+    }
     // strtotime returns false on a date it cannot read, and false < time() is
     // true — which filed a seminar with a malformed date under "already run"
     // and dropped it off the listing. Unreadable is treated as undated, so it

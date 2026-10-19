@@ -141,6 +141,10 @@ function evStateRebuild(): bool {
             // a claim that was never true.
             'signup'    => array_key_exists('signup', $r) ? (int)!empty($r['signup']) : 1,
             'kind'       => (string)($r['kind'] ?? 'seminar'),
+            // Without this the front page advertises an all-day SURT as
+            // "Saturday 7 November, 12 am", which is worse than saying nothing
+            // about the time at all.
+            'all_day'   => array_key_exists('all_day', $r) ? (int)!empty($r['all_day']) : 0,
         ];
     }
 
@@ -167,6 +171,19 @@ function evStateRebuild(): bool {
 function evStateWhen(array $e): string {
     $m = evStateMoment((string)($e['starts_at'] ?? ''));
     if ($m === null) return 'Date to be confirmed';
+
+    if (!empty($e['all_day'])) {
+        // ends_at is stored as midnight starting the last day, so it is the
+        // last day itself — no shifting back the way the .ics needs.
+        $end = evStateMoment((string)($e['ends_at'] ?? ''));
+        if ($end !== null && $end->format('Y-m-d') !== $m->format('Y-m-d')) {
+            $sameYear = $end->format('Y') === $m->format('Y');
+            return $m->format($sameYear ? 'l j F' : 'l j F Y') . ' to '
+                 . $end->format($sameYear ? 'j F' : 'j F Y');
+        }
+        return $m->format('l j F') . ', all day';
+    }
+
     $clock = ($m->format('i') === '00' ? $m->format('g') : $m->format('g:i')) . $m->format(' a');
     return $m->format('l j F') . ', ' . $clock;
 }

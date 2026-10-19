@@ -90,6 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
             evUpdate($id, [
                 'kind'            => evStr($_POST['kind'] ?? 'seminar'),
                 'signup'          => !empty($_POST['signup']) ? 1 : 0,
+                'all_day'         => !empty($_POST['all_day']) ? 1 : 0,
                 'map_lat'         => $pin['lat'] ?? null,
                 'map_lng'         => $pin['lng'] ?? null,
                 'title'           => $title,
@@ -270,6 +271,10 @@ $forInput = function ($v) {
             </select>
           </div>
           <div class="fld" style="padding-top:1.9rem;">
+            <label class="chk" style="margin-bottom:.5rem;">
+              <input type="checkbox" name="all_day" value="1"<?= evAllDay($event) ? ' checked' : '' ?>>
+              Runs all day
+            </label>
             <label class="chk">
               <input type="checkbox" name="signup" value="1"<?= evTakesSignups($event) ? ' checked' : '' ?>>
               People can sign up

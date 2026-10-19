@@ -49,6 +49,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'quick
         'title'    => evStr($_POST['title'] ?? ''),
         'date'     => evStr($_POST['date'] ?? ''),
         'time'     => evStr($_POST['time'] ?? ''),
+        'end_time' => evStr($_POST['end_time'] ?? ''),
+        'end_date' => evStr($_POST['end_date'] ?? ''),
+        'all_day'  => !empty($_POST['all_day']),
         'location' => evStr($_POST['location'] ?? ''),
         'kind'     => evStr($_POST['kind'] ?? 'meeting'),
         'signup'   => !empty($_POST['signup']),
@@ -114,10 +117,15 @@ foreach (evPublished() as $e) {
     if ($tEnd < $first->getTimestamp() || $t > $last->getTimestamp()) continue;
 
     // Shown on each day it covers, within this month.
-    $cursor = max($t, $first->getTimestamp());
-    $stop   = min($tEnd, $last->getTimestamp());
-    for ($day = strtotime(date('Y-m-d', $cursor)); $day <= $stop; $day += 86400) {
-        $byDay[date('Y-m-d', $day)][] = $e;
+    // Walked a calendar day at a time, not 86400 seconds at a time: the clocks
+    // change inside this range twice a year, and adding a fixed number of
+    // seconds drifts off midnight — which showed an event twice on the day
+    // after the change and dropped its last day altogether.
+    $cursor = new DateTime(date('Y-m-d', max($t, $first->getTimestamp())));
+    $stop   = new DateTime(date('Y-m-d', min($tEnd, $last->getTimestamp())));
+    while ($cursor <= $stop) {
+        $byDay[$cursor->format('Y-m-d')][] = $e;
+        $cursor->modify('+1 day');
     }
     $month[] = $e;
 }
@@ -329,7 +337,7 @@ $subscribeUrl = (defined('SITE_URL') && SITE_URL ? rtrim(SITE_URL, '/') : 'https
              onauxclick="event.stopPropagation()"
              title="<?= $h($e['title']) ?>">
             <span class="t"><?= $h($e['title']) ?></span>
-            <span class="w"><?= $h(evClock(strtotime($e['starts_at']))) ?></span>
+            <span class="w"><?= $h(evAllDay($e) ? 'All day' : evClock(strtotime($e['starts_at']))) ?></span>
           </a>
           <?php endforeach; ?>
         </div>
@@ -356,7 +364,7 @@ $subscribeUrl = (defined('SITE_URL') && SITE_URL ? rtrim(SITE_URL, '/') : 'https
           <span class="wo-main">
             <span class="t"><?= $h($e['title']) ?></span>
             <span class="w">
-              <?= $h(evClock($t)) ?><?php if (trim((string)$e['location']) !== ''): ?>
+              <?= $h(evAllDay($e) ? 'All day' : evClock($t)) ?><?php if (trim((string)$e['location']) !== ''): ?>
               &middot; <?= $h($e['location']) ?><?php endif; ?>
             </span>
             <span class="wo-pill" style="background:<?= $h($k['colour']) ?>;"><?= $h($k['short']) ?></span>
@@ -413,11 +421,31 @@ $subscribeUrl = (defined('SITE_URL') && SITE_URL ? rtrim(SITE_URL, '/') : 'https
                placeholder="e.g. Exec meeting">
       </label>
 
-      <div class="wo-two">
+      <label class="wo-check" style="margin-bottom:.8rem;">
+        <input type="checkbox" name="all_day" id="woAllDay" value="1"
+               onchange="woDayToggle()"<?= !empty($addBack['all_day']) ? ' checked' : '' ?>>
+        <span>All day</span>
+      </label>
+
+      <div class="wo-two" id="woTimes">
         <label class="wo-f">
           <span>Starts</span>
-          <input type="time" name="time" value="<?= $h($addBack['time'] ?? '16:30') ?>">
+          <input type="time" name="time" id="woFrom" onchange="woEndFollows()"
+                 value="<?= $h($addBack['time'] ?? '16:30') ?>">
         </label>
+        <label class="wo-f">
+          <span>Ends</span>
+          <input type="time" name="end_time" id="woTo"
+                 value="<?= $h($addBack['end_time'] ?? '17:30') ?>">
+        </label>
+      </div>
+
+      <label class="wo-f" id="woEndDay" style="display:none;">
+        <span>Last day <em>(same day unless you change it)</em></span>
+        <input type="date" name="end_date" id="woEndDate" value="<?= $h($addBack['end_date'] ?? '') ?>">
+      </label>
+
+      <div class="wo-two">
         <label class="wo-f">
           <span>Kind</span>
           <select name="kind">
@@ -453,7 +481,7 @@ $subscribeUrl = (defined('SITE_URL') && SITE_URL ? rtrim(SITE_URL, '/') : 'https
   </div>
 
   <script>
-  function woAdd(date, ev) {
+  function woAdd(date, ev, keepEnd) {
     if (ev) ev.stopPropagation();
     var d = new Date(date + 'T12:00:00');
     if (!date || isNaN(d.getTime())) {
@@ -463,15 +491,48 @@ $subscribeUrl = (defined('SITE_URL') && SITE_URL ? rtrim(SITE_URL, '/') : 'https
     document.getElementById('woDate').value = date;
     document.getElementById('woHeading').textContent =
       'Add something on ' + d.toLocaleDateString(undefined, { weekday:'long', day:'numeric', month:'long' });
+    // Always reset, never "only if empty": the dialog is reused, so opening
+    // the 20th and then the 5th left the 20th sitting in the finishing date
+    // and published a sixteen-day event to everybody's calendar. The one
+    // exception is the reopen after a refusal, which must keep what they typed.
+    var ed = document.getElementById('woEndDate');
+    if (ed && !keepEnd) ed.value = date;
+    woDayToggle();
     document.getElementById('woVeil').classList.add('open');
     document.getElementById('woTitle').focus();
   }
+  // All day swaps the two clocks for a finishing date. Hidden rather than
+  // disabled, so whatever time was typed is still there if it is unticked.
+  function woDayToggle() {
+    var on = document.getElementById('woAllDay').checked;
+    document.getElementById('woTimes').style.display  = on ? 'none' : '';
+    document.getElementById('woEndDay').style.display = on ? '' : 'none';
+    var ed = document.getElementById('woEndDate');
+    if (on && !ed.value) ed.value = document.getElementById('woDate').value;
+  }
+
+  // Keeps the finish after the start, so a time that would be refused on
+  // submit is corrected while it is still on screen.
+  function woEndFollows() {
+    var from = document.getElementById('woFrom').value;
+    var to   = document.getElementById('woTo').value;
+    if (!from) return;
+    var mins = function (t) { var p = t.split(':'); return (+p[0]) * 60 + (+p[1]); };
+    // Only steps in when the finish is no longer after the start — moving the
+    // start past it, or clearing it. An end that still makes sense is left
+    // alone rather than being dragged somewhere the organiser did not ask for.
+    if (to && mins(to) > mins(from)) return;
+    var end = Math.min(mins(from) + 60, 23 * 60 + 59);
+    document.getElementById('woTo').value =
+      String(Math.floor(end / 60)).padStart(2, '0') + ':' + String(end % 60).padStart(2, '0');
+  }
+
   function woClose() { document.getElementById('woVeil').classList.remove('open'); }
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') woClose(); });
   <?php if ($addErr !== ''): ?>
   // Refused: reopen it with what they typed still in place, rather than
   // closing and making them start again.
-  woAdd(<?= json_encode($addBack['date'] ?? '') ?>);
+  woAdd(<?= json_encode($addBack['date'] ?? '') ?>, null, true);
   <?php endif; ?>
   </script>
   <?php endif; ?>

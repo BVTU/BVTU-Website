@@ -83,6 +83,30 @@ function icsUid(array $e, string $host): string {
  * date is not something another calendar can hold.
  */
 function icsEvent(array $e, string $host, string $base): string {
+    /*
+     * All day is its own thing in iCalendar: a DATE value rather than a
+     * DATE-TIME. Sending midnight-to-midnight as timestamps would put a
+     * Pro-D day in somebody's calendar as a 12 am appointment, in whatever
+     * timezone their phone happens to be in — which is how an all-day event
+     * on the 24th shows up on the 23rd for anyone east of here.
+     *
+     * DTEND is exclusive, so a single day ends on the following date.
+     */
+    if (evAllDay($e)) {
+        $sd = substr((string)$e['starts_at'], 0, 10);
+        if ($sd === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $sd)) return '';
+        $ed = substr(trim((string)($e['ends_at'] ?? '')), 0, 10);
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $ed) || $ed < $sd) $ed = $sd;
+        $lines = [
+            'BEGIN:VEVENT',
+            'UID:' . icsUid($e, $host),
+            'DTSTAMP:' . gmdate('Ymd\THis\Z'),
+            'DTSTART;VALUE=DATE:' . str_replace('-', '', $sd),
+            'DTEND;VALUE=DATE:'   . (new DateTime($ed))->modify('+1 day')->format('Ymd'),
+        ];
+        return icsFinishEvent($e, $lines, $host, $base);
+    }
+
     $start = icsUtc($e['starts_at'] ?? '');
     if ($start === null) return '';
 
@@ -94,22 +118,27 @@ function icsEvent(array $e, string $host, string $base): string {
         $end = $d ? $d->modify('+1 hour')->format('Ymd\THis\Z') : $start;
     }
 
-    $url  = $base . '/event.php?s=' . rawurlencode((string)$e['slug']);
-    $desc = trim((string)($e['summary'] ?? ''));
-    $body = trim((string)($e['description'] ?? ''));
-    if ($body !== '') $desc = ($desc !== '' ? $desc . "\n\n" : '') . $body;
-    $desc = ($desc !== '' ? $desc . "\n\n" : '') . $url;
-
     $lines = [
         'BEGIN:VEVENT',
         'UID:' . icsUid($e, $host),
         'DTSTAMP:' . gmdate('Ymd\THis\Z'),
         'DTSTART:' . $start,
         'DTEND:' . $end,
-        'SUMMARY:' . icsText((string)$e['title']),
-        'DESCRIPTION:' . icsText($desc),
-        'URL:' . icsText($url),
     ];
+    return icsFinishEvent($e, $lines, $host, $base);
+}
+
+/** Everything after the dates, which is the same whether it is all day or not. */
+function icsFinishEvent(array $e, array $lines, string $host, string $base): string {
+    $url  = $base . '/event.php?s=' . rawurlencode((string)$e['slug']);
+    $desc = trim((string)($e['summary'] ?? ''));
+    $body = trim((string)($e['description'] ?? ''));
+    if ($body !== '') $desc = ($desc !== '' ? $desc . "\n\n" : '') . $body;
+    $desc = ($desc !== '' ? $desc . "\n\n" : '') . $url;
+
+    $lines[] = 'SUMMARY:' . icsText((string)$e['title']);
+    $lines[] = 'DESCRIPTION:' . icsText($desc);
+    $lines[] = 'URL:' . icsText($url);
     // Without these a calendar that already holds the event may keep the old
     // time after it moves. SEQUENCE climbs with each edit; LAST-MODIFIED gives
     // apps that prefer a timestamp something to compare.
