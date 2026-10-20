@@ -14,6 +14,12 @@ function cgCurrentYear(): int {
 }
 
 function cgEnsureTable(): void {
+    // Repeat calls are free, so the functions that need the newer columns can
+    // ask for them without a CREATE and a dozen information_schema lookups
+    // every time.
+    static $done = false;
+    if ($done) return;
+    $done = true;
     $db = getDB();
     $db->exec("CREATE TABLE IF NOT EXISTS collab_grant_applications (
         id                  INT AUTO_INCREMENT PRIMARY KEY,
@@ -62,6 +68,18 @@ function cgEnsureTable(): void {
         'collab_token'         => 'VARCHAR(64) DEFAULT NULL',
         'collab_disputed_at'   => 'DATETIME DEFAULT NULL',
         'collab_dispute_note'  => 'TEXT',
+        // A send that was actually tried and failed. Without this, "nobody has
+        // told them" and "we tried and it bounced" look identical — every grant
+        // approved before collaborator emails existed has a NULL
+        // collab_notified_at, and the panel accused us of a failed send that
+        // was never attempted.
+        'collab_attempt_at'    => 'DATETIME DEFAULT NULL',
+        'collab_attempt_why'   => "VARCHAR(255) NOT NULL DEFAULT ''",
+        // Deliberately not emailing them: the grant is long finished, or it was
+        // handled by phone. A flag rather than a fake notified_at, so the
+        // record never claims an email went out that did not.
+        'collab_waived_at'     => 'DATETIME DEFAULT NULL',
+        'collab_waived_by'     => "VARCHAR(255) NOT NULL DEFAULT ''",
     ] as $col => $type) {
         try {
             $has = $db->query(
@@ -220,7 +238,24 @@ function cgCollaboratorNeedsAttention(array $app): bool {
     if (empty($app['collaborator_name']))      return false;
     if (empty($app['has_collaborator']))       return false;
     if (!empty($app['collab_notified_at']))    return false;
+    // Someone decided not to write to them. Still on the application, just no
+    // longer asking to be dealt with.
+    if (!empty($app['collab_waived_at']))      return false;
     return true;
+}
+
+/**
+ * Which of the three states an unreached collaborator is actually in.
+ *
+ * 'failed'  — a send was tried and did not go. Press Send to try again.
+ * 'never'   — nothing has ever been attempted. The whole backlog from before
+ *             collaborator emails existed lands here, and telling the user it
+ *             "did not go" was simply untrue.
+ * 'noaddr'  — never attempted, and we have nowhere to send it either.
+ */
+function cgCollaboratorState(array $app, array $addr): string {
+    if (!empty($app['collab_attempt_at'])) return 'failed';
+    return $addr['email'] === '' ? 'noaddr' : 'never';
 }
 
 /**
@@ -253,9 +288,26 @@ function cgCollaboratorsToFix(): array {
         // Including the ones we DO have an address for: if the send failed,
         // this is the only place it can be tried again, and filtering them out
         // left no retry anywhere.
-        $a['_why'] = $addr['email'] !== ''
-            ? 'We have ' . $addr['email'] . ' for them, but the email did not go.'
-            : $addr['why'];
+        $a['_state'] = cgCollaboratorState($a, $addr);
+        // The address the SEND will use, which may have come from Contacts
+        // rather than the column. Without it the row said "we have jane@… for
+        // them" above an empty, required box demanding the same address again.
+        $a['_addr']  = $addr['email'];
+        if ($a['_state'] === 'failed') {
+            $a['_why'] = 'Tried on ' . date('M j', strtotime((string)$a['collab_attempt_at']))
+                       . ' and it did not go'
+                       . (trim((string)($a['collab_attempt_why'] ?? '')) !== ''
+                          ? ' — ' . lcfirst(rtrim((string)$a['collab_attempt_why'], '.')) . '.'
+                          : '.');
+        } elseif ($a['_state'] === 'never') {
+            // Approved before we started writing to collaborators, almost
+            // always. Not a failure, and saying so sent the user looking for
+            // a mail problem that was not there.
+            $a['_why'] = 'Nothing has been sent to them yet. We have '
+                       . $addr['email'] . ' for them.';
+        } else {
+            $a['_why'] = $addr['why'];
+        }
         $out[] = $a;
     }
     return $out;
@@ -344,6 +396,174 @@ function cgCollabDisputeAck(int $id): bool {
 }
 
 /**
+ * Did that UPDATE actually land on an application?
+ *
+ * rowCount() counts CHANGED rows on this connection, not matched ones, so a
+ * second press that asks for the state the row is already in returns zero.
+ * Reporting that as a failure sent the user looking for a missing column;
+ * reporting a bad id as success would leave a collaborator silently unflagged.
+ * So zero changes means "already so" when the application exists, and a
+ * genuine failure only when it does not.
+ */
+function cgRowTouched(PDOStatement $st, int $id): bool {
+    if ($st->rowCount() > 0) return true;
+    $chk = getDB()->prepare("SELECT COUNT(*) FROM collab_grant_applications WHERE id = ?");
+    $chk->execute([$id]);
+    return (bool)$chk->fetchColumn();
+}
+
+/**
+ * Forget everything we recorded about telling a collaborator.
+ *
+ * For when the collaborator changes: whatever we did, we did it to somebody
+ * else, and the address we had reaches them rather than the new name. Each
+ * column is cleared only if it exists, so an older server with a failed ALTER
+ * still edits applications normally.
+ */
+function cgResetCollabNotice(int $id): bool {
+    // These columns are created by cgEnsureTable(), not cgEnsureEditSupport():
+    // without this the first press on a freshly deployed server reports them
+    // missing and the notice says nothing was cleared when it could have been.
+    cgEnsureTable();
+    cgEnsureEditSupport();
+    $sets = [];
+    foreach (['collab_notified_at' => 'NULL', 'collab_attempt_at' => 'NULL',
+              'collab_waived_at'   => 'NULL', 'collab_attempt_why' => "''",
+              'collab_waived_by'   => "''",
+              // The typed address belongs to the person who was named before.
+              // Kept, it would send "a day is booked against your name" to
+              // entirely the wrong teacher; cleared, the address resolves from
+              // Contacts by the new name, or the panel asks for it. A retype
+              // after fixing a misspelt name is the cheaper mistake.
+              'collaborator_email'  => "''",
+              // The dispute too. Renaming is the usual ANSWER to "that is not
+              // me", so leaving the flag set makes the new collaborator look
+              // like they objected, with the old person's note attached. The
+              // token goes with it: the old person's link must not reach into
+              // somebody else's application, and cgCollabToken() mints a fresh
+              // one on demand.
+              'collab_disputed_at'  => 'NULL',
+              'collab_dispute_note' => 'NULL',
+              'collab_token'        => 'NULL'] as $col => $blank) {
+        if (cgHasCollabColumn($col)) $sets[] = "{$col} = {$blank}";
+    }
+    if (!$sets) return false;
+    try {
+        getDB()->prepare("UPDATE collab_grant_applications SET " . implode(', ', $sets)
+                         . " WHERE id = ?")->execute([$id]);
+        return true;
+    } catch (\Throwable $e) {
+        error_log('cgResetCollabNotice: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/** Remember that a send was tried and did not go. */
+function cgNoteCollabAttempt(int $id, string $why): bool {
+    // These columns are created by cgEnsureTable(), not cgEnsureEditSupport():
+    // without this the first press on a freshly deployed server reports them
+    // missing and the notice says nothing was cleared when it could have been.
+    cgEnsureTable();
+    cgEnsureEditSupport();
+    if (!cgHasCollabColumn('collab_attempt_at')) return false;
+    try {
+        $sql = cgHasCollabColumn('collab_attempt_why')
+            ? "UPDATE collab_grant_applications
+                  SET collab_attempt_at = NOW(), collab_attempt_why = ? WHERE id = ?"
+            : "UPDATE collab_grant_applications SET collab_attempt_at = NOW() WHERE id = ?";
+        $args = cgHasCollabColumn('collab_attempt_why')
+            ? [mb_substr($why, 0, 255), $id] : [$id];
+        getDB()->prepare($sql)->execute($args);
+        return true;
+    } catch (\Throwable $e) {
+        // Never worth failing a send report over.
+        error_log('cgNoteCollabAttempt: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Decide not to email this collaborator, and take the row off the panel.
+ *
+ * The flag is kept rather than faking collab_notified_at: the application must
+ * never claim an email went out that did not, because that is exactly how a
+ * collaborator ends up with a day booked against their name and no idea.
+ */
+function cgCollabWaive(int $id, string $by): bool {
+    // These columns are created by cgEnsureTable(), not cgEnsureEditSupport():
+    // without this the first press on a freshly deployed server reports them
+    // missing and the notice says nothing was cleared when it could have been.
+    cgEnsureTable();
+    cgEnsureEditSupport();
+    if (!cgHasCollabColumn('collab_waived_at')) return false;
+    try {
+        $sql = cgHasCollabColumn('collab_waived_by')
+            ? "UPDATE collab_grant_applications
+                  SET collab_waived_at = NOW(), collab_waived_by = ? WHERE id = ?"
+            : "UPDATE collab_grant_applications SET collab_waived_at = NOW() WHERE id = ?";
+        $args = cgHasCollabColumn('collab_waived_by')
+            ? [mb_substr($by, 0, 255), $id] : [$id];
+        $st = getDB()->prepare($sql);
+        $st->execute($args);
+        return cgRowTouched($st, $id);
+    } catch (\Throwable $e) {
+        error_log('cgCollabWaive: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/** Put a waived one back on the panel, for a waive pressed by mistake. */
+function cgCollabUnwaive(int $id): bool {
+    // These columns are created by cgEnsureTable(), not cgEnsureEditSupport():
+    // without this the first press on a freshly deployed server reports them
+    // missing and the notice says nothing was cleared when it could have been.
+    cgEnsureTable();
+    cgEnsureEditSupport();
+    if (!cgHasCollabColumn('collab_waived_at')) return false;
+    try {
+        $st = getDB()->prepare(
+            "UPDATE collab_grant_applications SET collab_waived_at = NULL WHERE id = ?"
+        );
+        $st->execute([$id]);
+        return cgRowTouched($st, $id);
+    } catch (\Throwable $e) {
+        error_log('cgCollabUnwaive: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Clear, in one press, every row where no send was ever attempted.
+ *
+ * That is both the pre-feature backlog and the ones we have no address for:
+ * in neither case did an email go, so neither is waiting on a retry. A send
+ * that was tried and failed is a live problem with a live Send button, and
+ * sweeping it up here would hide the one row that still needs doing.
+ *
+ * Takes the rows it is clearing, so the button and the press agree on what
+ * they are about rather than scanning twice and possibly differing.
+ * Returns how many were cleared.
+ */
+function cgCollabWaiveUntried(string $by, ?array $onlyIds = null): int {
+    $n = 0;
+    foreach (cgCollabUntried(cgCollaboratorsToFix()) as $a) {
+        // The button named the rows it was offering. Anything approved since
+        // the page was drawn is somebody else's problem to look at, not
+        // something to sweep up on a press aimed at the old backlog.
+        if ($onlyIds !== null && !in_array((int)$a['id'], $onlyIds, true)) continue;
+        if (cgCollabWaive((int)$a['id'], $by)) $n++;
+    }
+    return $n;
+}
+
+/** Of the outstanding rows, the ones where nothing was ever sent. */
+function cgCollabUntried(array $toFix): array {
+    return array_values(array_filter($toFix, function ($a) {
+        return ($a['_state'] ?? '') !== 'failed';
+    }));
+}
+
+/**
  * Tell the collaborator, on approval.
  *
  * Returns ['sent' => bool, 'why' => string]. A failure here never stops an
@@ -362,6 +582,14 @@ function cgSendCollaboratorEmail(array $app, bool $force = false): array {
     if (!$force && !empty($app['collab_notified_at'])) {
         return ['sent' => false, 'why' => 'They were already emailed on '
               . date('M j', strtotime((string)$app['collab_notified_at'])) . '.'];
+    }
+    // Somebody decided not to write to this person. Re-approving to change the
+    // day count must not quietly overturn that decision — the Send button on
+    // the panel passes $force and is the way to change your mind.
+    if (!$force && !empty($app['collab_waived_at'])) {
+        return ['sent' => false, 'why' => 'It was decided on '
+              . date('M j', strtotime((string)$app['collab_waived_at']))
+              . ' not to email them.'];
     }
 
     $addr = cgCollaboratorAddress($app);
@@ -392,7 +620,16 @@ function cgSendCollaboratorEmail(array $app, bool $force = false): array {
           . "be booked in your name:\n"
           . cgCollabDisputeUrl((int)$app['id']) . "\n";
 
-    $ok = siteMail($addr['email'], emailTplSubject('collab_collaborator', $tv), $body);
+    // A throw has to leave the same trace as a false. Otherwise a send that may
+    // even have gone out reads as "never tried", and the bulk clear retires it
+    // for good — the one outcome this panel exists to prevent.
+    try {
+        $ok = siteMail($addr['email'], emailTplSubject('collab_collaborator', $tv), $body);
+    } catch (\Throwable $e) {
+        error_log('cgSendCollaboratorEmail: ' . $e->getMessage());
+        cgNoteCollabAttempt((int)$app['id'], 'The email could not be sent.');
+        return ['sent' => false, 'why' => 'The email could not be sent.'];
+    }
     if ($ok && cgHasCollabColumn('collab_notified_at')) {
         $sql = cgHasCollabEmail()
             ? "UPDATE collab_grant_applications SET collab_notified_at = NOW(), collaborator_email = ? WHERE id = ?"
@@ -400,6 +637,9 @@ function cgSendCollaboratorEmail(array $app, bool $force = false): array {
         $args = cgHasCollabEmail() ? [$addr['email'], (int)$app['id']] : [(int)$app['id']];
         getDB()->prepare($sql)->execute($args);
     }
+    // Remembered either way, so the panel can say "tried on the 3rd and it
+    // bounced" instead of accusing us of a failure nobody ever attempted.
+    if (!$ok) cgNoteCollabAttempt((int)$app['id'], 'The email could not be sent.');
     return ['sent' => (bool)$ok, 'why' => $ok ? '' : 'The email could not be sent.'];
 }
 
@@ -423,9 +663,29 @@ function cgSendApprovalEmail(array $app): void {
         // Keyed on the send having happened, not on an address existing. A
         // failed send used to tell the applicant it was handled, and then
         // nobody told the collaborator at all.
-        $collabLine = !empty($app['collab_notified_at'])
-            ? "We have emailed {$collab} as well, so they know to submit their own absence in Atrieve for the days you'll be working together."
-            : "We do not have an email address for {$collab}, so we could not write to them — please forward this to them so they can submit their own absence in Atrieve for the days you'll be working together.";
+        if (!empty($app['collab_notified_at'])) {
+            $collabLine = "We have emailed {$collab} as well, so they know to submit their own absence in Atrieve for the days you'll be working together.";
+        } elseif (!empty($app['collab_waived_at'])) {
+            // Somebody decided not to write to them, so asking the applicant to
+            // forward it both contradicts that decision and quietly carries it
+            // out anyway. Say nothing; the decision is on the application.
+            $collabLine = '';
+        } else {
+            // Two different reasons we did not reach them, and only one of them
+            // is "no address". Telling an applicant we have no address for
+            // somebody we plainly do have an address for reads as carelessness,
+            // and they cannot act on it either way except by forwarding.
+            // Asked of the same resolver the send itself uses, not of the
+            // raw column: an address matched out of Contacts is one we have,
+            // and telling the applicant otherwise is the same lie in a
+            // narrower case.
+            $why = cgCollaboratorAddress($app)['email'] !== ''
+                ? "we could not get an email through to {$collab}"
+                : "we do not have an email address for {$collab}";
+            $collabLine = ucfirst($why) . ", so please forward this to them "
+                        . "so they can submit their own absence in Atrieve for the days "
+                        . "you'll be working together.";
+        }
     }
 
     $tv = ['{{name}}' => $name, '{{days}}' => (string)$days,
@@ -759,6 +1019,24 @@ function cgApplyEdit(int $id, array $values, string $actor, bool $isAdmin): arra
 
     getDB()->prepare("INSERT INTO collab_grant_edits (app_id, changed_by, by_admin, changes) VALUES (?,?,?,?)")
            ->execute([$id, $actor, $isAdmin ? 1 : 0, json_encode($changed, JSON_UNESCAPED_UNICODE)]);
+
+    // Naming a different collaborator makes every record of the telling wrong:
+    // the new person has not been emailed, no send to them has failed, and
+    // nobody has decided not to write to them. Left alone, a new name would
+    // inherit the old one's "emailed" or "cleared" and never be flagged — a
+    // release day against their name that they never hear about.
+    // Keyed on the NAME only. A has_collaborator toggle leaves the same person
+    // named: wiping their address and the proof we emailed them, then flagging
+    // them again when it is toggled back, means a second "a day is counted
+    // against your three" to somebody who already had one.
+    // Compared the way Contacts compares them: fixing "pat smith" to
+    // "Pat Smith" is the same teacher, and wiping the record would re-flag them
+    // for a second "a day is counted against your three".
+    if (array_key_exists('collaborator_name', $changed)
+        && cgNameKey((string)$changed['collaborator_name'][0])
+           !== cgNameKey((string)$changed['collaborator_name'][1])) {
+        cgResetCollabNotice($id);
+    }
 
     return ['changed' => $changed, 'material' => $material];
 }

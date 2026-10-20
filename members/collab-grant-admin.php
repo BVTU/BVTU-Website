@@ -154,6 +154,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'colla
     $apps = cgGetApplications($year);
 }
 
+// ── Deciding not to write to a collaborator at all ───────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST'
+    && in_array($_POST['action'] ?? '', ['collab-waive', 'collab-unwaive', 'collab-waive-untried'], true)) {
+    csrfCheck();
+    $act = (string)$_POST['action'];
+    $by  = (string)(getMember()['email'] ?? '');
+
+    if ($act === 'collab-waive-untried') {
+        // The ids the button was offering when the page was drawn, so the press
+        // clears what the user was looking at and nothing approved since.
+        $offered = array_values(array_filter(array_map(
+            'intval', (array)($_POST['ids'] ?? [])
+        )));
+        // Always a whitelist, even when empty: "?: null" turned a POST with no
+        // ids into "clear the lot", which is precisely what naming them was
+        // meant to stop.
+        $n = cgCollabWaiveUntried($by, $offered);
+        if ($n > 0) {
+            $notice = $n . ' cleared. Nothing was emailed — they are still on their '
+                    . 'applications, marked as not written to.';
+        } elseif (!cgHasCollabColumn('collab_waived_at')) {
+            // Rows are still on screen, so "nothing to clear" would read as a
+            // lie. Name the actual reason.
+            $notice = 'Nothing could be cleared — the collab_waived_at column is missing '
+                    . 'on this server. Tell the site admin.';
+        } else {
+            $notice = 'Nothing to clear. Any rows left are sends that were tried and failed.';
+        }
+    } else {
+        $aid = (int)($_POST['app_id'] ?? 0);
+        $app = $aid ? cgGetApplication($aid) : null;
+        if (!$app) {
+            $notice = 'Could not find that application.';
+        } elseif ($act === 'collab-waive') {
+            $notice = cgCollabWaive($aid, $by)
+                ? 'Cleared. ' . $app['collaborator_name'] . ' was not emailed, and the '
+                    . 'application says so.'
+                : 'Could not clear that — the collab_waived_at column is missing on this '
+                    . 'server. Tell the site admin.';
+        } else {
+            $notice = cgCollabUnwaive($aid)
+                ? $app['collaborator_name'] . ' is back on the list to be emailed.'
+                : 'Could not undo that.';
+        }
+    }
+    $apps = cgGetApplications($year);
+}
+
 // ── Reaching a collaborator we could not write to ─────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'collab-email') {
     csrfCheck();
@@ -220,6 +268,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_id'])
             if (!empty($target['collaborator_name']) && !empty($target['has_collaborator'])) {
                 if ($collab['sent']) {
                     $notice .= ' ' . $target['collaborator_name'] . ' has been emailed too.';
+                } elseif (!empty($target['collab_waived_at'])) {
+                    // Deliberately not emailed. Reporting that as a failure, and
+                    // pointing at a panel row that is hidden precisely because
+                    // of the decision, reads as something gone wrong.
+                    $notice .= ' ' . $target['collaborator_name'] . ' was not emailed — it was '
+                             . 'decided on '
+                             . date('M j', strtotime((string)$target['collab_waived_at']))
+                             . ' not to write to them.';
                 } elseif (!empty($target['collab_notified_at'])) {
                     // Re-approving to change the day count is a normal thing to
                     // do. Reporting it as a failure, with a pointer to a panel
@@ -708,12 +764,35 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
 
     <?php if ($toFix): ?>
     <div class="cg-flag">
-      <h2>Collaborators we could not email</h2>
+      <?php $untriedRows = cgCollabUntried($toFix); $untried = count($untriedRows); ?>
+      <h2>Collaborators who have not been told</h2>
       <p class="cg-flag-lead">
         These grants are approved and the applicant has been told. The person they named
         has not &mdash; so they do not know a release day is counted against their three.
-        Where we already have an address, the send simply did not go; press Send to try again.
+        Each row says whether a send was tried and failed, or whether nothing has gone
+        out yet.
+        <?php if ($untried > 0): ?>
+        Grants approved before collaborator emails existed, and any we have no address
+        for, show as &ldquo;nothing sent yet&rdquo; &mdash; if those are water under the
+        bridge, clear them all at once. A send that was tried and failed is left for you
+        to retry.
+        <?php endif; ?>
       </p>
+      <?php if ($untried > 0): ?>
+      <form method="POST" style="margin:0 0 .9rem;"
+            onsubmit="return confirm(<?= htmlspecialchars(json_encode(
+                'Clear ' . $untried . ' where nothing was ever sent? No email will go out. '
+                . 'Rows where a send was tried and failed are left alone.'), ENT_QUOTES) ?>);">
+        <?= csrfField() ?>
+        <input type="hidden" name="action" value="collab-waive-untried">
+        <?php foreach ($untriedRows as $u): ?>
+        <input type="hidden" name="ids[]" value="<?= (int)$u['id'] ?>">
+        <?php endforeach; ?>
+        <button type="submit" class="btn btn-outline" style="font-size:.82rem;padding:.38rem .8rem;">
+          Clear the <?= $untried ?> where nothing was sent
+        </button>
+      </form>
+      <?php endif; ?>
       <?php foreach ($toFix as $a): ?>
       <form method="POST" class="cg-flag-row">
         <?= csrfField() ?>
@@ -726,16 +805,37 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
           <?php endif; ?>
           <div class="cg-flag-when">
             Named by <?= htmlspecialchars($a['applicant_name']) ?> &middot; #<?= (int)$a['id'] ?>
+            <?php // The year, so a 2019 leftover and a grant approved last week
+                  // are not the same undifferentiated row. ?>
+            <?php if (!empty($a['school_year'])): ?>
+            &middot; <?= (int)$a['school_year'] ?>&ndash;<?= ((int)$a['school_year'] + 1) % 100 ?>
+            <?php endif; ?>
             &middot; <?= htmlspecialchars($a['_why']) ?>
           </div>
         </div>
-        <?php $known = trim((string)($a['collaborator_email'] ?? '')); ?>
+        <?php // The address the send would actually use, Contacts match included,
+              // so the box agrees with the sentence above it. ?>
+        <?php $known = trim((string)($a['_addr'] ?? ''));
+              // _addr is empty when the stored address is unusable. Showing it
+              // anyway gives the near miss to correct, instead of an empty box
+              // demanding it be typed from nothing.
+              if ($known === '') $known = trim((string)($a['collaborator_email'] ?? '')); ?>
         <input type="email" name="collaborator_email" class="cg-flag-input"
                value="<?= htmlspecialchars($known) ?>"
                placeholder="their email address"<?= $known === '' ? ' required' : '' ?>>
         <button type="submit" class="btn btn-primary" style="font-size:.84rem;padding:.42rem .9rem;">
           <?= $known === '' ? 'Save &amp; send' : 'Send' ?>
         </button>
+      </form>
+      <?php // Its own form: a GET-less dismiss cannot share the send form above,
+            // or pressing it would submit the address field as a send too. ?>
+      <form method="POST" class="cg-flag-dismiss"
+            onsubmit="return confirm(<?= htmlspecialchars(json_encode(
+                'Clear ' . $a['collaborator_name'] . ' without emailing them?'), ENT_QUOTES) ?>);">
+        <?= csrfField() ?>
+        <input type="hidden" name="action" value="collab-waive">
+        <input type="hidden" name="app_id" value="<?= (int)$a['id'] ?>">
+        <button type="submit" class="cg-flag-link">No email needed &mdash; clear it</button>
       </form>
       <?php endforeach; ?>
     </div>
@@ -755,6 +855,12 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
                        font-size:.88rem; border:1px solid var(--border); border-radius:6px; }
       .cg-flag-when { font-size:.78rem; color:var(--gray-500); margin-top:.1rem; }
       .cg-flag-note { font-size:.86rem; color:var(--gray-700); font-style:italic; margin-top:.3rem; }
+      /* Sits under its row, not beside the Send button: the quiet way out of a
+         row should not compete with the thing we actually want pressed. */
+      .cg-flag-dismiss { flex:1 1 100%; margin:-.35rem 0 .35rem; }
+      .cg-flag-link { background:none; border:0; padding:0; font:inherit; font-size:.78rem;
+                      color:var(--gray-500); text-decoration:underline; cursor:pointer; }
+      .cg-flag-link:hover { color:var(--gray-700); }
     </style>
 
     <?php $rc = cgYearReleaseCost($year); ?>
@@ -1017,6 +1123,27 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
                     <?= htmlspecialchars($app['collaborator_name']) ?>
                     <?php if ($app['collaborator_school']): ?>
                       <span style="color:var(--gray-400);font-weight:400;"> · <?= htmlspecialchars($app['collaborator_school']) ?></span>
+                    <?php endif; ?>
+                    <?php // Where the telling stands. A cleared row leaves the panel but
+                          // must not leave the record: "we chose not to write to them" and
+                          // "we emailed them" have to stay tellable apart for ever. ?>
+                    <?php if (!empty($app['collab_notified_at'])): ?>
+                      <div style="font-size:.78rem;color:var(--gray-500);font-weight:400;margin-top:.15rem;">
+                        Emailed <?= htmlspecialchars(date('M j, Y', strtotime((string)$app['collab_notified_at']))) ?>
+                      </div>
+                    <?php elseif (!empty($app['collab_waived_at'])): ?>
+                      <div style="font-size:.78rem;color:var(--gray-500);font-weight:400;margin-top:.15rem;">
+                        Not emailed &mdash; cleared
+                        <?= htmlspecialchars(date('M j, Y', strtotime((string)$app['collab_waived_at']))) ?><?php
+                          if (trim((string)($app['collab_waived_by'] ?? '')) !== ''): ?>
+                          by <?= htmlspecialchars($app['collab_waived_by']) ?><?php endif; ?>.
+                        <form method="POST" style="display:inline;">
+                          <?= csrfField() ?>
+                          <input type="hidden" name="action" value="collab-unwaive">
+                          <input type="hidden" name="app_id" value="<?= (int)$app['id'] ?>">
+                          <button type="submit" class="cg-flag-link">Put it back on the list</button>
+                        </form>
+                      </div>
                     <?php endif; ?>
                   <?php elseif ($app['needs_partner']): ?>
                     <em style="color:var(--gray-500);">Needs help finding partner</em>
