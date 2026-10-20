@@ -23,15 +23,16 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     header('Content-Disposition: attachment; filename="collab-grant-' . $year . '-' . ($year+1) . '.csv"');
     require_once __DIR__ . '/xlsx-writer.php';   // csvSafeText(), shared guard
     $out = fopen('php://output', 'w');
+    // The reconciling columns only. The long prose fields, the contact details
+    // and the "who reviewed it" trail are all on the application itself; in a
+    // spreadsheet they pushed the figures you are actually checking off the
+    // right-hand edge.
     fputcsv($out, [
         'ID', 'Status', 'Submitted',
-        'Applicant Name', 'Email', 'School', 'Position', 'Time in Role',
-        'Has Collaborator', 'Collaborator Name', 'Collaborator School', 'Needs Partner Help',
-        'Days Requested', 'Days Granted', 'Proposed Dates',
-        'Collaboration Description', 'Goals',
-        'Admin Notes', 'Reviewed By', 'Reviewed At',
-        'Atrieve Logged', 'Atrieve Confirmed', 'Atrieve Confirmed By', 'Invoice Number',
-        'Release Cost',
+        'Applicant Name', 'School', 'Position',
+        'Collaborator Name',
+        'Days Requested', 'Days Granted', 'Proposed Dates', 'Reviewed At',
+        'Atrieve Logged', 'Atrieve Confirmed', 'Invoice Number', 'Release Cost',
     ]);
     foreach ($apps as $a) {
         $pdArr = json_decode($a['proposed_dates'] ?? '[]', true);
@@ -43,25 +44,21 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
             ucfirst($a['status']),
             date('Y-m-d', strtotime($a['submitted_at'])),
             $a['applicant_name'],
-            $a['applicant_email'],
             $a['school'],
             $a['position'],
-            $a['years_in_role'],
-            $a['has_collaborator'] ? 'Yes' : 'No',
-            $a['collaborator_name'],
-            $a['collaborator_school'],
-            $a['needs_partner'] ? 'Yes' : 'No',
+            // Gated on has_collaborator, not just on the name being there. The
+            // form hides its collaborator inputs rather than disabling them, so
+            // a name typed and then "Not yet" chosen still arrives — and with
+            // the Has Collaborator column gone there is nothing left in the
+            // sheet to contradict it. A release day reconciled against a
+            // teacher the application does not name is the worst kind of wrong.
+            !empty($a['has_collaborator']) ? $a['collaborator_name'] : '',
             $a['days_requested'],
             ($a['days_approved'] ?? null) !== null ? (int)$a['days_approved'] : '',
             $pdStr,
-            $a['collaboration_desc'],
-            $a['goals'],
-            $a['admin_notes'],
-            $a['reviewed_by'],
             $a['reviewed_at'] ? date('Y-m-d', strtotime($a['reviewed_at'])) : '',
             !empty($a['atrieve_confirmed']) ? 'Yes' : 'No',
             !empty($a['atrieve_confirmed_at']) ? date('Y-m-d', strtotime($a['atrieve_confirmed_at'])) : '',
-            $a['atrieve_confirmed_by'] ?? '',
             $a['invoice_number'] ?? '',
             ($a['release_cost'] ?? null) !== null
                 ? number_format((float)$a['release_cost'], 2, '.', '') : '',
