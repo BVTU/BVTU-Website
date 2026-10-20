@@ -60,73 +60,23 @@ if ($action === 'delete') {
     lpDirectBack($back, 'error', 'That entry could not be removed.');
 }
 
-if ($action !== 'add') { header('Location: ' . $back); exit; }
-
-// ── Check the figures before touching the file ───────────────────────────
-// Moving the upload first and validating second leaves an orphan on disk every
-// time somebody forgets to pick a grant.
-$amountIn = round((float)($_POST['amount'] ?? 0), 2);
-$payeeIn  = trim((string)($_POST['payee'] ?? ''));
-$grantIn  = (int)($_POST['grant_id'] ?? 0);
-$lineIn   = (int)($_POST['budget_line_id'] ?? 0);
-if ($payeeIn === '' || $amountIn <= 0 || (!$grantIn && !$lineIn)) {
+/*
+ * Adding is retired. Everything now goes through the expense portal, so money
+ * paid to somebody outside the union is a voucher with two signatures rather
+ * than a line typed in afterwards. Refused here and not merely hidden on the
+ * page: a bookmarked form, a stale tab or a back-button resubmit would
+ * otherwise keep writing rows nobody signed for.
+ *
+ * Removing still works. The rows already recorded are part of the year's
+ * figures, and clearing a mistaken one has to stay possible.
+ */
+if ($action === 'add') {
     lpDirectBack($back, 'error',
-        'Needs a payee, an amount above zero, and a grant or budget line to count against.');
+        'Logging a payment afterwards has been retired — everything goes through the '
+      . 'expense portal now. Start a voucher and tick "Pay a vendor instead of me", '
+      . 'and it gets two signatures before the money moves.');
 }
 
-// ── The receipt, when one came with it ────────────────────────────────────
-$savedName = null;
-$origName  = null;
-if (!empty($_FILES['receipt']['name'])) {
-    $f = $_FILES['receipt'];
-    if (($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-        lpDirectBack($back, 'error', $f['error'] === UPLOAD_ERR_INI_SIZE
-            ? 'That receipt is larger than the server accepts (' . ini_get('upload_max_filesize') . ').'
-            : 'The receipt did not upload. Nothing was saved.');
-    }
-    if ($f['size'] > 15 * 1024 * 1024) {
-        lpDirectBack($back, 'error', 'That receipt is over 15 MB.');
-    }
-
-    /*
-     * The saved extension comes from the file's content, never from the name the
-     * browser sent — a real JPEG called "shell.php" would otherwise land as a
-     * .php in the web root. Same rule as lp-scan.php.
-     */
-    $byMime = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp',
-               'image/gif' => 'gif', 'image/heic' => 'heic', 'image/heif' => 'heif',
-               'application/pdf' => 'pdf'];
-    $okExt  = ['jpg','jpeg','png','webp','gif','heic','heif','pdf'];
-    $origName = basename($f['name']);
-    $mime     = @mime_content_type($f['tmp_name']);
-    $ext      = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
-    if (isset($byMime[$mime]))            $ext = $byMime[$mime];
-    elseif (!in_array($ext, $okExt, true)) {
-        lpDirectBack($back, 'error', 'That file type is not accepted — use a photo or a PDF.');
-    }
-
-    $savedName = date('Ymd-His') . '-' . bin2hex(random_bytes(4)) . '.' . $ext;
-    if (!move_uploaded_file($f['tmp_name'], LP_RECEIPTS_DIR . $savedName)) {
-        lpDirectBack($back, 'error', 'The receipt could not be saved. Nothing was recorded.');
-    }
-}
-
-$id = lpAddDirectExpense([
-    'year'           => $year,
-    'grant_id'       => $_POST['grant_id']       ?? 0,
-    'budget_line_id' => $_POST['budget_line_id'] ?? 0,
-    'spent_on'       => $_POST['spent_on']       ?? '',
-    'payee'          => $_POST['payee']          ?? '',
-    'description'    => $_POST['description']    ?? '',
-    'amount'         => $_POST['amount']         ?? 0,
-    'cheque_ref'     => $_POST['cheque_ref']     ?? '',
-    'receipt_path'     => $savedName,
-    'receipt_filename' => $origName,
-], $member['email']);
-
-if (!$id) {
-    // Validated above, so this is a database failure; do not leave the file behind.
-    if ($savedName && is_file(LP_RECEIPTS_DIR . $savedName)) @unlink(LP_RECEIPTS_DIR . $savedName);
-    lpDirectBack($back, 'error', 'That could not be saved. The problem has been logged.');
-}
-lpDirectBack($back, 'notice', 'Recorded — it now counts toward that total.');
+// Nothing else reaches here: 'delete' and 'add' both exit above.
+header('Location: ' . $back);
+exit;

@@ -39,8 +39,10 @@ $error  = $_GET['error']  ?? '';
 $canSign1    = expIsEligibleSigner1($email);   // President — member claims
 $canSign2    = expIsEligibleSigner2($email);   // Treasurer — member claims
 $canPayClaim = expCanMarkPaid($email);         // either
-$isTreasurer = lpCanSign1($email);             // Treasurer — vouchers
-$isVP        = lpCanSign2($email);             // VP — vouchers
+// No page-level voucher role flags: who may sign depends on the voucher as well
+// as the person, because on a vendor payment the President is an eligible second
+// signature. lpCanSign1For()/lpCanSign2For() are asked per voucher, and
+// lpCanReview() above already decided whether this person sees the page at all.
 
 // Active items, newest stage first. Ordering the statuses puts anything needing
 // this person nearer the top without a heading to say so.
@@ -79,7 +81,10 @@ function _isMyClaim(array $b): bool {
  */
 function _cannotSignVoucher(array $v): bool {
     global $email;
-    return expWouldSelfSign($email, lpPayTo($v)['email'] ?: null, $v['submitted_by_email'] ?? null);
+    // lpSignBlockedClaimant() is what the server guard passes, so the two can
+    // never disagree: on a vendor payment the submitter is authorising rather
+    // than claiming and may sign, and the payee is barred either way.
+    return expWouldSelfSign($email, lpPayTo($v)['email'] ?: null, lpSignBlockedClaimant($v));
 }
 
 /**
@@ -95,17 +100,21 @@ function _isMyVoucher(array $v): bool {
     return expWouldSelfSign($email, $v['submitted_by_email'] ?? null);
 }
 /** Whether a voucher is waiting on this person. */
-function _lpNeedsMe(array $v, bool $treas, bool $vp): bool {
+function _lpNeedsMe(array $v): bool {
+    global $email;
     if (_cannotSignVoucher($v)) return false;    // as for claims: never your own
-    if ($v['status'] === 'submitted')           return $treas;
-    if ($v['status'] === 'treasurer_approved')  return $vp;
-    if ($v['status'] === 'vp_approved')         return $treas;
+    // Asked of the voucher, not of the page's role flags: on a vendor payment
+    // the President is an eligible second signature, and a flag worked out once
+    // for the whole page cannot know that.
+    if ($v['status'] === 'submitted')           return lpCanSign1For($v, $email);
+    if ($v['status'] === 'treasurer_approved')  return lpCanSign2For($v, $email);
+    if ($v['status'] === 'vp_approved')         return lpCanSign1For($v, $email);
     return false;
 }
 
 $waiting = 0;
 foreach ($claimsActive as $b) if (_claimNeedsMe($b, $canSign1, $canSign2, $canPayClaim)) $waiting++;
-foreach ($lpActive   as $v) if (_lpNeedsMe($v, $isTreasurer, $isVP)) $waiting++;
+foreach ($lpActive   as $v) if (_lpNeedsMe($v)) $waiting++;
 
 $catLabels = [
     'meals' => 'Meals', 'travel' => 'Travel', 'supplies' => 'Supplies',
@@ -350,7 +359,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
   <?php if (!$lpActive): ?><p class="empty">Nothing open.</p><?php endif; ?>
 
   <?php foreach ($lpActive as $v):
-    $mine   = _lpNeedsMe($v, $isTreasurer, $isVP);
+    $mine   = _lpNeedsMe($v);
     $vTotal = array_sum(array_map('lpRowTotal', lpGetExpenses($v['id'])));
   ?>
   <div class="pcard <?= $mine ? 'mine' : '' ?>">
@@ -377,6 +386,9 @@ function _signedLine(array $r, string $role1, string $role2): string {
               echo 'Signed off. The Treasurer records the payment.';
           } elseif (_isMyVoucher($v)) {
               echo 'Your own voucher — the Treasurer and VP sign it. You can withdraw it below.';
+          } elseif (lpIsVendorPayment($v)) {
+              echo 'You are the payee on this one, so you cannot sign it. '
+                 . 'It needs the Treasurer and one of the President or VP.';
           } else {
               // Named as the payee on somebody else's voucher. Barred from
               // signing it, but it is not theirs to withdraw.
@@ -384,7 +396,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
                  . 'It needs the other two signatures.';
           }
         ?></span>
-      <?php elseif ($v['status'] === 'submitted' && $isTreasurer): ?>
+      <?php elseif ($v['status'] === 'submitted' && lpCanSign1For($v, $email)): ?>
         <form method="POST" action="lp-action.php" style="display:inline;">
         <?= csrfField() ?>
           <input type="hidden" name="action" value="treasurer_approve">
@@ -392,7 +404,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
           <input type="hidden" name="redirect" value="approvals.php">
           <button type="submit" class="btn-go">&#x2713; Approve</button>
         </form>
-      <?php elseif ($v['status'] === 'treasurer_approved' && $isVP): ?>
+      <?php elseif ($v['status'] === 'treasurer_approved' && lpCanSign2For($v, $email)): ?>
         <form method="POST" action="lp-action.php" style="display:inline;">
         <?= csrfField() ?>
           <input type="hidden" name="action" value="vp_approve">
@@ -405,7 +417,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
       <a class="link-sm" href="lp-voucher-edit.php?id=<?= (int)$v['id'] ?>">View &rarr;</a>
     </div>
 
-    <?php if ($v['status'] === 'vp_approved' && $isTreasurer && !_cannotSignVoucher($v)): ?>
+    <?php if ($v['status'] === 'vp_approved' && lpCanSign1For($v, $email) && !_cannotSignVoucher($v)): ?>
     <details class="more">
       <summary>&#x25B8; Record e-transfer</summary>
       <form method="POST" action="lp-action.php" class="form-inline">
@@ -454,7 +466,10 @@ function _signedLine(array $r, string $role1, string $role2): string {
         <?php if (lpIsVendorPayment($v)): ?>
         <span class="pay-vendor-chip">&rarr; pays <?= htmlspecialchars(lpPayTo($v)['name']) ?></span>
         <?php endif; ?>
-        <?php $sl = _signedLine($v, 'Treasurer', 'VP'); ?>
+        <?php // The second label from who actually signed, so a President's
+              // signature on a vendor payment is not shown as the VP's. ?>
+        <?php $sl = _signedLine($v, 'Treasurer',
+                  lpSecondSignerRole($v) === 'President' ? 'President' : 'VP'); ?>
         <?= $sl ? '&middot; ' . $sl : '' ?>
         &middot; <a class="link-sm" href="lp-voucher-edit.php?id=<?= (int)$v['id'] ?>">View &rarr;</a>
       </div>

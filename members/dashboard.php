@@ -194,14 +194,30 @@ if (execIsAdmin($myEmail) && empty($myExecRoleSlugs)) {
               if (expCanMarkPaid($member['email']))       $waiting += $mineOut(expBatchGetAll('signer2_approved'));
               // One pass: lpGetVouchersByStatuses runs a GROUP BY aggregate, and
               // calling it per status ran the same join three times.
-              $mayFor = ['submitted'           => lpCanSign1($member['email']),
-                         'vp_approved'         => lpCanSign1($member['email']),
-                         'treasurer_approved'  => lpCanSign2($member['email'])];
+              // The statuses are still fetched from the role, to keep this one
+              // query — but eligibility is then re-asked per voucher, because on
+              // a vendor payment the President is a signer and the page-level
+              // answer cannot know that. Counting it either way was wrong: the
+              // President was never told a vendor payment waited on them, and a
+              // President-admin was counted for one the server would refuse.
+              $mayFor = ['submitted'           => lpCanSign1($member['email']) || expIsPresident($member['email']),
+                         'vp_approved'         => lpCanSign1($member['email']) || expIsPresident($member['email']),
+                         'treasurer_approved'  => lpCanSign2($member['email']) || expIsPresident($member['email'])];
               $wanted = array_keys(array_filter($mayFor));
               if ($wanted) {
-                  $waiting += $mineOut(array_filter(
+                  $waiting += count(array_filter(
                       lpGetVouchersByStatuses($wanted),
-                      fn($v) => !empty($mayFor[$v['status']])
+                      function ($v) use ($member) {
+                          // Same two questions the guard asks: barred if you are
+                          // the payee (or the claimant), and otherwise only if
+                          // this voucher's own rule admits you.
+                          if (expWouldSelfSign($member['email'], lpPayTo($v)['email'] ?: null,
+                                               lpSignBlockedClaimant($v))) return false;
+                          if ($v['status'] === 'treasurer_approved') {
+                              return lpCanSign2For($v, $member['email']);
+                          }
+                          return lpCanSign1For($v, $member['email']);
+                      }
                   ));
               }
               if ($waiting > 0): ?>

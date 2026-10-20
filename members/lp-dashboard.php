@@ -104,17 +104,9 @@ $grantSumJson      = json_encode(array_values($grantSum));
     .direct-box > summary { cursor:pointer; font-size:.82rem; font-weight:800;
       text-transform:uppercase; letter-spacing:.05em; color:var(--gray-500); padding:.4rem 0; }
     .direct-box > summary:hover { color:var(--primary); }
+    .direct-retired { font-size:.84rem; color:var(--gray-500); line-height:1.6;
+      margin:.2rem 0 1rem; }
     .direct-count { font-weight:700; text-transform:none; letter-spacing:0; color:var(--primary); }
-    .direct-form { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
-      gap:.7rem; padding:.6rem 0 .9rem; }
-    .direct-form label { font-size:.75rem; font-weight:700; color:var(--gray-600); display:block; }
-    .direct-form label.wide { grid-column:1/-1; }
-    .direct-form input, .direct-form select { width:100%; margin-top:.2rem; border:1px solid var(--gray-300);
-      border-radius:7px; padding:.4rem .55rem; font:inherit; font-size:.86rem; box-sizing:border-box; }
-    .direct-actions { display:flex; align-items:center; gap:.8rem; flex-wrap:wrap; }
-    .direct-hint { font-size:.76rem; color:var(--gray-500); font-weight:400; }
-    .lp-btn { background:var(--primary); color:#fff; border:none; border-radius:7px;
-      padding:.45rem 1rem; font:inherit; font-size:.86rem; font-weight:700; cursor:pointer; }
     .direct-table { width:100%; border-collapse:collapse; font-size:.82rem; margin-bottom:.6rem; }
     .direct-table th { text-align:left; font-size:.68rem; text-transform:uppercase;
       letter-spacing:.05em; color:var(--gray-400); padding:.3rem .4rem; }
@@ -381,64 +373,31 @@ $grantSumJson      = json_encode(array_values($grantSum));
        Money the union paid straight out — a cheque to a speaker, a venue
        deposit — that never reaches a President's voucher but still spends the
        grant. Recorded here so the grant total is the real one. -->
-  <?php // Recording is for the open year only: a past year is read-only here and
-        // may already be closed and archived. ?>
-  <?php if ($isCurrent && !lpYearIsClosed($year) && lpCanRecordDirect($member['email'])): ?>
-  <details class="direct-box"<?= $directExp ? ' open' : '' ?>>
-    <?php // Named for what it is: a log of money already gone, not a way to
-          // authorise any. Paying a vendor goes through a voucher with two
-          // signatures — "Pay a vendor instead of me" on the voucher form. ?>
-    <summary>Log a payment already made<?php
-      if ($directExp): ?> <span class="direct-count"><?= count($directExp) ?> recorded</span><?php endif; ?></summary>
+  <?php // Adding is retired: everything goes through the expense portal, so a
+        // payment to somebody outside the union is a voucher with two signatures
+        // rather than a line typed in afterwards.
+        //
+        // What was already logged stays, here and in the year's figures — real
+        // money really went, and dropping it would make the grant totals and the
+        // BCTF claim read low. History, not an entry point.
+        //
+        // $canUnlog carries the one thing still possible: clearing a mistaken
+        // row, and only on the open year, because a closed year may already be
+        // archived. Shown for a past year too, just read-only. ?>
+  <?php if ($directExp): ?>
+  <?php $canUnlog = $isCurrent && !lpYearIsClosed($year) && lpCanRecordDirect($member['email']); ?>
+  <details class="direct-box">
+    <summary>Payments logged before the portal<?php
+      ?> <span class="direct-count"><?= count($directExp) ?> recorded</span></summary>
+    <p class="direct-retired">
+      These were entered by hand before everything went through the expense portal.
+      They still count against their grant or budget line, so the year's figures and the
+      BCTF claim are unchanged. Nothing new can be added here &mdash; to pay somebody
+      outside the union, start a voucher and tick &ldquo;Pay a vendor instead of me&rdquo;,
+      and it gets two signatures before the money moves.
+    </p>
 
-    <form method="POST" action="lp-direct-action.php" enctype="multipart/form-data" class="direct-form">
-      <?= csrfField() ?>
-      <input type="hidden" name="action" value="add">
-      <input type="hidden" name="year" value="<?= (int)$year ?>">
 
-      <label>Paid to
-        <input type="text" name="payee" required maxlength="200" placeholder="e.g. Dr Chen — speaker fee">
-      </label>
-      <label>Amount
-        <input type="number" name="amount" step="0.01" min="0.01" required placeholder="0.00">
-      </label>
-      <label>Date
-        <input type="date" name="spent_on" value="<?= date('Y-m-d') ?>">
-      </label>
-      <label>Cheque / reference
-        <input type="text" name="cheque_ref" maxlength="60" placeholder="optional">
-      </label>
-      <label>Counts against — BCTF grant
-        <select name="grant_id">
-          <option value="">— none —</option>
-          <?php foreach ($grantSum as $g): ?>
-            <option value="<?= (int)$g['id'] ?>"><?= htmlspecialchars($g['name']) ?></option>
-          <?php endforeach; ?>
-        </select>
-      </label>
-      <label>&hellip; or local budget line
-        <select name="budget_line_id">
-          <option value="">— none —</option>
-          <?php foreach ($budgetSum as $b): ?>
-            <option value="<?= (int)$b['id'] ?>"><?= htmlspecialchars($b['name']) ?></option>
-          <?php endforeach; ?>
-        </select>
-      </label>
-      <label class="wide">What it was for
-        <input type="text" name="description" maxlength="255" placeholder="optional">
-      </label>
-      <label class="wide">Receipt or invoice
-        <input type="file" name="receipt" accept="image/*,application/pdf,.pdf">
-      </label>
-      <div class="wide direct-actions">
-        <button type="submit" class="lp-btn">Record it</button>
-        <span class="direct-hint">Pick a grant or a budget line — that is what the amount counts toward.
-          This only records a payment that has already gone out; to <strong>authorise</strong> one,
-          start a voucher and tick &ldquo;Pay a vendor instead of me&rdquo;.</span>
-      </div>
-    </form>
-
-    <?php if ($directExp): ?>
     <table class="direct-table">
       <thead><tr><th>Date</th><th>Paid to</th><th>Counts against</th><th class="r">Amount</th><th></th><th></th></tr></thead>
       <tbody>
@@ -458,6 +417,7 @@ $grantSumJson      = json_encode(array_values($grantSum));
             <?php else: ?><span class="muted">no receipt</span><?php endif; ?>
           </td>
           <td class="r">
+            <?php if ($canUnlog): ?>
             <form method="POST" action="lp-direct-action.php" style="display:inline;"
                   onsubmit="return confirm('Remove this payment from the total? The receipt file is kept.');">
               <?= csrfField() ?>
@@ -466,12 +426,12 @@ $grantSumJson      = json_encode(array_values($grantSum));
               <input type="hidden" name="id" value="<?= (int)$d['id'] ?>">
               <button type="submit" class="direct-del">Remove</button>
             </form>
+            <?php endif; ?>
           </td>
         </tr>
         <?php endforeach; ?>
       </tbody>
     </table>
-    <?php endif; ?>
   </details>
   <?php endif; ?>
 

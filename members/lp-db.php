@@ -292,9 +292,134 @@ function lpCanSign2(string $email): bool {
     return expIsVP($email);
 }
 
+/**
+ * Who may give the FIRST signature on this particular voucher.
+ *
+ * An ordinary LP voucher reimburses the President, so it is Treasurer then VP
+ * and the President is kept out of both slots.
+ *
+ * A vendor payment pays neither of them, so the President may be one of the
+ * two signatures — Cody's rule: "it just needs to be me and the Treasurer."
+ * That makes the first slot stricter rather than looser: it must be the
+ * Treasurer in their own right, not the President arriving through
+ * expIsAdmin(). Otherwise the President could take the Treasurer's slot, the
+ * second slot would still want a VP, and the Treasurer could not sign at all.
+ */
+function lpCanSign1For(array $v, string $email): bool {
+    require_once __DIR__ . '/exp-db.php';
+    if (!lpIsVendorPayment($v)) return lpCanSign1($email);
+    if (expIsTreasurerRole($email)) return true;
+    // If nobody holds the Treasurer role at all, fall back to the old test,
+    // which admits the President through expIsAdmin(). Reserving the slot to a
+    // role no one holds would leave every vendor payment permanently unsigned.
+    if (!lpHasRealTreasurer()) return lpCanSign1($email);
+    // Unless the Treasurer is the one being paid. They are barred from signing
+    // their own payment, and with the first slot reserved to them the voucher
+    // could never be signed by anybody at all — it would sit approved-by-nobody
+    // for ever. The President or the VP opens it instead, and the second slot
+    // still needs a different one of them, so it is still two people and still
+    // never the payee.
+    if (lpTreasurerIsPayee($v)) return expIsPresident($email) || expIsVP($email);
+    return false;
+}
+
+/**
+ * What to call the second signature on this voucher.
+ *
+ * Once it has been given, the role of whoever gave it. Before that, who it is
+ * waiting on — either officer on a vendor payment, the VP otherwise.
+ */
+function lpSecondSignerRole(array $v): string {
+    require_once __DIR__ . '/exp-db.php';
+    $who = trim((string)($v['signer2_email'] ?? ''));
+    if ($who !== '') {
+        if (expIsVP($who)) return 'Vice-President';
+        if (expIsPresident($who)) return 'President';
+        return 'second signer';
+    }
+    return lpIsVendorPayment($v) ? 'President or Vice-President' : 'Vice-President';
+}
+
+/**
+ * Does anybody actually hold the Treasurer role?
+ *
+ * Its own query rather than lpGetTreasurerEmails(), which swallows both of its
+ * lookups: a missing exec_roles table would come back as an empty roster, read
+ * as "no Treasurer", and relax the first signature to the any-admin test —
+ * letting the submitting President sign their own vendor payment. So a lookup
+ * that throws answers TRUE, keeping the strict rule. The cost of being wrong
+ * that way is a voucher that needs the VP; the other way it is money out with
+ * one real signature.
+ */
+function lpHasRealTreasurer(): bool {
+    static $has = null;
+    if ($has !== null) return $has;
+    foreach (['exec_roles', 'exp_roles'] as $tbl) {
+        try {
+            if ((int)getDB()->query(
+                    "SELECT COUNT(*) FROM {$tbl} WHERE role='treasurer'"
+                )->fetchColumn() > 0) {
+                return $has = true;
+            }
+        } catch (\Throwable $e) {
+            error_log('lpHasRealTreasurer ' . $tbl . ': ' . $e->getMessage());
+            return $has = true;   // cannot tell — keep the strict rule
+        }
+    }
+    return $has = false;
+}
+
+/** Is the vendor on this voucher actually our own Treasurer? */
+function lpTreasurerIsPayee(array $v): bool {
+    require_once __DIR__ . '/exp-db.php';
+    $to = trim((string)(lpPayTo($v)['email'] ?? ''));
+    return $to !== '' && expIsTreasurerRole($to);
+}
+
+/**
+ * Who may give the SECOND signature on this particular voucher.
+ *
+ * The VP always, as before. On a vendor payment the President too: they are
+ * not the one being paid, so their name is a second pair of eyes rather than
+ * self-approval. Still two unique people, and still never the payee.
+ */
+function lpCanSign2For(array $v, string $email): bool {
+    require_once __DIR__ . '/exp-db.php';
+    if (lpCanSign2($email)) return true;
+    return lpIsVendorPayment($v) && expIsPresident($email);
+}
+
+/**
+ * The claimant to keep out of the signatures, for this voucher.
+ *
+ * On an ordinary voucher that is the submitter: they are being reimbursed, so
+ * signing would be self-authorisation. On a vendor payment the money goes to
+ * somebody outside the union entirely, so submitting it is authorising a spend
+ * rather than claiming one, and the submitter may sign.
+ *
+ * The payee is barred either way, which is the part that must never move: if
+ * the President names their own address as the vendor, they cannot sign it.
+ */
+function lpSignBlockedClaimant(array $v): ?string {
+    // Only lifted when we actually know who the payee is. A vendor row with a
+    // blank e-transfer address has no payee to bar, so lifting the submitter
+    // bar as well would leave the voucher with no self-dealing guard at all —
+    // the submitter could sign their own. The forms refuse a blank address;
+    // this is the belt for older rows and anything edited straight in the DB.
+    if (lpIsVendorPayment($v) && trim((string)(lpPayTo($v)['email'] ?? '')) !== '') {
+        return null;
+    }
+    return ($v['submitted_by_email'] ?? null) ?: null;
+}
+
 /** Can review LP vouchers (treasurer or VP) */
 function lpCanReview(string $email): bool {
-    return lpCanSign1($email) || lpCanSign2($email);
+    require_once __DIR__ . '/exp-db.php';
+    // The President too: they may be the second signature on a vendor payment,
+    // and without this a President who is not also an admin is redirected off
+    // approvals.php and never sees the voucher waiting on them. What they may
+    // actually press is still decided per voucher.
+    return lpCanSign1($email) || lpCanSign2($email) || expIsPresident($email);
 }
 
 /** Ensure approval columns exist on lp_vouchers */
@@ -435,13 +560,17 @@ function lpApprovalTrail(array $v): string {
         $out .= $row($status === 'submitted' ? 'current' : 'todo', 'Treasurer approval', '');
     }
 
-    // 3. Vice-President (signer 2)
+    // 3. Second signature. Named by who gave it, not by the slot: on a vendor
+    // payment the President may be signer 2, and logging their name under
+    // "Vice-President" records a role they do not hold.
+    $sig2Role = lpSecondSignerRole($v);
     if (!empty($v['signer2_at'])) {
-        $out .= $row('done', 'Approved by Vice-President',
+        $out .= $row('done', 'Approved by ' . $sig2Role,
             htmlspecialchars($v['signer2_name'] ?: $v['signer2_email'])
             . ' &middot; ' . $when($v['signer2_at']) . $note($v['signer2_note'] ?? ''));
     } else {
-        $out .= $row($status === 'treasurer_approved' ? 'current' : 'todo', 'Vice-President signature', '');
+        $out .= $row($status === 'treasurer_approved' ? 'current' : 'todo',
+                     $sig2Role . ' signature', '');
     }
 
     // 4. Payment
@@ -625,8 +754,12 @@ function lpApproveAsSigner1(int $id, string $email, string $name, string $note =
     // vendor payment could name a signer's own address as the "vendor", and
     // that signer could then approve and pay themselves — two signatures on
     // paper, self-authorisation in fact.
-    expAssertNotOwnClaim($email, lpPayTo($v)['email'] ?: null, $v['submitted_by_email'] ?? null);
-    if (!lpCanSign1($email)) throw new RuntimeException("Only the BVTU Treasurer can give first approval.");
+    expAssertNotOwnClaim($email, lpPayTo($v)['email'] ?: null, lpSignBlockedClaimant($v));
+    if (!lpCanSign1For($v, $email)) {
+        throw new RuntimeException(lpIsVendorPayment($v)
+            ? "The first signature on a vendor payment has to be the Treasurer."
+            : "Only the BVTU Treasurer can give first approval.");
+    }
     getDB()->prepare(
         "UPDATE lp_vouchers SET status='treasurer_approved',
          signer1_email=?, signer1_name=?, signer1_at=NOW(), signer1_note=? WHERE id=?"
@@ -641,8 +774,12 @@ function lpApproveAsSigner2(int $id, string $email, string $name, string $note =
     // vendor payment could name a signer's own address as the "vendor", and
     // that signer could then approve and pay themselves — two signatures on
     // paper, self-authorisation in fact.
-    expAssertNotOwnClaim($email, lpPayTo($v)['email'] ?: null, $v['submitted_by_email'] ?? null);
-    if (!lpCanSign2($email)) throw new RuntimeException("Only the Vice-President can give second approval.");
+    expAssertNotOwnClaim($email, lpPayTo($v)['email'] ?: null, lpSignBlockedClaimant($v));
+    if (!lpCanSign2For($v, $email)) {
+        throw new RuntimeException(lpIsVendorPayment($v)
+            ? "The second signature on a vendor payment has to be the President or the Vice-President."
+            : "Only the Vice-President can give second approval.");
+    }
     if (!empty($v['signer1_email']) && strtolower(trim($email)) === strtolower(trim($v['signer1_email']))) {
         throw new RuntimeException("Signer 2 cannot be the same person as Signer 1.");
     }
@@ -675,8 +812,10 @@ function lpMarkPaid(int $id, string $email, string $name, string $note, string $
     // vendor payment could name a signer's own address as the "vendor", and
     // that signer could then approve and pay themselves — two signatures on
     // paper, self-authorisation in fact.
-    expAssertNotOwnClaim($email, lpPayTo($v)['email'] ?: null, $v['submitted_by_email'] ?? null);
-    if (!lpCanSign1($email)) throw new RuntimeException("Only the Treasurer can mark a voucher as paid.");
+    expAssertNotOwnClaim($email, lpPayTo($v)['email'] ?: null, lpSignBlockedClaimant($v));
+    // Still the Treasurer: they are the one who sends the e-transfer, so they
+    // are the one who records that it went.
+    if (!lpCanSign1For($v, $email)) throw new RuntimeException("Only the Treasurer can mark a voucher as paid.");
     $pd = ($paymentDate && preg_match('/^\d{4}-\d{2}-\d{2}$/', $paymentDate)) ? $paymentDate : date('Y-m-d');
     getDB()->prepare(
         "UPDATE lp_vouchers SET status='paid',
@@ -823,9 +962,23 @@ function lpEmailSubmitted(array $v, float $total): void {
 }
 
 function lpEmailTreasurerApproved(array $v, float $total): void {
-    $body = '<p>The LP expense voucher has been approved by the BVTU Treasurer and now requires the Vice-President\'s signature.</p>'
+    $vendor = lpIsVendorPayment($v);
+    $body = '<p>The LP expense voucher has been approved by the BVTU Treasurer and now requires '
+          . ($vendor
+             ? 'a second signature from the President or the Vice-President.'
+             : 'the Vice-President\'s signature.')
+          . '</p>'
           . _lpVoucherBox($v, $total);
-    foreach (lpGetVPEmails() as $email) {
+    // On a vendor payment the submitter may be the second signature, so they
+    // have to be told it is waiting on them. Addressed once even if they are
+    // also on the VP list.
+    $to = lpGetVPEmails();
+    if ($vendor && !empty($v['submitted_by_email'])) $to[] = $v['submitted_by_email'];
+    $seen = [];
+    foreach ($to as $email) {
+        $k = strtolower(trim((string)$email));
+        if ($k === '' || isset($seen[$k])) continue;
+        $seen[$k] = true;
         lpNotify($email, 'LP Voucher — Second Signature Required — ' . $v['name'], _lpWrap('Second Signature Required', $body));
     }
 }
@@ -1285,6 +1438,16 @@ function lpDirectEnsure(): void {
 }
 
 /** Returns the new row's id, or 0 when the figures do not make an expense. */
+/**
+ * RETIRED — no callers. Logging a payment after the fact was removed when
+ * everything moved to the expense portal: money paid to somebody outside the
+ * union is now a voucher with two signatures, not a row typed in afterwards.
+ *
+ * Kept, not deleted, because the rows it wrote are still read everywhere
+ * (totals, archive bundle, receipts export) and a backfill may yet be needed.
+ * Nothing should call it without a deliberate decision: it writes a payment
+ * nobody signed for.
+ */
 function lpAddDirectExpense(array $d, string $by): int {
     lpDirectEnsure();
     $amount = round((float)($d['amount'] ?? 0), 2);

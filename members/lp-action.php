@@ -57,18 +57,27 @@ try {
             break;
 
         case 'treasurer_approve':
-            if (!lpCanSign1($member['email'])) {
-                throw new RuntimeException('Only the BVTU Treasurer can give first approval.');
+            // Asked of this voucher, not of the role alone: a vendor payment
+            // has its own pair, and a page-level check here would reject the
+            // signer before lpApproveAsSigner1() ever ran.
+            if (!lpCanSign1For($v, $member['email'])) {
+                throw new RuntimeException(lpIsVendorPayment($v)
+                    ? 'The first signature on a vendor payment has to be the Treasurer.'
+                    : 'Only the BVTU Treasurer can give first approval.');
             }
             lpApproveAsSigner1($voucherId, $member['email'], $member['name'], $note);
             $v = lpGetVoucher($voucherId); // reload
             lpEmailTreasurerApproved($v, $total);
-            $msg = 'Voucher approved. VP has been notified for second signature.';
+            $msg = lpIsVendorPayment($v)
+                 ? 'Voucher approved. The President and VP have been notified for the second signature.'
+                 : 'Voucher approved. VP has been notified for second signature.';
             break;
 
         case 'vp_approve':
-            if (!lpCanSign2($member['email'])) {
-                throw new RuntimeException('Only the Vice-President can give second approval.');
+            if (!lpCanSign2For($v, $member['email'])) {
+                throw new RuntimeException(lpIsVendorPayment($v)
+                    ? 'The second signature on a vendor payment has to be the President or the Vice-President.'
+                    : 'Only the Vice-President can give second approval.');
             }
             lpApproveAsSigner2($voucherId, $member['email'], $member['name'], $note);
             $v = lpGetVoucher($voucherId); // reload
@@ -77,7 +86,7 @@ try {
             break;
 
         case 'reject':
-            if (!lpCanSign1($member['email']) && !lpCanSign2($member['email'])) {
+            if (!lpCanSign1For($v, $member['email']) && !lpCanSign2For($v, $member['email'])) {
                 throw new RuntimeException('You do not have permission to reject this voucher.');
             }
             if (!$note) throw new RuntimeException('Please provide a reason for rejection.');
@@ -88,7 +97,7 @@ try {
             break;
 
         case 'mark_paid':
-            if (!lpCanSign1($member['email'])) {
+            if (!lpCanSign1For($v, $member['email'])) {
                 throw new RuntimeException('Only the Treasurer can mark a voucher as paid.');
             }
             lpEnsureApprovalColumns();

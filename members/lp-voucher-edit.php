@@ -7,6 +7,10 @@ require_once __DIR__ . '/exec-db.php';
 requireLogin();
 
 $member = getMember();
+// Named outright: the page calls expIsVP()/expIsPresident() directly, and
+// relying on lp-db.php's function-level require to have fired first makes that
+// work only as long as nobody reorders the calls above.
+require_once __DIR__ . '/exp-db.php';
 lpEnsureTables();
 /* The duplicate-reminder columns, before anything writes to them. The save
  * below deletes this voucher's rows and re-inserts them, so a missing column
@@ -452,7 +456,14 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
 
   <?php if ($readOnly): ?>
   <div class="saved-notice" style="background:#eff6ff;border-color:#bfdbfe;color:#1e40af;">
-    &#x1F441; Reviewing as <?= $isTreasurer ? 'Treasurer' : 'Vice-President' ?> — read only.
+    <?php // Three roles can reach this page now, so the label is taken from the
+          // reader rather than assumed to be whichever of two it is not. ?>
+    &#x1F441; Reviewing as <?php
+      if ($isTreasurer)                        echo 'Treasurer';
+      elseif (expIsVP($member['email']))       echo 'Vice-President';
+      elseif (expIsPresident($member['email'])) echo 'President';
+      else                                     echo 'reviewer';
+    ?> &mdash; read only.
     <a href="approvals.php" style="color:#1e40af;font-weight:700;margin-left:.5rem;">&#x2190; Back to review queue</a>
   </div>
   <?php endif; ?>
