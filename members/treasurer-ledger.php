@@ -126,7 +126,17 @@ function _dateWhere(string $col, string $from, string $to): array {
     [$dw, $dp] = _dateWhere('v.payment_date', $dateFrom, $dateTo);
     $where  = array_merge($where, $dw);
     $params = array_merge($params, $dp);
-    $sql = "SELECT v.id, v.submitted_by AS member_name, v.submitted_by_email AS member_email,
+    // The ledger answers "where did the money go", so it must name the payee,
+    // not the submitter. A paid vendor voucher listed under the President read
+    // as a reimbursement to them for an invoice the union owed somebody else.
+    $payeeCols = lpHasPayeeColumns()
+        ? "CASE WHEN COALESCE(v.payee_name,'')  <> '' THEN v.payee_name  ELSE v.submitted_by       END AS member_name,
+           CASE WHEN COALESCE(v.payee_name,'')  <> '' THEN v.payee_email ELSE v.submitted_by_email END AS member_email,
+           COALESCE(v.payee_name,'') AS payee_name,"
+        : "v.submitted_by AS member_name, v.submitted_by_email AS member_email,
+           '' AS payee_name,";
+    $sql = "SELECT v.id, {$payeeCols}
+                   v.submitted_by AS submitted_by, v.submitted_by_email AS submitted_by_email,
                    v.name AS title, v.voucher_number,
                    v.payment_date, v.paid_at, v.payment_ref, v.payment_note,
                    COALESCE(SUM(e.travel_amt + e.meals + e.gifts + e.misc + e.office + e.phone), 0) AS total,
@@ -144,8 +154,14 @@ function _dateWhere(string $col, string $from, string $to): array {
         $rows[] = [
             'source'       => 'lp_voucher',
             'source_id'    => $r['id'],
-            'member_name'  => $r['member_name'],
+            // member_name now holds the vendor on a vendor payment, so the
+            // name is marked and the submitter kept beside it. Without the
+            // marker a vendor reads as a member who was reimbursed.
+            'member_name'  => trim((string)($r['payee_name'] ?? '')) !== ''
+                              ? $r['member_name'] . ' (vendor)'
+                              : $r['member_name'],
             'member_email' => $r['member_email'],
+            'submitted_by' => $r['submitted_by'] ?? '',
             'amount'       => (float)$r['total'],
             'expense_date' => $r['first_date'],
             'payment_date' => $r['payment_date'] ?: substr($r['paid_at'] ?? '', 0, 10),
@@ -447,6 +463,14 @@ $sourceLabels = [
         <td>
           <div style="font-weight:700;"><?= htmlspecialchars($r['member_name']) ?></div>
           <div style="font-size:.73rem;color:var(--gray-500);"><?= htmlspecialchars($r['member_email']) ?></div>
+          <?php // On a vendor row the name above is the vendor, so the officer who
+                // submitted it is named here rather than disappearing from the ledger. ?>
+          <?php if (trim((string)($r['submitted_by'] ?? '')) !== ''
+                    && strpos($r['member_name'], '(vendor)') !== false): ?>
+          <div style="font-size:.73rem;color:var(--gray-500);">
+            submitted by <?= htmlspecialchars($r['submitted_by']) ?>
+          </div>
+          <?php endif; ?>
         </td>
         <td><span class="src-badge" style="background:<?= $sl['bg'] ?>;color:<?= $sl['color'] ?>;"><?= $sl['label'] ?></span></td>
         <td><?= htmlspecialchars($r['description']) ?></td>

@@ -71,14 +71,32 @@ function _isMyClaim(array $b): bool {
     return expWouldSelfSign($email, $b['user_email'] ?? null, $b['submitted_by_email'] ?? null);
 }
 
-/** A voucher this signer submitted. */
+/**
+ * A voucher this signer may not sign: they submitted it, or they are the payee.
+ *
+ * The same question the guard in lpApproveAsSigner1() throws on. Asking a
+ * narrower one here would offer an Approve button the server then refuses.
+ */
+function _cannotSignVoucher(array $v): bool {
+    global $email;
+    return expWouldSelfSign($email, lpPayTo($v)['email'] ?: null, $v['submitted_by_email'] ?? null);
+}
+
+/**
+ * A voucher this person actually submitted.
+ *
+ * Kept separate from _cannotSignVoucher(): being named as the vendor also bars
+ * you from signing, but it is not your voucher and Withdraw is not yours to
+ * press. Telling a signer "your own voucher" about somebody else's claim
+ * describes the wrong relationship entirely.
+ */
 function _isMyVoucher(array $v): bool {
     global $email;
     return expWouldSelfSign($email, $v['submitted_by_email'] ?? null);
 }
 /** Whether a voucher is waiting on this person. */
 function _lpNeedsMe(array $v, bool $treas, bool $vp): bool {
-    if (_isMyVoucher($v)) return false;          // as for claims: never your own
+    if (_cannotSignVoucher($v)) return false;    // as for claims: never your own
     if ($v['status'] === 'submitted')           return $treas;
     if ($v['status'] === 'treasurer_approved')  return $vp;
     if ($v['status'] === 'vp_approved')         return $treas;
@@ -185,6 +203,9 @@ function _signedLine(array $r, string $role1, string $role2): string {
     details.done-list > summary:hover { color:var(--primary); }
     .empty { font-size:.85rem;color:var(--gray-400);font-style:italic;padding:.3rem 0 .6rem; }
     .ledger-note { font-size:.8rem;color:var(--gray-400);font-style:italic;margin-top:1.5rem; }
+    .pay-vendor-chip { display:inline-block; background:#eef4ff; border:1px solid #c7dbf7;
+                       color:#1d4ed8; border-radius:20px; padding:.05rem .5rem; font-size:.74rem;
+                       font-weight:600; margin:0 .15rem; }
   </style>
 </head>
 <body>
@@ -340,15 +361,29 @@ function _signedLine(array $r, string $role1, string $role2): string {
     </div>
     <div class="card-meta">
       <?= htmlspecialchars($v['submitted_by']) ?>
+      <?php // A vendor payment is a different decision from a reimbursement, so
+            // it is marked where the Approve button is, not only in the email. ?>
+      <?php if (lpIsVendorPayment($v)): ?>
+      <span class="pay-vendor-chip">&rarr; pays <?= htmlspecialchars(lpPayTo($v)['name']) ?></span>
+      <?php endif; ?>
       <?= $v['voucher_number'] ? '&middot; #' . htmlspecialchars($v['voucher_number']) : '' ?>
       &middot; <?= (int)$v['expense_count'] ?> item<?= (int)$v['expense_count'] === 1 ? '' : 's' ?>
     </div>
 
     <div class="acts">
-      <?php if (_isMyVoucher($v)): ?>
-        <span class="own-item"><?= $v['status'] === 'vp_approved'
-            ? 'Signed off. The Treasurer records the payment.'
-            : 'Your own voucher — the Treasurer and VP sign it. You can withdraw it below.' ?></span>
+      <?php if (_cannotSignVoucher($v)): ?>
+        <span class="own-item"><?php
+          if ($v['status'] === 'vp_approved') {
+              echo 'Signed off. The Treasurer records the payment.';
+          } elseif (_isMyVoucher($v)) {
+              echo 'Your own voucher — the Treasurer and VP sign it. You can withdraw it below.';
+          } else {
+              // Named as the payee on somebody else's voucher. Barred from
+              // signing it, but it is not theirs to withdraw.
+              echo 'You are the payee on this one, so you cannot sign it. '
+                 . 'It needs the other two signatures.';
+          }
+        ?></span>
       <?php elseif ($v['status'] === 'submitted' && $isTreasurer): ?>
         <form method="POST" action="lp-action.php" style="display:inline;">
         <?= csrfField() ?>
@@ -370,7 +405,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
       <a class="link-sm" href="lp-voucher-edit.php?id=<?= (int)$v['id'] ?>">View &rarr;</a>
     </div>
 
-    <?php if ($v['status'] === 'vp_approved' && $isTreasurer && !_isMyVoucher($v)): ?>
+    <?php if ($v['status'] === 'vp_approved' && $isTreasurer && !_cannotSignVoucher($v)): ?>
     <details class="more">
       <summary>&#x25B8; Record e-transfer</summary>
       <form method="POST" action="lp-action.php" class="form-inline">
@@ -416,6 +451,9 @@ function _signedLine(array $r, string $role1, string $role2): string {
       </div>
       <div class="card-meta">
         <?= htmlspecialchars($v['submitted_by']) ?>
+        <?php if (lpIsVendorPayment($v)): ?>
+        <span class="pay-vendor-chip">&rarr; pays <?= htmlspecialchars(lpPayTo($v)['name']) ?></span>
+        <?php endif; ?>
         <?php $sl = _signedLine($v, 'Treasurer', 'VP'); ?>
         <?= $sl ? '&middot; ' . $sl : '' ?>
         &middot; <a class="link-sm" href="lp-voucher-edit.php?id=<?= (int)$v['id'] ?>">View &rarr;</a>

@@ -79,12 +79,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     foreach ($descs as $d) { if (trim($d)) { $hasRow = true; break; } }
     if (!$hasRow) $errors[] = 'Please add at least one expense.';
 
+    // The payee, validated up here with the other checks. Sitting below the
+    // `if (!$errors)` gate it could add an error that nothing read: the
+    // expenses still saved and the voucher still went off for approval, as a
+    // self-reimbursement, with the message never shown.
+    // Gated on the voucher's real status, not on what the form chose to render,
+    // so a stale page or a hand-made POST cannot redirect a payment that has
+    // already gone for signature.
+    $payeeWritable = lpPayeeEditable($voucher);
+    $payeeName = $payeeEmail = '';
+    if ($payeeWritable && !empty($_POST['pay_vendor'])) {
+        $payeeName  = trim($_POST['payee_name']  ?? '');
+        $payeeEmail = trim($_POST['payee_email'] ?? '');
+        if ($payeeName === '') $errors[] = 'Please say who the vendor is.';
+        if ($payeeEmail === '') {
+            $errors[] = 'Please give the vendor\'s e-transfer address.';
+        } elseif (!filter_var($payeeEmail, FILTER_VALIDATE_EMAIL)) {
+            $errors[] = 'That vendor e-transfer address does not look right.';
+        } elseif (strcasecmp($payeeEmail, (string)$voucher['submitted_by_email']) === 0) {
+            $errors[] = 'That is the submitter\'s own address — untick the vendor box '
+                      . 'to claim this back instead.';
+        } elseif (strcasecmp($payeeEmail, (string)($member['email'] ?? '')) === 0) {
+            // An exec editing somebody else's draft could otherwise name their
+            // own address as the vendor. The signing guard would stop them
+            // signing it, but the other two officers would be approving a
+            // payment to the person who typed it in.
+            $errors[] = 'That is your own address — you cannot make yourself the vendor '
+                      . 'on someone else\'s voucher.';
+        }
+    }
+
     if (!$errors) {
         $db = getDB();
 
         // Update voucher header
         $db->prepare("UPDATE lp_vouchers SET voucher_number=?, name=?, notes=? WHERE id=?")
            ->execute([$voucherNum ?: null, $voucherName, $notes ?: null, $id]);
+
+        if ($payeeWritable) {
+            $db->prepare("UPDATE lp_vouchers SET payee_name=?, payee_email=? WHERE id=?")
+               ->execute([$payeeName, $payeeEmail, $id]);
+        }
 
         // Collect IDs being kept
         $keptIds = array_filter(array_map('intval', $expIds));
@@ -458,6 +493,82 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
       <input type="text" name="notes" value="<?= htmlspecialchars($voucher['notes'] ?? '') ?>">
     </div>
   </div>
+
+  <?php
+    $vIsVendor = lpIsVendorPayment($voucher); $vPt = lpPayTo($voucher);
+    // After a refusal the form must show what they typed, not what is still in
+    // the database — re-rendering from the row emptied the vendor fields and
+    // unticked the box, so the next Save stored it as a self-reimbursement.
+    $vBack   = $errors && $_SERVER['REQUEST_METHOD'] === 'POST';
+    $vTicked = $vBack ? !empty($_POST['pay_vendor']) : $vIsVendor;
+    $vName   = $vBack ? (string)($_POST['payee_name']  ?? '') : (string)($voucher['payee_name']  ?? '');
+    $vEmail  = $vBack ? (string)($_POST['payee_email'] ?? '') : (string)($voucher['payee_email'] ?? '');
+  ?>
+  <style>
+    /* Outside both branches: the locked notice is rendered in the other one,
+       and a style defined only alongside the editable box left it unstyled. */
+    .vendor-box { border:1px solid var(--border); border-radius:10px; padding:.85rem 1rem;
+                  margin:0 0 1rem; background:#fafafa; }
+    .vendor-box.on { background:#f0f7ff; border-color:#b9d6f2; }
+    .vendor-tick { display:flex; align-items:center; gap:.5rem; font-weight:600; font-size:.92rem;
+                   cursor:pointer; }
+    .vendor-tick input { width:1rem; height:1rem; }
+    .vendor-why { font-size:.8rem; color:var(--gray-500); margin:.4rem 0 0; line-height:1.5; }
+    .vendor-fields { display:none; gap:.75rem; margin-top:.8rem; }
+    .vendor-box.on .vendor-fields { display:flex; flex-wrap:wrap; }
+    .vendor-locked { border:1px solid #b9d6f2; background:#f0f7ff; border-radius:10px;
+                     padding:.7rem 1rem; margin:0 0 1rem; font-size:.88rem; }
+    .vendor-locked .lk { font-size:.76rem; color:var(--gray-500); display:block; margin-top:.2rem; }
+  </style>
+  <?php // Reviewers get the read-only notice below, never the tick box: a
+        // control that cannot save is worse than no control. ?>
+  <?php if (lpPayeeEditable($voucher) && !$readOnly): ?>
+  <div class="vendor-box<?= $vTicked ? ' on' : '' ?>">
+    <label class="vendor-tick">
+      <input type="checkbox" name="pay_vendor" value="1" id="payVendor"
+             onchange="vendorToggle()"<?= $vTicked ? ' checked' : '' ?>>
+      <span>Pay a vendor instead of me</span>
+    </label>
+    <p class="vendor-why">
+      Signed the same way &mdash; Treasurer, then Vice-President. Tick this and the
+      payment instruction tells the Treasurer to e&#8209;transfer the vendor, not you.
+      It can only be changed until the first signature.
+    </p>
+    <div class="vendor-fields" id="vendorFields">
+      <div class="hfield" style="flex:2;">
+        <label>Vendor *</label>
+        <input type="text" name="payee_name" maxlength="200" placeholder="e.g. Northern Sound &amp; Light"
+          value="<?= htmlspecialchars($vName) ?>">
+      </div>
+      <div class="hfield" style="flex:2;">
+        <label>Their e&#8209;transfer address *</label>
+        <input type="email" name="payee_email" maxlength="255" placeholder="e.g. accounts@northernsound.ca"
+          value="<?= htmlspecialchars($vEmail) ?>">
+      </div>
+    </div>
+  </div>
+  <script>
+    function vendorToggle() {
+      var on = document.getElementById('payVendor').checked;
+      document.getElementById('payVendor').closest('.vendor-box').classList.toggle('on', on);
+      ['payee_name', 'payee_email'].forEach(function (n) {
+        var el = document.querySelector('[name="' + n + '"]');
+        if (el) el.required = on;
+      });
+    }
+    vendorToggle();
+  </script>
+  <?php elseif ($vIsVendor): ?>
+  <?php // Signed already, so shown and not offered. Hiding it would leave the
+        // page silent about where the money is going. ?>
+  <div class="vendor-locked">
+    <strong>Pays <?= htmlspecialchars($vPt['name']) ?></strong>
+    <?php if ($vPt['email'] !== ''): ?>&middot; <?= htmlspecialchars($vPt['email']) ?><?php endif; ?>
+    <span class="lk">Fixed once the voucher went for signature, so nobody signs for
+      one payee and the money leaves for another. To change it, withdraw the voucher
+      (or have it declined) and submit it again.</span>
+  </div>
+  <?php endif; ?>
 
   <div class="toolbar">
     <button type="button" class="btn-add" onclick="addRow()">+ Add Row</button>

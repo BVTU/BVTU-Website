@@ -321,6 +321,12 @@ function lpEnsureApprovalColumns(): void {
         'payment_note'       => "TEXT",
         'payment_ref'        => "VARCHAR(255)",
         'payment_date'       => "DATE",
+        // A voucher that pays somebody other than the person who submitted it.
+        // Empty payee_name means the ordinary case — the submitter is
+        // reimbursed. Non-empty means the money goes to a vendor instead, and
+        // the submitter is authorising the spend rather than claiming it back.
+        'payee_name'         => "VARCHAR(200) NOT NULL DEFAULT ''",
+        'payee_email'        => "VARCHAR(255) NOT NULL DEFAULT ''",
     ];
     foreach ($cols as $col => $type) {
         try {
@@ -615,7 +621,11 @@ function lpApproveAsSigner1(int $id, string $email, string $name, string $note =
     if ($v['status'] !== 'submitted') throw new RuntimeException("Voucher must be in 'submitted' state.");
     // The President submits LP vouchers and passes lpCanSign1() through
     // expIsAdmin(), so without this they could sign their own.
-    expAssertNotOwnClaim($email, $v['submitted_by_email'] ?? null);
+    // Both the payee and the submitter. Passing only the submitter meant a
+    // vendor payment could name a signer's own address as the "vendor", and
+    // that signer could then approve and pay themselves — two signatures on
+    // paper, self-authorisation in fact.
+    expAssertNotOwnClaim($email, lpPayTo($v)['email'] ?: null, $v['submitted_by_email'] ?? null);
     if (!lpCanSign1($email)) throw new RuntimeException("Only the BVTU Treasurer can give first approval.");
     getDB()->prepare(
         "UPDATE lp_vouchers SET status='treasurer_approved',
@@ -627,7 +637,11 @@ function lpApproveAsSigner2(int $id, string $email, string $name, string $note =
     $v = lpGetVoucher($id);
     if (!$v) throw new RuntimeException("Voucher not found.");
     if ($v['status'] !== 'treasurer_approved') throw new RuntimeException("Voucher must have Treasurer approval first.");
-    expAssertNotOwnClaim($email, $v['submitted_by_email'] ?? null);
+    // Both the payee and the submitter. Passing only the submitter meant a
+    // vendor payment could name a signer's own address as the "vendor", and
+    // that signer could then approve and pay themselves — two signatures on
+    // paper, self-authorisation in fact.
+    expAssertNotOwnClaim($email, lpPayTo($v)['email'] ?: null, $v['submitted_by_email'] ?? null);
     if (!lpCanSign2($email)) throw new RuntimeException("Only the Vice-President can give second approval.");
     if (!empty($v['signer1_email']) && strtolower(trim($email)) === strtolower(trim($v['signer1_email']))) {
         throw new RuntimeException("Signer 2 cannot be the same person as Signer 1.");
@@ -657,7 +671,11 @@ function lpMarkPaid(int $id, string $email, string $name, string $note, string $
     if ($v['status'] !== 'vp_approved') throw new RuntimeException("Voucher must have both signatures before marking paid.");
     // lpCanSign1() admits the President via expIsAdmin(); they are the payee on
     // their own voucher, so recording payment on it stays with the Treasurer.
-    expAssertNotOwnClaim($email, $v['submitted_by_email'] ?? null);
+    // Both the payee and the submitter. Passing only the submitter meant a
+    // vendor payment could name a signer's own address as the "vendor", and
+    // that signer could then approve and pay themselves — two signatures on
+    // paper, self-authorisation in fact.
+    expAssertNotOwnClaim($email, lpPayTo($v)['email'] ?: null, $v['submitted_by_email'] ?? null);
     if (!lpCanSign1($email)) throw new RuntimeException("Only the Treasurer can mark a voucher as paid.");
     $pd = ($paymentDate && preg_match('/^\d{4}-\d{2}-\d{2}$/', $paymentDate)) ? $paymentDate : date('Y-m-d');
     getDB()->prepare(
@@ -696,12 +714,101 @@ function _lpWrap(string $title, string $body): string {
     </div></body></html>';
 }
 
+/**
+ * Is this voucher paying somebody other than the person who submitted it?
+ *
+ * Keyed on a payee name being present, not on a separate flag: the two move
+ * together, and a flag that could disagree with the name is a way for money to
+ * go to the wrong place.
+ */
+function lpIsVendorPayment(array $v): bool {
+    return trim((string)($v['payee_name'] ?? '')) !== '';
+}
+
+/**
+ * Are the vendor-payee columns on this server yet?
+ *
+ * For SQL that has to name them. A failed ALTER must cost the payee column in
+ * a report, never the report itself.
+ */
+function lpHasPayeeColumns(): bool {
+    static $ok = null;
+    if ($ok !== null) return $ok;
+    try {
+        $ok = (int)getDB()->query(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='lp_vouchers'
+               AND COLUMN_NAME='payee_name'"
+        )->fetchColumn() > 0;
+    } catch (\Throwable $e) {
+        error_log('lpHasPayeeColumns: ' . $e->getMessage());
+        $ok = false;
+    }
+    return $ok;
+}
+
+/**
+ * May the payee still be changed?
+ *
+ * Only before anybody has signed. A signature is a signature on a particular
+ * payee: letting the destination be edited afterwards would mean the Treasurer
+ * and VP had authorised a payment to one party and the money left for another,
+ * which is the whole thing two signatures exist to stop.
+ */
+function lpPayeeEditable(array $v): bool {
+    // Not once it has been submitted: the Treasurer has already been emailed
+    // the voucher by then, and editing the destination afterwards means a
+    // signature given against a payee nobody reviewed. Decline it and submit
+    // again to change who gets paid.
+    return in_array((string)($v['status'] ?? ''), ['draft', 'rejected'], true);
+}
+
+/**
+ * Who the e-transfer actually goes to, asked in one place.
+ *
+ * Every surface that tells somebody where to send money must come through
+ * here. The payment instruction used to read submitted_by_email directly, so
+ * a vendor payment would have quietly e-transferred the President instead of
+ * the vendor.
+ *
+ * Returns ['name', 'email', 'vendor' => bool].
+ */
+function lpPayTo(array $v): array {
+    if (lpIsVendorPayment($v)) {
+        return [
+            'name'   => trim((string)$v['payee_name']),
+            // Falls back to nothing rather than to the submitter: an empty
+            // e-transfer address must read as "ask who to pay", never as
+            // "pay the person who filled this in".
+            'email'  => trim((string)($v['payee_email'] ?? '')),
+            'vendor' => true,
+        ];
+    }
+    return [
+        'name'   => (string)($v['submitted_by'] ?? ''),
+        'email'  => (string)($v['submitted_by_email'] ?? ''),
+        'vendor' => false,
+    ];
+}
+
 function _lpVoucherBox(array $v, float $total): string {
     $siteUrl = defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca';
     return '<div class="detail-box">'
          . '<div class="row"><span class="lbl">Voucher</span><span class="val">' . htmlspecialchars($v['name']) . '</span></div>'
          . '<div class="row"><span class="lbl">Number</span><span class="val">' . htmlspecialchars($v['voucher_number'] ?? '—') . '</span></div>'
          . '<div class="row"><span class="lbl">Submitted by</span><span class="val">' . htmlspecialchars($v['submitted_by']) . '</span></div>'
+         // The payee goes in front of both signers, not just in the payment
+         // instruction at the end. Authorising money to a vendor is a different
+         // decision from reimbursing a colleague, and the signature is the
+         // moment to know which one is being asked for.
+         . (lpIsVendorPayment($v)
+            ? '<div class="row"><span class="lbl">Pay to</span><span class="val">'
+              . htmlspecialchars(lpPayTo($v)['name']) . ' (vendor)</span></div>'
+              // The address too, not just the name: it is the address the money
+              // follows, so it is the thing being signed for.
+              . '<div class="row"><span class="lbl">E-transfer to</span><span class="val">'
+              . htmlspecialchars(lpPayTo($v)['email'] ?: 'not given') . '</span></div>'
+            : '')
          . '<div class="row"><span class="lbl">Total</span><span class="val">$' . number_format($total, 2) . '</span></div>'
          . '</div>'
          . '<p><a class="btn" href="' . $siteUrl . '/members/approvals.php">Review in Approvals &amp; Payments</a></p>';
@@ -725,11 +832,28 @@ function lpEmailTreasurerApproved(array $v, float $total): void {
 
 function lpEmailVPApproved(array $v, float $total): void {
     $siteUrl = defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca';
+    $pay = lpPayTo($v);
+    // Asked of lpPayTo(), never of submitted_by_email. A vendor payment that
+    // printed the submitter's address here would have the Treasurer e-transfer
+    // the President for an invoice the union owes somebody else.
+    $where = $pay['email'] !== ''
+        ? htmlspecialchars($pay['email'])
+        : '<strong style="color:#991b1b;">no e-transfer address on the voucher &mdash; '
+          . 'ask before paying</strong>';
     $body = '<p>The LP expense voucher has received both signatures and is <strong>ready for e-transfer payment</strong>.</p>'
           . _lpVoucherBox($v, $total)
           . '<div class="detail-box" style="background:#f0fdf4;border-color:#bbf7d0;">'
-          . '<div class="row"><span class="lbl">Send e-transfer to</span><span class="val">' . htmlspecialchars($v['submitted_by_email']) . '</span></div>'
+          . ($pay['vendor']
+             ? '<div class="row"><span class="lbl">Pay the vendor</span><span class="val">'
+               . htmlspecialchars($pay['name']) . '</span></div>'
+             : '')
+          . '<div class="row"><span class="lbl">Send e-transfer to</span><span class="val">' . $where . '</span></div>'
           . '<div class="row"><span class="lbl">Amount</span><span class="val">$' . number_format($total, 2) . '</span></div>'
+          . ($pay['vendor']
+             ? '<div class="row"><span class="lbl">Not</span><span class="val">'
+               . htmlspecialchars((string)$v['submitted_by'])
+               . ' &mdash; they submitted it, they are not being reimbursed</span></div>'
+             : '')
           . '</div>'
           . '<p><a class="btn" href="' . $siteUrl . '/members/approvals.php">Open Approvals &amp; Payments</a></p>';
     foreach (lpGetTreasurerEmails() as $email) {
@@ -749,14 +873,23 @@ function lpEmailRejected(array $v): void {
 }
 
 function lpEmailPaid(array $v, float $total): void {
-    $body = '<p>Your LP expense voucher has been paid via e-transfer.</p>'
+    $pay = lpPayTo($v);
+    $body = '<p>' . ($pay['vendor']
+            ? 'The vendor payment you submitted has been sent by e-transfer.'
+            : 'Your LP expense voucher has been paid via e-transfer.') . '</p>'
           . '<div class="detail-box">'
           . '<div class="row"><span class="lbl">Voucher</span><span class="val">' . htmlspecialchars($v['name']) . '</span></div>'
+          . ($pay['vendor']
+             ? '<div class="row"><span class="lbl">Paid to</span><span class="val">'
+               . htmlspecialchars($pay['name']) . '</span></div>'
+             : '')
           . '<div class="row"><span class="lbl">Amount</span><span class="val">$' . number_format($total, 2) . '</span></div>'
           . '<div class="row"><span class="lbl">Paid by</span><span class="val">' . htmlspecialchars($v['paid_by_name'] ?? '—') . '</span></div>'
           . '</div>';
     if ($v['submitted_by_email']) {
-        lpNotify($v['submitted_by_email'], 'LP Voucher Paid — ' . $v['name'], _lpWrap('Payment Sent', $body));
+        lpNotify($v['submitted_by_email'],
+                 ($pay['vendor'] ? 'Vendor Paid — ' : 'LP Voucher Paid — ') . $v['name'],
+                 _lpWrap('Payment Sent', $body));
     }
 }
 

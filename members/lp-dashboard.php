@@ -6,6 +6,9 @@ requireLogin();
 
 $member = getMember();
 lpEnsureTables();
+// The voucher list marks vendor payments, so payee_name has to exist before it
+// is read. It lives in lpEnsureApprovalColumns(), not lpEnsureTables().
+lpEnsureApprovalColumns();
 
 if (!lpCanView($member['email'])) {
     header('Location: dashboard.php'); exit;
@@ -382,7 +385,10 @@ $grantSumJson      = json_encode(array_values($grantSum));
         // may already be closed and archived. ?>
   <?php if ($isCurrent && !lpYearIsClosed($year) && lpCanRecordDirect($member['email'])): ?>
   <details class="direct-box"<?= $directExp ? ' open' : '' ?>>
-    <summary>Record a payment made outside a voucher<?php
+    <?php // Named for what it is: a log of money already gone, not a way to
+          // authorise any. Paying a vendor goes through a voucher with two
+          // signatures — "Pay a vendor instead of me" on the voucher form. ?>
+    <summary>Log a payment already made<?php
       if ($directExp): ?> <span class="direct-count"><?= count($directExp) ?> recorded</span><?php endif; ?></summary>
 
     <form method="POST" action="lp-direct-action.php" enctype="multipart/form-data" class="direct-form">
@@ -426,7 +432,9 @@ $grantSumJson      = json_encode(array_values($grantSum));
       </label>
       <div class="wide direct-actions">
         <button type="submit" class="lp-btn">Record it</button>
-        <span class="direct-hint">Pick a grant or a budget line — that is what the amount counts toward.</span>
+        <span class="direct-hint">Pick a grant or a budget line — that is what the amount counts toward.
+          This only records a payment that has already gone out; to <strong>authorise</strong> one,
+          start a voucher and tick &ldquo;Pay a vendor instead of me&rdquo;.</span>
       </div>
     </form>
 
@@ -491,6 +499,11 @@ $grantSumJson      = json_encode(array_values($grantSum));
           </div>
           <div class="meta">
             <?= htmlspecialchars($v['submitted_by']) ?>
+            <?php // Marked here too, or a vendor payment reads in this list as a
+                  // reimbursement to the officer who submitted it. ?>
+            <?php if (lpIsVendorPayment($v)): ?>
+            · <strong>pays <?= htmlspecialchars(lpPayTo($v)['name']) ?></strong>
+            <?php endif; ?>
             · <?= $v['expense_count'] ?> expense<?= $v['expense_count'] != 1 ? 's' : '' ?>
             · <?= date('M j, Y', strtotime($v['created_at'])) ?>
           </div>

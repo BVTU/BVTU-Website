@@ -7,6 +7,10 @@ requireLogin();
 
 $member = getMember();
 lpEnsureTables();
+// payee_name/payee_email live here, not in lpEnsureTables(), and this page is
+// the one that writes them — without this the vendor INSERT dies on "Unknown
+// column" the first time it runs on a server that has not had the ALTER.
+lpEnsureApprovalColumns();
 /* The duplicate-reminder columns, before anything writes to them. The save
  * below deletes this voucher's rows and re-inserts them, so a missing column
  * would throw between the two and take the voucher's expenses with it. */
@@ -30,6 +34,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfCheck();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $voucherName = trim($_POST['voucher_name'] ?? '');
     $voucherNum  = trim($_POST['voucher_number'] ?? '');
+    // A vendor payment: the money goes to somebody other than whoever is
+    // filling this in. Only honoured when the box is ticked, so a name left
+    // behind by a change of mind cannot quietly redirect the payment — the
+    // same trap the collaborator fields had.
+    $payVendor   = !empty($_POST['pay_vendor']);
+    $payeeName   = $payVendor ? trim($_POST['payee_name']  ?? '') : '';
+    $payeeEmail  = $payVendor ? trim($_POST['payee_email'] ?? '') : '';
     $notes       = trim($_POST['notes'] ?? '');
 
     // Expense arrays
@@ -56,6 +67,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $draftId = (int)($_POST['draft_voucher_id'] ?? 0);
 
     if (!$voucherName) $errors[] = 'Please enter a voucher name.';
+    if ($payVendor) {
+        if ($payeeName === '')  $errors[] = 'Please say who the vendor is.';
+        // Refused rather than left blank: a signed authorisation with nowhere
+        // to send the money is worse than one that was never submitted.
+        if ($payeeEmail === '') {
+            $errors[] = 'Please give the vendor\'s e-transfer address.';
+        } elseif (!filter_var($payeeEmail, FILTER_VALIDATE_EMAIL)) {
+            $errors[] = 'That vendor e-transfer address does not look right.';
+        }
+        if ($payeeEmail !== '' && strcasecmp($payeeEmail, (string)$member['email']) === 0) {
+            // Not a vendor payment at all, and routing it as one would hide a
+            // reimbursement to yourself behind a vendor label.
+            $errors[] = 'That is your own address — leave the vendor box unticked '
+                      . 'to claim this back yourself.';
+        }
+    }
 
     // Check at least one non-empty expense row
     $hasRow = false;
@@ -70,9 +97,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $chk = $db->prepare("SELECT id FROM lp_vouchers WHERE id=? AND submitted_by_email=? AND name='(draft)'");
             $chk->execute([$draftId, $member['email']]);
             if ($chk->fetch()) {
-                $db->prepare("UPDATE lp_vouchers SET voucher_number=?, name=?, notes=?, mileage_rate=?, status='draft'
+                $db->prepare("UPDATE lp_vouchers SET voucher_number=?, name=?, notes=?, mileage_rate=?,
+                                     payee_name=?, payee_email=?, status='draft'
                               WHERE id=?")
-                   ->execute([$voucherNum ?: null, $voucherName, $notes ?: null, $mileageRate, $draftId]);
+                   ->execute([$voucherNum ?: null, $voucherName, $notes ?: null, $mileageRate,
+                              $payeeName, $payeeEmail, $draftId]);
                 $voucherId = $draftId;
             } else {
                 $draftId = 0; // draft not found or doesn't belong to user — fall through to insert
@@ -80,10 +109,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if (!$draftId) {
-            $db->prepare("INSERT INTO lp_vouchers (voucher_number, name, submitted_by, submitted_by_email, notes, year, mileage_rate)
-                          VALUES (?,?,?,?,?,?,?)")
+            $db->prepare("INSERT INTO lp_vouchers (voucher_number, name, submitted_by, submitted_by_email, notes, year, mileage_rate, payee_name, payee_email)
+                          VALUES (?,?,?,?,?,?,?,?,?)")
                ->execute([$voucherNum ?: null, $voucherName, $member['name'], $member['email'],
-                          $notes ?: null, lpCurrentYear(), $mileageRate]);
+                          $notes ?: null, lpCurrentYear(), $mileageRate, $payeeName, $payeeEmail]);
             $voucherId = (int)$db->lastInsertId();
         }
 
@@ -444,6 +473,58 @@ $initRowsJson = json_encode($initRows);
         value="<?= htmlspecialchars($_POST['notes'] ?? '') ?>">
     </div>
   </div>
+
+  <?php // Off by default, because reimbursing the submitter is the ordinary
+        // case. Ticking it changes who the Treasurer e-transfers, so it says so
+        // in those words rather than leaving it to be inferred. ?>
+  <div class="vendor-box<?= !empty($_POST['pay_vendor']) ? ' on' : '' ?>">
+    <label class="vendor-tick">
+      <input type="checkbox" name="pay_vendor" value="1" id="payVendor"
+             onchange="vendorToggle()"<?= !empty($_POST['pay_vendor']) ? ' checked' : '' ?>>
+      <span>Pay a vendor instead of me</span>
+    </label>
+    <p class="vendor-why">
+      Signed the same way &mdash; Treasurer, then Vice-President. The difference is
+      where the money goes: tick this and the payment instruction tells the Treasurer
+      to e&#8209;transfer the vendor, not you.
+    </p>
+    <div class="vendor-fields" id="vendorFields">
+      <div class="hfield" style="flex:2;">
+        <label>Vendor *</label>
+        <input type="text" name="payee_name" maxlength="200" placeholder="e.g. Northern Sound &amp; Light"
+          value="<?= htmlspecialchars($_POST['payee_name'] ?? '') ?>">
+      </div>
+      <div class="hfield" style="flex:2;">
+        <label>Their e&#8209;transfer address *</label>
+        <input type="email" name="payee_email" maxlength="255" placeholder="e.g. accounts@northernsound.ca"
+          value="<?= htmlspecialchars($_POST['payee_email'] ?? '') ?>">
+      </div>
+    </div>
+  </div>
+  <style>
+    .vendor-box { border:1px solid var(--border); border-radius:10px; padding:.85rem 1rem;
+                  margin:0 0 1rem; background:#fafafa; }
+    .vendor-box.on { background:#f0f7ff; border-color:#b9d6f2; }
+    .vendor-tick { display:flex; align-items:center; gap:.5rem; font-weight:600; font-size:.92rem;
+                   cursor:pointer; }
+    .vendor-tick input { width:1rem; height:1rem; }
+    .vendor-why { font-size:.8rem; color:var(--gray-500); margin:.4rem 0 0; line-height:1.5; }
+    .vendor-fields { display:none; gap:.75rem; margin-top:.8rem; }
+    .vendor-box.on .vendor-fields { display:flex; flex-wrap:wrap; }
+  </style>
+  <script>
+    function vendorToggle() {
+      var on = document.getElementById('payVendor').checked;
+      document.getElementById('payVendor').closest('.vendor-box').classList.toggle('on', on);
+      // Required only while it is showing, so an unticked box cannot block the
+      // submit with fields nobody can see.
+      ['payee_name', 'payee_email'].forEach(function (n) {
+        var el = document.querySelector('[name="' + n + '"]');
+        if (el) el.required = on;
+      });
+    }
+    vendorToggle();
+  </script>
 
   <!-- Toolbar -->
   <div class="toolbar">

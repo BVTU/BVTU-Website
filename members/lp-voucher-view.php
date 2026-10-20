@@ -45,6 +45,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'submi
         $total    = array_sum(array_map('lpRowTotal', $expenses));
         $body  = "A new expense voucher has been submitted for your review.\n\n";
         $body .= "Submitted by: {$voucher['submitted_by']}\n";
+        if (lpIsVendorPayment($voucher)) {
+            $_pt = lpPayTo($voucher);
+            $body .= "Pay to: {$_pt['name']}" . ($_pt['email'] !== '' ? " <{$_pt['email']}>" : '') . "\n";
+        }
         $body .= "Voucher: {$vNum}{$voucher['name']}\n";
         $body .= "Expenses: {$expCount} line items\n";
         $body .= "Total: $" . number_format($total, 2) . "\n";
@@ -88,6 +92,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'resen
         $total    = array_sum(array_map('lpRowTotal', $expenses));
         $body  = "A new expense voucher has been submitted for your review.\n\n";
         $body .= "Submitted by: {$voucher['submitted_by']}\n";
+        if (lpIsVendorPayment($voucher)) {
+            $_pt = lpPayTo($voucher);
+            $body .= "Pay to: {$_pt['name']}" . ($_pt['email'] !== '' ? " <{$_pt['email']}>" : '') . "\n";
+        }
         $body .= "Voucher: {$vNum}{$voucher['name']}\n";
         $body .= "Expenses: {$expCount} line items\n";
         $body .= "Total: $" . number_format($total, 2) . "\n";
@@ -332,6 +340,12 @@ arsort($blSummary);
       </h1>
       <div class="sub">
         Submitted by <?= htmlspecialchars($voucher['submitted_by']) ?>
+        <?php // Said plainly on the voucher itself: whoever reads it later needs
+              // to know the submitter was authorising a spend, not claiming. ?>
+        <?php if (lpIsVendorPayment($voucher)): $pt = lpPayTo($voucher); ?>
+        · <strong>Pay to <?= htmlspecialchars($pt['name']) ?></strong>
+        <?php if ($pt['email'] !== ''): ?>(<?= htmlspecialchars($pt['email']) ?>)<?php endif; ?>
+        <?php endif; ?>
         · <?= date('F j, Y', strtotime($voucher['created_at'])) ?>
         <?php if ($voucher['notes']): ?>· <?= htmlspecialchars($voucher['notes']) ?><?php endif; ?>
       </div>
