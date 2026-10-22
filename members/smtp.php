@@ -98,7 +98,37 @@ function siteDeliveryAddress(string $account): string {
     return $cache[$key] = $to;
 }
 
-function _siteMailLog(string $to, string $subject, bool $ok, string $err = ''): void {
+/**
+ * Take the one-time links out of a message before it is kept.
+ *
+ * The log stores what was sent so it can be read back afterwards, and some of
+ * these emails exist only to carry a link that acts as a password: a reset
+ * link, an invitation, a cancel-my-registration link. Keeping those verbatim
+ * would turn the log into a drawer of live keys, readable by anyone who can
+ * open the page or a database backup.
+ *
+ * Two rules rather than one. The first names the parameters this site actually
+ * uses for capability links; the second removes any long opaque run left in a
+ * URL, so a link shape nobody remembered to add to the first rule is still
+ * caught. What survives is the wording, which is the thing worth reading.
+ *
+ * The second rule takes unbroken letters and digits only. Our tokens are hex;
+ * our slugs are lowercase words joined by hyphens. Allowing hyphens into that
+ * run would redact "mental-health-first-aid" out of the handout email and make
+ * the log less useful for no gain in safety.
+ */
+function siteMailRedact(string $body): string {
+    $body = preg_replace(
+        '/\b((?:token|t|key|code|auth|secret)=)[A-Za-z0-9_\-\.]{10,}/i',
+        '$1[one-time link removed]',
+        $body
+    );
+    return (string)preg_replace_callback('#https?://[^\s"\'<>]+#i', function (array $m): string {
+        return (string)preg_replace('/[A-Za-z0-9]{24,}/', '[removed]', $m[0]);
+    }, (string)$body);
+}
+
+function _siteMailLog(string $to, string $subject, bool $ok, string $err = '', string $body = '', bool $isHtml = false): void {
     /* Only a bare address can be resolved; the CC path hands this a composed
      * label ("someone@x (cc ...)"), which is not an account and must be left
      * as written rather than looked up and silently not annotated. */
@@ -118,13 +148,30 @@ function _siteMailLog(string $to, string $subject, bool $ok, string $err = ''): 
                 subject   VARCHAR(500) NOT NULL,
                 status    VARCHAR(10)  NOT NULL,
                 error_msg VARCHAR(500),
+                body      MEDIUMTEXT,
+                is_html   TINYINT(1) NOT NULL DEFAULT 0,
                 INDEX idx_sent (sent_at),
                 INDEX idx_to   (to_email)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            // Best effort for a table that predates these two columns; a host
+            // that will not ALTER loses the readback, not the logging.
+            foreach (['body' => 'MEDIUMTEXT',
+                      'is_html' => 'TINYINT(1) NOT NULL DEFAULT 0'] as $col => $type) {
+                try {
+                    $has = (int)$db->query(
+                        "SELECT COUNT(*) FROM information_schema.COLUMNS
+                         WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='site_email_log'
+                           AND COLUMN_NAME='{$col}'"
+                    )->fetchColumn();
+                    if (!$has) $db->exec("ALTER TABLE site_email_log ADD COLUMN {$col} {$type}");
+                } catch (\Throwable $e) { /* logging must not fail over this */ }
+            }
             $tableReady = true;
         }
-        $db->prepare("INSERT INTO site_email_log (to_email, subject, status, error_msg) VALUES (?,?,?,?)")
-           ->execute([$to, $subject, $ok ? 'sent' : 'failed', $err ?: null]);
+        $db->prepare("INSERT INTO site_email_log (to_email, subject, status, error_msg, body, is_html)
+                      VALUES (?,?,?,?,?,?)")
+           ->execute([$to, $subject, $ok ? 'sent' : 'failed', $err ?: null,
+                      $body !== '' ? siteMailRedact($body) : null, $isHtml ? 1 : 0]);
     } catch (\Throwable $e) {
         error_log('siteMailLog: ' . $e->getMessage());
     }
@@ -205,12 +252,12 @@ function siteMailWithAttachments(
         $logTo = $to;
         $dest  = siteDeliveryAddress($to);
         if (strcasecmp($dest, $to) !== 0) $logTo .= ' -> ' . $dest;
-        _siteMailLog($logTo . ($cc ? ' (cc ' . implode(', ', $cc) . ')' : ''), $subject, true);
+        _siteMailLog($logTo . ($cc ? ' (cc ' . implode(', ', $cc) . ')' : ''), $subject, true, '', $body, $isHtml);
         return true;
     } catch (Exception $e) {
         $err = $mail->ErrorInfo;
         error_log("siteMailWithAttachments failed to {$to}: " . $err);
-        _siteMailLog($to, $subject, false, $err);
+        _siteMailLog($to, $subject, false, $err, $body, $isHtml);
         return false;
     }
 }
@@ -256,12 +303,12 @@ function siteMail(string $to, string $subject, string $body, bool $isHtml = fals
         }
 
         $mail->send();
-        _siteMailLog($to, $subject, true);
+        _siteMailLog($to, $subject, true, '', $body, $isHtml);
         return true;
     } catch (Exception $e) {
         $err = $mail->ErrorInfo;
         error_log("siteMail failed to {$to}: " . $err);
-        _siteMailLog($to, $subject, false, $err);
+        _siteMailLog($to, $subject, false, $err, $body, $isHtml);
         return false;
     }
 }
