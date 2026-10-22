@@ -143,6 +143,40 @@ const EMAIL_TEMPLATES = [
         ],
     ],
 
+    'event_materials' => [
+        'label'   => 'Event — the handouts, before the day',
+        'when'    => 'Sent to everyone registered when an organiser presses '
+                   . '"Send to … registered" on the event\'s sign-up page.',
+        'format'  => 'text',
+        'subject' => 'Before {{title}}',
+        'preview_note' => 'Only one of the two middle paragraphs is used in a real email — '
+                        . 'whichever fits. Between them the email prints the date, the place, '
+                        . 'anything you typed in the send box, and every handout with a link.',
+        'vars'    => ['{{name}}'  => 'the person it is going to',
+                      '{{title}}' => 'the event’s name',
+                      '{{when}}'  => 'the date and time, written out',
+                      '{{count}}' => 'how many handouts are going with it'],
+        'blocks'  => [
+            'intro'    => ['label' => 'Opening',
+                           'text'  => "Hi {{name}},\n\n{{title}} is coming up."],
+            // Between these blocks the code prints the date, the place, the
+            // organiser's own note for this send, and then each handout with
+            // its name and a link straight to the file. Which of the next two
+            // appears depends on whether the files fit in an email.
+            'attached' => ['label' => 'Either — the handouts are attached',
+                           'text'  => "Everything you need is attached to this email."],
+            // Worded for one file as well as several: the handouts below may be
+            // a single oversized PDF, and the old copy only read correctly for
+            // a list.
+            'linked'   => ['label' => 'Or — too big to attach, so links instead',
+                           'text'  => "Too large to attach, so here is a link to each one:"],
+            'cancel'   => ['label' => 'Cannot make it',
+                           'text'  => "Cannot make it after all? Let us know here:"],
+            'signoff'  => ['label' => 'Sign-off',
+                           'text'  => "Bulkley Valley Teachers' Union"],
+        ],
+    ],
+
     'collab_received' => [
         'label'   => 'Collaboration grant — application received',
         'when'    => 'Sent to the applicant as soon as they submit.',

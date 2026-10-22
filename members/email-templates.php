@@ -63,6 +63,7 @@ function tplSample(string $key): array {
         '{{when}}'        => 'Thursday, November 12, 2026 at 9 am – Friday, November 13, 2026 at 3:30 pm',
         '{{collaborator}}'=> 'Sam Ridley',
         '{{applicant}}'   => 'Heather McKenzie',
+        '{{count}}'       => '3',
     ];
     $out = [];
     foreach (array_keys($t['vars']) as $v) $out[$v] = $samples[$v] ?? $v;
@@ -175,7 +176,16 @@ function tplSample(string $key): array {
               <pre><?= htmlspecialchars(emailTplBlock($key, $bk, $s)) ?></pre>
             <?php endif; ?>
           <?php endforeach; ?>
-          <?php if (($t['format'] ?? 'text') === 'html'): ?>
+          <?php // The preview prints every paragraph in order and cannot know
+                // which ones a real email actually uses. Where that would read
+                // oddly — two alternatives in a row, say — the template says so
+                // in its own words rather than leaving an editor to "fix" a
+                // contradiction and break one branch of the send. ?>
+          <?php if (!empty($t['preview_note'])): ?>
+          <p style="font-size:.8rem;color:var(--gray-500);margin:.6rem 0 0;">
+            <?= htmlspecialchars($t['preview_note']) ?>
+          </p>
+          <?php elseif (($t['format'] ?? 'text') === 'html'): ?>
           <p style="font-size:.8rem;color:var(--gray-500);margin:.6rem 0 0;">
             The claim details and buttons sit between these paragraphs in the real email.
           </p>

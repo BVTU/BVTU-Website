@@ -1474,10 +1474,19 @@ function evSendMaterials(array $event, string $sentBy, string $message = ''): ar
         }
     }
 
+    require_once __DIR__ . '/email-templates-db.php';
+    // The subject is editable too, so it comes from the template rather than
+    // being built here. {{name}} is per recipient, so it is resolved inside
+    // the loop with the rest.
     $sent = 0; $failedTo = [];
     foreach ($people as $r) {
         $body = evMaterialsBody($event, $r, $docs, $attach, $message);
-        $subj = 'Before ' . $event['title'];
+        $subj = emailTplSubject('event_materials', [
+            '{{name}}'  => (string)$r['name'],
+            '{{title}}' => (string)$event['title'],
+            '{{when}}'  => evWhen($event),
+            '{{count}}' => (string)count($docs),
+        ]);
         try {
             $ok = $files
                 ? siteMailWithAttachments($r['email'], $subj, $body, $files)
@@ -1523,10 +1532,21 @@ function evDocFileName(array $d): string {
 }
 
 function evMaterialsBody(array $event, array $reg, array $docs, bool $attach, string $message): string {
+    require_once __DIR__ . '/email-templates-db.php';
+
+    // Only the prose is editable, as everywhere else: the date, the place, the
+    // organiser's note for this send, every handout's name and link, and the
+    // link to cancel are all printed here. Wording that drifts can never cost
+    // somebody the handout they were sent or the way to withdraw.
+    $vars = [
+        '{{name}}'  => (string)$reg['name'],
+        '{{title}}' => (string)$event['title'],
+        '{{when}}'  => evWhen($event),
+        '{{count}}' => (string)count($docs),
+    ];
+
     $lines = [
-        'Hi ' . $reg['name'] . ',',
-        '',
-        $event['title'] . ' is coming up.',
+        emailTplBlock('event_materials', 'intro', $vars),
         '',
         'When:  ' . evWhen($event),
     ];
@@ -1539,9 +1559,7 @@ function evMaterialsBody(array $event, array $reg, array $docs, bool $attach, st
 
     if ($docs) {
         $lines[] = '';
-        $lines[] = $attach
-            ? (count($docs) === 1 ? 'The handout is attached.' : 'The handouts are attached.')
-            : 'Too large to attach, so here they are — one link each:';
+        $lines[] = emailTplBlock('event_materials', $attach ? 'attached' : 'linked', $vars);
         foreach ($docs as $d) {
             $lines[] = '';
             $lines[] = '  ' . evDocLabel($d);
@@ -1558,10 +1576,10 @@ function evMaterialsBody(array $event, array $reg, array $docs, bool $attach, st
     }
 
     $lines[] = '';
-    $lines[] = 'Cannot make it after all? Let us know here:';
+    $lines[] = emailTplBlock('event_materials', 'cancel', $vars);
     $lines[] = evCancelUrl($reg);
     $lines[] = '';
-    $lines[] = 'Bulkley Valley Teachers\' Union';
+    $lines[] = emailTplBlock('event_materials', 'signoff', $vars);
 
     return implode("\n", $lines);
 }
