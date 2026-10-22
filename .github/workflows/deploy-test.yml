@@ -1,11 +1,11 @@
 name: Deploy test branch
 
-# Every push to `test` lands at the same staging URL, so it can be bookmarked
-# and checked before anything reaches main. Pushing here is deliberately cheap:
-# the full review happens on the way from test to main, not on the way here.
+# Staging is deployed by Hostinger's own Git integration, watching `test` the
+# same way it watches `main` for live. This workflow is the emergency fallback
+# for when that is unavailable — the mirror image of deploy.yml, and dispatch
+# only for the same reason: two mechanisms writing the same directory on every
+# push would race each other.
 on:
-  push:
-    branches: [test]
   workflow_dispatch:
 
 # One deploy at a time, and never a half-finished one racing a newer push.
