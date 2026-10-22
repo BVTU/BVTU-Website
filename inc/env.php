@@ -64,9 +64,19 @@ function siteTestBannerStart(): void {
     });
 }
 
-/** A <meta robots> for the test copy, so staging never reaches a search result. */
-function siteTestNoIndex(): string {
-    return siteIsTest() ? '<meta name="robots" content="noindex, nofollow">' : '';
+/**
+ * Keep the test copy out of search results.
+ *
+ * A header rather than a <meta> tag, for two reasons: it covers the PDFs,
+ * images and .ics files this site serves through PHP as well as the pages, and
+ * it needs no edit to fifty-odd templates to take effect. The site's own
+ * robots.txt cannot do this job — crawlers only read the one at the domain
+ * root, which belongs to the live site.
+ */
+function siteTestNoIndexHeader(): void {
+    if (!siteIsTest() || headers_sent()) return;
+    header('X-Robots-Tag: noindex, nofollow', true);
 }
 
+siteTestNoIndexHeader();
 siteTestBannerStart();
