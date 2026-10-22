@@ -33,7 +33,53 @@ require_once __DIR__ . '/lib/phpmailer/SMTP.php';
  * inbox. This changes the envelope only — the account's email is still its
  * identity everywhere else, so who may sign what does not move.
  */
+/**
+ * Is this the staging copy of the site?
+ *
+ * Decided by config.php, which is never deployed — so the live server cannot
+ * accidentally inherit it from a branch, and the test server cannot lose it by
+ * being redeployed. Absent means live, because the dangerous mistake is a test
+ * server that thinks it is live, not the other way round.
+ */
+function siteIsTest(): bool {
+    return defined('SITE_ENV') && strtolower(trim((string)SITE_ENV)) === 'test';
+}
+
+/** Where every email goes on the test site. */
+function siteTestInbox(): string {
+    return defined('SITE_TEST_INBOX') ? trim((string)SITE_TEST_INBOX) : '';
+}
+
+/**
+ * The subject as it should arrive, tagged on the test site with who it would
+ * really have gone to — which is most of what you want to check.
+ */
+function siteMailSubject(string $subject, string $realTo): string {
+    if (!siteIsTest()) return $subject;
+    return '[TEST → ' . ($realTo !== '' ? $realTo : 'nobody') . '] ' . $subject;
+}
+
 function siteDeliveryAddress(string $account): string {
+    /*
+     * Every email on the test site goes to one inbox instead of the member it
+     * names. This is the single most important thing about having a staging
+     * copy: the test site may well be pointed at the live database, and without
+     * this, opening a page that happens to send would mail real members real
+     * notices about things that did not happen.
+     *
+     * With no inbox configured we return nothing and let the send fail. A test
+     * server that cannot mail anyone is a nuisance; one that quietly falls
+     * through to the real address is the exact accident this prevents.
+     */
+    if (siteIsTest()) {
+        $inbox = siteTestInbox();
+        if ($inbox === '') {
+            error_log('siteDeliveryAddress: SITE_ENV is test but SITE_TEST_INBOX is not set — '
+                    . 'refusing to deliver to ' . $account);
+        }
+        return $inbox;
+    }
+
     static $cache = [];
     $key = strtolower(trim($account));
     if ($key === '') return $account;
@@ -154,7 +200,8 @@ function siteMailWithAttachments(
 
         $mail->isHTML(false);
         $mail->CharSet = 'UTF-8';
-        $mail->Subject = $subject;
+        // Tagged on test with the address it would really have gone to.
+        $mail->Subject = siteMailSubject($subject, $to);
         $mail->Body    = $body;
 
         $mail->send();
@@ -206,7 +253,8 @@ function siteMail(string $to, string $subject, string $body, bool $isHtml = fals
 
         $mail->isHTML($isHtml);
         $mail->CharSet = 'UTF-8';
-        $mail->Subject = $subject;
+        // Tagged on test with the address it would really have gone to.
+        $mail->Subject = siteMailSubject($subject, $to);
         $mail->Body    = $body;
         if ($isHtml) {
             $mail->AltBody = strip_tags($body);

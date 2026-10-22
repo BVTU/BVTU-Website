@@ -1,0 +1,48 @@
+name: Deploy test branch
+
+# Every push to `test` lands at the same staging URL, so it can be bookmarked
+# and checked before anything reaches main. Pushing here is deliberately cheap:
+# the full review happens on the way from test to main, not on the way here.
+on:
+  push:
+    branches: [test]
+  workflow_dispatch:
+
+# One deploy at a time, and never a half-finished one racing a newer push.
+concurrency:
+  group: deploy-test
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse to run from any branch but test
+        # The FTP step below writes to a fixed directory. If this workflow ever
+        # fires from another ref, stop before it writes anything.
+        run: |
+          test "${{ github.ref }}" = "refs/heads/test" || {
+            echo "::error::deploy-test may only run from the test branch (got ${{ github.ref }})"
+            exit 1
+          }
+
+      - name: Checkout repo
+        uses: actions/checkout@v4.2.2
+
+      - name: Deploy to the staging directory
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+        with:
+          server: 82.180.172.230
+          username: u285963410
+          password: ${{ secrets.FTP_PASSWORD }}
+          # NOT /new/. That is the live site.
+          server-dir: /test/
+          dangerous-clean-slate: false
+          state-name: .ftp-sync-state-test.json
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/protected-docs/**
+            **/config.php
