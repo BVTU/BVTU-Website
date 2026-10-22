@@ -13,6 +13,24 @@
  */
 
 /*
+ * Errors are logged, not printed — on public pages too.
+ *
+ * auth.php says the same thing and why: a notice printed into a page publishes
+ * the server's filesystem path to whoever is reading it. auth.php is only
+ * loaded by member pages though, so a notice on the public side printed in
+ * full. A duplicated define in config.php did exactly that on the test site.
+ *
+ * Off BEFORE config.php is required, because config.php is itself a thing that
+ * can emit a notice — which is precisely what happened, and suppressing after
+ * loading it would have been too late to stop the one leak we have actually
+ * seen. BVTU_DEBUG is read afterwards, once config has had its say.
+ */
+@ini_set('display_errors', '0');
+@ini_set('display_startup_errors', '0');
+@ini_set('log_errors', '1');
+error_reporting(E_ALL);
+
+/*
  * config.php holds SITE_ENV, and this file is included from the shared nav and
  * from auth.php — sometimes before anything has loaded config. Reading it here
  * means the answer does not depend on which require happened to come first;
@@ -21,6 +39,11 @@
 if (!defined('SITE_ENV')) {
     $cfg = __DIR__ . '/../members/config.php';
     if (is_file($cfg)) require_once $cfg;
+}
+
+// Now that config has loaded, let BVTU_DEBUG put them back on screen.
+if (defined('BVTU_DEBUG') && BVTU_DEBUG) {
+    @ini_set('display_errors', '1');
 }
 
 if (!function_exists('siteIsTest')) {
