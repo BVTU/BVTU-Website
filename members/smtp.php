@@ -40,11 +40,6 @@ require_once __DIR__ . '/lib/phpmailer/SMTP.php';
  */
 require_once __DIR__ . '/../inc/env.php';
 
-/** Where every email goes on the test site. */
-function siteTestInbox(): string {
-    return defined('SITE_TEST_INBOX') ? trim((string)SITE_TEST_INBOX) : '';
-}
-
 /**
  * The subject as it should arrive, tagged on the test site with who it would
  * really have gone to — which is most of what you want to check.
@@ -137,6 +132,7 @@ function _siteMailLog(string $to, string $subject, bool $ok, string $err = '', s
         if (strcasecmp($delivered, $to) !== 0) $to .= ' -> ' . $delivered;
     }
     static $tableReady = false;
+    static $hasBody = false;
     try {
         require_once __DIR__ . '/db.php';
         $db = getDB();
@@ -166,12 +162,41 @@ function _siteMailLog(string $to, string $subject, bool $ok, string $err = '', s
                     if (!$has) $db->exec("ALTER TABLE site_email_log ADD COLUMN {$col} {$type}");
                 } catch (\Throwable $e) { /* logging must not fail over this */ }
             }
+            // Whether the readback columns are really there. Naming them in the
+            // INSERT regardless would mean a failed ALTER stopped ALL logging —
+            // the opposite of what the best-effort catch above is for.
+            try {
+                $db->query("SELECT body, is_html FROM site_email_log LIMIT 1");
+                $hasBody = true;
+            } catch (\Throwable $e) {
+                $hasBody = false;
+            }
             $tableReady = true;
+
+            /*
+             * Prune old bodies here, on the write path, not when somebody opens
+             * the log. A page that is only ever read should not quietly perform
+             * an irreversible UPDATE — least of all a staging copy pointed at
+             * the live database. Once per request that sends mail is plenty.
+             */
+            if ($hasBody) {
+                try {
+                    $db->exec("UPDATE site_email_log SET body = NULL
+                               WHERE body IS NOT NULL
+                                 AND sent_at < DATE_SUB(NOW(), INTERVAL 180 DAY)");
+                } catch (\Throwable $e) { /* a log that cannot tidy itself still logs */ }
+            }
         }
-        $db->prepare("INSERT INTO site_email_log (to_email, subject, status, error_msg, body, is_html)
-                      VALUES (?,?,?,?,?,?)")
-           ->execute([$to, $subject, $ok ? 'sent' : 'failed', $err ?: null,
-                      $body !== '' ? siteMailRedact($body) : null, $isHtml ? 1 : 0]);
+        if ($hasBody) {
+            $db->prepare("INSERT INTO site_email_log (to_email, subject, status, error_msg, body, is_html)
+                          VALUES (?,?,?,?,?,?)")
+               ->execute([$to, $subject, $ok ? 'sent' : 'failed', $err ?: null,
+                          $body !== '' ? siteMailRedact($body) : null, $isHtml ? 1 : 0]);
+        } else {
+            $db->prepare("INSERT INTO site_email_log (to_email, subject, status, error_msg)
+                          VALUES (?,?,?,?)")
+               ->execute([$to, $subject, $ok ? 'sent' : 'failed', $err ?: null]);
+        }
     } catch (\Throwable $e) {
         error_log('siteMailLog: ' . $e->getMessage());
     }
@@ -252,12 +277,15 @@ function siteMailWithAttachments(
         $logTo = $to;
         $dest  = siteDeliveryAddress($to);
         if (strcasecmp($dest, $to) !== 0) $logTo .= ' -> ' . $dest;
-        _siteMailLog($logTo . ($cc ? ' (cc ' . implode(', ', $cc) . ')' : ''), $subject, true, '', $body, $isHtml);
+        // true, not $isHtml: this function has no such parameter and always
+        // sends HTML. Naming one produced an undefined-variable notice on every
+        // attachment email.
+        _siteMailLog($logTo . ($cc ? ' (cc ' . implode(', ', $cc) . ')' : ''), $subject, true, '', $body, true);
         return true;
     } catch (Exception $e) {
         $err = $mail->ErrorInfo;
         error_log("siteMailWithAttachments failed to {$to}: " . $err);
-        _siteMailLog($to, $subject, false, $err, $body, $isHtml);
+        _siteMailLog($to, $subject, false, $err, $body, true);
         return false;
     }
 }

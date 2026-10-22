@@ -60,12 +60,52 @@ if (!function_exists('siteIsTest')) {
  * than a cosmetic problem — so everything is checked before anything is
  * touched, and anything uncertain is left exactly as it was.
  */
+/** Where every email goes on the test site. */
+function siteTestInbox(): string {
+    return defined('SITE_TEST_INBOX') ? trim((string)SITE_TEST_INBOX) : '';
+}
+
+/**
+ * The address a raw mail() call should actually use.
+ *
+ * A handful of places send with PHP's own mail() rather than through
+ * smtp.php — the contact form, the CA assistant's alert, the library rating
+ * notice. They never passed through siteDeliveryAddress(), so on the test site
+ * they went to real people while the banner promised nothing leaves it.
+ *
+ * Returns '' on a test server with no inbox configured, and callers skip the
+ * send: a staging copy that cannot mail anybody is a nuisance, one that mails
+ * the membership is the accident this exists to prevent.
+ */
+function siteRawMailTo(string $to): string {
+    return siteIsTest() ? siteTestInbox() : $to;
+}
+
+function siteTestBannerHtml(): string {
+    static $done = false;
+    if (!siteIsTest() || $done) return '';
+    $done = true;
+    return '<div style="position:sticky;top:0;z-index:99999;background:#7c2d12;color:#fff;'
+         . 'font:700 .8rem/1.5 system-ui,sans-serif;text-align:center;padding:.4rem .8rem;'
+         . 'letter-spacing:.02em;">TEST SITE &mdash; nothing here is live, and no email '
+         . 'leaves it. <span style="font-weight:400;opacity:.85;">Changes are published '
+         . 'separately.</span></div>';
+}
+
 function siteTestBannerStart(): void {
     if (!siteIsTest()) return;
     static $on = false;
     if ($on) return;             // one buffer per request, however many includes
     $on = true;
 
+    /*
+     * A chunk size, not an unlimited buffer. event-doc.php and the receipt and
+     * CSV exports all include auth.php and then stream megabytes; holding that
+     * whole download in memory to look for a <body> tag it will never contain
+     * is how a large PDF turns into a memory_limit fatal. With a chunk size the
+     * output flows as it is produced and the banner still lands, because an
+     * HTML page emits <body> in its first few kilobytes.
+     */
     ob_start(function (string $out): string {
         // Did this page actually send HTML? An explicit non-HTML Content-Type
         // settles it; otherwise the markup has to look like a document.
@@ -75,16 +115,13 @@ function siteTestBannerStart(): void {
         }
         if (stripos($out, '<body') === false) return $out;
 
-        $bar = '<div style="position:sticky;top:0;z-index:99999;background:#7c2d12;color:#fff;'
-             . 'font:700 .8rem/1.5 system-ui,sans-serif;text-align:center;padding:.4rem .8rem;'
-             . 'letter-spacing:.02em;">TEST SITE &mdash; nothing here is live, and no email '
-             . 'leaves it. <span style="font-weight:400;opacity:.85;">Changes are published '
-             . 'separately.</span></div>';
+        $bar = siteTestBannerHtml();
+        if ($bar === '') return $out;   // already emitted by the shared nav
 
         // After the opening <body …>, wherever it is and however it is written.
         $out = preg_replace('/(<body\b[^>]*>)/i', '$1' . $bar, $out, 1, $n);
         return $n ? $out : $out;
-    });
+    }, 8192);
 }
 
 /**
@@ -97,6 +134,11 @@ function siteTestBannerStart(): void {
  * root, which belongs to the live site.
  */
 function siteTestNoIndexHeader(): void {
+    // Only possible before output has started, which on a public page is not
+    // guaranteed — this file is included by the shared nav, and most pages have
+    // already printed their <head> by then. The .htaccess rule keyed on the
+    // /test/ path is what actually guarantees it, for every response including
+    // the static ones PHP never sees. This stays as the belt.
     if (!siteIsTest() || headers_sent()) return;
     header('X-Robots-Tag: noindex, nofollow', true);
 }

@@ -152,6 +152,19 @@ function bvtuNavHref(string $url, string $base): string {
 }
 
 function bvtuNav(array $o = []): void {
+    /*
+     * The test banner, printed here on the public side.
+     *
+     * env.php also injects it into the output buffer, but a public page calls
+     * this function AFTER it has already emitted <body> — so that buffer never
+     * contains the tag it is looking for and the whole public side of the test
+     * copy looked exactly like live. Member pages load auth.php before any
+     * output, so the buffer works for them. siteTestBannerHtml() returns the
+     * bar once per request, so whichever gets there first wins and it is never
+     * printed twice.
+     */
+    if (function_exists('siteTestBannerHtml')) echo siteTestBannerHtml();
+
     $base = $o['base'] ?? '';
     $hero = !empty($o['hero']);
 

@@ -36,16 +36,26 @@ $db->exec("CREATE TABLE IF NOT EXISTS site_email_log (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
 /*
- * The message bodies are kept for 180 days and then dropped, while the row
- * itself — who, what, when, whether it arrived — is kept for good. Reading
- * back what somebody was sent is a thing you do in the days after sending it;
- * holding every member's correspondence indefinitely is a liability without a
- * purpose. Cheap: indexed on sent_at, and only ever touches old rows.
+ * The readback columns, for a table that predates them — which on live is
+ * every table, since CREATE TABLE IF NOT EXISTS does nothing to one that is
+ * already there. Without this the body is never selected and the log looks
+ * broken until somebody notices.
+ *
+ * Trimming old bodies is deliberately NOT done here. This page only reads;
+ * an irreversible UPDATE on a GET would fire on a prefetch, and from a staging
+ * copy pointed at the live database it would blank live records. That happens
+ * on the write path in smtp.php instead.
  */
-try {
-    $db->exec("UPDATE site_email_log SET body = NULL
-               WHERE body IS NOT NULL AND sent_at < DATE_SUB(NOW(), INTERVAL 180 DAY)");
-} catch (\Throwable $e) { /* a log that cannot tidy itself still logs */ }
+foreach (['body' => 'MEDIUMTEXT', 'is_html' => 'TINYINT(1) NOT NULL DEFAULT 0'] as $col => $type) {
+    try {
+        $has = (int)$db->query(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='site_email_log'
+               AND COLUMN_NAME='{$col}'"
+        )->fetchColumn();
+        if (!$has) $db->exec("ALTER TABLE site_email_log ADD COLUMN {$col} {$type}");
+    } catch (\Throwable $e) { /* the log still lists; only the readback is lost */ }
+}
 
 $filter = trim($_GET['filter'] ?? '');
 $page   = max(1, (int)($_GET['p'] ?? 1));
