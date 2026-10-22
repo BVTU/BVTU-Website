@@ -78,7 +78,15 @@ function siteTestInbox(): string {
  * the membership is the accident this exists to prevent.
  */
 function siteRawMailTo(string $to): string {
-    return siteIsTest() ? siteTestInbox() : $to;
+    if (!siteIsTest()) return $to;
+    $inbox = siteTestInbox();
+    if ($inbox === '') {
+        // Said out loud, as siteDeliveryAddress() does. Otherwise the contact
+        // form on test reports a failure with nothing anywhere to explain it.
+        error_log('siteRawMailTo: SITE_ENV is test but SITE_TEST_INBOX is not set — '
+                . 'refusing to deliver to ' . $to);
+    }
+    return $inbox;
 }
 
 function siteTestBannerHtml(): string {

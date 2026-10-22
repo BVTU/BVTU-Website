@@ -16,6 +16,10 @@ RewriteRule ^trustee-zones\.html$ /trustee-zones.php [R=301,L]
 # reindex.php and was never meant to be an endpoint, and if anything that
 # needs a login is ever added to it by mistake, this is what stops it being
 # handed to whoever asks.
+<FilesMatch "^\.user\.ini$|^config\.php$|^documents-text\.json$">
+  Require all denied
+</FilesMatch>
+
 # The staging copy is served from /test/ and must never reach a search result.
 # Here rather than in PHP because it covers every response — images, PDFs, the
 # static files PHP never sees — and because a public page has usually already
@@ -25,7 +29,3 @@ RewriteRule ^trustee-zones\.html$ /trustee-zones.php [R=301,L]
   SetEnvIf Request_URI "^/test/" BVTU_IS_TEST
   Header always set X-Robots-Tag "noindex, nofollow" env=BVTU_IS_TEST
 </IfModule>
-
-<FilesMatch "^\.user\.ini$|^config\.php$|^documents-text\.json$">
-  Require all denied
-</FilesMatch>

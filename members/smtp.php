@@ -179,7 +179,10 @@ function _siteMailLog(string $to, string $subject, bool $ok, string $err = '', s
              * an irreversible UPDATE — least of all a staging copy pointed at
              * the live database. Once per request that sends mail is plenty.
              */
-            if ($hasBody) {
+            // Never from the test site: smtp.php's own diversion exists because
+            // staging may well be pointed at the live database, and this is a
+            // write. Reading live rows there is survivable; blanking them is not.
+            if ($hasBody && !siteIsTest()) {
                 try {
                     $db->exec("UPDATE site_email_log SET body = NULL
                                WHERE body IS NOT NULL
@@ -277,15 +280,17 @@ function siteMailWithAttachments(
         $logTo = $to;
         $dest  = siteDeliveryAddress($to);
         if (strcasecmp($dest, $to) !== 0) $logTo .= ' -> ' . $dest;
-        // true, not $isHtml: this function has no such parameter and always
-        // sends HTML. Naming one produced an undefined-variable notice on every
-        // attachment email.
-        _siteMailLog($logTo . ($cc ? ' (cc ' . implode(', ', $cc) . ')' : ''), $subject, true, '', $body, true);
+        // false, not $isHtml: this function has no such parameter — naming one
+        // raised an undefined-variable notice on every attachment email — and
+        // it calls isHTML(false) above, so what it sends is plain text. Logging
+        // it as HTML would have the log strip_tags() a plain body and silently
+        // delete anything between angle brackets.
+        _siteMailLog($logTo . ($cc ? ' (cc ' . implode(', ', $cc) . ')' : ''), $subject, true, '', $body, false);
         return true;
     } catch (Exception $e) {
         $err = $mail->ErrorInfo;
         error_log("siteMailWithAttachments failed to {$to}: " . $err);
-        _siteMailLog($to, $subject, false, $err, $body, true);
+        _siteMailLog($to, $subject, false, $err, $body, false);
         return false;
     }
 }
