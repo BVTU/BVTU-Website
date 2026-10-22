@@ -89,14 +89,31 @@ function tplSample(string $key): array {
               font-size:.88rem;color:#166534;margin-bottom:1rem; }
     .error-box { background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:.7rem 1rem;
                  font-size:.88rem;color:#991b1b;margin-bottom:1rem; }
-    details.tpl { background:#fff;border:1px solid var(--gray-200);border-radius:12px;
-                  padding:.9rem 1.15rem;margin-bottom:.7rem; }
-    details.tpl summary { cursor:pointer;font-weight:700;color:var(--gray-800);font-size:.95rem;
-                          display:flex;align-items:center;gap:.5rem;flex-wrap:wrap; }
-    details.tpl .when { font-weight:400;font-size:.82rem;color:var(--gray-500); }
+    .sec { font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;
+           color:var(--gray-500);margin:1.6rem 0 .45rem;display:flex;align-items:center;gap:.45rem; }
+    .sec:first-of-type { margin-top:.6rem; }
+    .sec-n { font-weight:700;color:var(--gray-400);letter-spacing:0; }
+    /* The group is one card; the emails are rows inside it, not thirteen
+       separate cards each with its own border and padding. */
+    .sec-list { background:#fff;border:1px solid var(--gray-200);border-radius:12px;overflow:hidden; }
+    details.tpl { border-top:1px solid var(--gray-100); }
+    .sec-list > details.tpl:first-child { border-top:none; }
+    details.tpl summary { cursor:pointer;color:var(--gray-800);font-size:.92rem;
+                          display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap;
+                          padding:.62rem 1.1rem;list-style:none; }
+    details.tpl summary::-webkit-details-marker { display:none; }
+    details.tpl summary:hover { background:var(--gray-50); }
+    details[open].tpl > summary { background:var(--gray-50);border-bottom:1px solid var(--gray-100); }
+    .tpl-name { font-weight:700;flex:0 0 auto; }
+    /* The "when" sentence shares the row rather than pushing it to two lines,
+       and gives way first when there is no space for both. */
+    details.tpl .when { font-weight:400;font-size:.8rem;color:var(--gray-500);
+                        flex:1 1 14rem;min-width:0; }
+    .safe { font-size:.78rem;color:var(--gray-500);line-height:1.6;margin:1rem 0 0;
+            padding-top:.8rem;border-top:1px solid var(--gray-100);max-width:62ch; }
     .badge { font-size:.7rem;font-weight:700;border-radius:100px;padding:.1rem .5rem; }
     .badge.edited { background:#eff6ff;color:#1e40af; }
-    .body { padding-top:1rem; }
+    .body { padding:1rem 1.1rem 1.15rem; }
     label.f { display:block;font-size:.72rem;font-weight:800;text-transform:uppercase;
               letter-spacing:.05em;color:var(--gray-500);margin:.9rem 0 .3rem; }
     input[type=text], textarea { width:100%;border:1px solid var(--gray-300);border-radius:8px;
@@ -125,21 +142,30 @@ function tplSample(string $key): array {
   <h1>Email</h1>
   <?= emailAdminNav('wording', $member['email']) ?>
   <h2 style="font-size:1rem;font-weight:800;color:var(--gray-800);margin:0 0 .6rem;">Wording</h2>
-  <p class="lede">
-    The wording of the emails the site sends on its own. Everything else in each
-    email &mdash; claim details, amounts, reference codes, and the links people need
-    to approve or view something &mdash; is filled in automatically and is not editable
-    here, so nothing you change can produce an email that has lost the thing it was
-    sent for. Every email can be put back to its original wording at any time.
-  </p>
+  <?php // One line. What used to be here was five, answering "can I break
+        // this?" — a question you have before your first edit, not on every
+        // visit. That answer now sits in the editor next to Save, where the
+        // risk actually is. ?>
+  <p class="lede">The wording of the emails the site sends on its own. Open one to read it or change it.</p>
 
   <?php if ($notice): ?><div class="notice">&#x2713; <?= $notice ?></div><?php endif; ?>
   <?php if ($error):  ?><div class="error-box">&#x26A0; <?= $error ?></div><?php endif; ?>
 
-  <?php foreach (EMAIL_TEMPLATES as $key => $_def): $t = emailTpl($key); $s = tplSample($key); ?>
+  <?php
+    // Grouped: thirteen rows of equal weight is a linear scan every time, and
+    // the list only grows. The heading carries the category, so each row can
+    // drop the prefix it used to repeat — "Collaboration grant — you were
+    // named as the collaborator" becomes "Named as the collaborator" under it.
+    $bySection = [];
+    foreach (EMAIL_TEMPLATES as $k => $d) $bySection[$d['group'] ?? 'Other'][] = $k;
+  ?>
+  <?php foreach ($bySection as $section => $keys): ?>
+  <h3 class="sec"><?= htmlspecialchars($section) ?> <span class="sec-n"><?= count($keys) ?></span></h3>
+  <div class="sec-list">
+  <?php foreach ($keys as $key): $t = emailTpl($key); $s = tplSample($key); ?>
   <details class="tpl" <?= $open === $key ? 'open' : '' ?>>
     <summary>
-      <?= htmlspecialchars($t['label']) ?>
+      <span class="tpl-name"><?= htmlspecialchars($t['short'] ?? $t['label']) ?></span>
       <?php if (!empty($t['edited'])): ?><span class="badge edited">edited</span><?php endif; ?>
       <span class="when"><?= htmlspecialchars($t['when']) ?></span>
     </summary>
@@ -192,6 +218,11 @@ function tplSample(string $key): array {
           <?php endif; ?>
         </div>
 
+        <p class="safe">
+          Only the words above are yours to change. The details, amounts, reference
+          codes and every link this email needs are filled in by the site and cannot
+          be edited away &mdash; and Reset puts the original wording back at any time.
+        </p>
         <div class="row">
           <button class="btn-save">Save wording</button>
         </div>
@@ -208,6 +239,8 @@ function tplSample(string $key): array {
       <?php endif; ?>
     </div>
   </details>
+  <?php endforeach; ?>
+  </div>
   <?php endforeach; ?>
 
 </div>

@@ -26,6 +26,8 @@ require_once __DIR__ . '/db.php';
 const EMAIL_TEMPLATES = [
     'invite_link' => [
         'label'   => 'Invitation — set up your account',
+        'group'   => 'Accounts',
+        'short'   => 'Invitation',
         'when'    => 'Sent when an admin emails someone their registration link.',
         'format'  => 'text',
         'subject' => 'Set up your BVTU member account',
@@ -41,6 +43,8 @@ const EMAIL_TEMPLATES = [
 
     'invite_welcome' => [
         'label'   => 'Welcome — account created',
+        'group'   => 'Accounts',
+        'short'   => 'Welcome',
         'when'    => 'Sent the moment someone finishes setting up their account.',
         'format'  => 'text',
         'subject' => 'Welcome to the BVTU Member Portal',
@@ -53,6 +57,8 @@ const EMAIL_TEMPLATES = [
 
     'password_reset' => [
         'label'   => 'Password reset',
+        'group'   => 'Accounts',
+        'short'   => 'Password reset',
         'when'    => 'Sent when someone asks to reset their password.',
         'format'  => 'text',
         'subject' => 'BVTU — Password Reset Request',
@@ -65,6 +71,8 @@ const EMAIL_TEMPLATES = [
 
     'claim_submitted' => [
         'label'   => 'Expense claim — submitted',
+        'group'   => 'Expense claims',
+        'short'   => 'Submitted',
         'when'    => 'Sent to the member when their claim is submitted.',
         'format'  => 'html',
         'subject' => 'Expense Claim Submitted — {{ref}}',
@@ -81,6 +89,8 @@ const EMAIL_TEMPLATES = [
 
     'claim_authorized' => [
         'label'   => 'Expense claim — approved, payment coming',
+        'group'   => 'Expense claims',
+        'short'   => 'Approved, payment coming',
         'when'    => 'Sent to the member once both signatures are in.',
         'format'  => 'html',
         'subject' => 'Expense Approved — {{ref}} — E-transfer within 3 business days',
@@ -95,6 +105,8 @@ const EMAIL_TEMPLATES = [
 
     'claim_rejected' => [
         'label'   => 'Expense claim — rejected',
+        'group'   => 'Expense claims',
+        'short'   => 'Rejected',
         'when'    => 'Sent to the member when a claim is rejected. The reason given by the signer is added automatically.',
         'format'  => 'html',
         'subject' => 'Expense Claim Rejected — {{ref}}',
@@ -109,6 +121,8 @@ const EMAIL_TEMPLATES = [
 
     'claim_paid' => [
         'label'   => 'Expense claim — paid',
+        'group'   => 'Expense claims',
+        'short'   => 'Paid',
         'when'    => 'Sent to the member when the e-transfer goes out.',
         'format'  => 'html',
         'subject' => 'Expense Claim Paid — {{ref}}',
@@ -123,6 +137,8 @@ const EMAIL_TEMPLATES = [
 
     'event_registered' => [
         'label'   => 'Event — you are registered',
+        'group'   => 'Events',
+        'short'   => 'You’re registered',
         'when'    => 'Sent the moment someone registers for an event, and again if they '
                    . 'come back and change their answers.',
         'format'  => 'text',
@@ -145,6 +161,8 @@ const EMAIL_TEMPLATES = [
 
     'event_materials' => [
         'label'   => 'Event — the handouts, before the day',
+        'group'   => 'Events',
+        'short'   => 'Handouts, before the day',
         'when'    => 'Sent to everyone registered when an organiser presses '
                    . '"Send to … registered" on the event\'s sign-up page.',
         'format'  => 'text',
@@ -179,6 +197,8 @@ const EMAIL_TEMPLATES = [
 
     'collab_received' => [
         'label'   => 'Collaboration grant — application received',
+        'group'   => 'Collaboration grant',
+        'short'   => 'Application received',
         'when'    => 'Sent to the applicant as soon as they submit.',
         'format'  => 'text',
         'subject' => 'We received your Collaboration Grant application — BVTU',
@@ -191,6 +211,8 @@ const EMAIL_TEMPLATES = [
 
     'collab_edit_link' => [
         'label'   => 'Collaboration grant — link to change an application',
+        'group'   => 'Collaboration grant',
+        'short'   => 'Link to change an application',
         'when'    => 'Sent from the review panel when you send someone their edit link.',
         'format'  => 'text',
         'subject' => 'Change your Collaboration Grant application — BVTU',
@@ -203,6 +225,8 @@ const EMAIL_TEMPLATES = [
 
     'collab_collaborator' => [
         'label'   => 'Collaboration grant — you were named as the collaborator',
+        'group'   => 'Collaboration grant',
+        'short'   => 'Named as the collaborator',
         'when'    => 'Sent to the person named as a collaborator when the grant is approved. '
                    . 'The Atrieve booking paragraph is shared with the applicant’s own email, '
                    . 'so it is edited above and not here.',
@@ -222,6 +246,8 @@ const EMAIL_TEMPLATES = [
 
     'collab_approved' => [
         'label'   => 'Collaboration grant — approved',
+        'group'   => 'Collaboration grant',
+        'short'   => 'Approved',
         'when'    => 'Sent to the applicant when their grant is approved.',
         'format'  => 'text',
         'subject' => 'Your Collaboration Grant Application is Approved — BVTU',
