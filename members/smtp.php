@@ -33,17 +33,12 @@ require_once __DIR__ . '/lib/phpmailer/SMTP.php';
  * inbox. This changes the envelope only — the account's email is still its
  * identity everywhere else, so who may sign what does not move.
  */
-/**
- * Is this the staging copy of the site?
- *
- * Decided by config.php, which is never deployed — so the live server cannot
- * accidentally inherit it from a branch, and the test server cannot lose it by
- * being redeployed. Absent means live, because the dangerous mistake is a test
- * server that thinks it is live, not the other way round.
+/*
+ * siteIsTest() lives in inc/env.php and is required here rather than declared
+ * again. Two unguarded copies of the same function is a fatal on any page that
+ * loads both the shared nav and the mailer — which is most of them.
  */
-function siteIsTest(): bool {
-    return defined('SITE_ENV') && strtolower(trim((string)SITE_ENV)) === 'test';
-}
+require_once __DIR__ . '/../inc/env.php';
 
 /** Where every email goes on the test site. */
 function siteTestInbox(): string {

@@ -12,6 +12,17 @@
  * one place is better than one that is missing from eleven.
  */
 
+/*
+ * config.php holds SITE_ENV, and this file is included from the shared nav and
+ * from auth.php — sometimes before anything has loaded config. Reading it here
+ * means the answer does not depend on which require happened to come first;
+ * it is constants only, and db.php loads it the same way.
+ */
+if (!defined('SITE_ENV')) {
+    $cfg = __DIR__ . '/../members/config.php';
+    if (is_file($cfg)) require_once $cfg;
+}
+
 if (!function_exists('siteIsTest')) {
     function siteIsTest(): bool {
         return defined('SITE_ENV') && strtolower(trim((string)SITE_ENV)) === 'test';
