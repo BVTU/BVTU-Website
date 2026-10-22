@@ -21,9 +21,15 @@ most one confirming pass. Re-reviewing the whole diff after each individual fix
 multiplies the cost for findings that get smaller every round; when they are
 down to wording and style, stop and commit.
 
-Why: there is no staging site and no test suite. Hostinger deploys from `main`
-on push, so a defective commit is live for the whole membership immediately.
-Bugs that have reached production this way include a CSRF token written into
+**Where the review happens: on the way to `main`, not on the way to `test`.**
+Since 2026-10-22 work goes to the `test` branch first and is looked at on the
+staging site before it is merged. Cody asked that pushing to test stay cheap, so
+the full review is not required there — `tools/php-check.py` still is. Everything
+below applies in full to anything headed for `main`.
+
+Why: Hostinger deploys `main` on push, so a defective commit is live for the
+whole membership immediately, and staging only helps with what is visible on a
+page. Bugs that have reached production this way include a CSRF token written into
 the middle of an HTML attribute, a query that failed silently on a collation
 mismatch and so reported "nothing to reconcile", a sort that only reversed its
 last ORDER BY term, and a CSS class collision that rendered text invisible.

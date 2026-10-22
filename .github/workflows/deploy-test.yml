@@ -1,0 +1,48 @@
+name: Deploy test branch
+
+# Staging is deployed by Hostinger's own Git integration, watching `test` the
+# same way it watches `main` for live. This workflow is the emergency fallback
+# for when that is unavailable — the mirror image of deploy.yml, and dispatch
+# only for the same reason: two mechanisms writing the same directory on every
+# push would race each other.
+on:
+  workflow_dispatch:
+
+# One deploy at a time, and never a half-finished one racing a newer push.
+concurrency:
+  group: deploy-test
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse to run from any branch but test
+        # The FTP step below writes to a fixed directory. If this workflow ever
+        # fires from another ref, stop before it writes anything.
+        run: |
+          test "${{ github.ref }}" = "refs/heads/test" || {
+            echo "::error::deploy-test may only run from the test branch (got ${{ github.ref }})"
+            exit 1
+          }
+
+      - name: Checkout repo
+        uses: actions/checkout@v4.2.2
+
+      - name: Deploy to the staging directory
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+        with:
+          server: 82.180.172.230
+          username: u285963410
+          password: ${{ secrets.FTP_PASSWORD }}
+          # NOT /new/. That is the live site.
+          server-dir: /test/
+          dangerous-clean-slate: false
+          state-name: .ftp-sync-state-test.json
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/protected-docs/**
+            **/config.php

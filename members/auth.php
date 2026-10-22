@@ -1,4 +1,8 @@
 <?php
+// The test-site banner, hooked in here because every member page goes through
+// this file. One rule in one place beats the same rule missing from eleven
+// page headers.
+require_once __DIR__ . '/../inc/env.php';
 /*
  * Errors are logged, not printed.
  *

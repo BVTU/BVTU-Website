@@ -33,7 +33,43 @@ require_once __DIR__ . '/lib/phpmailer/SMTP.php';
  * inbox. This changes the envelope only — the account's email is still its
  * identity everywhere else, so who may sign what does not move.
  */
+/*
+ * siteIsTest() lives in inc/env.php and is required here rather than declared
+ * again. Two unguarded copies of the same function is a fatal on any page that
+ * loads both the shared nav and the mailer — which is most of them.
+ */
+require_once __DIR__ . '/../inc/env.php';
+
+/**
+ * The subject as it should arrive, tagged on the test site with who it would
+ * really have gone to — which is most of what you want to check.
+ */
+function siteMailSubject(string $subject, string $realTo): string {
+    if (!siteIsTest()) return $subject;
+    return '[TEST → ' . ($realTo !== '' ? $realTo : 'nobody') . '] ' . $subject;
+}
+
 function siteDeliveryAddress(string $account): string {
+    /*
+     * Every email on the test site goes to one inbox instead of the member it
+     * names. This is the single most important thing about having a staging
+     * copy: the test site may well be pointed at the live database, and without
+     * this, opening a page that happens to send would mail real members real
+     * notices about things that did not happen.
+     *
+     * With no inbox configured we return nothing and let the send fail. A test
+     * server that cannot mail anyone is a nuisance; one that quietly falls
+     * through to the real address is the exact accident this prevents.
+     */
+    if (siteIsTest()) {
+        $inbox = siteTestInbox();
+        if ($inbox === '') {
+            error_log('siteDeliveryAddress: SITE_ENV is test but SITE_TEST_INBOX is not set — '
+                    . 'refusing to deliver to ' . $account);
+        }
+        return $inbox;
+    }
+
     static $cache = [];
     $key = strtolower(trim($account));
     if ($key === '') return $account;
@@ -57,7 +93,37 @@ function siteDeliveryAddress(string $account): string {
     return $cache[$key] = $to;
 }
 
-function _siteMailLog(string $to, string $subject, bool $ok, string $err = ''): void {
+/**
+ * Take the one-time links out of a message before it is kept.
+ *
+ * The log stores what was sent so it can be read back afterwards, and some of
+ * these emails exist only to carry a link that acts as a password: a reset
+ * link, an invitation, a cancel-my-registration link. Keeping those verbatim
+ * would turn the log into a drawer of live keys, readable by anyone who can
+ * open the page or a database backup.
+ *
+ * Two rules rather than one. The first names the parameters this site actually
+ * uses for capability links; the second removes any long opaque run left in a
+ * URL, so a link shape nobody remembered to add to the first rule is still
+ * caught. What survives is the wording, which is the thing worth reading.
+ *
+ * The second rule takes unbroken letters and digits only. Our tokens are hex;
+ * our slugs are lowercase words joined by hyphens. Allowing hyphens into that
+ * run would redact "mental-health-first-aid" out of the handout email and make
+ * the log less useful for no gain in safety.
+ */
+function siteMailRedact(string $body): string {
+    $body = preg_replace(
+        '/\b((?:token|t|key|code|auth|secret)=)[A-Za-z0-9_\-\.]{10,}/i',
+        '$1[one-time link removed]',
+        $body
+    );
+    return (string)preg_replace_callback('#https?://[^\s"\'<>]+#i', function (array $m): string {
+        return (string)preg_replace('/[A-Za-z0-9]{24,}/', '[removed]', $m[0]);
+    }, (string)$body);
+}
+
+function _siteMailLog(string $to, string $subject, bool $ok, string $err = '', string $body = '', bool $isHtml = false): void {
     /* Only a bare address can be resolved; the CC path hands this a composed
      * label ("someone@x (cc ...)"), which is not an account and must be left
      * as written rather than looked up and silently not annotated. */
@@ -66,6 +132,7 @@ function _siteMailLog(string $to, string $subject, bool $ok, string $err = ''): 
         if (strcasecmp($delivered, $to) !== 0) $to .= ' -> ' . $delivered;
     }
     static $tableReady = false;
+    static $hasBody = false;
     try {
         require_once __DIR__ . '/db.php';
         $db = getDB();
@@ -77,13 +144,62 @@ function _siteMailLog(string $to, string $subject, bool $ok, string $err = ''): 
                 subject   VARCHAR(500) NOT NULL,
                 status    VARCHAR(10)  NOT NULL,
                 error_msg VARCHAR(500),
+                body      MEDIUMTEXT,
+                is_html   TINYINT(1) NOT NULL DEFAULT 0,
                 INDEX idx_sent (sent_at),
                 INDEX idx_to   (to_email)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            // Best effort for a table that predates these two columns; a host
+            // that will not ALTER loses the readback, not the logging.
+            foreach (['body' => 'MEDIUMTEXT',
+                      'is_html' => 'TINYINT(1) NOT NULL DEFAULT 0'] as $col => $type) {
+                try {
+                    $has = (int)$db->query(
+                        "SELECT COUNT(*) FROM information_schema.COLUMNS
+                         WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='site_email_log'
+                           AND COLUMN_NAME='{$col}'"
+                    )->fetchColumn();
+                    if (!$has) $db->exec("ALTER TABLE site_email_log ADD COLUMN {$col} {$type}");
+                } catch (\Throwable $e) { /* logging must not fail over this */ }
+            }
+            // Whether the readback columns are really there. Naming them in the
+            // INSERT regardless would mean a failed ALTER stopped ALL logging —
+            // the opposite of what the best-effort catch above is for.
+            try {
+                $db->query("SELECT body, is_html FROM site_email_log LIMIT 1");
+                $hasBody = true;
+            } catch (\Throwable $e) {
+                $hasBody = false;
+            }
             $tableReady = true;
+
+            /*
+             * Prune old bodies here, on the write path, not when somebody opens
+             * the log. A page that is only ever read should not quietly perform
+             * an irreversible UPDATE — least of all a staging copy pointed at
+             * the live database. Once per request that sends mail is plenty.
+             */
+            // Never from the test site: smtp.php's own diversion exists because
+            // staging may well be pointed at the live database, and this is a
+            // write. Reading live rows there is survivable; blanking them is not.
+            if ($hasBody && !siteIsTest()) {
+                try {
+                    $db->exec("UPDATE site_email_log SET body = NULL
+                               WHERE body IS NOT NULL
+                                 AND sent_at < DATE_SUB(NOW(), INTERVAL 180 DAY)");
+                } catch (\Throwable $e) { /* a log that cannot tidy itself still logs */ }
+            }
         }
-        $db->prepare("INSERT INTO site_email_log (to_email, subject, status, error_msg) VALUES (?,?,?,?)")
-           ->execute([$to, $subject, $ok ? 'sent' : 'failed', $err ?: null]);
+        if ($hasBody) {
+            $db->prepare("INSERT INTO site_email_log (to_email, subject, status, error_msg, body, is_html)
+                          VALUES (?,?,?,?,?,?)")
+               ->execute([$to, $subject, $ok ? 'sent' : 'failed', $err ?: null,
+                          $body !== '' ? siteMailRedact($body) : null, $isHtml ? 1 : 0]);
+        } else {
+            $db->prepare("INSERT INTO site_email_log (to_email, subject, status, error_msg)
+                          VALUES (?,?,?,?)")
+               ->execute([$to, $subject, $ok ? 'sent' : 'failed', $err ?: null]);
+        }
     } catch (\Throwable $e) {
         error_log('siteMailLog: ' . $e->getMessage());
     }
@@ -154,7 +270,8 @@ function siteMailWithAttachments(
 
         $mail->isHTML(false);
         $mail->CharSet = 'UTF-8';
-        $mail->Subject = $subject;
+        // Tagged on test with the address it would really have gone to.
+        $mail->Subject = siteMailSubject($subject, $to);
         $mail->Body    = $body;
 
         $mail->send();
@@ -163,12 +280,17 @@ function siteMailWithAttachments(
         $logTo = $to;
         $dest  = siteDeliveryAddress($to);
         if (strcasecmp($dest, $to) !== 0) $logTo .= ' -> ' . $dest;
-        _siteMailLog($logTo . ($cc ? ' (cc ' . implode(', ', $cc) . ')' : ''), $subject, true);
+        // false, not $isHtml: this function has no such parameter — naming one
+        // raised an undefined-variable notice on every attachment email — and
+        // it calls isHTML(false) above, so what it sends is plain text. Logging
+        // it as HTML would have the log strip_tags() a plain body and silently
+        // delete anything between angle brackets.
+        _siteMailLog($logTo . ($cc ? ' (cc ' . implode(', ', $cc) . ')' : ''), $subject, true, '', $body, false);
         return true;
     } catch (Exception $e) {
         $err = $mail->ErrorInfo;
         error_log("siteMailWithAttachments failed to {$to}: " . $err);
-        _siteMailLog($to, $subject, false, $err);
+        _siteMailLog($to, $subject, false, $err, $body, false);
         return false;
     }
 }
@@ -206,19 +328,20 @@ function siteMail(string $to, string $subject, string $body, bool $isHtml = fals
 
         $mail->isHTML($isHtml);
         $mail->CharSet = 'UTF-8';
-        $mail->Subject = $subject;
+        // Tagged on test with the address it would really have gone to.
+        $mail->Subject = siteMailSubject($subject, $to);
         $mail->Body    = $body;
         if ($isHtml) {
             $mail->AltBody = strip_tags($body);
         }
 
         $mail->send();
-        _siteMailLog($to, $subject, true);
+        _siteMailLog($to, $subject, true, '', $body, $isHtml);
         return true;
     } catch (Exception $e) {
         $err = $mail->ErrorInfo;
         error_log("siteMail failed to {$to}: " . $err);
-        _siteMailLog($to, $subject, false, $err);
+        _siteMailLog($to, $subject, false, $err, $body, $isHtml);
         return false;
     }
 }

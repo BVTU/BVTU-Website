@@ -29,9 +29,33 @@ $db->exec("CREATE TABLE IF NOT EXISTS site_email_log (
     subject   VARCHAR(500) NOT NULL,
     status    VARCHAR(10)  NOT NULL,
     error_msg VARCHAR(500),
+    body      MEDIUMTEXT,
+    is_html   TINYINT(1) NOT NULL DEFAULT 0,
     INDEX idx_sent (sent_at),
     INDEX idx_to   (to_email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+/*
+ * The readback columns, for a table that predates them — which on live is
+ * every table, since CREATE TABLE IF NOT EXISTS does nothing to one that is
+ * already there. Without this the body is never selected and the log looks
+ * broken until somebody notices.
+ *
+ * Trimming old bodies is deliberately NOT done here. This page only reads;
+ * an irreversible UPDATE on a GET would fire on a prefetch, and from a staging
+ * copy pointed at the live database it would blank live records. That happens
+ * on the write path in smtp.php instead.
+ */
+foreach (['body' => 'MEDIUMTEXT', 'is_html' => 'TINYINT(1) NOT NULL DEFAULT 0'] as $col => $type) {
+    try {
+        $has = (int)$db->query(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='site_email_log'
+               AND COLUMN_NAME='{$col}'"
+        )->fetchColumn();
+        if (!$has) $db->exec("ALTER TABLE site_email_log ADD COLUMN {$col} {$type}");
+    } catch (\Throwable $e) { /* the log still lists; only the readback is lost */ }
+}
 
 $filter = trim($_GET['filter'] ?? '');
 $page   = max(1, (int)($_GET['p'] ?? 1));
@@ -85,6 +109,19 @@ $pages = max(1, (int)ceil($total / $perPage));
     .log-table tbody tr { border-bottom: 1px solid var(--gray-100); }
     .log-table tbody tr:last-child { border-bottom: none; }
     .log-table tbody tr:hover { background: #fafafa; }
+    .log-row.has-body { cursor:pointer; }
+    .caret { display:inline-block; color:var(--gray-400); font-size:.7rem; margin-right:.3rem;
+             transition:transform .12s; }
+    .log-row.open .caret { transform:rotate(90deg); color:var(--primary); }
+    .log-row.open { background:var(--gray-50); }
+    .log-body > td { background:var(--gray-50); border-top:none; padding:.2rem 1rem 1rem; }
+    .msg-head { font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;
+                color:var(--gray-500);margin:.5rem 0 .4rem; }
+    .msg-note { font-size:.76rem;color:var(--gray-500);margin:0 0 .4rem;font-style:italic; }
+    .msg { white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+           font-size:.8rem;line-height:1.65;color:var(--gray-700);background:#fff;
+           border:1px solid var(--gray-200);border-radius:8px;padding:.8rem 1rem;margin:0;
+           max-height:26rem;overflow:auto; }
     .log-table td { padding: .55rem .85rem; vertical-align: top; }
     .ts { color: var(--gray-400); white-space: nowrap; font-size: .78rem; }
     .to-email { font-weight: 600; color: var(--gray-800); }
@@ -152,17 +189,34 @@ $pages = max(1, (int)ceil($total / $perPage));
       </tr>
     </thead>
     <tbody>
-      <?php foreach ($rows as $r): ?>
-      <tr>
+      <?php foreach ($rows as $r): $hasBody = trim((string)($r['body'] ?? '')) !== ''; ?>
+      <tr class="log-row<?= $hasBody ? ' has-body' : '' ?>"<?= $hasBody ? ' onclick="logToggle(this)"' : '' ?>>
         <td class="ts"><?= date('M j, Y', strtotime($r['sent_at'])) ?><br><?= date('g:i a', strtotime($r['sent_at'])) ?></td>
         <td class="to-email"><?= htmlspecialchars($r['to_email']) ?></td>
-        <td class="subject-cell"><?= htmlspecialchars($r['subject']) ?>
+        <td class="subject-cell">
+          <?php if ($hasBody): ?><span class="caret">&#9656;</span><?php endif; ?>
+          <?= htmlspecialchars($r['subject']) ?>
           <?php if ($r['error_msg']): ?>
-          <div class="err-msg">⚠ <?= htmlspecialchars($r['error_msg']) ?></div>
+          <div class="err-msg">&#9888; <?= htmlspecialchars($r['error_msg']) ?></div>
           <?php endif; ?>
         </td>
-        <td><span class="badge <?= $r['status'] ?>"><?= $r['status'] === 'sent' ? '✓ Sent' : '✗ Failed' ?></span></td>
+        <td><span class="badge <?= $r['status'] ?>"><?= $r['status'] === 'sent' ? '&#10003; Sent' : '&#10007; Failed' ?></span></td>
       </tr>
+      <?php if ($hasBody): ?>
+      <tr class="log-body" hidden>
+        <td colspan="4">
+          <div class="msg-head">What <?= htmlspecialchars(explode(' ', $r['to_email'])[0]) ?> received</div>
+          <?php // Stored already redacted, so there is no live link to print here
+                // even if one was in the email that went out. ?>
+          <?php if (!empty($r['is_html'])): ?>
+          <div class="msg-note">An HTML email, shown as its text.</div>
+          <pre class="msg"><?= htmlspecialchars(trim(strip_tags(str_replace(['</p>','<br>','<br/>','<br />','</div>','</tr>'], "\n", (string)$r['body'])))) ?></pre>
+          <?php else: ?>
+          <pre class="msg"><?= htmlspecialchars((string)$r['body']) ?></pre>
+          <?php endif; ?>
+        </td>
+      </tr>
+      <?php endif; ?>
       <?php endforeach; ?>
     </tbody>
   </table>
@@ -183,5 +237,15 @@ $pages = max(1, (int)ceil($total / $perPage));
   <?php endif; ?>
 
 </div>
+<script>
+  // One row at a time would hide a comparison; leaving them all open is the
+  // reader's business. Just toggles the row that follows the one clicked.
+  function logToggle(tr) {
+    var body = tr.nextElementSibling;
+    if (!body || !body.classList.contains('log-body')) return;
+    body.hidden = !body.hidden;
+    tr.classList.toggle('open', !body.hidden);
+  }
+</script>
 </body>
 </html>

@@ -307,8 +307,12 @@ if ($totalTokens > 0 && defined('DB_HOST')) {
                       . "Usage: " . round($monthTotal / $alertThreshold * 100, 1) . "%\n\n"
                       . "To adjust the alert threshold, set TOKEN_ALERT_THRESHOLD in members/config.php.\n"
                       . "To review usage, query: SELECT DATE(created_at) AS day, SUM(total_tokens) AS tokens FROM api_usage GROUP BY day ORDER BY day DESC;";
-            mail($alertEmail, $subject, $body,
-                 "From: noreply@bvtu.ca\r\nContent-Type: text/plain; charset=UTF-8\r\n");
+            require_once __DIR__ . '/inc/env.php';
+            $alertTo = siteRawMailTo($alertEmail);   // the test copy must not page anyone
+            if ($alertTo !== '') {
+                mail($alertTo, $subject, $body,
+                     "From: noreply@bvtu.ca\r\nContent-Type: text/plain; charset=UTF-8\r\n");
+            }
         }
 
     } catch (Exception $e) {

@@ -83,7 +83,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $body = "Name: {$name}\nEmail: {$email}\n\nMessage:\n{$message}\n\n---\nSent via bvtu.ca contact form";
 
-        if (mail($contactEmail, "BVTU Contact: {$subject}", $body, $headers)) {
+        // Diverted on the test site like everything else; sent as written on
+        // live. Without this the staging copy mailed the office for real.
+        require_once __DIR__ . '/inc/env.php';
+        $sendTo = siteRawMailTo($contactEmail);
+        if ($sendTo !== '' && mail($sendTo, "BVTU Contact: {$subject}", $body, $headers)) {
             $success = true;
             $fields  = ['name' => '', 'email' => '', 'subject' => '', 'message' => ''];
         } else {

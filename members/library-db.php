@@ -603,7 +603,12 @@ https://bvtu.ca/library-resource.php?id={$resource['id']}
 Bulkley Valley Teachers' Union
 TEXT;
     $headers = "From: BVTU <lp54@bctf.ca>\r\nReply-To: lp54@bctf.ca\r\nContent-Type: text/plain; charset=UTF-8";
-    @mail($resource['uploader_email'], "New rating on \"{$title}\" — BVTU Library", $body, $headers);
+    require_once __DIR__ . '/../inc/env.php';
+    // A member gets told their resource was rated — not from the test copy.
+    $rateTo = siteRawMailTo((string)$resource['uploader_email']);
+    if ($rateTo !== '') {
+        @mail($rateTo, "New rating on \"{$title}\" — BVTU Library", $body, $headers);
+    }
 }
 
 // ── Bookmarks ─────────────────────────────────────────────────────────────────
