@@ -33,6 +33,16 @@ $failedTo  = [];
 // rather than rendered straight from the POST — otherwise a refresh mails
 // everybody a second time.
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    /*
+     * A body over post_max_size arrives with no $_POST and no $_FILES, so the
+     * CSRF check would fire first and report a problem with the token — which
+     * is both wrong and nothing the organiser can act on. Now that this form
+     * carries a file, that is reachable by picking one big attachment.
+     */
+    if (empty($_POST) && (int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+        $errors[] = 'That attachment was too big for the server (its limit is '
+                  . ini_get('post_max_size') . '). Nothing was sent.';
+    } else {
     csrfCheck();
     if (($_POST['action'] ?? '') === 'send-materials') {
         $live = evRegistrations($id);
@@ -46,6 +56,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif (!$live) {
             $errors[] = 'Nobody is registered yet, so there is nobody to send to.';
         } else {
+            /*
+             * Uploaded before the send, not after, so the map goes out with
+             * this email rather than with the next one. It joins the event's
+             * handouts like any other file: same validation, same size
+             * ceiling, and anyone who loses the email can still find it on the
+             * event page. A file that will not upload stops the send — sending
+             * without the thing you attached is worse than not sending.
+             */
+            $addErrs = [];
+            $addNotes = [];
+            $addedNow = 0;
+            /*
+             * Asked of the normalised list, not of $_FILES['extra']['name'].
+             * A multiple input with nothing chosen posts [''] — an array that
+             * is not empty — so !empty() was true every time and the ordinary
+             * send with no attachment died on "choose at least one file".
+             */
+            $picked = array_filter(evNormaliseUploads($_FILES['extra'] ?? []), function ($f) {
+                return ($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE
+                    && trim((string)($f['name'] ?? '')) !== '';
+            });
+            if ($picked) {
+                $up = evDocAddMany($id, $_FILES['extra'], evStr($_POST['extra_title'] ?? ''),
+                                   '', $member['email']);
+                $addedNow = (int)($up['added'] ?? 0);
+                // Only when a file actually failed. evDocAddMany also returns an
+                // advisory note when the selection lands exactly on PHP's
+                // max_file_uploads, and treating that as fatal cancelled the
+                // email after every one of those files had uploaded fine.
+                if ($addedNow < count($picked) && !empty($up['errors'])) {
+                    $addErrs = $up['errors'];
+                } elseif (!empty($up['errors'])) {
+                    $addNotes = $up['errors'];
+                }
+            }
+
+            if ($addErrs) {
+                $errors = array_merge($errors, $addErrs);
+                // Says what landed, because a part-successful batch is the one
+                // case where re-picking everything would duplicate a file that
+                // is already on the event.
+                $errors[] = $addedNow > 0
+                    ? 'Nothing was sent. ' . $addedNow . ' file'
+                      . ($addedNow === 1 ? '' : 's') . ' did upload and ' . ($addedNow === 1 ? 'is' : 'are')
+                      . ' already in the handouts listed above — do not attach '
+                      . ($addedNow === 1 ? 'it' : 'them') . ' again. Send once the rest is sorted out.'
+                    : 'Nothing was sent and nothing was attached. Fix the file, or send without it.';
+            } else {
+            // No re-read needed: evSendMaterials() fetches the documents itself,
+            // so the file uploaded a moment ago is already in what it sends.
             $res = evSendMaterials($event, $member['email'], evStr($_POST['message'] ?? ''));
 
             $bits = ['Sent to ' . $res['sent'] . ' ' . ($res['sent'] === 1 ? 'person' : 'people')];
@@ -55,6 +115,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     : 'handouts linked rather than attached — too large to send';
             }
 
+            // The cap advisory rides along with the result rather than being
+            // swallowed: everything was sent, but the organiser should know the
+            // browser may have quietly dropped files past PHP's limit.
+            foreach ($addNotes as $n) $bits[] = rtrim($n, '.');
+
             startSession();
             $_SESSION['ev_sent'] = [
                 'notice'    => implode(' · ', $bits) . '.',
@@ -62,8 +127,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ];
             header('Location: event-signups.php?id=' . $id . '&sent=1');
             exit;
+            }   // attachment uploaded cleanly
         }
     }
+    }   // body within post_max_size
 }
 
 // The outcome of a send that has just redirected back here.
@@ -242,10 +309,14 @@ $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
           </li>
           <?php endforeach; ?>
         </ul>
-        <?php if ($attBytes > EV_MAIL_MAX_BYTES): ?>
+        <?php // evWillAttach(), the same test the send itself uses. Comparing raw
+              // bytes to the ceiling here meant anything between about 11 MB and
+              // 15 MB showed no warning and then went out as links. ?>
+        <?php if (!evWillAttach($attach)): ?>
         <p class="send-warn">
           Together these are <?= $h(evHumanBytes($attBytes)) ?>, over the
-          <?= $h(evHumanBytes(EV_MAIL_MAX_BYTES)) ?> an email will reliably carry.
+          <?= $h(evHumanBytes(evAttachableLimitRaw())) ?> an email will reliably carry
+          once encoded.
           Everyone will get a <strong>link</strong> to the handouts rather than the files
           themselves &mdash; so the message arrives for everybody instead of bouncing for some.
         </p>
@@ -262,7 +333,10 @@ $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
       </p>
       <?php endif; ?>
 
-      <form method="POST" onsubmit="return confirm('Send this to <?= (int)$liveCount ?> <?= $liveCount === 1 ? 'person' : 'people' ?> now? This cannot be undone.');">
+      <?php // enctype matters: without it the browser posts the filename only,
+            // the send goes out with no map, and nothing anywhere says why. ?>
+      <form method="POST" enctype="multipart/form-data"
+            onsubmit="return confirm('Send this to <?= (int)$liveCount ?> <?= $liveCount === 1 ? 'person' : 'people' ?> now? This cannot be undone.');">
         <?= csrfField() ?>
         <input type="hidden" name="action" value="send-materials">
         <div style="margin-bottom:.8rem;">
@@ -272,8 +346,36 @@ $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
           <p style="font-size:.79rem;color:var(--gray-500);margin:-.1rem 0 .35rem;">
             Optional. Goes near the top, above the handouts. Parking, what to bring, a change of room.
           </p>
+          <?php // Shown back after a refusal. A rejected attachment is the one
+                // error path that leaves the form usable, and losing the note
+                // they had just typed would be gratuitous. ?>
           <textarea id="sendmsg" name="message" maxlength="400"
-                    style="width:100%;min-height:4.5rem;padding:.55rem .65rem;border:1px solid var(--border);border-radius:6px;font:inherit;font-size:.92rem;resize:vertical;"></textarea>
+                    style="width:100%;min-height:4.5rem;padding:.55rem .65rem;border:1px solid var(--border);border-radius:6px;font:inherit;font-size:.92rem;resize:vertical;"><?= $h(evStr($_POST['message'] ?? '')) ?></textarea>
+        </div>
+
+        <div style="margin-bottom:.9rem;">
+          <label for="sendextra" style="display:block;font-weight:700;font-size:.84rem;margin-bottom:.3rem;">
+            Something else to send?
+          </label>
+          <p style="font-size:.79rem;color:var(--gray-500);margin:-.1rem 0 .35rem;">
+            Optional. A map of where to find us, a parking screenshot. It goes out with
+            this email and joins the handouts below, so anyone who loses the email can
+            still find it on the event page.
+          </p>
+          <input type="file" id="sendextra" name="extra[]" multiple
+                 accept="<?= $h('.' . implode(',.', array_keys(EV_DOC_TYPES))) ?>"
+                 style="font-size:.88rem;"
+                 onchange="document.getElementById('extraTitleWrap').style.display = this.files.length === 1 ? '' : 'none';">
+          <div id="extraTitleWrap" style="display:none;margin-top:.5rem;">
+            <?php // Offered for one file only: a single name cannot label a
+                  // selection, and evDocAddMany ignores it for a batch anyway. ?>
+            <input type="text" name="extra_title" maxlength="120"
+                   placeholder="What to call it — e.g. Where to find us"
+                   style="width:100%;max-width:22rem;padding:.45rem .6rem;border:1px solid var(--border);border-radius:6px;font:inherit;font-size:.88rem;">
+          </div>
+          <p style="font-size:.76rem;color:var(--gray-500);margin:.4rem 0 0;">
+            Up to <?= evMaxFiles() ?> files, <?= round(evMaxUploadBytes() / (1024 * 1024)) ?> MB each.
+          </p>
         </div>
         <?php $isDraft = ($event['status'] ?? '') === 'draft'; ?>
         <button type="submit" class="btn btn-primary"<?= ($liveCount === 0 || $isDraft) ? ' disabled' : '' ?>>

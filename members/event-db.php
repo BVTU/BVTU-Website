@@ -75,6 +75,24 @@ function evEncodedBytes(int $raw): int {
 }
 
 /**
+ * Will these handouts actually be attached, or linked?
+ *
+ * Asked in one place so the warning on the page and the decision in the send
+ * cannot differ. They did: the page compared raw bytes to the ceiling while
+ * the send compared base64-encoded bytes, so anything between about 11.25 MB
+ * and 15 MB was promised as an attachment and delivered as a link — with no
+ * warning, and no way to take the email back.
+ */
+function evWillAttach(array $docs): bool {
+    return $docs && evEncodedBytes(evDocBytes($docs)) <= EV_MAIL_MAX_BYTES;
+}
+
+/** The raw size a set of handouts has to come under to be attached. */
+function evAttachableLimitRaw(): int {
+    return (int)floor(EV_MAIL_MAX_BYTES / 4) * 3;
+}
+
+/**
  * What may be uploaded, extension => media type.
  *
  * A PDF is the one that previews in the browser on every device, which is why
@@ -1443,11 +1461,10 @@ function evSends(int $eventId): array {
 function evSendMaterials(array $event, string $sentBy, string $message = ''): array {
     $people = evRegistrations((int)$event['id']);
     $docs   = evAttachableDocs((int)$event['id']);
-    $bytes  = evDocBytes($docs);
 
     // Over the ceiling, everyone gets links rather than some people getting a
     // bounce. All or nothing, so two registrants never receive different things.
-    $attach = $docs && evEncodedBytes($bytes) <= EV_MAIL_MAX_BYTES;
+    $attach = evWillAttach($docs);
 
     $files = [];
     if ($attach) {

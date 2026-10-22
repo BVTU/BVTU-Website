@@ -628,13 +628,19 @@ $forInput = function ($v) {
         $att   = evAttachableDocs($id);
         $bytes = evDocBytes($att);
       ?>
+      <?php // evWillAttach(), the one test the send itself uses. Comparing raw
+            // bytes to the ceiling promised an attachment for anything up to
+            // 15 MB, while the send attaches only what fits once base64 has
+            // added a third to it — so 11.25-15 MB read as reassurance here and
+            // went out as links. ?>
+      <?php $willAttach = evWillAttach($att); ?>
       <?php if ($att): ?>
-      <p class="privacy" style="<?= $bytes > EV_MAIL_MAX_BYTES ? '' : 'background:var(--off-white);border-color:var(--border);color:var(--gray-600);' ?>">
-        <?php if ($bytes > EV_MAIL_MAX_BYTES): ?>
+      <p class="privacy" style="<?= !$willAttach ? '' : 'background:var(--off-white);border-color:var(--border);color:var(--gray-600);' ?>">
+        <?php if (!$willAttach): ?>
           <strong>Too much to attach.</strong> <?= count($att) ?> handouts come to
-          <?= $h(evHumanBytes($bytes)) ?>, over the <?= $h(evHumanBytes(EV_MAIL_MAX_BYTES)) ?>
-          an email will reliably carry. The reminder will link to them instead of
-          attaching them — switch some to "Not emailed" to get back under.
+          <?= $h(evHumanBytes($bytes)) ?>, over the <?= $h(evHumanBytes(evAttachableLimitRaw())) ?>
+          an email will reliably carry once encoded. The reminder will link to them
+          instead of attaching them — switch some to "Not emailed" to get back under.
         <?php else: ?>
           <?= count($att) ?> handout<?= count($att) === 1 ? '' : 's' ?> will be attached to
           the reminder email, <?= $h(evHumanBytes($bytes)) ?> in total.
