@@ -1410,8 +1410,26 @@ function evSendCancelNotice(array $event, array $reg): void {
 }
 
 function evSendOrganiserNotice(array $event, array $reg, array $answers, bool $isUpdate = false): void {
-    $to = trim((string)($event['notify_email'] ?? '')) ?: trim((string)($event['created_by'] ?? ''));
-    if ($to === '') return;
+    /*
+     * Both addresses, not one or the other.
+     *
+     * This used to send to notify_email, falling back to created_by only when
+     * notify_email was empty — so an event whose notify field had been pointed
+     * at somebody else told nobody else at all, and the person who set the
+     * event up heard nothing. That is exactly what happened: one event's
+     * notices arrived and another's did not, with no difference between them
+     * but that field.
+     *
+     * Deduplicated case-insensitively, so the ordinary case where they are the
+     * same address still sends one email.
+     */
+    $to = [];
+    foreach ([$event['notify_email'] ?? '', $event['created_by'] ?? ''] as $addr) {
+        $addr = trim((string)$addr);
+        if ($addr === '' || !filter_var($addr, FILTER_VALIDATE_EMAIL)) continue;
+        $to[strtolower($addr)] = $addr;
+    }
+    if (!$to) return;
 
     $count = count(evRegistrations((int)$event['id']));
     $lines = [
@@ -1428,8 +1446,16 @@ function evSendOrganiserNotice(array $event, array $reg, array $answers, bool $i
     $lines[] = '';
     $lines[] = 'That makes ' . $count . ' registered so far.';
 
-    siteMail($to, ($isUpdate ? 'Updated' : 'New') . ' registration: ' . $event['title'],
-             implode("\n", $lines));
+    $subject = ($isUpdate ? 'Updated' : 'New') . ' registration: ' . $event['title'];
+    $body    = implode("\n", $lines);
+    foreach ($to as $addr) {
+        // One failing address must not cost the other one its notice.
+        try {
+            siteMail($addr, $subject, $body);
+        } catch (\Throwable $e) {
+            error_log('evSendOrganiserNotice: ' . $addr . ' — ' . $e->getMessage());
+        }
+    }
 }
 
 // ── Sending the handouts ──────────────────────────────────────────────────────
