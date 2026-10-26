@@ -341,8 +341,15 @@ $forInput = function ($v) {
         </div>
 
         <div class="fld">
-          <label class="lbl" for="f-notify">Send me an email for each registration</label>
-          <p class="hint">Leave blank to stop the notifications.</p>
+          <label class="lbl" for="f-notify">Send an email for each registration</label>
+          <?php // The old hint said blank stops them. It does not — the code
+                // falls back to whoever created the event, which is the useful
+                // behaviour and the one to keep. The hint was the wrong half. ?>
+          <p class="hint">
+            Blank means they go to whoever created this event
+            (<?= $h(trim((string)($event['created_by'] ?? '')) ?: 'nobody — so none would be sent') ?>).
+            Put a different address here to send them somewhere else.
+          </p>
           <input type="email" id="f-notify" name="notify_email" value="<?= $h($event['notify_email']) ?>">
         </div>
 

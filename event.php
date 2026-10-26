@@ -155,8 +155,33 @@ if (!$notFound && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ev_subm
             }
 
             if ($reg) {
-                evSendConfirmation($event, $reg, $answers);
-                evSendOrganiserNotice($event, $reg, $answers, $wasUpdate);
+                /*
+                 * Each send stands on its own, and neither can take the page
+                 * down with it.
+                 *
+                 * They ran bare and in sequence, so anything thrown while
+                 * building the registrant's confirmation — a database hiccup
+                 * reading the editable wording, say — skipped the organiser's
+                 * notice entirely AND 500'd the page, after the registration
+                 * had already been saved. The member saw an error for a
+                 * sign-up that worked, probably did it again, and nobody was
+                 * told either time.
+                 *
+                 * The registration is the thing that matters and it is already
+                 * written. An email that will not go is logged and the page
+                 * carries on.
+                 */
+                try {
+                    evSendConfirmation($event, $reg, $answers);
+                } catch (\Throwable $e) {
+                    error_log('event registration: confirmation to ' . $reg['email'] . ' — ' . $e->getMessage());
+                }
+                try {
+                    evSendOrganiserNotice($event, $reg, $answers, $wasUpdate);
+                } catch (\Throwable $e) {
+                    error_log('event registration: organiser notice for event '
+                            . (int)$event['id'] . ' — ' . $e->getMessage());
+                }
             }
             $done = true;
         }
