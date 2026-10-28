@@ -345,11 +345,29 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
      * and reads at a glance in a table of twenty rows. */
     .receipt-cell { width: 86px; text-align: center; }
     .receipt-btn-group { display: flex; gap: .2rem; justify-content: center; }
-    /* One chip per receipt, stacked, with the add pair underneath — a line
-       with two receipts is the case this exists for, not an exception. */
-    .receipt-file-group { display: flex; flex-direction: column; gap: .15rem;
-        align-items: center; margin-bottom: .2rem; }
+    /* One button whatever the line carries, so every row is the same height
+       whether it holds one receipt or five. The count rides on the icon. */
+    .receipt-file-group { display: flex; justify-content: center; margin-bottom: .2rem; }
     .rcpt-chip { display: flex; gap: .15rem; align-items: center; }
+    .receipt-has-file { position: relative; }
+    .rcpt-count { position: absolute; top: -5px; right: -5px; min-width: 13px; height: 13px;
+        border-radius: 7px; background: var(--primary); color: #fff; font-size: .55rem;
+        font-weight: 800; line-height: 13px; text-align: center; padding: 0 2px; }
+    /* The chooser: a short list, so it is read rather than navigated. */
+    .rcpt-chooser { position: absolute; z-index: 400; background: #fff; border: 1px solid var(--gray-200);
+        border-radius: 9px; box-shadow: 0 8px 24px rgba(0,0,0,.14); padding: .35rem; min-width: 190px;
+        max-width: 280px; }
+    .rcpt-chooser-head { font-size: .66rem; font-weight: 800; text-transform: uppercase;
+        letter-spacing: .05em; color: var(--gray-500); padding: .2rem .4rem .3rem; }
+    .rcpt-chooser-row { display: flex; align-items: center; gap: .3rem; }
+    .rcpt-chooser-open { flex: 1 1 auto; min-width: 0; display: block; padding: .3rem .4rem;
+        border-radius: 6px; font-size: .78rem; color: var(--gray-700); text-decoration: none;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rcpt-chooser-open:hover { background: var(--accent); color: var(--primary-dk); }
+    .rcpt-chooser-off { flex: 0 0 auto; background: none; border: none; cursor: pointer;
+        font: inherit; font-size: .7rem; font-weight: 700; color: var(--gray-400);
+        padding: .2rem .35rem; border-radius: 5px; }
+    .rcpt-chooser-off:hover { background: #fef2f2; color: #b91c1c; }
     .rcpt-btn { width: 24px; height: 24px; border-radius: 5px; display: flex; align-items: center;
         justify-content: center; font-size: .78rem; font-family: inherit; cursor: pointer;
         padding: 0; text-decoration: none; transition: background .12s, border-color .12s, color .12s; }
@@ -1433,7 +1451,6 @@ function renderReceipts(rowId, pendingDataUrl) {
 
     const list = rowReceipts(rowId);
     const group = document.getElementById('attach-group-' + rowId);
-    // The add pair is always available now; only its label changes.
     if (group) {
         group.style.display = '';
         const a = document.getElementById('attach-btn-' + rowId);
@@ -1446,44 +1463,142 @@ function renderReceipts(rowId, pendingDataUrl) {
     const fileGroup = document.createElement('div');
     fileGroup.className = 'receipt-file-group';
 
-    const draw = function (rec, index, transientSrc) {
-        const pdf = isPdfSrc(transientSrc) || isPdfSrc(rec && rec.path);
-        const src = transientSrc && transientSrc !== '__pdf__'
-                  ? transientSrc
-                  : ('lp-receipt.php?f=' + encodeURIComponent((rec && rec.path) || ''));
-        const hoverSrc = pdf ? '__pdf__' : src;
+    if (pendingDataUrl && !list.length) {
+        const busy = document.createElement('div');
+        busy.className = 'rcpt-btn receipt-has-file';
+        busy.innerHTML = isPdfSrc(pendingDataUrl) ? '📕' : '📄';
+        busy.title = 'Reading this one…';
+        busy.addEventListener('mouseenter', e => showHoverPreview(e, pendingDataUrl));
+        busy.addEventListener('mouseleave', hideHoverPreview);
+        busy.addEventListener('mousemove',  moveHoverPreview);
+        fileGroup.appendChild(busy);
+        wrap.insertBefore(fileGroup, group || wrap.querySelector('.scan-spinner'));
+        return;
+    }
 
-        const chip = document.createElement('div');
-        chip.className = 'rcpt-chip';
+    /*
+     * One button, whatever the line carries.
+     *
+     * A chip per receipt grew the row every time one was added — three
+     * receipts made a row three times the height of its neighbours, in a table
+     * read by scanning down it. The count rides on the icon instead, so every
+     * row is the same height whether it holds one receipt or five, and the
+     * list opens on demand.
+     */
+    const chip = document.createElement('div');
+    chip.className = 'rcpt-chip';
 
-        const look = document.createElement(rec ? 'a' : 'div');
-        look.className = 'rcpt-btn receipt-has-file';
-        look.innerHTML = pdf ? '📕' : '📄';
-        look.title = rec ? ('Open ' + rec.name) : 'Reading this one…';
-        if (rec) { look.href = 'lp-receipt.php?f=' + encodeURIComponent(rec.path); look.target = '_blank'; }
-        look.addEventListener('mouseenter', e => showHoverPreview(e, hoverSrc));
-        look.addEventListener('mouseleave', hideHoverPreview);
-        look.addEventListener('mousemove',  moveHoverPreview);
-        chip.appendChild(look);
+    const many = list.length > 1;
+    const first = list[0];
+    const pdf = isPdfSrc(first.path);
 
-        if (rec) {
-            const off = document.createElement('button');
-            off.type = 'button';
-            off.className = 'rcpt-btn receipt-remove-btn';
-            off.title = 'Take this receipt off the line (the line is kept)';
-            off.textContent = '✕';
-            off.onclick = e => { e.stopPropagation(); removeReceiptFromRow(rowId, index); };
-            chip.appendChild(off);
-        }
-        fileGroup.appendChild(chip);
-    };
+    const look = document.createElement(many ? 'button' : 'a');
+    look.className = 'rcpt-btn receipt-has-file';
+    look.innerHTML = (pdf ? '📕' : '📄')
+                   + (many ? '<sup class="rcpt-count">' + list.length + '</sup>' : '');
+    if (many) {
+        look.type = 'button';
+        look.title = list.length + ' receipts on this line — click to choose one';
+        look.onclick = e => { e.stopPropagation(); openReceiptChooser(rowId, look); };
+    } else {
+        look.title = 'Open ' + first.name;
+        look.href = 'lp-receipt.php?f=' + encodeURIComponent(first.path);
+        look.target = '_blank';
+    }
+    // The first one previews on hover either way; it is the one whose figure
+    // the line was built from.
+    const hoverSrc = pdf ? '__pdf__' : ('lp-receipt.php?f=' + encodeURIComponent(first.path));
+    look.addEventListener('mouseenter', e => showHoverPreview(e, hoverSrc));
+    look.addEventListener('mouseleave', hideHoverPreview);
+    look.addEventListener('mousemove',  moveHoverPreview);
+    chip.appendChild(look);
 
-    list.forEach(function (rec, i) { draw(rec, i, null); });
-    if (pendingDataUrl) draw(null, -1, pendingDataUrl);
+    // With one receipt the ✕ stays in the cell: taking it off should not cost
+    // a trip through a list of one. With several it lives in the chooser,
+    // beside the name of the thing it removes.
+    if (!many) {
+        const off = document.createElement('button');
+        off.type = 'button';
+        off.className = 'rcpt-btn receipt-remove-btn';
+        off.title = 'Take this receipt off the line (the line is kept)';
+        off.textContent = '✕';
+        off.onclick = e => { e.stopPropagation(); removeReceiptFromRow(rowId, 0); };
+        chip.appendChild(off);
+    }
 
-    // Above the add pair: the receipts already on the line are the content,
-    // and the way to add another belongs under them, not in front of them.
+    fileGroup.appendChild(chip);
     wrap.insertBefore(fileGroup, group || wrap.querySelector('.scan-spinner'));
+}
+
+/** The open chooser, so a second click or an Escape closes it. */
+let receiptChooserEl = null;
+function closeReceiptChooser() {
+    if (receiptChooserEl) { receiptChooserEl.remove(); receiptChooserEl = null; }
+}
+document.addEventListener('click', closeReceiptChooser);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeReceiptChooser(); });
+
+/** Pick one of the receipts on a line, to look at or take off. */
+function openReceiptChooser(rowId, anchor) {
+    const wasOpen = receiptChooserEl && receiptChooserEl.dataset.row === String(rowId);
+    closeReceiptChooser();
+    if (wasOpen) return;
+
+    const list = rowReceipts(rowId);
+    if (!list.length) return;
+
+    const box = document.createElement('div');
+    box.className = 'rcpt-chooser';
+    box.dataset.row = String(rowId);
+    box.onclick = e => e.stopPropagation();
+
+    const head = document.createElement('div');
+    head.className = 'rcpt-chooser-head';
+    head.textContent = list.length + ' receipts on this line';
+    box.appendChild(head);
+
+    list.forEach(function (rec, i) {
+        const line = document.createElement('div');
+        line.className = 'rcpt-chooser-row';
+
+        const open = document.createElement('a');
+        open.className = 'rcpt-chooser-open';
+        open.href = 'lp-receipt.php?f=' + encodeURIComponent(rec.path);
+        open.target = '_blank';
+        open.textContent = (isPdfSrc(rec.path) ? '📕 ' : '📄 ') + rec.name;
+        open.title = 'Open ' + rec.name;
+        const src = isPdfSrc(rec.path) ? '__pdf__' : ('lp-receipt.php?f=' + encodeURIComponent(rec.path));
+        open.addEventListener('mouseenter', e => showHoverPreview(e, src));
+        open.addEventListener('mouseleave', hideHoverPreview);
+        open.addEventListener('mousemove',  moveHoverPreview);
+        line.appendChild(open);
+
+        const off = document.createElement('button');
+        off.type = 'button';
+        off.className = 'rcpt-chooser-off';
+        off.textContent = '✕';
+        off.title = 'Take this one off the line';
+        off.onclick = e => {
+            e.stopPropagation();
+            closeReceiptChooser();
+            removeReceiptFromRow(rowId, i);
+        };
+        line.appendChild(off);
+        box.appendChild(line);
+    });
+
+    document.body.appendChild(box);
+    receiptChooserEl = box;
+
+    // Below the icon, nudged back on screen if the row sits near an edge.
+    const r = anchor.getBoundingClientRect();
+    const w = box.offsetWidth;
+    let left = r.left + window.scrollX;
+    if (left + w > window.scrollX + document.documentElement.clientWidth - 8) {
+        left = window.scrollX + document.documentElement.clientWidth - w - 8;
+    }
+    box.style.left = Math.max(window.scrollX + 8, left) + 'px';
+    box.style.top  = (r.bottom + window.scrollY + 4) + 'px';
 }
 
 /**
