@@ -310,22 +310,37 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
     .cell-dollar { width: 82px; }
     .cell-select { width: 100%; border: 1px solid transparent; border-radius: 5px; padding: .3rem .4rem; font-size: .78rem; font-family: inherit; background: transparent; cursor: pointer; }
     .cell-select:hover, .cell-select:focus { border-color: var(--primary); background: #fff; outline: none; }
-    .receipt-cell { width: 68px; text-align: center; }
-    .receipt-attach-btn { background: none; border: 1px dashed var(--gray-300); border-radius: 5px; width: 28px; height: 28px; cursor: pointer; font-size: .82rem; color: var(--gray-400); display: flex; align-items: center; justify-content: center; transition: border-color .12s, color .12s, background .12s; }
-    .receipt-attach-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--accent); }
-    .receipt-has-file { width: 28px; height: 28px; border-radius: 5px; background: #dcfce7; border: 1px solid #86efac; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: .82rem; }
-    .receipt-has-file:hover { background: #bbf7d0; }
-    .receipt-open-btn { display: block; font-size: .6rem; font-weight: 700; color: var(--primary); text-decoration: none; text-align: center; line-height: 1.3; margin-top: .1rem; white-space: nowrap; }
-    .receipt-open-btn:hover { text-decoration: underline; color: var(--primary-dk); }
-    /* Quiet by design: taking a receipt off is a correction, not a thing to
-       invite. It only exists once a file is attached. */
-    .receipt-remove-btn { display: block; margin: .1rem auto 0; background: none; border: none;
-        padding: 0 .2rem; font: inherit; font-size: .62rem; font-weight: 700; line-height: 1.3;
-        color: var(--gray-400); cursor: pointer; }
-    .receipt-remove-btn:hover { color: #b91c1c; }
-    .receipt-phone-btn { background: none; border: 1px dashed #86efac; border-radius: 5px; width: 28px; height: 28px; cursor: pointer; font-size: .78rem; color: var(--primary); display: flex; align-items: center; justify-content: center; transition: border-color .12s, background .12s; }
-    .receipt-phone-btn:hover { background: #f0fdf4; border-style: solid; }
+    /* ── The receipt cell has exactly two states ─────────────────────────
+     *
+     * Empty: attach a file, or send one from your phone.
+     * Holding one: look at it, replace it, or take it off.
+     *
+     * They used to run together — the phone button stayed beside an attached
+     * file, so the cell offered "add one" and "here is one" at the same time,
+     * in four different shapes stacked four deep down a 68px column. Each
+     * state is now one row of equal buttons, which is a third of the height
+     * and reads at a glance in a table of twenty rows. */
+    .receipt-cell { width: 86px; text-align: center; }
+    .receipt-btn-group, .receipt-file-group { display: flex; gap: .2rem; justify-content: center; }
+    .rcpt-btn { width: 24px; height: 24px; border-radius: 5px; display: flex; align-items: center;
+        justify-content: center; font-size: .78rem; font-family: inherit; cursor: pointer;
+        padding: 0; text-decoration: none; transition: background .12s, border-color .12s, color .12s; }
+    /* Empty: dashed, muted — an invitation, not a thing demanding attention. */
+    .receipt-attach-btn, .receipt-phone-btn { background: none; border: 1px dashed var(--gray-300);
+        color: var(--gray-400); }
+    .receipt-attach-btn:hover, .receipt-phone-btn:hover { border-color: var(--primary);
+        color: var(--primary); background: var(--accent); }
+    .receipt-phone-btn { border-color: #86efac; color: var(--primary); }
     .receipt-phone-btn.targeting { background: #dcfce7; border-style: solid; border-color: var(--primary); }
+    /* Holding one: solid green, so a row with a receipt is obvious down the column. */
+    .receipt-has-file, .receipt-open-btn { background: #dcfce7; border: 1px solid #86efac;
+        color: var(--primary-dk); }
+    .receipt-has-file:hover, .receipt-open-btn:hover { background: #bbf7d0; }
+    /* Taking one off is a correction, not something to invite: it sits with the
+       others so it is findable, and stays grey until you mean it. */
+    .receipt-remove-btn { background: none; border: 1px solid transparent; color: var(--gray-400);
+        font-weight: 700; }
+    .receipt-remove-btn:hover { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
     .receipt-btn-group { display: flex; gap: 3px; align-items: center; justify-content: center; }
     .qr-target { display:none; background:#f0fdf4; border:1.5px solid #86efac; border-radius:8px; padding:.5rem .75rem; margin-top:.6rem; font-size:.82rem; color:#166534; align-items:center; gap:.5rem; flex-wrap:wrap; }
     .qr-target strong { font-weight:800; }
@@ -721,11 +736,11 @@ function addRow(data = {}) {
     tr.innerHTML = `
       <td class="receipt-cell" data-label="Receipt">
         <div id="receipt-wrap-${id}">
-          <div class="receipt-btn-group">
-            <button type="button" class="receipt-attach-btn" id="attach-btn-${id}"
-              title="Attach file" onclick="triggerRowScan(${id})">📎</button>
-            <button type="button" class="receipt-phone-btn" id="phone-btn-${id}"
-              title="Upload from phone" onclick="phoneForRow(${id})">📱</button>
+          <div class="receipt-btn-group" id="attach-group-${id}">
+            <button type="button" class="rcpt-btn receipt-attach-btn" id="attach-btn-${id}"
+              title="Attach a file" onclick="triggerRowScan(${id})">📎</button>
+            <button type="button" class="rcpt-btn receipt-phone-btn" id="phone-btn-${id}"
+              title="Send one from your phone" onclick="phoneForRow(${id})">📱</button>
           </div>
           <div class="scan-spinner" id="spinner-${id}"></div>
           <input type="file" id="file-${id}" accept="image/*,.pdf" style="display:none"
@@ -1315,41 +1330,47 @@ function uploadAndScan(file, rowId, allowDup) {
 function showThumb(rowId, savedPath, dataUrl) {
     const wrap = document.getElementById('receipt-wrap-' + rowId);
     if (!wrap) return;
-    const btn = document.getElementById('attach-btn-' + rowId);
-    if (btn) btn.remove();
-    wrap.querySelector('.receipt-has-file')?.remove();
-    wrap.querySelector('.receipt-open-btn')?.remove();
+    // The empty-state pair steps aside rather than sitting alongside the file.
+    const group = document.getElementById('attach-group-' + rowId);
+    if (group) group.style.display = 'none';
+    wrap.querySelector('.receipt-file-group')?.remove();
     const pdf = isPdfSrc(dataUrl) || isPdfSrc(savedPath);
     const src = (dataUrl && dataUrl !== '__pdf__') ? dataUrl : ('lp-receipt.php?f=' + encodeURIComponent(savedPath || ''));
     const hoverSrc = pdf ? '__pdf__' : src;
+    // One row: look at it, replace it, take it off. Equal buttons, so the
+    // destructive one is findable without being the loudest thing in the cell.
+    const fileGroup = document.createElement('div');
+    fileGroup.className = 'receipt-file-group';
+
     const indicator = document.createElement('div');
-    indicator.className = 'receipt-has-file';
-    indicator.title = 'Click to change file';
+    indicator.className = 'rcpt-btn receipt-has-file';
+    indicator.title = 'Replace this file';
     indicator.innerHTML = '📄';
     indicator.dataset.src = src;
     indicator.onclick = () => triggerRowScan(rowId);
     indicator.addEventListener('mouseenter', e => showHoverPreview(e, hoverSrc));
     indicator.addEventListener('mouseleave', hideHoverPreview);
     indicator.addEventListener('mousemove',  moveHoverPreview);
-    wrap.insertBefore(indicator, wrap.querySelector('.scan-spinner'));
+    fileGroup.appendChild(indicator);
+    wrap.insertBefore(fileGroup, wrap.querySelector('.scan-spinner'));
     if (savedPath) {
         const openBtn = document.createElement('a');
         openBtn.href = 'lp-receipt.php?f=' + encodeURIComponent(savedPath);
         openBtn.target = '_blank';
-        openBtn.title = 'Open receipt in new tab';
-        openBtn.className = 'receipt-open-btn';
-        openBtn.textContent = '↗ open';
+        openBtn.title = 'Open the receipt in a new tab';
+        openBtn.className = 'rcpt-btn receipt-open-btn';
+        openBtn.textContent = '↗';
         openBtn.addEventListener('click', e => e.stopPropagation());
-        wrap.insertBefore(openBtn, wrap.querySelector('.scan-spinner'));
+        fileGroup.appendChild(openBtn);
     }
 
     const off = document.createElement('button');
     off.type = 'button';
-    off.className = 'receipt-remove-btn';
-    off.title = 'Take this receipt off the row';
+    off.className = 'rcpt-btn receipt-remove-btn';
+    off.title = 'Take this receipt off the row (the line is kept)';
     off.textContent = '✕';
     off.onclick = e => { e.stopPropagation(); removeReceiptFromRow(rowId); };
-    wrap.insertBefore(off, wrap.querySelector('.scan-spinner'));
+    fileGroup.appendChild(off);
 }
 
 /**
@@ -1393,22 +1414,11 @@ function removeReceiptFromRow(rowId) {
 
     const wrap = document.getElementById('receipt-wrap-' + rowId);
     if (wrap) {
-        wrap.querySelector('.receipt-has-file')?.remove();
-        wrap.querySelector('.receipt-open-btn')?.remove();
-        wrap.querySelector('.receipt-remove-btn')?.remove();
-        // Put the attach button back; showThumb() removed it.
-        if (!document.getElementById('attach-btn-' + rowId)) {
-            const group = wrap.querySelector('.receipt-btn-group');
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'receipt-attach-btn';
-            btn.id = 'attach-btn-' + rowId;
-            btn.title = 'Attach file';
-            btn.textContent = '📎';
-            btn.onclick = () => triggerRowScan(rowId);
-            if (group) group.insertBefore(btn, group.firstChild);
-            else wrap.insertBefore(btn, wrap.firstChild);
-        }
+        wrap.querySelector('.receipt-file-group')?.remove();
+        // Back to the empty state, which was only hidden — so the attach and
+        // phone buttons return exactly as they were, handlers and all.
+        const group = document.getElementById('attach-group-' + rowId);
+        if (group) group.style.display = '';
     }
     hideHoverPreview();
     showToast('Receipt taken off the row — the line is untouched');
