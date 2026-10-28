@@ -118,7 +118,7 @@ foreach ($vouchers as $v) {
     $ref = $v['voucher_number'] ?: ('voucher-' . $v['id']);
     try {
         $s = getDB()->prepare(
-            "SELECT expense_date, description, receipt_path, receipt_filename
+            "SELECT expense_date, description, receipt_path, receipt_filename, receipt_extra
              FROM lp_expenses WHERE voucher_id=? ORDER BY sort_order, id"
         );
         $s->execute([(int)$v['id']]);
@@ -126,18 +126,24 @@ foreach ($vouchers as $v) {
     } catch (Exception $e) { $rows = []; }
 
     foreach ($rows as $e) {
-        if (empty($e['receipt_path'])) continue;
-        $disk = LP_RECEIPTS_DIR . basename($e['receipt_path']);
-        $desc = trim((string)$e['description']);
-        if (!file_exists($disk)) {
-            $manifest[] = ["President's voucher", $ref, $desc, '', 'FILE MISSING ON SERVER'];
-            continue;
+        // Every receipt on the line. A bundle holding the card slip but not
+        // the itemised bill is a year-end record that cannot be audited.
+        $rcpts = lpRowReceipts($e);
+        if (!$rcpts) continue;
+        $desc  = trim((string)$e['description']);
+        foreach ($rcpts as $ri => $rc) {
+            $disk = LP_RECEIPTS_DIR . basename($rc['path']);
+            $label = $desc . (count($rcpts) > 1 ? ' (' . ($ri + 1) . ' of ' . count($rcpts) . ')' : '');
+            if (!file_exists($disk)) {
+                $manifest[] = ["President's voucher", $ref, $label, '', 'FILE MISSING ON SERVER'];
+                continue;
+            }
+            $ext  = strtolower(pathinfo($disk, PATHINFO_EXTENSION));
+            $name = bundleName($used, 'Receipts/Vouchers/' . preg_replace('/[^A-Za-z0-9._-]+/', '-', $ref),
+                               ($e['expense_date'] ?: 'undated') . '_' . $label, $ext);
+            $zip->addFile($disk, $name);
+            $manifest[] = ["President's voucher", $ref, $label, $name, 'included'];
         }
-        $ext  = strtolower(pathinfo($disk, PATHINFO_EXTENSION));
-        $name = bundleName($used, 'Receipts/Vouchers/' . preg_replace('/[^A-Za-z0-9._-]+/', '-', $ref),
-                           ($e['expense_date'] ?: 'undated') . '_' . $desc, $ext);
-        $zip->addFile($disk, $name);
-        $manifest[] = ["President's voucher", $ref, $desc, $name, 'included'];
     }
 }
 

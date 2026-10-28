@@ -122,9 +122,14 @@ foreach ($expenses as $e) {
 
     $receiptLabel = '';
 
-    if (!empty($e['receipt_path'])) {
-        $diskFile = LP_RECEIPTS_DIR . basename($e['receipt_path']);
-        if (file_exists($diskFile)) {
+    // Every receipt on the line. A line can carry the itemised bill and the
+    // card slip, and an export holding one of them is incomplete evidence.
+    $rcpts = lpRowReceipts($e);
+    if ($rcpts) {
+        $labels = [];
+        foreach ($rcpts as $rc) {
+            $diskFile = LP_RECEIPTS_DIR . basename($rc['path']);
+            if (!file_exists($diskFile)) { $labels[] = '(file missing)'; continue; }
             $ext = strtolower(pathinfo($diskFile, PATHINFO_EXTENSION));
             $descSlug = preg_replace('/[^A-Za-z0-9]+/', '-', trim((string)$e['description']));
             $descSlug = trim($descSlug, '-');
@@ -135,6 +140,7 @@ foreach ($expenses as $e) {
             $entryName = $base . '.' . $ext;
 
             // Avoid collisions if two expenses share the same date/description
+            // — and now also between the two receipts on one line.
             $n = 1;
             while (isset($usedNames[$entryName])) {
                 $entryName = $base . '-' . (++$n) . '.' . $ext;
@@ -142,10 +148,9 @@ foreach ($expenses as $e) {
             $usedNames[$entryName] = true;
 
             $zip->addFile($diskFile, 'Receipts/' . $entryName);
-            $receiptLabel = $entryName;
-        } else {
-            $receiptLabel = '(file missing)';
+            $labels[] = $entryName;
         }
+        $receiptLabel = implode(' + ', $labels);
     } else {
         $receiptLabel = '(no receipt)';
     }

@@ -67,6 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $office      = $_POST['office']        ?? [];
     $phone       = $_POST['phone']         ?? [];
     $receiptPath = $_POST['receipt_path']  ?? [];
+    $receiptXtra = $_POST['receipt_extra'] ?? [];
     $receiptOrig = $_POST['receipt_orig']  ?? [];
     $grantIds    = $_POST['grant_id']      ?? [];
     $blIds       = $_POST['budget_line_id']?? [];
@@ -140,7 +141,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $upd = $db->prepare(
             "UPDATE lp_expenses SET expense_date=?, description=?, travel_km=?, travel_amt=?,
              meals=?, gifts=?, misc=?, office=?, phone=?,
-             receipt_path=?, receipt_filename=?, grant_id=?, budget_line_id=?, notes=?, sort_order=?,
+             receipt_path=?, receipt_filename=?, receipt_extra=?,
+             grant_id=?, budget_line_id=?, notes=?, sort_order=?,
              receipt_sha256=?, scan_vendor=?, scan_date=?, scan_total=?
              WHERE id=? AND voucher_id=?"
         );
@@ -148,9 +150,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             "INSERT INTO lp_expenses
              (voucher_id, expense_date, description, travel_km, travel_amt,
               meals, gifts, misc, office, phone,
-              receipt_path, receipt_filename, grant_id, budget_line_id, notes, sort_order,
+              receipt_path, receipt_filename, receipt_extra,
+              grant_id, budget_line_id, notes, sort_order,
               receipt_sha256, scan_vendor, scan_date, scan_total)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         );
 
         foreach ($descs as $i => $desc) {
@@ -175,6 +178,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 round((float)($phone[$i]  ?? 0), 2),
                 ($receiptPath[$i] ?? '') ?: null,
                 ($receiptOrig[$i] ?? '') ?: null,
+                /* Receipts after the first, as the browser posted them. Read
+                 * back through json_decode and re-encoded so a hand-made POST
+                 * cannot put arbitrary text in the column, and so a row that
+                 * posts nothing stores NULL rather than an empty string. */
+                lpRowExtraEncode(array_merge(
+                    [['path' => (string)($receiptPath[$i] ?? ''), 'name' => '']],
+                    (function ($raw) {
+                        $list = json_decode((string)$raw, true);
+                        if (!is_array($list)) return [];
+                        $out = [];
+                        foreach ($list as $r) {
+                            if (!is_array($r)) continue;
+                            $path = trim((string)($r['path'] ?? ''));
+                            if ($path === '') continue;
+                            $out[] = ['path' => basename($path),
+                                      'name' => mb_substr(trim((string)($r['name'] ?? '')), 0, 255)];
+                        }
+                        return $out;
+                    })($receiptXtra[$i] ?? '')
+                )),
                 ($grantIds[$i] ?? '') ?: null,
                 ($blIds[$i]    ?? '') ?: null,
                 ($expNotes[$i] ?? '') ?: null,
@@ -321,7 +344,12 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
      * state is now one row of equal buttons, which is a third of the height
      * and reads at a glance in a table of twenty rows. */
     .receipt-cell { width: 86px; text-align: center; }
-    .receipt-btn-group, .receipt-file-group { display: flex; gap: .2rem; justify-content: center; }
+    .receipt-btn-group { display: flex; gap: .2rem; justify-content: center; }
+    /* One chip per receipt, stacked, with the add pair underneath — a line
+       with two receipts is the case this exists for, not an exception. */
+    .receipt-file-group { display: flex; flex-direction: column; gap: .15rem;
+        align-items: center; margin-bottom: .2rem; }
+    .rcpt-chip { display: flex; gap: .15rem; align-items: center; }
     .rcpt-btn { width: 24px; height: 24px; border-radius: 5px; display: flex; align-items: center;
         justify-content: center; font-size: .78rem; font-family: inherit; cursor: pointer;
         padding: 0; text-decoration: none; transition: background .12s, border-color .12s, color .12s; }
@@ -749,6 +777,7 @@ function addRow(data = {}) {
         <input type="hidden" name="exp_id[]"       value="${data.db_id || ''}">
         <input type="hidden" name="receipt_path[]" id="rpath-${id}" value="${escHtml(data.receipt_path || '')}">
         <input type="hidden" name="receipt_orig[]" id="rorig-${id}" value="${escHtml(data.receipt_filename || '')}">
+        <input type="hidden" name="receipt_extra[]" id="rextra-${id}" value="${escHtml(data.receipt_extra || '')}">
         <input type="hidden" name="exp_notes[]" value="${escHtml(data.notes || '')}">
         <input type="hidden" name="scan_vendor[]" id="svend-${id}" value="${escHtml(data.scan_vendor || '')}">
         <input type="hidden" name="scan_date[]"   id="sdate-${id}" value="${data.scan_date || ''}">
@@ -786,9 +815,9 @@ function addRow(data = {}) {
     if (document.getElementById('cat-' + id) &&
         document.getElementById('cat-' + id).value === '__split') openSplit(id);
 
-    if (data.receipt_path) {
-        showThumb(id, data.receipt_path, null);
-    }
+    // Unconditional: a row may carry extras with no first receipt if one was
+    // taken off, and renderReceipts() draws the empty state perfectly well.
+    renderReceipts(id);
     enableRowDrop(id);
     updateRow(id);
     updateTotals();
@@ -1327,50 +1356,134 @@ function uploadAndScan(file, rowId, allowDup) {
         });
 }
 
+/* ── A line's receipts ────────────────────────────────────────────────────────
+ *
+ * A line can need more than one: the itemised bill and the card slip. The
+ * first lives in receipt_path so every page that reads that column goes on
+ * working; the rest live in receipt_extra as JSON. These four functions are
+ * the only things that touch those fields, so the cell can be drawn from the
+ * row's own state rather than patched as files arrive.
+ */
+function rowReceipts(rowId) {
+    var out = [];
+    var p = document.getElementById('rpath-' + rowId);
+    var n = document.getElementById('rorig-' + rowId);
+    if (p && String(p.value).trim()) {
+        out.push({ path: p.value.trim(), name: (n && n.value.trim()) || p.value.trim() });
+    }
+    var x = document.getElementById('rextra-' + rowId);
+    if (x && String(x.value).trim()) {
+        try {
+            var list = JSON.parse(x.value);
+            if (Object.prototype.toString.call(list) === '[object Array]') {
+                list.forEach(function (r) {
+                    if (r && r.path) out.push({ path: String(r.path), name: String(r.name || r.path) });
+                });
+            }
+        } catch (e) { /* unreadable extras lose the extras, never the first */ }
+    }
+    return out;
+}
+
+function setRowReceipts(rowId, list) {
+    var p = document.getElementById('rpath-' + rowId);
+    var n = document.getElementById('rorig-' + rowId);
+    var x = document.getElementById('rextra-' + rowId);
+    var first = list[0] || null;
+    if (p) p.value = first ? first.path : '';
+    if (n) n.value = first ? first.name : '';
+    if (x) x.value = list.length > 1 ? JSON.stringify(list.slice(1)) : '';
+}
+
+/** Add one, unless this exact file is already on the line. */
+function addRowReceipt(rowId, path, name) {
+    path = String(path || '').trim();
+    if (!path) return;
+    var list = rowReceipts(rowId);
+    for (var i = 0; i < list.length; i++) if (list[i].path === path) return;
+    list.push({ path: path, name: String(name || path) });
+    setRowReceipts(rowId, list);
+}
+
+function removeRowReceiptAt(rowId, index) {
+    var list = rowReceipts(rowId);
+    if (index < 0 || index >= list.length) return;
+    list.splice(index, 1);
+    setRowReceipts(rowId, list);
+}
+
 function showThumb(rowId, savedPath, dataUrl) {
     const wrap = document.getElementById('receipt-wrap-' + rowId);
     if (!wrap) return;
-    // The empty-state pair steps aside rather than sitting alongside the file.
-    const group = document.getElementById('attach-group-' + rowId);
-    if (group) group.style.display = 'none';
+    if (savedPath) addRowReceipt(rowId, savedPath, savedPath);
+    renderReceipts(rowId, savedPath ? null : dataUrl);
+}
+
+/**
+ * Draw the cell from the row's receipts.
+ *
+ * One chip per receipt — look at it, or take it off — and the add pair stays
+ * put underneath, because a line wanting a second receipt is the ordinary
+ * case this exists for, not an exception.
+ */
+function renderReceipts(rowId, pendingDataUrl) {
+    const wrap = document.getElementById('receipt-wrap-' + rowId);
+    if (!wrap) return;
     wrap.querySelector('.receipt-file-group')?.remove();
-    const pdf = isPdfSrc(dataUrl) || isPdfSrc(savedPath);
-    const src = (dataUrl && dataUrl !== '__pdf__') ? dataUrl : ('lp-receipt.php?f=' + encodeURIComponent(savedPath || ''));
-    const hoverSrc = pdf ? '__pdf__' : src;
-    // One row: look at it, replace it, take it off. Equal buttons, so the
-    // destructive one is findable without being the loudest thing in the cell.
+
+    const list = rowReceipts(rowId);
+    const group = document.getElementById('attach-group-' + rowId);
+    // The add pair is always available now; only its label changes.
+    if (group) {
+        group.style.display = '';
+        const a = document.getElementById('attach-btn-' + rowId);
+        if (a) a.title = list.length ? 'Add another receipt' : 'Attach a file';
+        const ph = document.getElementById('phone-btn-' + rowId);
+        if (ph) ph.title = list.length ? 'Add another from your phone' : 'Send one from your phone';
+    }
+    if (!list.length && !pendingDataUrl) return;
+
     const fileGroup = document.createElement('div');
     fileGroup.className = 'receipt-file-group';
 
-    const indicator = document.createElement('div');
-    indicator.className = 'rcpt-btn receipt-has-file';
-    indicator.title = 'Replace this file';
-    indicator.innerHTML = '📄';
-    indicator.dataset.src = src;
-    indicator.onclick = () => triggerRowScan(rowId);
-    indicator.addEventListener('mouseenter', e => showHoverPreview(e, hoverSrc));
-    indicator.addEventListener('mouseleave', hideHoverPreview);
-    indicator.addEventListener('mousemove',  moveHoverPreview);
-    fileGroup.appendChild(indicator);
-    wrap.insertBefore(fileGroup, wrap.querySelector('.scan-spinner'));
-    if (savedPath) {
-        const openBtn = document.createElement('a');
-        openBtn.href = 'lp-receipt.php?f=' + encodeURIComponent(savedPath);
-        openBtn.target = '_blank';
-        openBtn.title = 'Open the receipt in a new tab';
-        openBtn.className = 'rcpt-btn receipt-open-btn';
-        openBtn.textContent = '↗';
-        openBtn.addEventListener('click', e => e.stopPropagation());
-        fileGroup.appendChild(openBtn);
-    }
+    const draw = function (rec, index, transientSrc) {
+        const pdf = isPdfSrc(transientSrc) || isPdfSrc(rec && rec.path);
+        const src = transientSrc && transientSrc !== '__pdf__'
+                  ? transientSrc
+                  : ('lp-receipt.php?f=' + encodeURIComponent((rec && rec.path) || ''));
+        const hoverSrc = pdf ? '__pdf__' : src;
 
-    const off = document.createElement('button');
-    off.type = 'button';
-    off.className = 'rcpt-btn receipt-remove-btn';
-    off.title = 'Take this receipt off the row (the line is kept)';
-    off.textContent = '✕';
-    off.onclick = e => { e.stopPropagation(); removeReceiptFromRow(rowId); };
-    fileGroup.appendChild(off);
+        const chip = document.createElement('div');
+        chip.className = 'rcpt-chip';
+
+        const look = document.createElement(rec ? 'a' : 'div');
+        look.className = 'rcpt-btn receipt-has-file';
+        look.innerHTML = pdf ? '📕' : '📄';
+        look.title = rec ? ('Open ' + rec.name) : 'Reading this one…';
+        if (rec) { look.href = 'lp-receipt.php?f=' + encodeURIComponent(rec.path); look.target = '_blank'; }
+        look.addEventListener('mouseenter', e => showHoverPreview(e, hoverSrc));
+        look.addEventListener('mouseleave', hideHoverPreview);
+        look.addEventListener('mousemove',  moveHoverPreview);
+        chip.appendChild(look);
+
+        if (rec) {
+            const off = document.createElement('button');
+            off.type = 'button';
+            off.className = 'rcpt-btn receipt-remove-btn';
+            off.title = 'Take this receipt off the line (the line is kept)';
+            off.textContent = '✕';
+            off.onclick = e => { e.stopPropagation(); removeReceiptFromRow(rowId, index); };
+            chip.appendChild(off);
+        }
+        fileGroup.appendChild(chip);
+    };
+
+    list.forEach(function (rec, i) { draw(rec, i, null); });
+    if (pendingDataUrl) draw(null, -1, pendingDataUrl);
+
+    // Above the add pair: the receipts already on the line are the content,
+    // and the way to add another belongs under them, not in front of them.
+    wrap.insertBefore(fileGroup, group || wrap.querySelector('.scan-spinner'));
 }
 
 /**
@@ -1389,39 +1502,40 @@ function showThumb(rowId, savedPath, dataUrl) {
  * receipt, and a mis-click should not destroy it; a row saved without a path
  * simply no longer refers to it.
  */
-function removeReceiptFromRow(rowId) {
+function removeReceiptFromRow(rowId, index) {
     const tr = document.getElementById('row-' + rowId);
     if (!tr) return;
+    const list = rowReceipts(rowId);
+    index = (typeof index === 'number' && index >= 0) ? index : 0;
+    const going = list[index];
+    if (!going) return;
 
-    const rpath = document.getElementById('rpath-' + rowId);
-    const had   = rpath && String(rpath.value).trim();
-    if (had && !confirm('Take this receipt off the row?\n\n'
-                      + 'Nothing else on the line changes, and the file is kept — '
-                      + 'you can put it on another row.')) return;
+    if (!confirm('Take "' + going.name + '" off this line?\n\n'
+               + 'Nothing else on the line changes, and the file is kept — '
+               + 'you can put it on another line.')) return;
 
-    ['rpath-', 'rorig-', 'svend-', 'sdate-', 'stot-'].forEach(function (p) {
-        const el = document.getElementById(p + rowId);
-        if (el) el.value = '';
-    });
+    removeRowReceiptAt(rowId, index);
+    const left = rowReceipts(rowId);
 
-    // The fingerprint the duplicate check reads. Left behind, the same photo
-    // on the correct row would be reported as already attached — to a row that
-    // no longer has it.
-    delete tr.dataset.billHash;
-    delete tr.dataset.billVendor;
-    delete tr.dataset.billDate;
-    delete tr.dataset.billAmount;
-
-    const wrap = document.getElementById('receipt-wrap-' + rowId);
-    if (wrap) {
-        wrap.querySelector('.receipt-file-group')?.remove();
-        // Back to the empty state, which was only hidden — so the attach and
-        // phone buttons return exactly as they were, handlers and all.
-        const group = document.getElementById('attach-group-' + rowId);
-        if (group) group.style.display = '';
+    // What the scan read, and the fingerprint the duplicate check matches on,
+    // belong to the first receipt. They go only when it does — otherwise
+    // removing the card slip would wipe what the itemised bill told us.
+    if (index === 0) {
+        ['svend-', 'sdate-', 'stot-'].forEach(function (pfx) {
+            const el = document.getElementById(pfx + rowId);
+            if (el) el.value = '';
+        });
+        delete tr.dataset.billHash;
+        delete tr.dataset.billVendor;
+        delete tr.dataset.billDate;
+        delete tr.dataset.billAmount;
     }
+
+    renderReceipts(rowId);
     hideHoverPreview();
-    showToast('Receipt taken off the row — the line is untouched');
+    showToast(left.length
+        ? '\u2705 "' + going.name + '" taken off — ' + left.length + ' receipt' + (left.length === 1 ? '' : 's') + ' left on the line'
+        : '\u2705 Receipt taken off the line — the line is untouched');
 }
 
 const hoverPreview = document.getElementById('receiptPreview');
@@ -1708,12 +1822,14 @@ function flashRow(tr) {
 }
 
 function putReceiptOnRow(id, receipt, sd) {
-    var rpathEl = document.getElementById('rpath-' + id);
-    var rorigEl = document.getElementById('rorig-' + id);
-    if (rpathEl) rpathEl.value = receipt.saved_path;
-    if (rorigEl) rorigEl.value = receipt.original_name || '';
-    showThumb(id, receipt.saved_path, null);
-    fillRowFromScan(id, sd);
+    // Added to the line, not written over what is already on it.
+    var wasEmpty = rowReceipts(id).length === 0;
+    addRowReceipt(id, receipt.saved_path, receipt.original_name || receipt.saved_path);
+    renderReceipts(id);
+    // The figures come off the first receipt. A second one joins the line
+    // without re-reading the amounts off it, or the card slip would overwrite
+    // the itemised breakdown it is evidence for.
+    if (wasEmpty) fillRowFromScan(id, sd);
     var tr = document.getElementById('row-' + id);
     if (tr) {
         tr.dataset.billVendor = normVendor(sd.vendor);
@@ -1750,15 +1866,27 @@ function mergeIntoRow(tr, receipt, sd) {
     var keepNew = coming > had;
     var higher  = Math.max(had, coming);
 
+    /*
+     * Both are kept. This used to call putReceiptOnRow(), which replaced the
+     * path — so the itemised bill and the card slip became one file and a note
+     * reading "Also provided: …" about something nothing linked to any more.
+     * The line holds them both now, and the note is no longer a substitute for
+     * the file.
+     *
+     * The first receipt stays the one whose figure matches the claim, because
+     * that is the one every page showing a single receipt will reach for: a $38
+     * itemised receipt beside a $45 row is exactly what makes a Treasurer stop.
+     */
+    addRowReceipt(id, receipt.saved_path, receipt.original_name || receipt.saved_path);
     if (keepNew) {
-        // The attached image should match the figure claimed: a $38 itemized
-        // receipt beside a $45 row is exactly what makes a Treasurer stop.
-        var oldName = (tr.querySelector('[name="receipt_orig[]"]') || {}).value || 'the first receipt';
-        putReceiptOnRow(id, receipt, sd);
-        appendRowNote(tr, 'Also provided: ' + oldName + '.');
-    } else {
-        appendRowNote(tr, 'Also provided: ' + (receipt.original_name || 'a second receipt') + '.');
+        var list = rowReceipts(id);
+        if (list.length > 1) {
+            var moved = list.pop();          // the one just added
+            list.unshift(moved);             // ahead of the smaller figure
+            setRowReceipts(id, list);
+        }
     }
+    renderReceipts(id);
 
     // Through the hidden field the row actually posts, then resync, or the
     // screen would show the old figure while the form carried the new one.
