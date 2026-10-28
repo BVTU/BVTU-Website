@@ -291,6 +291,12 @@ $initRowsJson = json_encode($initRows);
     .receipt-has-file:hover { background: #bbf7d0; }
     .receipt-open-btn { display: block; font-size: .6rem; font-weight: 700; color: var(--primary); text-decoration: none; text-align: center; line-height: 1.3; margin-top: .1rem; white-space: nowrap; }
     .receipt-open-btn:hover { text-decoration: underline; color: var(--primary-dk); }
+    /* Quiet by design: taking a receipt off is a correction, not a thing to
+       invite. It only exists once a file is attached. */
+    .receipt-remove-btn { display: block; margin: .1rem auto 0; background: none; border: none;
+        padding: 0 .2rem; font: inherit; font-size: .62rem; font-weight: 700; line-height: 1.3;
+        color: var(--gray-400); cursor: pointer; }
+    .receipt-remove-btn:hover { color: #b91c1c; }
     .receipt-phone-btn { background: none; border: 1px dashed #86efac; border-radius: 5px; width: 28px; height: 28px; cursor: pointer; font-size: .78rem; color: var(--primary); display: flex; align-items: center; justify-content: center; transition: border-color .12s, background .12s; }
     .receipt-phone-btn:hover { background: #f0fdf4; border-style: solid; }
     .receipt-phone-btn.targeting { background: #dcfce7; border-style: solid; border-color: var(--primary); }
@@ -1318,6 +1324,76 @@ function showThumb(rowId, savedPath, dataUrl) {
         openBtn.addEventListener('click', e => e.stopPropagation());
         wrap.insertBefore(openBtn, wrap.querySelector('.scan-spinner'));
     }
+
+    const off = document.createElement('button');
+    off.type = 'button';
+    off.className = 'receipt-remove-btn';
+    off.title = 'Take this receipt off the row';
+    off.textContent = '✕';
+    off.onclick = e => { e.stopPropagation(); removeReceiptFromRow(rowId); };
+    wrap.insertBefore(off, wrap.querySelector('.scan-spinner'));
+}
+
+/**
+ * Take the receipt off a row and leave the row alone.
+ *
+ * Attaching to the wrong row used to mean deleting the whole line and typing
+ * the date, description, amount, category and grant again — and then, because
+ * the file was still recorded against the voucher, being told the photo was a
+ * duplicate when it went onto the right row. It was, of itself.
+ *
+ * So the row's own figures are not touched. What goes is the file, what the
+ * scan read off it, and the fingerprint the duplicate check matches on, which
+ * is what stops the warning following the receipt to its proper home.
+ *
+ * The file itself stays on the server. It may be the only copy of that
+ * receipt, and a mis-click should not destroy it; a row saved without a path
+ * simply no longer refers to it.
+ */
+function removeReceiptFromRow(rowId) {
+    const tr = document.getElementById('row-' + rowId);
+    if (!tr) return;
+
+    const rpath = document.getElementById('rpath-' + rowId);
+    const had   = rpath && String(rpath.value).trim();
+    if (had && !confirm('Take this receipt off the row?\n\n'
+                      + 'Nothing else on the line changes, and the file is kept — '
+                      + 'you can put it on another row.')) return;
+
+    ['rpath-', 'rorig-', 'svend-', 'sdate-', 'stot-'].forEach(function (p) {
+        const el = document.getElementById(p + rowId);
+        if (el) el.value = '';
+    });
+
+    // The fingerprint the duplicate check reads. Left behind, the same photo
+    // on the correct row would be reported as already attached — to a row that
+    // no longer has it.
+    delete tr.dataset.billHash;
+    delete tr.dataset.billVendor;
+    delete tr.dataset.billDate;
+    delete tr.dataset.billAmount;
+
+    const wrap = document.getElementById('receipt-wrap-' + rowId);
+    if (wrap) {
+        wrap.querySelector('.receipt-has-file')?.remove();
+        wrap.querySelector('.receipt-open-btn')?.remove();
+        wrap.querySelector('.receipt-remove-btn')?.remove();
+        // Put the attach button back; showThumb() removed it.
+        if (!document.getElementById('attach-btn-' + rowId)) {
+            const group = wrap.querySelector('.receipt-btn-group');
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'receipt-attach-btn';
+            btn.id = 'attach-btn-' + rowId;
+            btn.title = 'Attach file';
+            btn.textContent = '📎';
+            btn.onclick = () => triggerRowScan(rowId);
+            if (group) group.insertBefore(btn, group.firstChild);
+            else wrap.insertBefore(btn, wrap.firstChild);
+        }
+    }
+    hideHoverPreview();
+    showToast('Receipt taken off the row — the line is untouched');
 }
 
 // ── Hover preview ─────────────────────────────────────────────────────────────
