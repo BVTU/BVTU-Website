@@ -43,6 +43,12 @@ function lpDupeEnsureColumns(): void {
         'scan_vendor'    => 'VARCHAR(255) DEFAULT NULL',
         'scan_date'      => 'DATE DEFAULT NULL',
         'scan_total'     => 'DECIMAL(10,2) DEFAULT NULL',
+        // Receipts after the first. One line often needs two — the itemised
+        // bill and the card slip — and until now the second overwrote the
+        // first, leaving a note saying one had been provided and no way to
+        // reach it. receipt_path stays the first receipt so everything that
+        // already reads it keeps working; this holds the rest.
+        'receipt_extra'  => 'TEXT DEFAULT NULL',
     ];
     foreach ($cols as $col => $type) {
         try {
