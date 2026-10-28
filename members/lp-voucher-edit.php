@@ -1348,9 +1348,12 @@ function uploadAndScan(file, rowId, allowDup) {
             if (data.suggested_grant_id) row.querySelector('[name="grant_id[]"]').value = data.suggested_grant_id;
             if (data.suggested_bl_id)    row.querySelector('[name="budget_line_id[]"]').value = data.suggested_bl_id;
             if (data.saved_path) {
-                document.getElementById('rpath-' + rowId).value = data.saved_path;
-                document.getElementById('rorig-' + rowId).value = data.original_name || '';
-                showThumb(rowId, data.saved_path, null);
+                // Added, not written over. Attaching a second file from the
+                // desktop replaced the first here while the phone path added
+                // it — the same action with two different outcomes depending
+                // on which button you reached for.
+                addRowReceipt(rowId, data.saved_path, data.original_name || data.saved_path);
+                renderReceipts(rowId);
             }
             syncRowFromHidden(rowId);
             /* Kept with the row so the comparison still works next week, when
@@ -1945,6 +1948,14 @@ function putReceiptOnRow(id, receipt, sd) {
     // without re-reading the amounts off it, or the card slip would overwrite
     // the itemised breakdown it is evidence for.
     if (wasEmpty) fillRowFromScan(id, sd);
+    /*
+     * What the scan read describes the FIRST receipt, so only the first
+     * writes it. These were being overwritten by every later receipt while
+     * the comment above said the opposite: a $12 card slip joining a $48
+     * itemised line left "receipt reads $12" against a $48 claim, and the
+     * voucher flagged itself with "Worth a look" for a line that was right.
+     */
+    if (!wasEmpty) return;
     var tr = document.getElementById('row-' + id);
     if (tr) {
         tr.dataset.billVendor = normVendor(sd.vendor);
@@ -1994,6 +2005,18 @@ function mergeIntoRow(tr, receipt, sd) {
      */
     addRowReceipt(id, receipt.saved_path, receipt.original_name || receipt.saved_path);
     if (keepNew) {
+        /* Promoted to first, so what the scan read has to describe it too —
+         * otherwise the line carries the demoted receipt's figure against the
+         * new one's claim and flags itself for a mismatch it just resolved. */
+        var sv0 = document.getElementById('svend-' + id);
+        var sd0 = document.getElementById('sdate-' + id);
+        var st0 = document.getElementById('stot-' + id);
+        if (sv0) sv0.value = sd.vendor || '';
+        if (sd0) sd0.value = sd.date || '';
+        if (st0) st0.value = coming > 0 ? coming.toFixed(2) : '';
+        tr.dataset.billVendor = normVendor(sd.vendor);
+        tr.dataset.billDate   = sd.date || '';
+        tr.dataset.billHash   = receipt.sha256 || '';
         var list = rowReceipts(id);
         if (list.length > 1) {
             var moved = list.pop();          // the one just added

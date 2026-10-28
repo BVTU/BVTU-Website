@@ -207,6 +207,9 @@ if ($errors && !empty($descs)) {
             'phone_amount'       => $phone[$i]        ?? '',
             'saved_path'         => $receiptPath[$i]  ?? '',
             'original_name'      => $receiptOrig[$i]  ?? '',
+            // Without this a validation error silently dropped every receipt
+            // after the first — the page redrew from these values.
+            'receipt_extra'      => $receiptXtra[$i]  ?? '',
             'suggested_grant_id' => $grantIds[$i]     ?? '',
             'suggested_bl_id'    => $blIds[$i]        ?? '',
             'exp_notes'          => $expNotes[$i]     ?? '',
@@ -721,7 +724,7 @@ function addRow(data = {}) {
         </div>
         <input type="hidden" name="receipt_path[]" id="rpath-${id}" value="${data.saved_path || ''}">
         <input type="hidden" name="receipt_orig[]" id="rorig-${id}" value="${data.original_name || ''}">
-        <input type="hidden" name="receipt_extra[]" id="rextra-${id}" value="">
+        <input type="hidden" name="receipt_extra[]" id="rextra-${id}" value="${escHtml(data.receipt_extra || '')}">
         <input type="hidden" name="exp_notes[]" value="${escHtml(data.exp_notes || '')}">
         <input type="hidden" name="scan_vendor[]" id="svend-${id}" value="${escHtml(data.scan_vendor || '')}">
         <input type="hidden" name="scan_date[]"   id="sdate-${id}" value="${data.scan_date || ''}">
@@ -1316,9 +1319,10 @@ function populateRow(rowId, data) {
     if (data.suggested_bl_id)    setSelect(row, '[name="budget_line_id[]"]', data.suggested_bl_id);
 
     if (data.saved_path) {
-        document.getElementById('rpath-' + rowId).value = data.saved_path;
-        document.getElementById('rorig-' + rowId).value = data.original_name || '';
-        showThumb(rowId, data.saved_path, null);
+        // Added, not written over — the same as the phone path, which it was
+        // not: attaching a second file from the desktop replaced the first.
+        addRowReceipt(rowId, data.saved_path, data.original_name || data.saved_path);
+        renderReceipts(rowId);
     }
 
     if (data.concerns || data.flag) {
@@ -1575,6 +1579,22 @@ function openReceiptChooser(rowId, anchor) {
     box.style.top  = (r.bottom + window.scrollY + 4) + 'px';
 }
 
+/**
+ * Take the receipt off a row and leave the row alone.
+ *
+ * Attaching to the wrong row used to mean deleting the whole line and typing
+ * the date, description, amount, category and grant again — and then, because
+ * the file was still recorded against the voucher, being told the photo was a
+ * duplicate when it went onto the right row. It was, of itself.
+ *
+ * So the row's own figures are not touched. What goes is the file, what the
+ * scan read off it, and the fingerprint the duplicate check matches on, which
+ * is what stops the warning following the receipt to its proper home.
+ *
+ * The file itself stays on the server. It may be the only copy of that
+ * receipt, and a mis-click should not destroy it; a row saved without a path
+ * simply no longer refers to it.
+ */
 function removeReceiptFromRow(rowId, index) {
     const tr = document.getElementById('row-' + rowId);
     if (!tr) return;
@@ -1987,6 +2007,14 @@ function putReceiptOnRow(id, receipt, sd) {
     // without re-reading the amounts off it, or the card slip would overwrite
     // the itemised breakdown it is evidence for.
     if (wasEmpty) fillRowFromScan(id, sd);
+    /*
+     * What the scan read describes the FIRST receipt, so only the first
+     * writes it. These were being overwritten by every later receipt while
+     * the comment above said the opposite: a $12 card slip joining a $48
+     * itemised line left "receipt reads $12" against a $48 claim, and the
+     * voucher flagged itself with "Worth a look" for a line that was right.
+     */
+    if (!wasEmpty) return;
     var tr = document.getElementById('row-' + id);
     if (tr) {
         tr.dataset.billVendor = normVendor(sd.vendor);
@@ -2030,6 +2058,18 @@ function mergeIntoRow(tr, receipt, sd) {
      */
     addRowReceipt(id, receipt.saved_path, receipt.original_name || receipt.saved_path);
     if (keepNew) {
+        /* Promoted to first, so what the scan read has to describe it too —
+         * otherwise the line carries the demoted receipt's figure against the
+         * new one's claim and flags itself for a mismatch it just resolved. */
+        var sv0 = document.getElementById('svend-' + id);
+        var sd0 = document.getElementById('sdate-' + id);
+        var st0 = document.getElementById('stot-' + id);
+        if (sv0) sv0.value = sd.vendor || '';
+        if (sd0) sd0.value = sd.date || '';
+        if (st0) st0.value = coming > 0 ? coming.toFixed(2) : '';
+        tr.dataset.billVendor = normVendor(sd.vendor);
+        tr.dataset.billDate   = sd.date || '';
+        tr.dataset.billHash   = receipt.sha256 || '';
         var list = rowReceipts(id);
         if (list.length > 1) { var moved = list.pop(); list.unshift(moved); setRowReceipts(id, list); }
     }

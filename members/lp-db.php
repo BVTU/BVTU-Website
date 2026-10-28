@@ -1106,7 +1106,7 @@ function lpGetExpensesByGrant(int $grantId): array {
     $s = getDB()->prepare(
         "SELECT e.id, e.expense_date, e.description, e.travel_km, e.travel_amt,
                 e.meals, e.gifts, e.misc, e.office, e.phone,
-                e.receipt_path, e.receipt_filename, e.created_at,
+                e.receipt_path, e.receipt_filename, e.receipt_extra, e.created_at,
                 v.name AS voucher_name, v.voucher_number, v.id AS voucher_id, v.status AS voucher_status
          FROM lp_expenses e
          JOIN lp_vouchers v ON v.id = e.voucher_id
@@ -1149,12 +1149,23 @@ function lpUnmarkGrantSubmitted(int $grantId): void {
 
 function lpDeleteVoucher(int $id): void {
     $db = getDB();
-    // Delete receipt files from disk first
-    $s = $db->prepare("SELECT receipt_path FROM lp_expenses WHERE voucher_id=? AND receipt_path IS NOT NULL");
-    $s->execute([$id]);
-    foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $path) {
-        if ($path && file_exists(LP_RECEIPTS_DIR . basename($path))) {
-            @unlink(LP_RECEIPTS_DIR . basename($path));
+    // Delete receipt files from disk first — every receipt on each line, not
+    // just the first, or the extras are left on the server for ever with
+    // nothing in the database pointing at them.
+    try {
+        $s = $db->prepare("SELECT receipt_path, receipt_extra FROM lp_expenses WHERE voucher_id=?");
+        $s->execute([$id]);
+        $rows = $s->fetchAll();
+    } catch (\Throwable $e) {
+        // A server without the column still deletes what it can name.
+        $s = $db->prepare("SELECT receipt_path FROM lp_expenses WHERE voucher_id=?");
+        $s->execute([$id]);
+        $rows = $s->fetchAll();
+    }
+    foreach ($rows as $row) {
+        foreach (lpRowReceipts($row) as $rc) {
+            $disk = LP_RECEIPTS_DIR . basename($rc['path']);
+            if (file_exists($disk)) @unlink($disk);
         }
     }
     $db->prepare("DELETE FROM lp_expenses WHERE voucher_id=?")->execute([$id]);

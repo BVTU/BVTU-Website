@@ -25,6 +25,12 @@ $member = getMember();
 if (!lpCanView($member['email'])) { header('Location: lp-dashboard.php'); exit; }
 
 lpEnsureTables();
+/* receipt_extra lives on lp_expenses and is added by this; the SELECT below
+ * names it, and without this a freshly deployed server would throw "unknown
+ * column" into a catch that turns it into "no rows" — a year-end bundle with
+ * no voucher receipts in it and nothing in the manifest to say so. */
+require_once __DIR__ . '/lp-dupes.php';
+lpDupeEnsureColumns();
 expBatchEnsureTables();
 cgEnsureTable();
 

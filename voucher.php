@@ -225,12 +225,16 @@ $pageCount = count($pages) + 2;   // checklist + lines + sign-off
         <tr><th></th><th>#</th><th>Date</th><th>Description</th><th>Receipt</th><th style="text-align:right;">Amount</th></tr>
       </thead>
       <tbody>
-        <?php foreach ($pages as $p): $e = $p['e'];
+        <?php // One line per EXPENSE, not per page. Iterating $pages listed a
+              // two-receipt line twice, each at its full amount, while the
+              // total below is summed from $expenses — a signing checklist
+              // whose column does not add up to its own total. ?>
+        <?php foreach ($expenses as $ei => $e):
               $hasFile = lpRowReceiptCount($e) > 0;
               $isKm    = !$hasFile && lpIsMileageOnly($e); ?>
         <tr>
           <td class="tik"><span class="box"></span></td>
-          <td class="n"><?= $p['n'] ?></td>
+          <td class="n"><?= $ei + 1 ?></td>
           <td style="white-space:nowrap;"><?= $e['expense_date'] ? $h(date('M j', strtotime($e['expense_date']))) : '—' ?></td>
           <td><?= $h($e['description']) ?></td>
           <td>

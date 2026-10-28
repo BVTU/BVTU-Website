@@ -121,6 +121,34 @@ function lpShareReceiptName(int $voucherId, string $file): ?string {
     );
     $s->execute([$voucherId, $file]);
     $found = $s->fetchColumn();
+
+    /*
+     * Receipts after the first, which live as JSON in receipt_extra. Without
+     * this every extra-receipt page in the printed signing pack came back 403
+     * — the pack would be stapled together with gaps where the card slips
+     * should be.
+     *
+     * The decoded list decides, never the LIKE: a filename that happens to
+     * appear inside another voucher's JSON must not authorise itself. The name
+     * handed back is the one actually stored, as below.
+     */
+    if ($found === false || $found === null || $found === '') {
+        try {
+            $x = getDB()->prepare(
+                "SELECT receipt_extra FROM lp_expenses
+                 WHERE voucher_id = ? AND receipt_extra LIKE ?"
+            );
+            $x->execute([$voucherId, '%' . $file . '%']);
+            foreach ($x->fetchAll(PDO::FETCH_COLUMN) as $json) {
+                foreach (lpRowReceipts(['receipt_extra' => $json]) as $rc) {
+                    if (basename($rc['path']) === basename($file)) return basename($rc['path']);
+                }
+            }
+        } catch (\Throwable $e) {
+            error_log('lpShareReceiptName extras: ' . $e->getMessage());
+        }
+    }
+
     if ($found === false || $found === null || $found === '') return null;
 
     // The comparison above is the database's, which ignores case and trailing
