@@ -1532,15 +1532,46 @@ function singleFilledCategory(tr) {
     return count === 1 ? found : null;
 }
 
-/** A row nobody has started filling in — not merely one without a receipt. A
- *  mileage row with km and a description is somebody's work, not a free slot. */
+/** A row nobody has started filling in — not merely one without a receipt.
+ *
+ *  Every field a person can put something in counts, which it did not used to.
+ *  This checked the receipt, the description, the kilometres and the hidden
+ *  category amounts, and nothing else — so a row where you had typed a date and
+ *  picked a category read as empty, and the next photo off your phone landed on
+ *  top of it. Arriving with its own category it then met the one already there,
+ *  the row turned into a split, and you were asked to sort out a mess that
+ *  should never have been made.
+ *
+ *  A new row is created completely blank, so nothing here can mistake a freshly
+ *  added row for an occupied one. When in doubt the answer is "occupied": the
+ *  cost of being wrong that way is one extra empty row, and the other way is
+ *  landing on somebody's work. */
 function rowIsUntouched(tr) {
     var path = tr.querySelector('[name="receipt_path[]"]');
     if (!path || String(path.value).trim()) return false;
-    var desc = tr.querySelector('[name="description[]"]');
-    if (desc && desc.value.trim()) return false;
+
+    // Anything typed.
+    var typed = ['description[]', 'expense_date[]', 'exp_notes[]'];
+    for (var i = 0; i < typed.length; i++) {
+        var el = tr.querySelector('[name="' + typed[i] + '"]');
+        if (el && String(el.value).trim()) return false;
+    }
+
+    // Anything chosen: the category, and the grant or budget line it is against.
+    var picked = ['cat_sel[]', 'grant_id[]', 'budget_line_id[]'];
+    for (var j = 0; j < picked.length; j++) {
+        var sel = tr.querySelector('[name="' + picked[j] + '"]');
+        if (sel && String(sel.value).trim()) return false;
+    }
+
     var km = tr.querySelector('[name="travel_km[]"]');
     if (km && (parseFloat(km.value) || 0) > 0) return false;
+
+    // The amount box as well as the hidden mirrors it writes to, so a figure
+    // typed but not yet committed still counts as somebody's work.
+    var amt = tr.querySelector('.cell-amount');
+    if (amt && (parseFloat(amt.value) || 0) > 0) return false;
+
     var any = false;
     ['travel_amt','meals','gifts','misc','office','phone'].forEach(function (k) {
         var el = tr.querySelector('.hid-' + k);
