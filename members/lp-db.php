@@ -653,6 +653,62 @@ function lpGetExpenses(int $voucherId): array {
     return $s->fetchAll();
 }
 
+/**
+ * Every receipt on one expense line, the first one first.
+ *
+ * A line can need more than one: the itemised bill and the card slip, a
+ * registration form and its payment confirmation. receipt_path holds the
+ * first — so every page that reads that column keeps working untouched —
+ * and receipt_extra holds any others as JSON.
+ *
+ * Asked in one place so that adding a second receipt does not mean finding
+ * every surface that shows one. Returns a list of ['path' => , 'name' => ].
+ */
+function lpRowReceipts(array $row): array {
+    $out = [];
+    $first = trim((string)($row['receipt_path'] ?? ''));
+    if ($first !== '') {
+        $out[] = ['path' => $first,
+                  'name' => trim((string)($row['receipt_filename'] ?? '')) ?: $first];
+    }
+    $extra = trim((string)($row['receipt_extra'] ?? ''));
+    if ($extra !== '') {
+        $list = json_decode($extra, true);
+        if (is_array($list)) {
+            foreach ($list as $r) {
+                if (!is_array($r)) continue;
+                $path = trim((string)($r['path'] ?? ''));
+                if ($path === '') continue;
+                $out[] = ['path' => $path,
+                          'name' => trim((string)($r['name'] ?? '')) ?: $path];
+            }
+        }
+    }
+    return $out;
+}
+
+/** How many receipts a line carries. */
+function lpRowReceiptCount(array $row): int { return count(lpRowReceipts($row)); }
+
+/**
+ * Pack the receipts after the first for storage.
+ *
+ * Takes the whole list, keeps the first in receipt_path and returns the rest
+ * encoded, so a caller never has to split them by hand. Null when there is
+ * nothing after the first, which keeps the column empty on the ordinary line.
+ */
+function lpRowExtraEncode(array $receipts): ?string {
+    $rest = [];
+    foreach (array_slice(array_values($receipts), 1) as $r) {
+        $path = trim((string)($r['path'] ?? ''));
+        if ($path === '') continue;
+        $rest[] = ['path' => $path, 'name' => trim((string)($r['name'] ?? ''))];
+    }
+    if (!$rest) return null;
+    $json = json_encode($rest, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    return $json === false ? null : $json;
+}
+
 function lpRowTotal(array $expense): float {
     return (float)$expense['travel_amt'] + (float)$expense['meals']
          + (float)$expense['gifts']      + (float)$expense['misc']
@@ -1050,7 +1106,7 @@ function lpGetExpensesByGrant(int $grantId): array {
     $s = getDB()->prepare(
         "SELECT e.id, e.expense_date, e.description, e.travel_km, e.travel_amt,
                 e.meals, e.gifts, e.misc, e.office, e.phone,
-                e.receipt_path, e.receipt_filename, e.created_at,
+                e.receipt_path, e.receipt_filename, e.receipt_extra, e.created_at,
                 v.name AS voucher_name, v.voucher_number, v.id AS voucher_id, v.status AS voucher_status
          FROM lp_expenses e
          JOIN lp_vouchers v ON v.id = e.voucher_id
@@ -1093,12 +1149,23 @@ function lpUnmarkGrantSubmitted(int $grantId): void {
 
 function lpDeleteVoucher(int $id): void {
     $db = getDB();
-    // Delete receipt files from disk first
-    $s = $db->prepare("SELECT receipt_path FROM lp_expenses WHERE voucher_id=? AND receipt_path IS NOT NULL");
-    $s->execute([$id]);
-    foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $path) {
-        if ($path && file_exists(LP_RECEIPTS_DIR . basename($path))) {
-            @unlink(LP_RECEIPTS_DIR . basename($path));
+    // Delete receipt files from disk first — every receipt on each line, not
+    // just the first, or the extras are left on the server for ever with
+    // nothing in the database pointing at them.
+    try {
+        $s = $db->prepare("SELECT receipt_path, receipt_extra FROM lp_expenses WHERE voucher_id=?");
+        $s->execute([$id]);
+        $rows = $s->fetchAll();
+    } catch (\Throwable $e) {
+        // A server without the column still deletes what it can name.
+        $s = $db->prepare("SELECT receipt_path FROM lp_expenses WHERE voucher_id=?");
+        $s->execute([$id]);
+        $rows = $s->fetchAll();
+    }
+    foreach ($rows as $row) {
+        foreach (lpRowReceipts($row) as $rc) {
+            $disk = LP_RECEIPTS_DIR . basename($rc['path']);
+            if (file_exists($disk)) @unlink($disk);
         }
     }
     $db->prepare("DELETE FROM lp_expenses WHERE voucher_id=?")->execute([$id]);

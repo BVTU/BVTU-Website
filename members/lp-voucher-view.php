@@ -541,10 +541,18 @@ arsort($blSummary);
         ?>
         <tr>
           <td>
-            <?php if ($e['receipt_path']): ?>
-            <a class="receipt-btn" href="lp-receipt.php?f=<?= urlencode($e['receipt_path']) ?>" target="_blank">
-              📄 View
+            <?php // Every receipt on the line, not just the first. A line can
+                  // carry the itemised bill and the card slip, and approving
+                  // against half the evidence is the thing to avoid. ?>
+            <?php $rcpts = lpRowReceipts($e); ?>
+            <?php if ($rcpts): ?>
+            <?php foreach ($rcpts as $ri => $rc): ?>
+            <a class="receipt-btn" href="lp-receipt.php?f=<?= urlencode($rc['path']) ?>" target="_blank"
+               title="<?= htmlspecialchars($rc['name']) ?>"
+               style="<?= $ri ? 'margin-top:.2rem;' : '' ?>">
+              📄 View<?= count($rcpts) > 1 ? ' ' . ($ri + 1) : '' ?>
             </a>
+            <?php endforeach; ?>
             <?php else: ?>
             <span style="color:var(--gray-300);font-size:.75rem;">—</span>
             <?php endif; ?>

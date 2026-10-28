@@ -54,6 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $office      = $_POST['office']         ?? [];
     $phone       = $_POST['phone']          ?? [];
     $receiptPath = $_POST['receipt_path']   ?? [];
+    $receiptXtra = $_POST['receipt_extra']  ?? [];
     $receiptOrig = $_POST['receipt_orig']   ?? [];
     $grantIds    = $_POST['grant_id']       ?? [];
     $blIds       = $_POST['budget_line_id'] ?? [];
@@ -120,9 +121,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             "INSERT INTO lp_expenses
              (voucher_id, expense_date, description, travel_km, travel_amt,
               meals, gifts, misc, office, phone,
-              receipt_path, receipt_filename, grant_id, budget_line_id, notes, sort_order,
+              receipt_path, receipt_filename, receipt_extra,
+              grant_id, budget_line_id, notes, sort_order,
               receipt_sha256, scan_vendor, scan_date, scan_total)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         );
 
         foreach ($descs as $i => $desc) {
@@ -153,6 +155,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 round((float)($phone[$i]  ?? 0), 2),
                 ($receiptPath[$i] ?? '') ?: null,
                 ($receiptOrig[$i] ?? '') ?: null,
+                /* Receipts after the first, re-read through json_decode so a
+                 * hand-made POST cannot put arbitrary text in the column. */
+                lpRowExtraEncode(array_merge(
+                    [['path' => (string)($receiptPath[$i] ?? ''), 'name' => '']],
+                    (function ($raw) {
+                        $list = json_decode((string)$raw, true);
+                        if (!is_array($list)) return [];
+                        $out = [];
+                        foreach ($list as $r) {
+                            if (!is_array($r)) continue;
+                            $path = trim((string)($r['path'] ?? ''));
+                            if ($path === '') continue;
+                            $out[] = ['path' => basename($path),
+                                      'name' => mb_substr(trim((string)($r['name'] ?? '')), 0, 255)];
+                        }
+                        return $out;
+                    })($receiptXtra[$i] ?? '')
+                )),
                 ($grantIds[$i] ?? '') ?: null,
                 ($blIds[$i]    ?? '') ?: null,
                 ($expNotes[$i] ?? '') ?: null,
@@ -187,6 +207,9 @@ if ($errors && !empty($descs)) {
             'phone_amount'       => $phone[$i]        ?? '',
             'saved_path'         => $receiptPath[$i]  ?? '',
             'original_name'      => $receiptOrig[$i]  ?? '',
+            // Without this a validation error silently dropped every receipt
+            // after the first — the page redrew from these values.
+            'receipt_extra'      => $receiptXtra[$i]  ?? '',
             'suggested_grant_id' => $grantIds[$i]     ?? '',
             'suggested_bl_id'    => $blIds[$i]        ?? '',
             'exp_notes'          => $expNotes[$i]     ?? '',
@@ -284,16 +307,60 @@ $initRowsJson = json_encode($initRows);
     .cell-select:hover, .cell-select:focus { border-color: var(--primary); background: #fff; outline: none; }
 
     /* Receipt cell */
-    .receipt-cell { width: 68px; text-align: center; }
-    .receipt-attach-btn { background: none; border: 1px dashed var(--gray-300); border-radius: 5px; width: 28px; height: 28px; cursor: pointer; font-size: .82rem; color: var(--gray-400); display: flex; align-items: center; justify-content: center; transition: border-color .12s, color .12s, background .12s; }
-    .receipt-attach-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--accent); }
-    .receipt-has-file { width: 28px; height: 28px; border-radius: 5px; background: #dcfce7; border: 1px solid #86efac; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: .82rem; position: relative; }
-    .receipt-has-file:hover { background: #bbf7d0; }
-    .receipt-open-btn { display: block; font-size: .6rem; font-weight: 700; color: var(--primary); text-decoration: none; text-align: center; line-height: 1.3; margin-top: .1rem; white-space: nowrap; }
-    .receipt-open-btn:hover { text-decoration: underline; color: var(--primary-dk); }
-    .receipt-phone-btn { background: none; border: 1px dashed #86efac; border-radius: 5px; width: 28px; height: 28px; cursor: pointer; font-size: .78rem; color: var(--primary); display: flex; align-items: center; justify-content: center; transition: border-color .12s, background .12s; }
-    .receipt-phone-btn:hover { background: #f0fdf4; border-style: solid; }
+    /* ── The receipt cell has exactly two states ─────────────────────────
+     *
+     * Empty: attach a file, or send one from your phone.
+     * Holding one: look at it, replace it, or take it off.
+     *
+     * They used to run together — the phone button stayed beside an attached
+     * file, so the cell offered "add one" and "here is one" at the same time,
+     * in four different shapes stacked four deep down a 68px column. Each
+     * state is now one row of equal buttons, which is a third of the height
+     * and reads at a glance in a table of twenty rows. */
+    .receipt-cell { width: 86px; text-align: center; }
+    .receipt-btn-group { display: flex; gap: .2rem; justify-content: center; }
+    /* One button whatever the line carries, so every row is the same height
+       whether it holds one receipt or five. The count rides on the icon. */
+    .receipt-file-group { display: flex; justify-content: center; margin-bottom: .2rem; }
+    .rcpt-chip { display: flex; gap: .15rem; align-items: center; }
+    .receipt-has-file { position: relative; }
+    .rcpt-count { position: absolute; top: -5px; right: -5px; min-width: 13px; height: 13px;
+        border-radius: 7px; background: var(--primary); color: #fff; font-size: .55rem;
+        font-weight: 800; line-height: 13px; text-align: center; padding: 0 2px; }
+    /* The chooser: a short list, so it is read rather than navigated. */
+    .rcpt-chooser { position: absolute; z-index: 400; background: #fff; border: 1px solid var(--gray-200);
+        border-radius: 9px; box-shadow: 0 8px 24px rgba(0,0,0,.14); padding: .35rem; min-width: 190px;
+        max-width: 280px; }
+    .rcpt-chooser-head { font-size: .66rem; font-weight: 800; text-transform: uppercase;
+        letter-spacing: .05em; color: var(--gray-500); padding: .2rem .4rem .3rem; }
+    .rcpt-chooser-row { display: flex; align-items: center; gap: .3rem; }
+    .rcpt-chooser-open { flex: 1 1 auto; min-width: 0; display: block; padding: .3rem .4rem;
+        border-radius: 6px; font-size: .78rem; color: var(--gray-700); text-decoration: none;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rcpt-chooser-open:hover { background: var(--accent); color: var(--primary-dk); }
+    .rcpt-chooser-off { flex: 0 0 auto; background: none; border: none; cursor: pointer;
+        font: inherit; font-size: .7rem; font-weight: 700; color: var(--gray-400);
+        padding: .2rem .35rem; border-radius: 5px; }
+    .rcpt-chooser-off:hover { background: #fef2f2; color: #b91c1c; }
+    .rcpt-btn { width: 24px; height: 24px; border-radius: 5px; display: flex; align-items: center;
+        justify-content: center; font-size: .78rem; font-family: inherit; cursor: pointer;
+        padding: 0; text-decoration: none; transition: background .12s, border-color .12s, color .12s; }
+    /* Empty: dashed, muted — an invitation, not a thing demanding attention. */
+    .receipt-attach-btn, .receipt-phone-btn { background: none; border: 1px dashed var(--gray-300);
+        color: var(--gray-400); }
+    .receipt-attach-btn:hover, .receipt-phone-btn:hover { border-color: var(--primary);
+        color: var(--primary); background: var(--accent); }
+    .receipt-phone-btn { border-color: #86efac; color: var(--primary); }
     .receipt-phone-btn.targeting { background: #dcfce7; border-style: solid; border-color: var(--primary); }
+    /* Holding one: solid green, so a row with a receipt is obvious down the column. */
+    .receipt-has-file, .receipt-open-btn { background: #dcfce7; border: 1px solid #86efac;
+        color: var(--primary-dk); }
+    .receipt-has-file:hover, .receipt-open-btn:hover { background: #bbf7d0; }
+    /* Taking one off is a correction, not something to invite: it sits with the
+       others so it is findable, and stays grey until you mean it. */
+    .receipt-remove-btn { background: none; border: 1px solid transparent; color: var(--gray-400);
+        font-weight: 700; }
+    .receipt-remove-btn:hover { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
     .receipt-btn-group { display: flex; gap: 3px; align-items: center; justify-content: center; }
     .qr-target { display:none; background:#f0fdf4; border:1.5px solid #86efac; border-radius:8px; padding:.5rem .75rem; margin-top:.6rem; font-size:.82rem; color:#166534; align-items:center; gap:.5rem; flex-wrap:wrap; }
     .qr-target strong { font-weight:800; }
@@ -645,11 +712,11 @@ function addRow(data = {}) {
     tr.innerHTML = `
       <td class="receipt-cell" data-label="Receipt">
         <div id="receipt-wrap-${id}">
-          <div class="receipt-btn-group">
-            <button type="button" class="receipt-attach-btn" id="attach-btn-${id}"
-              title="Attach file" onclick="triggerRowScan(${id})">📎</button>
-            <button type="button" class="receipt-phone-btn" id="phone-btn-${id}"
-              title="Upload from phone" onclick="phoneForRow(${id})">📱</button>
+          <div class="receipt-btn-group" id="attach-group-${id}">
+            <button type="button" class="rcpt-btn receipt-attach-btn" id="attach-btn-${id}"
+              title="Attach a file" onclick="triggerRowScan(${id})">📎</button>
+            <button type="button" class="rcpt-btn receipt-phone-btn" id="phone-btn-${id}"
+              title="Send one from your phone" onclick="phoneForRow(${id})">📱</button>
           </div>
           <div class="scan-spinner" id="spinner-${id}"></div>
           <input type="file" id="file-${id}" accept="image/*,.pdf" style="display:none"
@@ -657,6 +724,7 @@ function addRow(data = {}) {
         </div>
         <input type="hidden" name="receipt_path[]" id="rpath-${id}" value="${data.saved_path || ''}">
         <input type="hidden" name="receipt_orig[]" id="rorig-${id}" value="${data.original_name || ''}">
+        <input type="hidden" name="receipt_extra[]" id="rextra-${id}" value="${escHtml(data.receipt_extra || '')}">
         <input type="hidden" name="exp_notes[]" value="${escHtml(data.exp_notes || '')}">
         <input type="hidden" name="scan_vendor[]" id="svend-${id}" value="${escHtml(data.scan_vendor || '')}">
         <input type="hidden" name="scan_date[]"   id="sdate-${id}" value="${data.scan_date || ''}">
@@ -1210,10 +1278,12 @@ function uploadAndScan(file, rowId, allowDup) {
                 showRowScanError(rowId, data.error);
                 if (!data.saved_path) return;   // nothing was stored to attach
             }
+            const wasFirst = rowReceipts(rowId).length === 0;
             populateRow(rowId, data);
             /* Kept with the row so the comparison still works next week, when
-             * this page has been closed and reopened twice. */
-            bvtuSetRowScanFields(rowId, data);
+             * this page has been closed and reopened twice — and only for the
+             * receipt those figures actually came off. */
+            if (wasFirst) bvtuSetRowScanFields(rowId, data);
 
             if (data && data.duplicate) {
                 bvtuDupeTell(data.duplicate, document.getElementById('row-' + rowId));
@@ -1236,6 +1306,21 @@ function populateRow(rowId, data) {
     const row = document.getElementById('row-' + rowId);
     if (!row) return;
 
+    /*
+     * Only the first receipt on a line writes the line. A card slip added to
+     * a filled line used to overwrite the date, description and amounts with
+     * its own — dropping a $48 claim to the $12 on the slip. The file is
+     * still attached below; it just does not get to rewrite the claim.
+     */
+    const firstOnLine = rowReceipts(rowId).length === 0;
+    if (!firstOnLine) {
+        if (data.saved_path) {
+            addRowReceipt(rowId, data.saved_path, data.original_name || data.saved_path);
+            renderReceipts(rowId);
+        }
+        return;
+    }
+
     if (data.date)        setInput(row, '[name="expense_date[]"]', data.date);
     if (data.description) setInput(row, '[name="description[]"]', data.description);
     if (data.travel_amount && data.travel_amount > 0) {
@@ -1251,9 +1336,10 @@ function populateRow(rowId, data) {
     if (data.suggested_bl_id)    setSelect(row, '[name="budget_line_id[]"]', data.suggested_bl_id);
 
     if (data.saved_path) {
-        document.getElementById('rpath-' + rowId).value = data.saved_path;
-        document.getElementById('rorig-' + rowId).value = data.original_name || '';
-        showThumb(rowId, data.saved_path, null);
+        // Added, not written over — the same as the phone path, which it was
+        // not: attaching a second file from the desktop replaced the first.
+        addRowReceipt(rowId, data.saved_path, data.original_name || data.saved_path);
+        renderReceipts(rowId);
     }
 
     if (data.concerns || data.flag) {
@@ -1283,41 +1369,283 @@ function isPdfSrc(src) {
     return src === '__pdf__' || /\.pdf/i.test(src || '') || (src && src.startsWith('data:application/pdf'));
 }
 
+/* ── A line's receipts ────────────────────────────────────────────────────────
+ *
+ * A line can need more than one: the itemised bill and the card slip. The
+ * first lives in receipt_path so every page that reads that column goes on
+ * working; the rest live in receipt_extra as JSON. These four functions are
+ * the only things that touch those fields, so the cell can be drawn from the
+ * row's own state rather than patched as files arrive.
+ */
+function rowReceipts(rowId) {
+    var out = [];
+    var p = document.getElementById('rpath-' + rowId);
+    var n = document.getElementById('rorig-' + rowId);
+    if (p && String(p.value).trim()) {
+        out.push({ path: p.value.trim(), name: (n && n.value.trim()) || p.value.trim() });
+    }
+    var x = document.getElementById('rextra-' + rowId);
+    if (x && String(x.value).trim()) {
+        try {
+            var list = JSON.parse(x.value);
+            if (Object.prototype.toString.call(list) === '[object Array]') {
+                list.forEach(function (r) {
+                    if (r && r.path) out.push({ path: String(r.path), name: String(r.name || r.path) });
+                });
+            }
+        } catch (e) { /* unreadable extras lose the extras, never the first */ }
+    }
+    return out;
+}
+
+function setRowReceipts(rowId, list) {
+    var p = document.getElementById('rpath-' + rowId);
+    var n = document.getElementById('rorig-' + rowId);
+    var x = document.getElementById('rextra-' + rowId);
+    var first = list[0] || null;
+    if (p) p.value = first ? first.path : '';
+    if (n) n.value = first ? first.name : '';
+    if (x) x.value = list.length > 1 ? JSON.stringify(list.slice(1)) : '';
+}
+
+/** Add one, unless this exact file is already on the line. */
+function addRowReceipt(rowId, path, name) {
+    path = String(path || '').trim();
+    if (!path) return;
+    var list = rowReceipts(rowId);
+    for (var i = 0; i < list.length; i++) if (list[i].path === path) return;
+    list.push({ path: path, name: String(name || path) });
+    setRowReceipts(rowId, list);
+}
+
+function removeRowReceiptAt(rowId, index) {
+    var list = rowReceipts(rowId);
+    if (index < 0 || index >= list.length) return;
+    list.splice(index, 1);
+    setRowReceipts(rowId, list);
+}
+
 function showThumb(rowId, savedPath, dataUrl) {
     const wrap = document.getElementById('receipt-wrap-' + rowId);
     if (!wrap) return;
+    if (savedPath) addRowReceipt(rowId, savedPath, savedPath);
+    renderReceipts(rowId, savedPath ? null : dataUrl);
+}
 
-    const btn = document.getElementById('attach-btn-' + rowId);
-    if (btn) btn.remove();
+/**
+ * Draw the cell from the row's receipts.
+ *
+ * One chip per receipt — look at it, or take it off — and the add pair stays
+ * put underneath, because a line wanting a second receipt is the ordinary
+ * case this exists for, not an exception.
+ */
+function renderReceipts(rowId, pendingDataUrl) {
+    const wrap = document.getElementById('receipt-wrap-' + rowId);
+    if (!wrap) return;
+    wrap.querySelector('.receipt-file-group')?.remove();
 
-    wrap.querySelector('.receipt-has-file')?.remove();
-    wrap.querySelector('.receipt-open-btn')?.remove();
-
-    const pdf = isPdfSrc(dataUrl) || isPdfSrc(savedPath);
-    const src = (dataUrl && dataUrl !== '__pdf__') ? dataUrl : ('lp-receipt.php?f=' + encodeURIComponent(savedPath || ''));
-    const hoverSrc = pdf ? '__pdf__' : src;
-
-    const indicator = document.createElement('div');
-    indicator.className = 'receipt-has-file';
-    indicator.title = 'Click to change file';
-    indicator.innerHTML = '📄';
-    indicator.dataset.src = src;
-    indicator.onclick = () => triggerRowScan(rowId);
-    indicator.addEventListener('mouseenter', e => showHoverPreview(e, hoverSrc));
-    indicator.addEventListener('mouseleave',  hideHoverPreview);
-    indicator.addEventListener('mousemove',   moveHoverPreview);
-    wrap.insertBefore(indicator, wrap.querySelector('.scan-spinner'));
-
-    if (savedPath) {
-        const openBtn = document.createElement('a');
-        openBtn.href = 'lp-receipt.php?f=' + encodeURIComponent(savedPath);
-        openBtn.target = '_blank';
-        openBtn.title = 'Open receipt in new tab';
-        openBtn.className = 'receipt-open-btn';
-        openBtn.textContent = '↗ open';
-        openBtn.addEventListener('click', e => e.stopPropagation());
-        wrap.insertBefore(openBtn, wrap.querySelector('.scan-spinner'));
+    const list = rowReceipts(rowId);
+    const group = document.getElementById('attach-group-' + rowId);
+    if (group) {
+        group.style.display = '';
+        const a = document.getElementById('attach-btn-' + rowId);
+        if (a) a.title = list.length ? 'Add another receipt' : 'Attach a file';
+        const ph = document.getElementById('phone-btn-' + rowId);
+        if (ph) ph.title = list.length ? 'Add another from your phone' : 'Send one from your phone';
     }
+    if (!list.length && !pendingDataUrl) return;
+
+    const fileGroup = document.createElement('div');
+    fileGroup.className = 'receipt-file-group';
+
+    if (pendingDataUrl && !list.length) {
+        const busy = document.createElement('div');
+        busy.className = 'rcpt-btn receipt-has-file';
+        busy.innerHTML = isPdfSrc(pendingDataUrl) ? '📕' : '📄';
+        busy.title = 'Reading this one…';
+        busy.addEventListener('mouseenter', e => showHoverPreview(e, pendingDataUrl));
+        busy.addEventListener('mouseleave', hideHoverPreview);
+        busy.addEventListener('mousemove',  moveHoverPreview);
+        fileGroup.appendChild(busy);
+        wrap.insertBefore(fileGroup, group || wrap.querySelector('.scan-spinner'));
+        return;
+    }
+
+    /*
+     * One button, whatever the line carries.
+     *
+     * A chip per receipt grew the row every time one was added — three
+     * receipts made a row three times the height of its neighbours, in a table
+     * read by scanning down it. The count rides on the icon instead, so every
+     * row is the same height whether it holds one receipt or five, and the
+     * list opens on demand.
+     */
+    const chip = document.createElement('div');
+    chip.className = 'rcpt-chip';
+
+    const many = list.length > 1;
+    const first = list[0];
+    const pdf = isPdfSrc(first.path);
+
+    const look = document.createElement(many ? 'button' : 'a');
+    look.className = 'rcpt-btn receipt-has-file';
+    look.innerHTML = (pdf ? '📕' : '📄')
+                   + (many ? '<sup class="rcpt-count">' + list.length + '</sup>' : '');
+    if (many) {
+        look.type = 'button';
+        look.title = list.length + ' receipts on this line — click to choose one';
+        look.onclick = e => { e.stopPropagation(); openReceiptChooser(rowId, look); };
+    } else {
+        look.title = 'Open ' + first.name;
+        look.href = 'lp-receipt.php?f=' + encodeURIComponent(first.path);
+        look.target = '_blank';
+    }
+    // The first one previews on hover either way; it is the one whose figure
+    // the line was built from.
+    const hoverSrc = pdf ? '__pdf__' : ('lp-receipt.php?f=' + encodeURIComponent(first.path));
+    look.addEventListener('mouseenter', e => showHoverPreview(e, hoverSrc));
+    look.addEventListener('mouseleave', hideHoverPreview);
+    look.addEventListener('mousemove',  moveHoverPreview);
+    chip.appendChild(look);
+
+    // With one receipt the ✕ stays in the cell: taking it off should not cost
+    // a trip through a list of one. With several it lives in the chooser,
+    // beside the name of the thing it removes.
+    if (!many) {
+        const off = document.createElement('button');
+        off.type = 'button';
+        off.className = 'rcpt-btn receipt-remove-btn';
+        off.title = 'Take this receipt off the line (the line is kept)';
+        off.textContent = '✕';
+        off.onclick = e => { e.stopPropagation(); removeReceiptFromRow(rowId, 0); };
+        chip.appendChild(off);
+    }
+
+    fileGroup.appendChild(chip);
+    wrap.insertBefore(fileGroup, group || wrap.querySelector('.scan-spinner'));
+}
+
+/** The open chooser, so a second click or an Escape closes it. */
+let receiptChooserEl = null;
+function closeReceiptChooser() {
+    if (receiptChooserEl) { receiptChooserEl.remove(); receiptChooserEl = null; }
+}
+document.addEventListener('click', closeReceiptChooser);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeReceiptChooser(); });
+
+/** Pick one of the receipts on a line, to look at or take off. */
+function openReceiptChooser(rowId, anchor) {
+    const wasOpen = receiptChooserEl && receiptChooserEl.dataset.row === String(rowId);
+    closeReceiptChooser();
+    if (wasOpen) return;
+
+    const list = rowReceipts(rowId);
+    if (!list.length) return;
+
+    const box = document.createElement('div');
+    box.className = 'rcpt-chooser';
+    box.dataset.row = String(rowId);
+    box.onclick = e => e.stopPropagation();
+
+    const head = document.createElement('div');
+    head.className = 'rcpt-chooser-head';
+    head.textContent = list.length + ' receipts on this line';
+    box.appendChild(head);
+
+    list.forEach(function (rec, i) {
+        const line = document.createElement('div');
+        line.className = 'rcpt-chooser-row';
+
+        const open = document.createElement('a');
+        open.className = 'rcpt-chooser-open';
+        open.href = 'lp-receipt.php?f=' + encodeURIComponent(rec.path);
+        open.target = '_blank';
+        open.textContent = (isPdfSrc(rec.path) ? '📕 ' : '📄 ') + rec.name;
+        open.title = 'Open ' + rec.name;
+        const src = isPdfSrc(rec.path) ? '__pdf__' : ('lp-receipt.php?f=' + encodeURIComponent(rec.path));
+        open.addEventListener('mouseenter', e => showHoverPreview(e, src));
+        open.addEventListener('mouseleave', hideHoverPreview);
+        open.addEventListener('mousemove',  moveHoverPreview);
+        line.appendChild(open);
+
+        const off = document.createElement('button');
+        off.type = 'button';
+        off.className = 'rcpt-chooser-off';
+        off.textContent = '✕';
+        off.title = 'Take this one off the line';
+        off.onclick = e => {
+            e.stopPropagation();
+            closeReceiptChooser();
+            removeReceiptFromRow(rowId, i);
+        };
+        line.appendChild(off);
+        box.appendChild(line);
+    });
+
+    document.body.appendChild(box);
+    receiptChooserEl = box;
+
+    // Below the icon, nudged back on screen if the row sits near an edge.
+    const r = anchor.getBoundingClientRect();
+    const w = box.offsetWidth;
+    let left = r.left + window.scrollX;
+    if (left + w > window.scrollX + document.documentElement.clientWidth - 8) {
+        left = window.scrollX + document.documentElement.clientWidth - w - 8;
+    }
+    box.style.left = Math.max(window.scrollX + 8, left) + 'px';
+    box.style.top  = (r.bottom + window.scrollY + 4) + 'px';
+}
+
+/**
+ * Take the receipt off a row and leave the row alone.
+ *
+ * Attaching to the wrong row used to mean deleting the whole line and typing
+ * the date, description, amount, category and grant again — and then, because
+ * the file was still recorded against the voucher, being told the photo was a
+ * duplicate when it went onto the right row. It was, of itself.
+ *
+ * So the row's own figures are not touched. What goes is the file, what the
+ * scan read off it, and the fingerprint the duplicate check matches on, which
+ * is what stops the warning following the receipt to its proper home.
+ *
+ * The file itself stays on the server. It may be the only copy of that
+ * receipt, and a mis-click should not destroy it; a row saved without a path
+ * simply no longer refers to it.
+ */
+function removeReceiptFromRow(rowId, index) {
+    const tr = document.getElementById('row-' + rowId);
+    if (!tr) return;
+    const list = rowReceipts(rowId);
+    index = (typeof index === 'number' && index >= 0) ? index : 0;
+    const going = list[index];
+    if (!going) return;
+
+    if (!confirm('Take "' + going.name + '" off this line?\n\n'
+               + 'Nothing else on the line changes, and the file is kept — '
+               + 'you can put it on another line.')) return;
+
+    removeRowReceiptAt(rowId, index);
+    const left = rowReceipts(rowId);
+
+    // What the scan read, and the fingerprint the duplicate check matches on,
+    // belong to the first receipt. They go only when it does — otherwise
+    // removing the card slip would wipe what the itemised bill told us.
+    if (index === 0) {
+        ['svend-', 'sdate-', 'stot-'].forEach(function (pfx) {
+            const el = document.getElementById(pfx + rowId);
+            if (el) el.value = '';
+        });
+        delete tr.dataset.billHash;
+        delete tr.dataset.billVendor;
+        delete tr.dataset.billDate;
+        delete tr.dataset.billAmount;
+    }
+
+    renderReceipts(rowId);
+    hideHoverPreview();
+    showToast(left.length
+        ? '\u2705 "' + going.name + '" taken off — ' + left.length + ' receipt' + (left.length === 1 ? '' : 's') + ' left on the line'
+        : '\u2705 Receipt taken off the line — the line is untouched');
 }
 
 // ── Hover preview ─────────────────────────────────────────────────────────────
@@ -1598,15 +1926,46 @@ function singleFilledCategory(tr) {
     return count === 1 ? found : null;
 }
 
-/** A row nobody has started filling in — not merely one without a receipt. A
- *  mileage row with km and a description is somebody's work, not a free slot. */
+/** A row nobody has started filling in — not merely one without a receipt.
+ *
+ *  Every field a person can put something in counts, which it did not used to.
+ *  This checked the receipt, the description, the kilometres and the hidden
+ *  category amounts, and nothing else — so a row where you had typed a date and
+ *  picked a category read as empty, and the next photo off your phone landed on
+ *  top of it. Arriving with its own category it then met the one already there,
+ *  the row turned into a split, and you were asked to sort out a mess that
+ *  should never have been made.
+ *
+ *  A new row is created completely blank, so nothing here can mistake a freshly
+ *  added row for an occupied one. When in doubt the answer is "occupied": the
+ *  cost of being wrong that way is one extra empty row, and the other way is
+ *  landing on somebody's work. */
 function rowIsUntouched(tr) {
     var path = tr.querySelector('[name="receipt_path[]"]');
     if (!path || String(path.value).trim()) return false;
-    var desc = tr.querySelector('[name="description[]"]');
-    if (desc && desc.value.trim()) return false;
+
+    // Anything typed.
+    var typed = ['description[]', 'expense_date[]', 'exp_notes[]'];
+    for (var i = 0; i < typed.length; i++) {
+        var el = tr.querySelector('[name="' + typed[i] + '"]');
+        if (el && String(el.value).trim()) return false;
+    }
+
+    // Anything chosen: the category, and the grant or budget line it is against.
+    var picked = ['cat_sel[]', 'grant_id[]', 'budget_line_id[]'];
+    for (var j = 0; j < picked.length; j++) {
+        var sel = tr.querySelector('[name="' + picked[j] + '"]');
+        if (sel && String(sel.value).trim()) return false;
+    }
+
     var km = tr.querySelector('[name="travel_km[]"]');
     if (km && (parseFloat(km.value) || 0) > 0) return false;
+
+    // The amount box as well as the hidden mirrors it writes to, so a figure
+    // typed but not yet committed still counts as somebody's work.
+    var amt = tr.querySelector('.cell-amount');
+    if (amt && (parseFloat(amt.value) || 0) > 0) return false;
+
     var any = false;
     ['travel_amt','meals','gifts','misc','office','phone'].forEach(function (k) {
         var el = tr.querySelector('.hid-' + k);
@@ -1657,12 +2016,22 @@ function flashRow(tr) {
 }
 
 function putReceiptOnRow(id, receipt, sd) {
-    var rpathEl = document.getElementById('rpath-' + id);
-    var rorigEl = document.getElementById('rorig-' + id);
-    if (rpathEl) rpathEl.value = receipt.saved_path;
-    if (rorigEl) rorigEl.value = receipt.original_name || '';
-    showThumb(id, receipt.saved_path, null);
-    fillRowFromScan(id, sd);
+    // Added to the line, not written over what is already on it.
+    var wasEmpty = rowReceipts(id).length === 0;
+    addRowReceipt(id, receipt.saved_path, receipt.original_name || receipt.saved_path);
+    renderReceipts(id);
+    // The figures come off the first receipt. A second one joins the line
+    // without re-reading the amounts off it, or the card slip would overwrite
+    // the itemised breakdown it is evidence for.
+    if (wasEmpty) fillRowFromScan(id, sd);
+    /*
+     * What the scan read describes the FIRST receipt, so only the first
+     * writes it. These were being overwritten by every later receipt while
+     * the comment above said the opposite: a $12 card slip joining a $48
+     * itemised line left "receipt reads $12" against a $48 claim, and the
+     * voucher flagged itself with "Worth a look" for a line that was right.
+     */
+    if (!wasEmpty) return;
     var tr = document.getElementById('row-' + id);
     if (tr) {
         tr.dataset.billVendor = normVendor(sd.vendor);
@@ -1699,15 +2068,29 @@ function mergeIntoRow(tr, receipt, sd) {
     var keepNew = coming > had;
     var higher  = Math.max(had, coming);
 
+    /*
+     * Both are kept. This used to call putReceiptOnRow(), which replaced the
+     * path — so the itemised bill and the card slip became one file and a note
+     * reading "Also provided: …" about something nothing linked to any more.
+     */
+    addRowReceipt(id, receipt.saved_path, receipt.original_name || receipt.saved_path);
     if (keepNew) {
-        // The attached image should match the figure claimed: a $38 itemized
-        // receipt beside a $45 row is exactly what makes a Treasurer stop.
-        var oldName = (tr.querySelector('[name="receipt_orig[]"]') || {}).value || 'the first receipt';
-        putReceiptOnRow(id, receipt, sd);
-        appendRowNote(tr, 'Also provided: ' + oldName + '.');
-    } else {
-        appendRowNote(tr, 'Also provided: ' + (receipt.original_name || 'a second receipt') + '.');
+        /* Promoted to first, so what the scan read has to describe it too —
+         * otherwise the line carries the demoted receipt's figure against the
+         * new one's claim and flags itself for a mismatch it just resolved. */
+        var sv0 = document.getElementById('svend-' + id);
+        var sd0 = document.getElementById('sdate-' + id);
+        var st0 = document.getElementById('stot-' + id);
+        if (sv0) sv0.value = sd.vendor || '';
+        if (sd0) sd0.value = sd.date || '';
+        if (st0) st0.value = coming > 0 ? coming.toFixed(2) : '';
+        tr.dataset.billVendor = normVendor(sd.vendor);
+        tr.dataset.billDate   = sd.date || '';
+        tr.dataset.billHash   = receipt.sha256 || '';
+        var list = rowReceipts(id);
+        if (list.length > 1) { var moved = list.pop(); list.unshift(moved); setRowReceipts(id, list); }
     }
+    renderReceipts(id);
 
     // Through the hidden field the row actually posts, then resync, or the
     // screen would show the old figure while the form carried the new one.
@@ -1765,8 +2148,12 @@ function addPendingCard(receipt) {
     if (id) {
         var pinned = document.getElementById('row-' + id);
         var held   = pinned && pinned.querySelector('[name="receipt_path[]"]');
+        // It adds now rather than replacing, so the question is whether this
+        // photo belongs on that line at all — not whether to overwrite. Saying
+        // "replace" sent the second half of a bill to a different row.
         if (held && String(held.value).trim() &&
-            !confirm('That row already has a receipt on it. Replace it with this photo?')) {
+            !confirm('That row already has a receipt. Add this photo to the same line?\n\n'
+                   + 'Cancel to put it on a line of its own.')) {
             id = null;
         }
     }

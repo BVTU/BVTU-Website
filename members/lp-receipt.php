@@ -20,6 +20,47 @@ $s = getDB()->prepare(
 $s->execute([$path]);
 $row = $s->fetch();
 
+/*
+ * Receipts after the first on a line.
+ *
+ * A line can carry the itemised bill and the card slip; the first is in
+ * receipt_path and the rest are JSON in receipt_extra. Matching only the
+ * first meant every other receipt 404'd — from the chooser, from the
+ * Treasurer's "View 2", from the printed pack.
+ *
+ * LIKE finds the candidate rows and the decoded list decides, so a filename
+ * that merely appears inside another row's JSON cannot authorise itself.
+ *
+ * It does trust that a row naming a file has a right to it, as the
+ * receipt_path lookup above always has. That holds because lpCanCreate() is
+ * execIsAdmin() — only the President has vouchers — and lpCanView() admits
+ * exactly that role, so anyone who could name somebody else's file in their
+ * own row already passes the check below. If vouchers are ever opened to
+ * other members, the owner has to come from the row that stored the file
+ * rather than from any row that mentions it.
+ */
+if (!$row) {
+    try {
+        $s1b = getDB()->prepare(
+            "SELECT e.receipt_extra, v.submitted_by_email FROM lp_expenses e
+             JOIN lp_vouchers v ON v.id = e.voucher_id
+             WHERE e.receipt_extra LIKE ?"
+        );
+        $s1b->execute(['%' . $path . '%']);
+        foreach ($s1b->fetchAll() as $cand) {
+            foreach (lpRowReceipts(['receipt_extra' => $cand['receipt_extra']]) as $rc) {
+                if (basename($rc['path']) === $path) {
+                    $row = ['submitted_by_email' => $cand['submitted_by_email']];
+                    break 2;
+                }
+            }
+        }
+    } catch (\Throwable $e) {
+        // A server without the column simply has no extras to find.
+        error_log('lp-receipt extras: ' . $e->getMessage());
+    }
+}
+
 // Phone-uploaded receipts live in lp_pending_receipts until claimed
 if (!$row) {
     $s2 = getDB()->prepare(

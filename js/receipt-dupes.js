@@ -134,7 +134,9 @@
    * "skip it" has to put the cell back the way it was, including the paperclip,
    * or the row looks like it holds a receipt that was never stored.
    */
-  var RECEIPT_FIELDS = ['rpath-', 'rorig-', 'svend-', 'sdate-', 'stot-'];
+  /* rextra- included: a line can hold more than one receipt, and declining a
+   * duplicate must put back everything the row had — not just the first. */
+  var RECEIPT_FIELDS = ['rpath-', 'rorig-', 'rextra-', 'svend-', 'sdate-', 'stot-'];
 
   /** What the row held before this upload, so declining can put it back. */
   window.bvtuSnapshotRowReceipt = function (rowId) {
@@ -163,31 +165,19 @@
     }
     var wrap = document.getElementById('receipt-wrap-' + rowId);
     if (!wrap) return;
-    var gone = wrap.querySelector('.receipt-has-file');
-    if (gone) gone.remove();
-    gone = wrap.querySelector('.receipt-open-btn');
-    if (gone) gone.remove();
-    gone = wrap.querySelector('.dupe-label');
+    var gone = wrap.querySelector('.dupe-label');
     if (gone) gone.remove();
 
-    /* The row had a receipt before this one was offered: put that back rather
-     * than the paperclip, or declining a replacement would quietly detach a
-     * receipt that is already part of the record. */
-    if (prev['rpath-']) {
-      if (typeof showThumb === 'function') showThumb(rowId, prev['rpath-'], null);
+    /* The cell is drawn from the row's receipts now, so put the fields back
+     * the way they were and redraw — rather than picking bits of markup out
+     * by hand, which left a ✕ behind for a receipt that was no longer there
+     * and rebuilt a paperclip the page already owns. */
+    if (typeof renderReceipts === 'function') {
+      renderReceipts(rowId);
       return;
     }
-    if (!document.getElementById('attach-btn-' + rowId)) {
-      var group = wrap.querySelector('.receipt-btn-group') || wrap;
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'receipt-attach-btn';
-      b.id = 'attach-btn-' + rowId;
-      b.title = 'Attach file';
-      b.textContent = '\u{1F4CE}';
-      b.onclick = function () { triggerRowScan(rowId); };
-      group.insertBefore(b, group.firstChild);
-    }
+    /* Older page without the renderer: at least do not leave the cell empty. */
+    if (prev['rpath-'] && typeof showThumb === 'function') showThumb(rowId, prev['rpath-'], null);
   };
 
   /**

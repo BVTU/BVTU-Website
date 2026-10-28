@@ -49,10 +49,27 @@ foreach ($expenses as $e) {
     foreach ($categories as $col => $_) $catTotals[$col] += (float)$e[$col];
 }
 
-// Only the lines that have something to show get a page of their own.
+/*
+ * Only the lines that have something to show get a page of their own — and a
+ * line carrying two receipts gets one page each, because this is printed and
+ * signed. A pack that staples the card slip but not the itemised bill behind
+ * it is the half-evidence the signature is supposed to stand on.
+ *
+ * The figures sit on the first page of a line; the rest say which part they
+ * are, so nobody adds the same amount up twice.
+ */
 $pages = [];
 foreach ($expenses as $i => $e) {
-    $pages[] = ['n' => $i + 1, 'e' => $e];
+    $rcpts = lpRowReceipts($e);
+    if (count($rcpts) < 2) {
+        $pages[] = ['n' => $i + 1, 'e' => $e,
+                    'file' => $rcpts ? $rcpts[0]['path'] : '', 'part' => 0, 'of' => count($rcpts)];
+        continue;
+    }
+    foreach ($rcpts as $k => $rc) {
+        $pages[] = ['n' => $i + 1, 'e' => $e,
+                    'file' => $rc['path'], 'part' => $k, 'of' => count($rcpts)];
+    }
 }
 $pageCount = count($pages) + 2;   // checklist + lines + sign-off
 ?>
@@ -208,12 +225,16 @@ $pageCount = count($pages) + 2;   // checklist + lines + sign-off
         <tr><th></th><th>#</th><th>Date</th><th>Description</th><th>Receipt</th><th style="text-align:right;">Amount</th></tr>
       </thead>
       <tbody>
-        <?php foreach ($pages as $p): $e = $p['e'];
-              $hasFile = trim((string)$e['receipt_path']) !== '';
+        <?php // One line per EXPENSE, not per page. Iterating $pages listed a
+              // two-receipt line twice, each at its full amount, while the
+              // total below is summed from $expenses — a signing checklist
+              // whose column does not add up to its own total. ?>
+        <?php foreach ($expenses as $ei => $e):
+              $hasFile = lpRowReceiptCount($e) > 0;
               $isKm    = !$hasFile && lpIsMileageOnly($e); ?>
         <tr>
           <td class="tik"><span class="box"></span></td>
-          <td class="n"><?= $p['n'] ?></td>
+          <td class="n"><?= $ei + 1 ?></td>
           <td style="white-space:nowrap;"><?= $e['expense_date'] ? $h(date('M j', strtotime($e['expense_date']))) : '—' ?></td>
           <td><?= $h($e['description']) ?></td>
           <td>
@@ -237,7 +258,7 @@ $pageCount = count($pages) + 2;   // checklist + lines + sign-off
   <!-- ── One sheet per line ─────────────────────────────────────────────── -->
   <?php foreach ($pages as $idx => $p): $e = $p['e'];
         $rowTotal = lpRowTotal($e);
-        $file     = trim((string)$e['receipt_path']);
+        $file     = trim((string)($p['file'] ?? ''));
         $ext      = $extOf($file);
         // Mileage comes out before the totals are compared — shared with the
         // pre-submit reviewer so the two can never disagree about a line.
@@ -247,7 +268,10 @@ $pageCount = count($pages) + 2;   // checklist + lines + sign-off
         $differs     = lpTotalDiffers($e) === true;
         $isKm        = $file === '' && lpIsMileageOnly($e); ?>
   <div class="sheet">
-    <div class="lineno">Line <?= $p['n'] ?> of <?= count($pages) ?></div>
+    <?php // "2 of 2" rather than a second Line 7 with no explanation. ?>
+    <div class="lineno">Line <?= $p['n'] ?><?php
+        if (($p['of'] ?? 0) > 1): ?> &middot; receipt <?= (int)$p['part'] + 1 ?> of <?= (int)$p['of'] ?><?php
+        endif; ?></div>
     <div class="lined"><?= $e['expense_date'] ? $h(date('F j, Y', strtotime($e['expense_date']))) : 'Date not given' ?></div>
     <p class="linew">
       <?= $h($e['description']) ?>
@@ -255,6 +279,10 @@ $pageCount = count($pages) + 2;   // checklist + lines + sign-off
       <?php if ($e['budget_line_name']): ?> · <?= $h($e['budget_line_name']) ?><?php endif; ?>
     </p>
 
+    <?php // The figures belong to the line, so they are printed once, on its
+          // first page. Repeating them under the second receipt invites the
+          // same amount being counted twice by whoever is adding up. ?>
+    <?php if ((int)($p['part'] ?? 0) === 0): ?>
     <div class="claim">
       <div><span class="k">Claimed</span><span class="v"><?= $money($rowTotal) ?></span></div>
       <?php if ($scanTot !== null && $kmPortion > 0): ?>
@@ -267,7 +295,18 @@ $pageCount = count($pages) + 2;   // checklist + lines + sign-off
       <div><span class="k">Distance</span><span class="v sm"><?= number_format((float)$e['travel_km'], 1) ?> km</span></div>
       <?php endif; ?>
     </div>
+    <?php else: ?>
+    <div class="claim">
+      <div><span class="k">Same line as the page before</span>
+           <span class="v sm">figures shown there</span></div>
+    </div>
+    <?php endif; ?>
 
+    <?php // The verdict belongs with the figures, which are on the line's first
+          // page only. Printed under a later receipt it told a signer the card
+          // slip had been checked against the claim, when what was compared was
+          // the itemised bill on the sheet before. ?>
+    <?php if ((int)($p['part'] ?? 0) === 0): ?>
     <?php if ($differs): ?>
     <div class="differ">
       <strong>Worth a look.</strong> The amount claimed and the total read off the receipt
@@ -279,6 +318,7 @@ $pageCount = count($pages) + 2;   // checklist + lines + sign-off
       The total read off the receipt matches the amount claimed<?php
         if (!empty($e['scan_vendor'])) echo ', and the receipt is from ' . $h($e['scan_vendor']); ?>.
     </p>
+    <?php endif; ?>
     <?php endif; ?>
 
     <div class="shot">
