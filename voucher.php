@@ -302,6 +302,11 @@ $pageCount = count($pages) + 2;   // checklist + lines + sign-off
     </div>
     <?php endif; ?>
 
+    <?php // The verdict belongs with the figures, which are on the line's first
+          // page only. Printed under a later receipt it told a signer the card
+          // slip had been checked against the claim, when what was compared was
+          // the itemised bill on the sheet before. ?>
+    <?php if ((int)($p['part'] ?? 0) === 0): ?>
     <?php if ($differs): ?>
     <div class="differ">
       <strong>Worth a look.</strong> The amount claimed and the total read off the receipt
@@ -313,6 +318,7 @@ $pageCount = count($pages) + 2;   // checklist + lines + sign-off
       The total read off the receipt matches the amount claimed<?php
         if (!empty($e['scan_vendor'])) echo ', and the receipt is from ' . $h($e['scan_vendor']); ?>.
     </p>
+    <?php endif; ?>
     <?php endif; ?>
 
     <div class="shot">

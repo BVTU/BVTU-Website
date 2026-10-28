@@ -1339,14 +1339,27 @@ function uploadAndScan(file, rowId, allowDup) {
             }
             const row = document.getElementById('row-' + rowId);
             if (!row) return;
-            if (data.date)        row.querySelector('[name="expense_date[]"]').value = data.date;
-            if (data.description) row.querySelector('[name="description[]"]').value  = data.description;
-            const amts = {travel_amt: data.travel_amount, meals: data.meals_amount, gifts: data.gifts_amount, misc: data.misc_amount, office: data.office_amount, phone: data.phone_amount};
-            for (const [k,v] of Object.entries(amts)) {
-                if (v > 0) { const el = row.querySelector(`[name="${k}[]"]`); if(el) el.value = v.toFixed(2); }
+            /*
+             * Only the first receipt on a line writes the line.
+             *
+             * A card slip added to a filled line used to overwrite the date,
+             * the description and the amounts with its own — dropping a $48
+             * claim to the $12 on the slip — and then overwrite what the scan
+             * had read, so the line flagged itself against a figure it had
+             * just been given. The phone path has always added without
+             * rewriting; this is the same rule for the paperclip.
+             */
+            const firstOnLine = rowReceipts(rowId).length === 0;
+            if (firstOnLine) {
+                if (data.date)        row.querySelector('[name="expense_date[]"]').value = data.date;
+                if (data.description) row.querySelector('[name="description[]"]').value  = data.description;
+                const amts = {travel_amt: data.travel_amount, meals: data.meals_amount, gifts: data.gifts_amount, misc: data.misc_amount, office: data.office_amount, phone: data.phone_amount};
+                for (const [k,v] of Object.entries(amts)) {
+                    if (v > 0) { const el = row.querySelector(`[name="${k}[]"]`); if(el) el.value = v.toFixed(2); }
+                }
+                if (data.suggested_grant_id) row.querySelector('[name="grant_id[]"]').value = data.suggested_grant_id;
+                if (data.suggested_bl_id)    row.querySelector('[name="budget_line_id[]"]').value = data.suggested_bl_id;
             }
-            if (data.suggested_grant_id) row.querySelector('[name="grant_id[]"]').value = data.suggested_grant_id;
-            if (data.suggested_bl_id)    row.querySelector('[name="budget_line_id[]"]').value = data.suggested_bl_id;
             if (data.saved_path) {
                 // Added, not written over. Attaching a second file from the
                 // desktop replaced the first here while the phone path added
@@ -1357,8 +1370,9 @@ function uploadAndScan(file, rowId, allowDup) {
             }
             syncRowFromHidden(rowId);
             /* Kept with the row so the comparison still works next week, when
-             * this page has been closed and reopened twice. */
-            bvtuSetRowScanFields(rowId, data);
+             * this page has been closed and reopened twice — and only for the
+             * receipt those figures actually came off. */
+            if (firstOnLine) bvtuSetRowScanFields(rowId, data);
 
             if (data && data.duplicate) {
                 bvtuDupeTell(data.duplicate, document.getElementById('row-' + rowId));
@@ -2082,8 +2096,12 @@ function addPendingCard(receipt) {
     if (id) {
         var pinned = document.getElementById('row-' + id);
         var held   = pinned && pinned.querySelector('[name="receipt_path[]"]');
+        // It adds now rather than replacing, so the question is whether this
+        // photo belongs on that line at all — not whether to overwrite. Saying
+        // "replace" sent the second half of a bill to a different row.
         if (held && String(held.value).trim() &&
-            !confirm('That row already has a receipt on it. Replace it with this photo?')) {
+            !confirm('That row already has a receipt. Add this photo to the same line?\n\n'
+                   + 'Cancel to put it on a line of its own.')) {
             id = null;
         }
     }

@@ -30,6 +30,14 @@ $row = $s->fetch();
  *
  * LIKE finds the candidate rows and the decoded list decides, so a filename
  * that merely appears inside another row's JSON cannot authorise itself.
+ *
+ * It does trust that a row naming a file has a right to it, as the
+ * receipt_path lookup above always has. That holds because lpCanCreate() is
+ * execIsAdmin() — only the President has vouchers — and lpCanView() admits
+ * exactly that role, so anyone who could name somebody else's file in their
+ * own row already passes the check below. If vouchers are ever opened to
+ * other members, the owner has to come from the row that stored the file
+ * rather than from any row that mentions it.
  */
 if (!$row) {
     try {

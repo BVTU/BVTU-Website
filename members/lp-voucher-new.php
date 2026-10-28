@@ -1278,10 +1278,12 @@ function uploadAndScan(file, rowId, allowDup) {
                 showRowScanError(rowId, data.error);
                 if (!data.saved_path) return;   // nothing was stored to attach
             }
+            const wasFirst = rowReceipts(rowId).length === 0;
             populateRow(rowId, data);
             /* Kept with the row so the comparison still works next week, when
-             * this page has been closed and reopened twice. */
-            bvtuSetRowScanFields(rowId, data);
+             * this page has been closed and reopened twice — and only for the
+             * receipt those figures actually came off. */
+            if (wasFirst) bvtuSetRowScanFields(rowId, data);
 
             if (data && data.duplicate) {
                 bvtuDupeTell(data.duplicate, document.getElementById('row-' + rowId));
@@ -1303,6 +1305,21 @@ function uploadAndScan(file, rowId, allowDup) {
 function populateRow(rowId, data) {
     const row = document.getElementById('row-' + rowId);
     if (!row) return;
+
+    /*
+     * Only the first receipt on a line writes the line. A card slip added to
+     * a filled line used to overwrite the date, description and amounts with
+     * its own — dropping a $48 claim to the $12 on the slip. The file is
+     * still attached below; it just does not get to rewrite the claim.
+     */
+    const firstOnLine = rowReceipts(rowId).length === 0;
+    if (!firstOnLine) {
+        if (data.saved_path) {
+            addRowReceipt(rowId, data.saved_path, data.original_name || data.saved_path);
+            renderReceipts(rowId);
+        }
+        return;
+    }
 
     if (data.date)        setInput(row, '[name="expense_date[]"]', data.date);
     if (data.description) setInput(row, '[name="description[]"]', data.description);
@@ -2131,8 +2148,12 @@ function addPendingCard(receipt) {
     if (id) {
         var pinned = document.getElementById('row-' + id);
         var held   = pinned && pinned.querySelector('[name="receipt_path[]"]');
+        // It adds now rather than replacing, so the question is whether this
+        // photo belongs on that line at all — not whether to overwrite. Saying
+        // "replace" sent the second half of a bill to a different row.
         if (held && String(held.value).trim() &&
-            !confirm('That row already has a receipt on it. Replace it with this photo?')) {
+            !confirm('That row already has a receipt. Add this photo to the same line?\n\n'
+                   + 'Cancel to put it on a line of its own.')) {
             id = null;
         }
     }
