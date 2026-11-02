@@ -15,6 +15,9 @@ if (!cgIsAdmin($member['email'])) {
 }
 
 $year = isset($_GET['year']) ? (int)$_GET['year'] : cgCurrentYear();
+// A school year or nothing. "?year=abc" casts to 0, which is not a year any
+// application can belong to and would put a "0–1" option in the picker.
+if ($year < 2000 || $year > 2100) $year = cgCurrentYear();
 $apps = cgGetApplications($year);
 
 // ── CSV export — must happen before any HTML output ───────────────────────
@@ -592,6 +595,14 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
       border-color: var(--primary);
       box-shadow: 0 0 0 3px rgba(26,107,53,.1);
     }
+    .cg-year-pick { display: flex; align-items: center; gap: .4rem; margin: 0; }
+    .cg-year-pick label { font-size: .74rem; font-weight: 700; text-transform: uppercase;
+        letter-spacing: .04em; color: var(--gray-500); }
+    .cg-year-pick select { font: inherit; font-size: .84rem; padding: .3rem .5rem;
+        border: 1px solid var(--border); border-radius: 7px; background: #fff; cursor: pointer; }
+    .cg-edit-link { font-size: .74rem; font-weight: 700; color: var(--primary);
+        text-decoration: none; margin-left: .45rem; border-bottom: 1px solid transparent; }
+    .cg-edit-link:hover { border-bottom-color: var(--primary); }
     .app-action-btns { display: flex; gap: .6rem; flex-wrap: wrap; }
     .app-action-btns .btn {
       padding: .5rem 1.1rem;
@@ -603,8 +614,11 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
     }
     .btn-approve  { background: var(--primary); color: #fff; border: none; }
     .btn-approve:hover  { background: #155a2a; }
-    .btn-waitlist { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
-    .btn-waitlist:hover { background: #dbeafe; }
+    /* A link wearing the row's button, so it lines up with the real buttons
+       beside it rather than looking like text that wandered in. */
+    .btn-edit { background: #fff; color: var(--primary); border: 1px solid var(--primary);
+      text-decoration: none; display: inline-flex; align-items: center; }
+    .btn-edit:hover { background: var(--accent); }
     .btn-decline  { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
     .btn-decline:hover  { background: #fee2e2; }
 
@@ -698,6 +712,46 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
         <a href="?view=print&year=<?= $year ?>" class="<?= $cgReadOnly ? 'active' : '' ?>"
            title="A plain read-through, for printing or reading at a meeting">Print view</a>
       </div>
+
+      <?php
+        /*
+         * A school year to look at.
+         *
+         * The page has always defaulted to the current year and had no way to
+         * reach another, so every application from a previous year was
+         * unreachable except by typing ?year= into the address bar — including
+         * when the current year is simply empty and the page looks broken.
+         *
+         * The list is the years that actually have applications, plus the
+         * current one, so it never offers an empty year nobody has used.
+         */
+        $cgYears = [];
+        foreach (cgApplicationsAllYears() as $a) {
+            $y = (int)($a['school_year'] ?? 0);
+            if ($y > 0) $cgYears[$y] = true;
+        }
+        $cgYears[cgCurrentYear()] = true;
+        // And whatever year is actually being shown — a stale bookmark can
+        // name a real year with nothing in it. Without this the picker said
+        // 2026 while the page showed something else, and choosing 2026 fired
+        // no change event, so there was no way back.
+        $cgYears[$year] = true;
+        $cgYears = array_keys($cgYears);
+        rsort($cgYears);
+      ?>
+      <?php if (count($cgYears) > 1): ?>
+      <form method="get" class="cg-year-pick">
+        <input type="hidden" name="view" value="<?= htmlspecialchars($view) ?>">
+        <label for="cg-year">Year</label>
+        <select id="cg-year" name="year" onchange="this.form.submit()">
+          <?php foreach ($cgYears as $y): ?>
+          <option value="<?= $y ?>"<?= $y === $year ? ' selected' : '' ?>>
+            <?= $y ?>&ndash;<?= ($y + 1) % 100 ?>
+          </option>
+          <?php endforeach; ?>
+        </select>
+      </form>
+      <?php endif; ?>
       <a href="?export=csv&year=<?= $year ?>" class="export-btn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Export CSV
@@ -1151,7 +1205,26 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
               </div>
               <div class="app-detail-item">
                 <div class="dl">Days requested</div>
-                <div class="dd"><?= $days ?></div>
+                <div class="dd">
+                  <?= $days ?>
+                  <?php /*
+                   * The editor has always taken an id for a signed-in admin and
+                   * has always let one edit a locked or declined application —
+                   * it was simply never linked from here, so the only way in
+                   * was to email the applicant a link and ask them to do it.
+                   *
+                   * Here rather than in the actions below, because days are what
+                   * people ask to change. Days requested is the number of
+                   * proposed dates, so the editor changes the dates and the
+                   * count follows; a box for the number on its own would let the
+                   * two disagree.
+                   */ ?>
+                  <?php // The print view renders its own read-only card and never
+                        // reaches this markup, so no guard is needed here. ?>
+                  <a class="cg-edit-link"
+                     href="../collab-grant-edit.php?id=<?= (int)$app['id'] ?>"
+                     title="Change the dates, and anything else on the application">change</a>
+                </div>
               </div>
               <?php
                 $pdDates = [];
@@ -1186,7 +1259,7 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
 
             <?php if ($view !== 'followup'): ?>
             <div class="cg-decision">
-            <form class="app-action-form" method="post">
+            <form class="app-action-form" method="post" id="decide-<?= (int)$app['id'] ?>">
               <?= csrfField() ?>
               <input type="hidden" name="app_id" value="<?= $app['id'] ?>">
               <?php
@@ -1253,9 +1326,23 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
                 <span class="cg-field-note">Charged to both teachers on this application.</span>
               </label>
 
+              <?php /*
+               * Edit takes the place Waitlist had.
+               *
+               * Editing on somebody's behalf is asked for far more often than
+               * waitlisting, and it was folded away while Waitlist sat in the
+               * decision row — so the common job was the hidden one. Waitlist
+               * moves down with the other occasional actions rather than being
+               * removed: it is a real status, applications are in it, and it
+               * still shows on the card and in the figures.
+               *
+               * A link, not a submit: this form posts a decision, and Edit is
+               * not one. It carries the button's look so the row reads as one
+               * set of things you can do here.
+               */ ?>
               <div class="app-action-btns">
                 <button type="submit" name="action" value="approved"   class="btn btn-approve">✓ Approve &amp; notify applicant</button>
-                <button type="submit" name="action" value="waitlisted" class="btn btn-waitlist">Waitlist</button>
+                <a href="../collab-grant-edit.php?id=<?= (int)$app['id'] ?>" class="btn btn-edit">Edit application</a>
                 <button type="submit" name="action" value="declined"   class="btn btn-decline">Decline</button>
                 <?php if ($app['status'] !== 'pending'): ?>
                   <button type="submit" name="action" value="pending" class="btn" style="border:1px solid var(--border);background:#fff;color:var(--gray-500);">Reset to pending</button>
@@ -1277,21 +1364,48 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
                 days, open it under <a href="?view=all&amp;year=<?= $year ?>#app-<?= (int)$app['id'] ?>">All</a>.</p>
             <?php endif; ?>
 
-            <?php // The edit link and the "send them the link" button are needed
-                  // perhaps twice a term. They used to sit between the goals and
-                  // the decision, which is the one place nothing should. ?>
+            <?php /*
+             * Kept out of the decision path on purpose — these are wanted
+             * perhaps twice a term, and they used to sit between the goals and
+             * the decision, which is the one place nothing should.
+             *
+             * But the summary said "other things you can do", which names
+             * nothing, so the edit was effectively unfindable: somebody looking
+             * for it read straight past this line and concluded the feature did
+             * not exist. Folded away is fine. Unlabelled is not.
+             */ ?>
             <details class="app-more">
-              <summary>Other things you can do with this application</summary>
+              <summary><?= $view === 'followup'
+                  ? 'Send them the edit link'
+                  : 'Waitlist it, or send them the edit link' ?></summary>
               <div class="app-more-body">
-                <p>
-                  <a href="../collab-grant-edit.php?id=<?= (int)$app['id'] ?>">Edit this application</a>
-                  on <?= htmlspecialchars($app['applicant_name']) ?>'s behalf
-                  <?php if (!empty($app['edited_at'])): ?>
-                    <span class="app-more-note">— last changed
-                      <?= date('M j, Y', strtotime($app['edited_at'])) ?>
-                      by <?= htmlspecialchars($app['edited_by']) ?></span>
-                  <?php endif; ?>
+                <?php /*
+                 * Submits the decision form above rather than carrying its own.
+                 *
+                 * The handler writes admin_notes on every status change, so a
+                 * separate form here would have had to repost the notes — and
+                 * would still have thrown away anything typed into the box and
+                 * not yet saved. Pointing at the real form keeps the notes, the
+                 * day count and the token exactly as they are on screen.
+                 */ ?>
+                <?php // Only where the decision form exists. Follow-through does
+                      // not render it, so the button had no owner there: the click
+                      // did nothing at all while the summary promised otherwise. ?>
+                <?php if ($view !== 'followup'): ?>
+                <p style="margin:0 0 .6rem;">
+                  <button type="submit" form="decide-<?= (int)$app['id'] ?>"
+                          name="action" value="waitlisted" class="btn app-more-btn">
+                    Waitlist this application
+                  </button>
+                  <span class="app-more-note">Holds it without deciding; the days are not counted.</span>
                 </p>
+                <?php endif; ?>
+                <?php if (!empty($app['edited_at'])): ?>
+                <p class="app-more-note" style="margin:0 0 .6rem;">
+                  Last changed <?= date('M j, Y', strtotime($app['edited_at'])) ?>
+                  by <?= htmlspecialchars($app['edited_by']) ?>.
+                </p>
+                <?php endif; ?>
                 <form method="post">
                   <?= csrfField() ?>
                   <input type="hidden" name="app_id" value="<?= (int)$app['id'] ?>">
