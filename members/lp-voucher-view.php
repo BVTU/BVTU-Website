@@ -2,6 +2,10 @@
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/prod-db.php';
 require_once __DIR__ . '/lp-db.php';
+// expWouldSelfSign() is used below to ask the same question the mark-paid guard
+// throws on. lp-db.php only requires exp-db.php inside functions, so relying on
+// that would work until whichever call happened to pull it in stopped running.
+require_once __DIR__ . '/exp-db.php';
 require_once __DIR__ . '/lp-share.php';
 require_once __DIR__ . '/lp-checks.php';
 requireLogin();
@@ -21,6 +25,7 @@ if (!$isOwner && !lpCanView($member['email'])) { header('Location: lp-dashboard.
 
 $expenses = lpGetExpenses($id);
 $notice   = null;
+$error    = null;   // a refused mark-paid says why, rather than looking ignored
 
 // This page's own handlers (submit, delete, resend) act on POST. They now carry
 // tokens, so check them here — a token that is emitted and never verified is
@@ -65,6 +70,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'submi
             ? 'Voucher submitted — the treasurer has been notified by email.'
             : 'Voucher submitted, but no Treasurer is assigned so no email was sent. '
             . 'Assign a Treasurer in the Roles &amp; Directory, then use “Resend to Treasurer”.';
+    }
+}
+
+// ── Record the e-transfer ─────────────────────────────────────────────────────
+/*
+ * The last step lived only on the Approvals queue, so the page that shows a
+ * voucher in full — the one you open to check whether it has been dealt with —
+ * had no way to finish it and nothing but a greyed "E-transfer sent" line to
+ * say it had not. Recording it here closes that.
+ *
+ * lpMarkPaid() owns the rules: it refuses unless both signatures are in, and
+ * the same guard keeps a signer from paying a claim they are party to. Who may
+ * press it is asked of the voucher, because a vendor payment and a
+ * reimbursement do not have the same answer.
+ */
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'mark_paid') {
+    try {
+        lpMarkPaid($id, $member['email'], $member['name'] ?? $member['email'],
+                   trim((string)($_POST['note'] ?? '')),
+                   trim((string)($_POST['payment_ref'] ?? '')),
+                   trim((string)($_POST['payment_date'] ?? '')));
+        /* Everything after the write is inside its own guard. The payment is
+         * recorded by this point, so nothing here may throw into the outer
+         * catch — which would report a payment this request had just made as
+         * one somebody else had already made. */
+        try {
+            $v = lpGetVoucher($id);
+            if ($v) lpEmailPaid($v, array_sum(array_map('lpRowTotal', lpGetExpenses($id))));
+        } catch (\Throwable $e) {
+            error_log('lp-voucher-view paid notice: ' . $e->getMessage());
+        }
+        header('Location: lp-voucher-view.php?id=' . $id . '&paid=1');
+        exit;
+    } catch (\Throwable $e) {
+        /* The common way to land here is pressing Mark paid twice, or going
+         * back and resubmitting. That is not a fault and should not read like
+         * one: the payment is recorded either way, which is what the person
+         * wanted to know. */
+        $fresh = lpGetVoucher($id);
+        if ($fresh && $fresh['status'] === 'paid') {
+            $voucher = $fresh;
+            $notice  = 'Already recorded as paid — nothing was sent twice.';
+        } elseif ($e instanceof RuntimeException) {
+            // Ours, written to be read.
+            $error = $e->getMessage();
+        } else {
+            // A driver message — "SQLSTATE[22001] data too long" — helps nobody
+            // reading this page, and names the schema to whoever is.
+            error_log('lp-voucher-view mark_paid: ' . $e->getMessage());
+            $error = 'That could not be recorded. The problem has been logged — '
+                   . 'check the reference is not over-long and try again.';
+        }
     }
 }
 
@@ -242,6 +299,25 @@ arsort($blSummary);
   <link rel="stylesheet" href="../css/style.css?v=<?= @filemtime(__DIR__ . '/../css/style.css') ?>">
   <link rel="icon" href="../favicon.ico">
   <style>
+    /* Paid is the loudest thing on the page: the job of this block is to stop
+       somebody paying the same voucher a second time. */
+    .paid-banner { display:flex; gap:1rem; align-items:flex-start; background:#f0fdf4;
+      border:2px solid #16a34a; border-radius:10px; padding:1rem 1.15rem; margin-bottom:1.25rem;
+      font-size:.9rem; color:#14532d; line-height:1.6; max-width:640px; }
+    .paid-mark { flex:0 0 auto; font-size:.95rem; font-weight:800; letter-spacing:.06em;
+      background:#16a34a; color:#fff; border-radius:7px; padding:.3rem .7rem; white-space:nowrap; }
+    .paid-warn { margin-top:.35rem; font-weight:700; }
+    .pay-box { background:#fff; border:1px solid var(--gray-200); border-radius:12px;
+      padding:1rem 1.25rem; margin-bottom:1.25rem; max-width:640px; }
+    .pay-lead { font-size:.88rem; color:var(--gray-700); line-height:1.6; margin-bottom:.8rem; }
+    .pay-fields { display:flex; gap:.7rem; flex-wrap:wrap; margin-bottom:.9rem; }
+    .pay-fields label { display:flex; flex-direction:column; font-size:.72rem; font-weight:800;
+      text-transform:uppercase; letter-spacing:.04em; color:var(--gray-500); gap:.2rem; }
+    .pay-fields label.wide { flex:1 1 13rem; }
+    .pay-fields input { font:inherit; font-size:.88rem; padding:.42rem .55rem;
+      border:1px solid var(--gray-300); border-radius:7px; }
+    .pay-wait { font-size:.88rem; color:var(--gray-700); line-height:1.6; }
+    .pay-wait-who { font-size:.8rem; color:var(--gray-500); margin-top:.2rem; }
     .approval-card { background:#fff; border:1px solid var(--gray-200); border-radius:12px;
                      padding:1rem 1.25rem; margin-bottom:1.25rem; max-width:520px; }
     .approval-head { font-size:.72rem; font-weight:800; text-transform:uppercase;
@@ -478,6 +554,129 @@ arsort($blSummary);
   </div>
   <?php endif; ?>
 
+  <?php
+    /*
+     * Where the money is up to, said plainly on the page you open to find out.
+     *
+     * Three states and never a silence: paid, waiting on somebody, or yours to
+     * record. The paid one is deliberately the loudest — the whole point is
+     * that nobody reaches for a voucher and pays it a second time.
+     */
+    $pay      = lpPayTo($voucher);
+    $mayPay   = $voucher['status'] === 'vp_approved' && lpCanSign1For($voucher, $member['email'])
+                && !expWouldSelfSign($member['email'], $pay['email'] ?: null,
+                                     lpSignBlockedClaimant($voucher));
+    /*
+     * Who can actually record it, asked rather than assumed.
+     *
+     * This said "the Treasurer" and listed the Treasurer's address. On a vendor
+     * payment to the Treasurer's own address they are barred, and the job falls
+     * to the President or VP — so the one person who could not act was told
+     * they were waiting on themselves, and the people who could were not named.
+     * Only worked out when the waiting branch is actually shown.
+     */
+    $whoCanPay = function () use ($voucher, $pay) {
+        $out = [];
+        // Presidents included: when the Treasurer is the one being paid the
+        // slot falls to the President or the VP, and leaving the President out
+        // meant a page that said nobody could record it while somebody could.
+        // The admin constants are configuration rather than directory, so they
+        // are named here too.
+        $admins = [];
+        foreach (['EXPENSE_ADMIN_EMAIL', 'PROD_ADMIN_EMAIL'] as $c) {
+            if (defined($c)) $admins[] = (string)constant($c);
+        }
+        foreach (array_merge(lpGetTreasurerEmails(), lpGetVPEmails(), lpGetPresidentEmails(),
+                             $admins, [(string)($voucher['submitted_by_email'] ?? '')]) as $cand) {
+            $cand = trim((string)$cand);
+            if ($cand === '' || isset($out[strtolower($cand)])) continue;
+            if (!lpCanSign1For($voucher, $cand)) continue;
+            if (expWouldSelfSign($cand, $pay['email'] ?: null, lpSignBlockedClaimant($voucher))) continue;
+            $out[strtolower($cand)] = $cand;
+        }
+        return array_values($out);
+    };
+  ?>
+  <?php if ($voucher['status'] === 'paid'): ?>
+  <div class="paid-banner">
+    <div class="paid-mark">&#10003; PAID</div>
+    <div>
+      <?php // No amount here. It would be read off the expense rows as they are
+            // now, and nothing stops those being edited after payment — so the
+            // banner would state, as fact, a figure that may never have been
+            // sent. The voucher's total is already on this page; what the
+            // banner is for is who, when and whether it has gone. ?>
+      Paid to <strong><?= htmlspecialchars($pay['name']) ?></strong><?= $pay['vendor'] ? ' (vendor)' : '' ?>
+      <?php if (!empty($voucher['payment_date'])): ?>
+        on <?= htmlspecialchars(date('F j, Y', strtotime($voucher['payment_date']))) ?><?php
+      elseif (!empty($voucher['paid_at'])): ?>
+        on <?= htmlspecialchars(date('F j, Y', strtotime($voucher['paid_at']))) ?><?php endif; ?>.
+      <?php if (!empty($voucher['payment_ref'])): ?>
+        Reference <strong><?= htmlspecialchars($voucher['payment_ref']) ?></strong>.
+      <?php endif; ?>
+      <?php if (!empty($voucher['paid_by_name'])): ?>
+        Recorded by <?= htmlspecialchars($voucher['paid_by_name']) ?>.
+      <?php endif; ?>
+      <div class="paid-warn">Do not send it again.</div>
+    </div>
+  </div>
+  <?php elseif ($voucher['status'] === 'vp_approved'): ?>
+  <div class="pay-box">
+    <?php if ($mayPay): ?>
+    <form method="POST" class="pay-form"
+          onsubmit="return confirm('Record this as paid?\n\nIt will show as paid to everyone who can see the voucher, and cannot be undone here.');">
+      <?= csrfField() ?>
+      <input type="hidden" name="action" value="mark_paid">
+      <div class="pay-lead">
+        Both signatures are in. Once the e&#8209;transfer has gone to
+        <strong><?= htmlspecialchars($pay['name']) ?></strong><?php
+          if ($pay['email'] !== ''): ?> (<?= htmlspecialchars($pay['email']) ?>)<?php endif; ?>,
+        record it here so nobody sends it twice.
+      </div>
+      <div class="pay-fields">
+        <label>Date sent
+          <input type="date" name="payment_date" value="<?= date('Y-m-d') ?>">
+        </label>
+        <label>Reference
+          <input type="text" name="payment_ref" placeholder="e&#8209;transfer or cheque no.">
+        </label>
+        <label class="wide">Note
+          <input type="text" name="note" placeholder="Optional">
+        </label>
+      </div>
+      <button type="submit" class="btn btn-primary">Mark paid</button>
+    </form>
+    <?php else: ?>
+    <?php // Said out loud so the person who cannot do it stops wondering
+          // whether it is stuck, and does not pay it another way. ?>
+    <?php $canPay = $whoCanPay(); ?>
+    <div class="pay-wait">
+      <strong>Waiting on the e&#8209;transfer</strong> to
+      <?= htmlspecialchars($pay['name']) ?><?php if ($pay['email'] !== ''): ?> (<?= htmlspecialchars($pay['email']) ?>)<?php endif; ?>,
+      and on somebody recording it here.
+      <div class="pay-wait-who">
+        <?= $canPay
+            ? 'That is ' . htmlspecialchars(implode(' or ', $canPay)) . '.'
+            : 'Nobody who may record it can be identified — check the Treasurer is assigned in Roles &amp; Directory.' ?>
+      </div>
+    </div>
+    <?php endif; ?>
+  </div>
+  <?php endif; ?>
+
+  <?php // Only when nothing else has something to say — a Share or Revoke done
+        // from the &paid=1 URL would otherwise lose its own confirmation. ?>
+  <?php if ($notice === null && ($_GET['paid'] ?? '') === '1' && $voucher['status'] === 'paid') $notice =
+          'Recorded as paid. It shows as paid to everyone who can see this voucher.'; ?>
+  <?php if ($error): ?>
+    <?php // Styled outright: "notice" is not a class this page or the stylesheet
+          // defines, so a refused payment rendered as bare tinted text. ?>
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;
+                padding:.75rem 1rem;margin-bottom:1.25rem;font-size:.88rem;
+                color:#991b1b;font-weight:600;max-width:640px;">
+      &#9888; <?= htmlspecialchars($error) ?>
+    </div>
+  <?php endif; ?>
   <?php if ($notice): ?>
   <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:.75rem 1rem;margin-bottom:1.25rem;font-size:.88rem;color:#166534;font-weight:600;">
     ✓ <?= htmlspecialchars($notice) ?>
