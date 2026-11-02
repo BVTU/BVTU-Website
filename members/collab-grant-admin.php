@@ -240,6 +240,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'colla
     $apps = cgGetApplications($year);
 }
 
+// Accepting a suggested spelling records the address and stops there. The
+// suggestion is a guess from a misspelling; emailing on it in the same press
+// would write to that guess before anyone had read it.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'collab-suggest') {
+    csrfCheck();
+    $cid  = (int)($_POST['app_id'] ?? 0);
+    $addr = reqPostStr('collaborator_email');
+    $app  = $cid ? cgGetApplication($cid) : null;
+
+    if (!$app) {
+        $notice = 'Could not find that application.';
+    } elseif ($addr === '' || !filter_var($addr, FILTER_VALIDATE_EMAIL)) {
+        $notice = 'That suggestion is no longer valid — type the address instead.';
+    } else {
+        // Re-derived here rather than trusted from the form: the posted address
+        // decides who gets written to, and a hand-made POST must not be able to
+        // point it anywhere it likes.
+        $again = cgNearestPerson((string)$app['collaborator_name']);
+        if (!$again || strcasecmp($again['email'], $addr) !== 0) {
+            $notice = 'That suggestion no longer matches — type the address instead.';
+        } elseif (!cgSetCollaboratorEmail($cid, $addr)) {
+            $notice = 'That address could not be saved — the collaborator_email column '
+                    . 'is missing on this server. Tell the site admin.';
+        } else {
+            $notice = $app['collaborator_name'] . ' is recorded as ' . $again['name']
+                    . ' (' . $addr . '). Nothing has been emailed yet.';
+        }
+    }
+    $apps = cgGetApplications($year);
+}
+
 // ── Status updates ────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_id'])
     && in_array($_POST['action'] ?? '', ['approved', 'declined', 'waitlisted', 'pending'], true)) {
@@ -886,6 +917,25 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
           <?= $known === '' ? 'Save &amp; send' : 'Send' ?>
         </button>
       </form>
+      <?php
+        /* Nobody misspells their own name, but the lead types the
+         * collaborator's. An unmatched name is not cosmetic: the days sit under
+         * the name as typed instead of the person's total, and nobody is ever
+         * emailed to book their absence. Offered only where nothing matched, so
+         * a correct name is never second-guessed. */
+        $guess = $known === '' ? cgNearestPerson((string)$a['collaborator_name']) : null;
+      ?>
+      <?php if ($guess): ?>
+      <form method="POST" class="cg-flag-dismiss">
+        <?= csrfField() ?>
+        <input type="hidden" name="action" value="collab-suggest">
+        <input type="hidden" name="app_id" value="<?= (int)$a['id'] ?>">
+        <input type="hidden" name="collaborator_email" value="<?= htmlspecialchars($guess['email']) ?>">
+        <button type="submit" class="cg-flag-link">
+          Did you mean <?= htmlspecialchars($guess['name']) ?>? &mdash; use their address
+        </button>
+      </form>
+      <?php endif; ?>
       <?php // Its own form: a GET-less dismiss cannot share the send form above,
             // or pressing it would submit the address field as a send too. ?>
       <form method="POST" class="cg-flag-dismiss"

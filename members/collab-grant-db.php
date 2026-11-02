@@ -1187,6 +1187,70 @@ function cgNameKey(string $name): string {
     return trim((string)$n);
 }
 
+/** How far a name may be mistyped before it stops being the same name. */
+function cgTypoLimit(string $s): int {
+    $n = function_exists('mb_strlen') ? mb_strlen($s) : strlen($s);
+    if ($n <= 4) return 1;
+    if ($n <= 8) return 2;
+    return 3;
+}
+
+/**
+ * The contact a mistyped collaborator name probably meant, or null.
+ *
+ * Nobody misspells their own name, but the lead types the collaborator's, and
+ * "Mcyntire" for "McIntyre" is two transposed letters. An unmatched name is
+ * not a small problem: those days sit under the name as typed instead of the
+ * person's total, and cgSendCollaboratorEmail() has no address, so the
+ * collaborator is never told to book their absence.
+ *
+ * Offered to an admin, never applied on its own. Two candidates equally close
+ * return nothing, the same refusal to guess that ambiguous names already get.
+ * A collaborator is often written as a surname alone, so a single typed word is
+ * compared against surnames rather than whole names.
+ */
+function cgNearestPerson(string $typed): ?array {
+    $key = cgNameKey($typed);
+    if ($key === '' || strlen($key) < 4) return null;
+
+    $tTokens = preg_split('/\s+/', $key) ?: [$key];
+    $tLast   = (string)end($tTokens);
+    $oneWord = count($tTokens) === 1;
+
+    $best = null;
+    $bestD = PHP_INT_MAX;
+    $tie   = false;
+
+    foreach (cgContactsByName() as $ck => $c) {
+        // It matched after all, so this is not a typo and not our business.
+        if ($ck === $key) return null;
+        if (!empty($c['ambiguous']) || !empty($c['archived'])) continue;
+
+        $cTokens = preg_split('/\s+/', $ck) ?: [$ck];
+        $cLast   = (string)end($cTokens);
+
+        $a   = $oneWord ? $tLast : $key;
+        $b   = $oneWord ? $cLast : $ck;
+        $d   = levenshtein($a, $b);
+        $lim = cgTypoLimit($a);
+
+        // Names that sound alike are allowed to be spelled a little further
+        // apart — which is most of how surnames are got wrong.
+        if ($d > $lim) {
+            if (metaphone($tLast) === '' || metaphone($tLast) !== metaphone($cLast)) continue;
+            if ($d > $lim + 1) continue;
+        }
+
+        if ($d < $bestD)       { $bestD = $d; $best = $c; $tie = false; }
+        elseif ($d === $bestD) { $tie = true; }
+    }
+
+    if ($best === null || $tie) return null;
+    $email = trim((string)$best['email']);
+    if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) return null;
+    return ['name' => $best['name'], 'email' => $email, 'distance' => $bestD];
+}
+
 /**
  * Contacts indexed by comparable name, for resolving a typed collaborator.
  *
