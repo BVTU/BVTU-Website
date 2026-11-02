@@ -70,6 +70,8 @@ function bvtuNavItems(): array {
              'Your coverage, beneficiaries and conversion rights'],
             ['Student Loan Forgiveness', 'loan-forgiveness.php', false,
              'Up to $30,000 forgiven for teaching in the north'],
+            ['Deferred Salary Leave Plan', 'deferred-salary.php', false,
+             'Save part of your pay now and take a year off later'],
             ['Booking time off', 'atrieve.php', false,
              'Release time and absences, and how to enter them in Atrieve'],
             ['Class size &amp; remedy', 'remedy-tracker.php', false,
@@ -128,6 +130,7 @@ function bvtuNavSection(string $file): string {
                           'calendars.php', 'trustee-zones.php', 'trustee-candidates.php'],
         'members'     => ['members.php', 'benefits.php', 'life-insurance.php', 'loan-forgiveness.php',
                           'salary.php', 'ttoc.php', 'atrieve.php', 'remedy-tracker.php',
+                          'deferred-salary.php',
                           'collab-grant.php', 'collab-grant-edit.php',
                           // Added with the events work; without them neither page
                           // lights up its section in the bar.

@@ -109,6 +109,15 @@ $member   = $loggedIn ? getMember() : null;
           <div class="member-page-card-arrow">See if you qualify →</div>
         </a>
 
+        <a href="deferred-salary.php" class="member-page-card">
+          <div class="member-page-card-icon">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <h3>Deferred Salary Leave Plan</h3>
+          <p>Set aside part of your pay for up to six years and take a year off, paid from your own deferred salary. Deadlines, limits and the forms.</p>
+          <div class="member-page-card-arrow">See how it works &rarr;</div>
+        </a>
+
         <a href="ttoc.php" class="member-page-card">
           <div class="member-page-card-icon">
             <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>

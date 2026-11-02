@@ -212,6 +212,15 @@ require_once __DIR__ . '/members/auth.php';   // so the nav can tell you are sig
           <div class="doc-page-card-arrow">View calendars →</div>
         </a>
 
+        <a href="deferred-salary.php" class="doc-page-card">
+          <div class="doc-page-card-icon">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <h3>Deferred Salary Leave Plan</h3>
+          <p>Article G.37 and its schedules — defer part of your pay to fund a year off. Plan, form and deadlines.</p>
+          <div class="doc-page-card-arrow">How it works →</div>
+        </a>
+
         <a href="lous.php" class="doc-page-card">
           <div class="doc-page-card-icon">
             <svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
