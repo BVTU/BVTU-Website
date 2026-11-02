@@ -592,6 +592,9 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
       border-color: var(--primary);
       box-shadow: 0 0 0 3px rgba(26,107,53,.1);
     }
+    .cg-edit-link { font-size: .74rem; font-weight: 700; color: var(--primary);
+        text-decoration: none; margin-left: .45rem; border-bottom: 1px solid transparent; }
+    .cg-edit-link:hover { border-bottom-color: var(--primary); }
     .app-action-btns { display: flex; gap: .6rem; flex-wrap: wrap; }
     .app-action-btns .btn {
       padding: .5rem 1.1rem;
@@ -1151,7 +1154,24 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
               </div>
               <div class="app-detail-item">
                 <div class="dl">Days requested</div>
-                <div class="dd"><?= $days ?></div>
+                <div class="dd">
+                  <?= $days ?>
+                  <?php /*
+                   * The editor has always taken an id for a signed-in admin and
+                   * has always let one edit a locked or declined application —
+                   * it was simply never linked from here, so the only way in
+                   * was to email the applicant a link and ask them to do it.
+                   *
+                   * Here rather than in the actions below, because days are what
+                   * people ask to change. Days requested is the number of
+                   * proposed dates, so the editor changes the dates and the
+                   * count follows; a box for the number on its own would let the
+                   * two disagree.
+                   */ ?>
+                  <a class="cg-edit-link"
+                     href="../collab-grant-edit.php?id=<?= (int)$app['id'] ?>"
+                     title="Change the dates, and anything else on the application">change</a>
+                </div>
               </div>
               <?php
                 $pdDates = [];
