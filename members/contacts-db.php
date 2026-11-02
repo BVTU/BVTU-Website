@@ -160,13 +160,42 @@ function contactSearch(array $f, int $page = 1, int $perPage = 50): array {
     // !== '' rather than !empty(): "0" is a legitimate search term, and the
     // pill above the list would otherwise claim a filter that never applied.
     if (($f['q'] ?? '') !== '') {
-        $where[] = "(first_name LIKE ? OR last_name LIKE ? OR preferred_name LIKE ?
-                     OR email LIKE ? OR secondary_email LIKE ?)";
-        // Escape LIKE metacharacters, or searching "100%" matches everything
-        // and "_" matches any single character. The backslash is MySQL's
-        // default LIKE escape, so no ESCAPE clause is needed.
-        $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $f['q']) . '%';
-        array_push($params, $like, $like, $like, $like, $like);
+        /*
+         * One word at a time, and every word has to land somewhere.
+         *
+         * The whole query used to be matched against each column on its own, so
+         * "cody lind" was looked for inside first_name, inside last_name and
+         * inside email, and found in none of them — a first name worked, a full
+         * name never did, which is the first thing anyone types. Requiring each
+         * word separately makes a full name work in either order, and still
+         * finds "cod li".
+         */
+        $cols  = ['first_name', 'last_name', 'preferred_name', 'email', 'secondary_email'];
+        $terms = preg_split('/\s+/', trim((string)$f['q']), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        // "Lind, Cody" is a name as people write it; the comma is punctuation,
+        // not something to search for. Trimmed at the edges only, so an address
+        // keeps its dots and dashes.
+        $terms = array_values(array_filter(array_map(function ($t) {
+            return trim($t, " \t\n\r,;:");
+        }, $terms), function ($t) { return $t !== ''; }));
+        // A pasted paragraph would otherwise build an unbounded query.
+        foreach (array_slice($terms, 0, 6) as $term) {
+            /*
+             * Escape the LIKE metacharacters, or searching "100%" matches every
+             * contact and "_" matches any single character.
+             *
+             * The escape character is named rather than left to the backslash
+             * MySQL uses by default: that default disappears under the
+             * NO_BACKSLASH_ESCAPES sql_mode, and it is not the rule in every
+             * engine, so an unstated one is a wildcard escape that works until
+             * the day it does not. A pipe is not special in either a string
+             * literal or a LIKE pattern.
+             */
+            $like = '%' . str_replace(['|', '%', '_'], ['||', '|%', '|_'], $term) . '%';
+            $ors = [];
+            foreach ($cols as $c) { $ors[] = "$c LIKE ? ESCAPE '|'"; $params[] = $like; }
+            $where[] = '(' . implode(' OR ', $ors) . ')';
+        }
     }
     if (!empty($f['school_id'])) { $where[] = "school_id = ?";        $params[] = (int)$f['school_id']; }
     if (!empty($f['role']))      { $where[] = "role = ?";             $params[] = $f['role']; }
