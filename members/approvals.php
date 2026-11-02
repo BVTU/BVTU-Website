@@ -384,7 +384,14 @@ function _signedLine(array $r, string $role1, string $role2): string {
       <?php if (_cannotSignVoucher($v)): ?>
         <span class="own-item"><?php
           if ($v['status'] === 'vp_approved') {
-              echo 'Signed off. The Treasurer records the payment.';
+              /* Named, not assumed. This said "the Treasurer records the
+               * payment" to everybody — including a Treasurer who is the
+               * payee and therefore the one person who cannot. */
+              $who = lpPaymentRecorderEmails($v);
+              echo 'Signed off. '
+                 . ($who
+                    ? htmlspecialchars(implode(' or ', $who)) . ' records the payment.'
+                    : 'Nobody who may record the payment can be identified — check the roles.');
           } elseif (_isMyVoucher($v)) {
               echo 'Your own voucher — the Treasurer and VP sign it. You can withdraw it below.';
           } elseif (lpIsVendorPayment($v)) {

@@ -391,6 +391,35 @@ function lpCanRecordPayment(array $v, string $email): bool {
     return expIsTreasurerRole($email) || expIsPresident($email);
 }
 
+/**
+ * The people who may record this voucher's payment, by address.
+ *
+ * Asked in one place so the email telling somebody it is ready to pay and the
+ * page naming who can do it cannot disagree. It used to go to the Treasurer
+ * roster whatever the voucher said: on a vendor payment to the Treasurer they
+ * are barred, so the only person who could act — the President — was never
+ * told, and with no Treasurer assigned the mail went nowhere at all.
+ */
+function lpPaymentRecorderEmails(array $v): array {
+    require_once __DIR__ . '/exp-db.php';
+    $admins = [];
+    foreach (['EXPENSE_ADMIN_EMAIL', 'PROD_ADMIN_EMAIL'] as $c) {
+        if (defined($c)) $admins[] = (string)constant($c);
+    }
+    $pay     = lpPayTo($v);
+    $blocked = lpSignBlockedClaimant($v);
+    $out     = [];
+    foreach (array_merge(lpGetTreasurerEmails(), lpGetPresidentEmails(), $admins,
+                         [(string)($v['submitted_by_email'] ?? '')]) as $cand) {
+        $cand = trim((string)$cand);
+        if ($cand === '' || isset($out[strtolower($cand)])) continue;
+        if (!lpCanRecordPayment($v, $cand)) continue;
+        if (expWouldSelfSign($cand, $pay['email'] ?: null, $blocked)) continue;
+        $out[strtolower($cand)] = $cand;
+    }
+    return array_values($out);
+}
+
 /** Is the vendor on this voucher actually our own Treasurer? */
 function lpTreasurerIsPayee(array $v): bool {
     require_once __DIR__ . '/exp-db.php';
@@ -906,8 +935,6 @@ function lpMarkPaid(int $id, string $email, string $name, string $note, string $
     $v = lpGetVoucher($id);
     if (!$v) throw new RuntimeException("Voucher not found.");
     if ($v['status'] !== 'vp_approved') throw new RuntimeException("Voucher must have both signatures before marking paid.");
-    // lpCanSign1() admits the President via expIsAdmin(); they are the payee on
-    // their own voucher, so recording payment on it stays with the Treasurer.
     // Both the payee and the submitter. Passing only the submitter meant a
     // vendor payment could name a signer's own address as the "vendor", and
     // that signer could then approve and pay themselves — two signatures on
@@ -1133,7 +1160,14 @@ function lpEmailVPApproved(array $v, float $total): void {
              : '')
           . '</div>'
           . '<p><a class="btn" href="' . $siteUrl . '/members/approvals.php">Open Approvals &amp; Payments</a></p>';
-    foreach (lpGetTreasurerEmails() as $email) {
+    /* Whoever may actually record it, not the Treasurer roster by assumption.
+     * On a vendor payment to the Treasurer they are barred and the President
+     * is the one who can act; mailing the Treasurer told the wrong person and
+     * left the right one waiting for a message that never came. Falls back to
+     * the Treasurer roster only if nobody qualifies, so a misconfigured site
+     * still sends something rather than nothing. */
+    $to = lpPaymentRecorderEmails($v) ?: lpGetTreasurerEmails();
+    foreach ($to as $email) {
         lpNotify($email, 'LP Voucher Ready for Payment — ' . $v['name'], _lpWrap('Ready for E-Transfer', $body));
     }
 }

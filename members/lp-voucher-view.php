@@ -575,26 +575,9 @@ arsort($blSummary);
      * they were waiting on themselves, and the people who could were not named.
      * Only worked out when the waiting branch is actually shown.
      */
-    $whoCanPay = function () use ($voucher, $pay) {
-        $out = [];
-        // The Treasurer and the President, which is who may record a payment.
-        // No VPs: they sign, they do not pay. The admin constants are named
-        // because they are configuration rather than directory, and
-        // expIsPresident() admits them.
-        $admins = [];
-        foreach (['EXPENSE_ADMIN_EMAIL', 'PROD_ADMIN_EMAIL'] as $c) {
-            if (defined($c)) $admins[] = (string)constant($c);
-        }
-        foreach (array_merge(lpGetTreasurerEmails(), lpGetPresidentEmails(),
-                             $admins, [(string)($voucher['submitted_by_email'] ?? '')]) as $cand) {
-            $cand = trim((string)$cand);
-            if ($cand === '' || isset($out[strtolower($cand)])) continue;
-            if (!lpCanRecordPayment($voucher, $cand)) continue;
-            if (expWouldSelfSign($cand, $pay['email'] ?: null, lpSignBlockedClaimant($voucher))) continue;
-            $out[strtolower($cand)] = $cand;
-        }
-        return array_values($out);
-    };
+    // lpPaymentRecorderEmails() is the same list the "ready to pay" email is
+    // sent to, so the page and the message cannot name different people.
+    $whoCanPay = function () use ($voucher) { return lpPaymentRecorderEmails($voucher); };
   ?>
   <?php if ($voucher['status'] === 'paid'): ?>
   <div class="paid-banner">
