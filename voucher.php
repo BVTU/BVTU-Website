@@ -265,6 +265,12 @@ $pageCount = count($pages) + 2;   // checklist + lines + sign-off
         $receiptPart = lpReceiptPortion($e);
         $kmPortion   = $rowTotal - $receiptPart;
         $scanTot     = lpScanTotal($e);
+        // Every figure read off the receipt, not just the one the scanner
+        // called the total. The verdict below is lpTotalDiffers(), which now
+        // accepts a claim matching any of them — printing one figure beside
+        // "matches the amount claimed" would put a false statement in front
+        // of a signer with both numbers on the page.
+        $scanReads   = lpScanTotals($e);
         $differs     = lpTotalDiffers($e) === true;
         $isKm        = $file === '' && lpIsMileageOnly($e); ?>
   <div class="sheet">
@@ -289,7 +295,7 @@ $pageCount = count($pages) + 2;   // checklist + lines + sign-off
       <div><span class="k">Of that, non-mileage</span><span class="v sm"><?= $money($receiptPart) ?></span></div>
       <?php endif; ?>
       <?php if ($scanTot !== null): ?>
-      <div><span class="k">Receipt reads</span><span class="v sm"><?= $money($scanTot) ?></span></div>
+      <div><span class="k">Receipt reads</span><span class="v sm"><?= $h(implode(' / ', array_map($money, $scanReads))) ?></span></div>
       <?php endif; ?>
       <?php if ((float)$e['travel_km'] > 0): ?>
       <div><span class="k">Distance</span><span class="v sm"><?= number_format((float)$e['travel_km'], 1) ?> km</span></div>
@@ -315,7 +321,7 @@ $pageCount = count($pages) + 2;   // checklist + lines + sign-off
     </div>
     <?php elseif ($scanTot !== null): ?>
     <p class="agree">
-      The total read off the receipt matches the amount claimed<?php
+      The amount claimed matches <?= count($scanReads) > 1 ? 'one of the totals' : 'the total' ?> read off the receipt<?php
         if (!empty($e['scan_vendor'])) echo ', and the receipt is from ' . $h($e['scan_vendor']); ?>.
     </p>
     <?php endif; ?>

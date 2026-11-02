@@ -230,12 +230,6 @@ function lpDupeResult(string $kind, array $r): array {
 }
 
 /**
- * What to write into the scan_* columns for a saved row.
- *
- * Returns [vendor, date, total] with the vendor already normalised, so the
- * editor's hidden fields and this table always hold the same spelling.
- */
-/**
  * The other amounts a receipt showed, cleaned up for storage.
  *
  * Arrives from the browser, so it is read back as numbers and re-joined rather
@@ -256,6 +250,12 @@ function lpDupeAltTotals($raw): ?string {
     }, $out));
 }
 
+/**
+ * What to write into the scan_* columns for a saved row.
+ *
+ * Returns [vendor, date, total] with the vendor already normalised, so the
+ * editor's hidden fields and this table always hold the same spelling.
+ */
 function lpDupeScanFields(?string $vendor, ?string $date, $total): array {
     $nv = lpDupeNormVendor($vendor);
     $d  = trim((string)$date);

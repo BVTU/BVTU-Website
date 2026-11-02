@@ -1633,8 +1633,16 @@ function removeReceiptFromRow(rowId, index) {
     // What the scan read, and the fingerprint the duplicate check matches on,
     // belong to the first receipt. They go only when it does — otherwise
     // removing the card slip would wipe what the itemised bill told us.
+    /* The other readings describe whatever receipts were on the row, and
+     * nothing records which one each figure came from. So removing any receipt
+     * drops all of them: comparing strictly again can re-raise a prompt that
+     * was already answered, which is harmless. Keeping a stale figure would
+     * excuse a claim against a receipt no longer attached, which is not. */
+    const salt = document.getElementById('salt-' + rowId);
+    if (salt) salt.value = '';
+
     if (index === 0) {
-        ['svend-', 'sdate-', 'stot-', 'salt-'].forEach(function (pfx) {
+        ['svend-', 'sdate-', 'stot-'].forEach(function (pfx) {
             const el = document.getElementById(pfx + rowId);
             if (el) el.value = '';
         });

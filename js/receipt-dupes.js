@@ -196,6 +196,13 @@
     set('svend-', data.vendor || '');
     set('sdate-', data.date || '');
     set('stot-',  total > 0 ? total.toFixed(2) : '');
+    /* The other totals legible on the same photograph. Set here as well as on
+     * the phone-upload path: this is the desktop paperclip, and a receipt pair
+     * scanned through it would otherwise be compared against one figure. */
+    set('salt-', '');
+    if (typeof addRowAltTotals === 'function' && Array.isArray(data.other_amounts)) {
+      addRowAltTotals(rowId, data.other_amounts);
+    }
 
     var tr = document.getElementById('row-' + rowId);
     if (!tr) return;
