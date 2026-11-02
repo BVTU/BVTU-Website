@@ -1112,10 +1112,16 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
                         <a href="?year=<?= (int)$year ?>#app-<?= (int)$sid ?>">#<?= (int)$sid ?></a><?php endforeach; ?>
                     </div>
                   <?php endif; ?>
-                  <?php if (!empty($lp['undated']) && !empty($lp['shared_days'])): ?>
-                    <div style="color:var(--gray-500);font-size:.82rem;">
+                  <?php if (!empty($lp['undated'])): ?>
+                    <?php /* Said whether or not an overlap was found. A row with
+                           * no overlap and undated days is the one where it
+                           * matters most: the check did not run, so "no overlap"
+                           * there means "not looked at", not "looked at and
+                           * clear" — and the note under the table promises every
+                           * such row says so. */ ?>
+                    <div style="color:var(--gray-500);font-size:.82rem;margin-top:.15rem;">
                       Some of this total comes from applications with no usable dates, which
-                      could not be checked for overlap.
+                      could not be checked for days claimed twice.
                     </div>
                   <?php endif; ?>
                   <?php if ($unmatched): ?>

@@ -1494,6 +1494,7 @@ function cgDaysLedger(int $year): array {
 
     $byName     = null;   // contacts, read lazily: most loads never need it
     $appsByName = [];     // this year's applicants, by comparable name
+    $datesOf    = [];     // application id => its release dates, parsed once
 
     /*
      * The leads first, so the collaborator pass can use them.
@@ -1515,7 +1516,7 @@ function cgDaysLedger(int $year): array {
         $lName    = trim((string)$r['applicant_name']);
         $add($email !== '' ? 'e:' . $email : 'n:' . cgNameKey($lName),
              $lName, $email, $r['status'], $days, (int)$r['id'], 'lead', true, $rawEmail,
-             cgAppDates($r));
+             $datesOf[(int)$r['id']] = cgAppDates($r));
 
         $ak = cgNameKey($lName);
         if ($ak === '' || $email === '') continue;
@@ -1545,8 +1546,9 @@ function cgDaysLedger(int $year): array {
         // belongs to the field as a whole, so it only settles anything when
         // the field names one person.
         // The collaborator is released on the same days as the lead — that is
-        // what the approval email tells them to book.
-        $cDates   = cgAppDates($r);
+        // what the approval email tells them to book, and the lead pass has
+        // already parsed them.
+        $cDates   = $datesOf[(int)$r['id']] ?? cgAppDates($r);
         $named    = cgSplitNames($cName);
         $rawTyped = $hasCe ? strtolower(trim((string)($r['collaborator_email'] ?? ''))) : '';
         $typed    = cgCanonEmail($rawTyped);
