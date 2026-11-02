@@ -15,6 +15,9 @@ if (!cgIsAdmin($member['email'])) {
 }
 
 $year = isset($_GET['year']) ? (int)$_GET['year'] : cgCurrentYear();
+// A school year or nothing. "?year=abc" casts to 0, which is not a year any
+// application can belong to and would put a "0–1" option in the picker.
+if ($year < 2000 || $year > 2100) $year = cgCurrentYear();
 $apps = cgGetApplications($year);
 
 // ── CSV export — must happen before any HTML output ───────────────────────
@@ -611,8 +614,6 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
     }
     .btn-approve  { background: var(--primary); color: #fff; border: none; }
     .btn-approve:hover  { background: #155a2a; }
-    .btn-waitlist { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
-    .btn-waitlist:hover { background: #dbeafe; }
     /* A link wearing the row's button, so it lines up with the real buttons
        beside it rather than looking like text that wandered in. */
     .btn-edit { background: #fff; color: var(--primary); border: 1px solid var(--primary);
@@ -730,6 +731,11 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
             if ($y > 0) $cgYears[$y] = true;
         }
         $cgYears[cgCurrentYear()] = true;
+        // And whatever year is actually being shown — a stale bookmark can
+        // name a real year with nothing in it. Without this the picker said
+        // 2026 while the page showed something else, and choosing 2026 fired
+        // no change event, so there was no way back.
+        $cgYears[$year] = true;
         $cgYears = array_keys($cgYears);
         rsort($cgYears);
       ?>
@@ -1213,14 +1219,11 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
                    * count follows; a box for the number on its own would let the
                    * two disagree.
                    */ ?>
-                  <?php // Not in the print view, which is a read-through for a
-                        // meeting — an edit link on a page meant to be printed is
-                        // either dead ink or an invitation to edit mid-meeting. ?>
-                  <?php if (!$cgReadOnly): ?>
+                  <?php // The print view renders its own read-only card and never
+                        // reaches this markup, so no guard is needed here. ?>
                   <a class="cg-edit-link"
                      href="../collab-grant-edit.php?id=<?= (int)$app['id'] ?>"
                      title="Change the dates, and anything else on the application">change</a>
-                  <?php endif; ?>
                 </div>
               </div>
               <?php
@@ -1372,7 +1375,9 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
              * not exist. Folded away is fine. Unlabelled is not.
              */ ?>
             <details class="app-more">
-              <summary>Waitlist it, or send them the edit link</summary>
+              <summary><?= $view === 'followup'
+                  ? 'Send them the edit link'
+                  : 'Waitlist it, or send them the edit link' ?></summary>
               <div class="app-more-body">
                 <?php /*
                  * Submits the decision form above rather than carrying its own.
@@ -1383,6 +1388,10 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
                  * not yet saved. Pointing at the real form keeps the notes, the
                  * day count and the token exactly as they are on screen.
                  */ ?>
+                <?php // Only where the decision form exists. Follow-through does
+                      // not render it, so the button had no owner there: the click
+                      // did nothing at all while the summary promised otherwise. ?>
+                <?php if ($view !== 'followup'): ?>
                 <p style="margin:0 0 .6rem;">
                   <button type="submit" form="decide-<?= (int)$app['id'] ?>"
                           name="action" value="waitlisted" class="btn app-more-btn">
@@ -1390,6 +1399,7 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
                   </button>
                   <span class="app-more-note">Holds it without deciding; the days are not counted.</span>
                 </p>
+                <?php endif; ?>
                 <?php if (!empty($app['edited_at'])): ?>
                 <p class="app-more-note" style="margin:0 0 .6rem;">
                   Last changed <?= date('M j, Y', strtotime($app['edited_at'])) ?>
