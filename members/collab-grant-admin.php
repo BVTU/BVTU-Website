@@ -1342,11 +1342,18 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
                 days, open it under <a href="?view=all&amp;year=<?= $year ?>#app-<?= (int)$app['id'] ?>">All</a>.</p>
             <?php endif; ?>
 
-            <?php // The edit link and the "send them the link" button are needed
-                  // perhaps twice a term. They used to sit between the goals and
-                  // the decision, which is the one place nothing should. ?>
+            <?php /*
+             * Kept out of the decision path on purpose — these are wanted
+             * perhaps twice a term, and they used to sit between the goals and
+             * the decision, which is the one place nothing should.
+             *
+             * But the summary said "other things you can do", which names
+             * nothing, so the edit was effectively unfindable: somebody looking
+             * for it read straight past this line and concluded the feature did
+             * not exist. Folded away is fine. Unlabelled is not.
+             */ ?>
             <details class="app-more">
-              <summary>Other things you can do with this application</summary>
+              <summary>Edit this application, or send them the edit link</summary>
               <div class="app-more-body">
                 <p>
                   <a href="../collab-grant-edit.php?id=<?= (int)$app['id'] ?>">Edit this application</a>
