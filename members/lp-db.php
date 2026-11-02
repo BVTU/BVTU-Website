@@ -369,6 +369,23 @@ function lpHasRealTreasurer(): bool {
     return $has = false;
 }
 
+/**
+ * Who may record that the money has gone.
+ *
+ * Its own rule, not the one for signing. Both signatures are already in by
+ * this point, so writing down that the e-transfer went is bookkeeping rather
+ * than a third authorisation — the Treasurer or the President, because either
+ * may be the one who sent it. Cody's decision, 2026-11-02.
+ *
+ * What does not move: whoever is being paid may not record their own payment.
+ * lpMarkPaid() still puts the payee and the claimant through
+ * expAssertNotOwnClaim() before this is consulted.
+ */
+function lpCanRecordPayment(array $v, string $email): bool {
+    require_once __DIR__ . '/exp-db.php';
+    return expIsTreasurer($email) || expIsPresident($email);
+}
+
 /** Is the vendor on this voucher actually our own Treasurer? */
 function lpTreasurerIsPayee(array $v): bool {
     require_once __DIR__ . '/exp-db.php';
@@ -891,9 +908,9 @@ function lpMarkPaid(int $id, string $email, string $name, string $note, string $
     // that signer could then approve and pay themselves — two signatures on
     // paper, self-authorisation in fact.
     expAssertNotOwnClaim($email, lpPayTo($v)['email'] ?: null, lpSignBlockedClaimant($v));
-    // Still the Treasurer: they are the one who sends the e-transfer, so they
-    // are the one who records that it went.
-    if (!lpCanSign1For($v, $email)) throw new RuntimeException("Only the Treasurer can mark a voucher as paid.");
+    if (!lpCanRecordPayment($v, $email)) {
+        throw new RuntimeException('Only the Treasurer or the President can record a payment.');
+    }
     $pd = ($paymentDate && preg_match('/^\d{4}-\d{2}-\d{2}$/', $paymentDate)) ? $paymentDate : date('Y-m-d');
     /*
      * The status is part of the WHERE, not just the check above.

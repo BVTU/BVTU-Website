@@ -563,7 +563,7 @@ arsort($blSummary);
      * that nobody reaches for a voucher and pays it a second time.
      */
     $pay      = lpPayTo($voucher);
-    $mayPay   = $voucher['status'] === 'vp_approved' && lpCanSign1For($voucher, $member['email'])
+    $mayPay   = $voucher['status'] === 'vp_approved' && lpCanRecordPayment($voucher, $member['email'])
                 && !expWouldSelfSign($member['email'], $pay['email'] ?: null,
                                      lpSignBlockedClaimant($voucher));
     /*
@@ -590,7 +590,7 @@ arsort($blSummary);
                              $admins, [(string)($voucher['submitted_by_email'] ?? '')]) as $cand) {
             $cand = trim((string)$cand);
             if ($cand === '' || isset($out[strtolower($cand)])) continue;
-            if (!lpCanSign1For($voucher, $cand)) continue;
+            if (!lpCanRecordPayment($voucher, $cand)) continue;
             if (expWouldSelfSign($cand, $pay['email'] ?: null, lpSignBlockedClaimant($voucher))) continue;
             $out[strtolower($cand)] = $cand;
         }

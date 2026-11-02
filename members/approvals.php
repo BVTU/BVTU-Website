@@ -417,7 +417,9 @@ function _signedLine(array $r, string $role1, string $role2): string {
       <a class="link-sm" href="lp-voucher-edit.php?id=<?= (int)$v['id'] ?>">View &rarr;</a>
     </div>
 
-    <?php if ($v['status'] === 'vp_approved' && lpCanSign1For($v, $email) && !_cannotSignVoucher($v)): ?>
+    <?php // Recording a payment is not signing: the Treasurer or the President,
+          // and never whoever is being paid. ?>
+    <?php if ($v['status'] === 'vp_approved' && lpCanRecordPayment($v, $email) && !_cannotSignVoucher($v)): ?>
     <details class="more">
       <summary>&#x25B8; Record e-transfer</summary>
       <form method="POST" action="lp-action.php" class="form-inline">
