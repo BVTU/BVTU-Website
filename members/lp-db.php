@@ -873,10 +873,24 @@ function lpMarkPaid(int $id, string $email, string $name, string $note, string $
     // are the one who records that it went.
     if (!lpCanSign1For($v, $email)) throw new RuntimeException("Only the Treasurer can mark a voucher as paid.");
     $pd = ($paymentDate && preg_match('/^\d{4}-\d{2}-\d{2}$/', $paymentDate)) ? $paymentDate : date('Y-m-d');
-    getDB()->prepare(
+    /*
+     * The status is part of the WHERE, not just the check above.
+     *
+     * Two people pressing Mark paid at once — or one person double-clicking —
+     * both passed the read and both wrote, so the second overwrote the first's
+     * reference and date and sent a second "your voucher has been paid" email
+     * about one payment. Now the second UPDATE matches nothing and the caller
+     * is told it was already recorded.
+     */
+    $st = getDB()->prepare(
         "UPDATE lp_vouchers SET status='paid',
-         paid_at=NOW(), paid_by_email=?, paid_by_name=?, payment_note=?, payment_ref=?, payment_date=? WHERE id=?"
-    )->execute([$email, $name, $note ?: null, $paymentRef ?: null, $pd, $id]);
+         paid_at=NOW(), paid_by_email=?, paid_by_name=?, payment_note=?, payment_ref=?, payment_date=?
+         WHERE id=? AND status='vp_approved'"
+    );
+    $st->execute([$email, $name, $note ?: null, $paymentRef ?: null, $pd, $id]);
+    if ($st->rowCount() === 0) {
+        throw new RuntimeException('That voucher has already been recorded as paid.');
+    }
 }
 
 // ── Email notifications ───────────────────────────────────────────────────────

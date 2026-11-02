@@ -101,7 +101,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'mark_
         header('Location: lp-voucher-view.php?id=' . $id . '&paid=1');
         exit;
     } catch (\Throwable $e) {
-        $error = $e->getMessage();
+        /* The common way to land here is pressing Mark paid twice, or going
+         * back and resubmitting. That is not a fault and should not read like
+         * one: the payment is recorded either way, which is what the person
+         * wanted to know. */
+        $fresh = lpGetVoucher($id);
+        if ($fresh && $fresh['status'] === 'paid') {
+            $voucher = $fresh;
+            $notice  = 'Already recorded as paid — nothing was sent twice.';
+        } else {
+            $error = $e->getMessage();
+        }
     }
 }
 
@@ -546,14 +556,38 @@ arsort($blSummary);
     $mayPay   = $voucher['status'] === 'vp_approved' && lpCanSign1For($voucher, $member['email'])
                 && !expWouldSelfSign($member['email'], $pay['email'] ?: null,
                                      lpSignBlockedClaimant($voucher));
-    $payNames = implode(' or ', array_map(function ($e) { return $e; }, lpGetTreasurerEmails()));
+    /*
+     * Who can actually record it, asked rather than assumed.
+     *
+     * This said "the Treasurer" and listed the Treasurer's address. On a vendor
+     * payment to the Treasurer's own address they are barred, and the job falls
+     * to the President or VP — so the one person who could not act was told
+     * they were waiting on themselves, and the people who could were not named.
+     * Only worked out when the waiting branch is actually shown.
+     */
+    $whoCanPay = function () use ($voucher, $pay) {
+        $out = [];
+        foreach (array_merge(lpGetTreasurerEmails(), lpGetVPEmails(),
+                             [(string)($voucher['submitted_by_email'] ?? '')]) as $cand) {
+            $cand = trim((string)$cand);
+            if ($cand === '' || isset($out[strtolower($cand)])) continue;
+            if (!lpCanSign1For($voucher, $cand)) continue;
+            if (expWouldSelfSign($cand, $pay['email'] ?: null, lpSignBlockedClaimant($voucher))) continue;
+            $out[strtolower($cand)] = $cand;
+        }
+        return array_values($out);
+    };
   ?>
   <?php if ($voucher['status'] === 'paid'): ?>
   <div class="paid-banner">
     <div class="paid-mark">&#10003; PAID</div>
     <div>
-      <strong><?= htmlspecialchars($pay['name']) ?></strong><?= $pay['vendor'] ? ' (vendor)' : '' ?>
-      was sent $<?= number_format(array_sum(array_map('lpRowTotal', $expenses)), 2) ?>
+      <?php // No amount here. It would be read off the expense rows as they are
+            // now, and nothing stops those being edited after payment — so the
+            // banner would state, as fact, a figure that may never have been
+            // sent. The voucher's total is already on this page; what the
+            // banner is for is who, when and whether it has gone. ?>
+      Paid to <strong><?= htmlspecialchars($pay['name']) ?></strong><?= $pay['vendor'] ? ' (vendor)' : '' ?>
       <?php if (!empty($voucher['payment_date'])): ?>
         on <?= htmlspecialchars(date('F j, Y', strtotime($voucher['payment_date']))) ?><?php
       elseif (!empty($voucher['paid_at'])): ?>
@@ -596,22 +630,31 @@ arsort($blSummary);
     <?php else: ?>
     <?php // Said out loud so the person who cannot do it stops wondering
           // whether it is stuck, and does not pay it another way. ?>
+    <?php $canPay = $whoCanPay(); ?>
     <div class="pay-wait">
-      <strong>Waiting on the Treasurer</strong> to send the e&#8209;transfer to
-      <?= htmlspecialchars($pay['name']) ?><?php if ($pay['email'] !== ''): ?> (<?= htmlspecialchars($pay['email']) ?>)<?php endif; ?>
-      and record it.
-      <?php if ($payNames !== ''): ?>
-      <div class="pay-wait-who">That is <?= htmlspecialchars($payNames) ?>.</div>
-      <?php endif; ?>
+      <strong>Waiting on the e&#8209;transfer</strong> to
+      <?= htmlspecialchars($pay['name']) ?><?php if ($pay['email'] !== ''): ?> (<?= htmlspecialchars($pay['email']) ?>)<?php endif; ?>,
+      and on somebody recording it here.
+      <div class="pay-wait-who">
+        <?= $canPay
+            ? 'That is ' . htmlspecialchars(implode(' or ', $canPay)) . '.'
+            : 'Nobody who may record it can be identified — check the Treasurer is assigned in Roles &amp; Directory.' ?>
+      </div>
     </div>
     <?php endif; ?>
   </div>
   <?php endif; ?>
 
-  <?php if (($_GET['paid'] ?? '') === '1' && $voucher['status'] === 'paid') $notice =
+  <?php // Only when nothing else has something to say — a Share or Revoke done
+        // from the &paid=1 URL would otherwise lose its own confirmation. ?>
+  <?php if ($notice === null && ($_GET['paid'] ?? '') === '1' && $voucher['status'] === 'paid') $notice =
           'Recorded as paid. It shows as paid to everyone who can see this voucher.'; ?>
   <?php if ($error): ?>
-    <div class="notice" style="background:#fef2f2;border-color:#fecaca;color:#991b1b;">
+    <?php // Styled outright: "notice" is not a class this page or the stylesheet
+          // defines, so a refused payment rendered as bare tinted text. ?>
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;
+                padding:.75rem 1rem;margin-bottom:1.25rem;font-size:.88rem;
+                color:#991b1b;font-weight:600;max-width:640px;">
       &#9888; <?= htmlspecialchars($error) ?>
     </div>
   <?php endif; ?>
