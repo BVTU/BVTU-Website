@@ -592,6 +592,11 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
       border-color: var(--primary);
       box-shadow: 0 0 0 3px rgba(26,107,53,.1);
     }
+    .cg-year-pick { display: flex; align-items: center; gap: .4rem; margin: 0; }
+    .cg-year-pick label { font-size: .74rem; font-weight: 700; text-transform: uppercase;
+        letter-spacing: .04em; color: var(--gray-500); }
+    .cg-year-pick select { font: inherit; font-size: .84rem; padding: .3rem .5rem;
+        border: 1px solid var(--border); border-radius: 7px; background: #fff; cursor: pointer; }
     .cg-edit-link { font-size: .74rem; font-weight: 700; color: var(--primary);
         text-decoration: none; margin-left: .45rem; border-bottom: 1px solid transparent; }
     .cg-edit-link:hover { border-bottom-color: var(--primary); }
@@ -701,6 +706,41 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
         <a href="?view=print&year=<?= $year ?>" class="<?= $cgReadOnly ? 'active' : '' ?>"
            title="A plain read-through, for printing or reading at a meeting">Print view</a>
       </div>
+
+      <?php
+        /*
+         * A school year to look at.
+         *
+         * The page has always defaulted to the current year and had no way to
+         * reach another, so every application from a previous year was
+         * unreachable except by typing ?year= into the address bar — including
+         * when the current year is simply empty and the page looks broken.
+         *
+         * The list is the years that actually have applications, plus the
+         * current one, so it never offers an empty year nobody has used.
+         */
+        $cgYears = [];
+        foreach (cgApplicationsAllYears() as $a) {
+            $y = (int)($a['school_year'] ?? 0);
+            if ($y > 0) $cgYears[$y] = true;
+        }
+        $cgYears[cgCurrentYear()] = true;
+        $cgYears = array_keys($cgYears);
+        rsort($cgYears);
+      ?>
+      <?php if (count($cgYears) > 1): ?>
+      <form method="get" class="cg-year-pick">
+        <input type="hidden" name="view" value="<?= htmlspecialchars($view) ?>">
+        <label for="cg-year">Year</label>
+        <select id="cg-year" name="year" onchange="this.form.submit()">
+          <?php foreach ($cgYears as $y): ?>
+          <option value="<?= $y ?>"<?= $y === $year ? ' selected' : '' ?>>
+            <?= $y ?>&ndash;<?= ($y + 1) % 100 ?>
+          </option>
+          <?php endforeach; ?>
+        </select>
+      </form>
+      <?php endif; ?>
       <a href="?export=csv&year=<?= $year ?>" class="export-btn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Export CSV
@@ -1168,9 +1208,14 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
                    * count follows; a box for the number on its own would let the
                    * two disagree.
                    */ ?>
+                  <?php // Not in the print view, which is a read-through for a
+                        // meeting — an edit link on a page meant to be printed is
+                        // either dead ink or an invitation to edit mid-meeting. ?>
+                  <?php if (!$cgReadOnly): ?>
                   <a class="cg-edit-link"
                      href="../collab-grant-edit.php?id=<?= (int)$app['id'] ?>"
                      title="Change the dates, and anything else on the application">change</a>
+                  <?php endif; ?>
                 </div>
               </div>
               <?php
