@@ -92,7 +92,10 @@ if (isset($_GET['export']) && $_GET['export'] === 'days') {
             empty($lp['capped']) ? 'n/a' : ($lp['over'] ? 0 : $lp['left']),
             empty($lp['capped']) ? 'n/a' : ($lp['over'] ? 'Yes, by ' . ($lp['used'] - CG_DAY_CAP) : 'No'),
             implode(' + ', $roles),
-            $lp['exact'] ? 'Email address' : 'Includes days matched by name — approximate',
+            $lp['exact'] ? 'Email address'
+                : (strpos((string)$lp['key'], 'n:') === 0
+                    ? 'No match for this name — days sit under the name as typed'
+                    : 'Some days matched by name'),
             empty($lp['capped']) ? 'Not capped — ' . $lp['exempt_reason'] : 'Applies',
         ]));
     }
@@ -1024,8 +1027,23 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
                   <?php if ($addrs): ?>
                     <span style="color:var(--gray-500);">· <?= htmlspecialchars(implode(' · ', $addrs)) ?></span>
                   <?php endif; ?>
-                  <?php if (!$lp['exact']): ?>
-                    <span style="color:var(--gray-500);">· includes a name match</span>
+                  <?php
+                    /* Two very different situations used to share one label.
+                     * A collaborator's name that matched a known teacher is
+                     * the system working; a name that matched nobody is days
+                     * charged to a person we cannot identify, and only that
+                     * one is worth acting on. Printing the same words on both
+                     * put the second on every other row and buried it. */
+                    $unmatched = strpos((string)$lp['key'], 'n:') === 0;
+                  ?>
+                  <?php if ($unmatched): ?>
+                    <span style="color:#92400e;"
+                          title="This name matched no contact and no applicant this year, so these days are attributed to the name as typed. They may belong to someone already listed above under their email address.">·
+                      no match for this name</span>
+                  <?php elseif (!$lp['exact']): ?>
+                    <span style="color:var(--gray-500);"
+                          title="Some of these days come from an application where this person was named as a collaborator. Collaborators are typed names, so the days were attributed by matching the name to this person rather than by an email address.">·
+                      some days matched by name</span>
                   <?php endif; ?>
                 </td>
                 <td style="padding:.45rem .5rem;"><?= (int)$lp['approved'] ?></td>
@@ -1078,9 +1096,13 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
           Each application spends its days twice — once for the lead and once for the
           collaborator, who books their own absence for the same days.
           <?php if ($anyApprox): ?>
-            Rows marked approximate include days from an application where the person
-            was named as a collaborator; collaborators are typed names with no email
-            address, so those are matched by name and may be wrong.
+            Collaborators are typed names with no email address, so their days are
+            attributed by matching the name against Contacts and against everyone who
+            applied this year. "Some days matched by name" means that worked and names
+            who it matched; <strong>"no match for this name"</strong> means it did not,
+            and those days sit under the name as typed — they may belong to someone
+            already listed above. Adding that teacher to Contacts, or typing their
+            address on the application, settles it.
           <?php endif; ?>
           Anyone who has applied for nothing this year does not appear here at all.
           Mark someone "not capped" when releasing them costs the local nothing — a
@@ -1329,9 +1351,12 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
                         <span class="cg-tag good">hasn't used the fund</span>
                       <?php endif; ?>
                     <?php endif; ?>
-                    <?php if (!$p['exact']): ?>
+                    <?php if (strpos((string)($p['key'] ?? ''), 'n:') === 0): ?>
                       <span class="cg-tag approx"
-                            title="Part of this total comes from an application where the person was named as a collaborator. Collaborators are typed names with no email address, so those days are matched by name and could belong to someone else.">name match</span>
+                            title="This name matched no contact and no applicant this year, so these days are attributed to the name as typed and could belong to someone else.">no match</span>
+                    <?php elseif (!$p['exact']): ?>
+                      <span class="cg-tag approx"
+                            title="Part of this total comes from an application where the person was named as a collaborator. Collaborators are typed names, so those days were attributed by matching the name to this person rather than by an email address.">name match</span>
                     <?php endif; ?>
                   </div>
                 <?php endforeach; ?>

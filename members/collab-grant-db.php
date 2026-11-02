@@ -1376,8 +1376,20 @@ function cgDaysLedger(int $year): array {
         return $cache[$year] = [];
     }
 
-    $byName = null;   // read lazily: most loads never need it
+    $byName     = null;   // contacts, read lazily: most loads never need it
+    $appsByName = [];     // this year's applicants, by comparable name
 
+    /*
+     * The leads first, so the collaborator pass can use them.
+     *
+     * A teacher who applied this year gave their own address on their own
+     * application, which is the best evidence of identity the system holds —
+     * better than a contact record, which may be stale or missing. A
+     * collaborator typed as a bare name is very often one of them, and until
+     * now that was never checked: Vittoria Yano sat in the ledger twice, once
+     * as a lead with her address and once as a nameless collaborator row,
+     * because the match was only ever attempted against contacts.
+     */
     foreach ($rows as $r) {
         $days = cgEffectiveDays($r);
         if ($days < 1) continue;
@@ -1387,6 +1399,23 @@ function cgDaysLedger(int $year): array {
         $lName    = trim((string)$r['applicant_name']);
         $add($email !== '' ? 'e:' . $email : 'n:' . cgNameKey($lName),
              $lName, $email, $r['status'], $days, (int)$r['id'], 'lead', true, $rawEmail);
+
+        $ak = cgNameKey($lName);
+        if ($ak === '' || $email === '') continue;
+        if (isset($appsByName[$ak]) && $appsByName[$ak]['email'] !== $email) {
+            // Two applicants of one name are two people. Charging a
+            // collaborator's days to whichever applied first would be a guess
+            // with somebody's cap riding on it.
+            $appsByName[$ak]['ambiguous'] = true;
+            continue;
+        }
+        $appsByName[$ak] = ['email' => $email, 'name' => $lName,
+                            'ambiguous' => $appsByName[$ak]['ambiguous'] ?? false];
+    }
+
+    foreach ($rows as $r) {
+        $days = cgEffectiveDays($r);
+        if ($days < 1) continue;
 
         // 'has_collaborator' is what the review panel reads, so the ledger reads
         // it too: a name left behind after someone switched back to "not yet"
@@ -1413,9 +1442,22 @@ function cgDaysLedger(int $year): array {
             // Matched by name, so never exact — the panel shows this as approximate.
             $k = cgNameKey($one);
             if ($byName === null) $byName = cgContactsByName();
-            if ($k !== '' && isset($byName[$k]) && !$byName[$k]['ambiguous']) {
-                $cEmail = cgCanonEmail((string)$byName[$k]['email']);
-                $add('e:' . $cEmail, $byName[$k]['name'], $cEmail,
+
+            $hit = null;
+            if ($k !== '') {
+                if (isset($byName[$k]) && !$byName[$k]['ambiguous']) {
+                    $hit = $byName[$k];
+                } elseif (isset($appsByName[$k]) && !$appsByName[$k]['ambiguous']) {
+                    // Nobody in contacts, but someone of that name applied this
+                    // year and gave an address. Tried second so a maintained
+                    // contact record still wins.
+                    $hit = $appsByName[$k];
+                }
+            }
+
+            if ($hit !== null) {
+                $cEmail = cgCanonEmail((string)$hit['email']);
+                $add('e:' . $cEmail, $hit['name'], $cEmail,
                      $r['status'], $days, (int)$r['id'], 'collaborator', false);
             } else {
                 $add('n:' . $k, $one, '', $r['status'], $days, (int)$r['id'], 'collaborator', false);
