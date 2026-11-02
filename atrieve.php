@@ -191,7 +191,7 @@ $member   = $loggedIn ? getMember() : null;
     </div>
   </section>
 
-  <main class="main-content">
+  <main class="page-content">
     <div class="container" style="max-width:800px">
 
       <!-- ── Critical warning ──────────────────────────────────────── -->

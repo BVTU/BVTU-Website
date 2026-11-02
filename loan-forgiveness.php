@@ -310,7 +310,7 @@ $member   = $loggedIn ? getMember() : null;
     </div>
   </section>
 
-  <main class="main-content">
+  <main class="page-content">
     <div class="container" style="max-width:820px">
 
       <!-- ── Good-news banner ──────────────────────────────────────── -->
