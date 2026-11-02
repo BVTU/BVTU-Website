@@ -83,6 +83,7 @@ $prompt = 'You are reviewing a receipt for a union expense reimbursement. '
         . '{"vendor": string or null, "date": "YYYY-MM-DD" or null, "total_amount": number or null, '
         . '"likely_category": "meals" | "travel" | "supplies" | "conference" | "accommodation" | "other" | null, '
         . '"concerns": string or null}. '
+        . scanPairPrompt() . ' '
         . scanConcernPrompt();
 
 $payload = json_encode([

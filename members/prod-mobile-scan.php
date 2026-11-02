@@ -101,6 +101,7 @@ if (defined('CLAUDE_API_KEY')) {
               '{"vendor": string or null, "date": "YYYY-MM-DD" or null, "total_amount": number or null, ' .
               '"likely_category": "conference" | "course" | "materials" | "travel" | "other" | null, ' .
               '"concerns": string or null}. ' .
+              scanPairPrompt() . ' ' .
               scanConcernPrompt();
 
     $payload = json_encode([

@@ -153,6 +153,8 @@ $contentBlock = $isPdf ? [
 ];
 
 $concernRules = scanConcernPrompt();
+$pairRules = scanPairPrompt(true);
+
 $prompt = <<<PROMPT
 You are reviewing a receipt for a teachers' union president's expense reimbursement.
 Extract the following and return ONLY valid JSON — no markdown, no preamble:
@@ -167,6 +169,7 @@ Extract the following and return ONLY valid JSON — no markdown, no preamble:
   "office_amount": number or null,
   "phone_amount": number or null,
   "total_amount": number or null,
+  "other_amounts": [numbers],
   "suggested_grant": string or null,
   "suggested_budget_line": string or null,
   "concerns": string or null
@@ -181,6 +184,8 @@ Expense category rules:
 - misc_amount: anything else
 
 Put the full receipt total in the most appropriate single category. Split across multiple only if clearly mixed (e.g. a receipt with food AND office supplies).
+
+{$pairRules}
 
 Available BCTF grants (suggest the best match or null):
 {$grantNames}
@@ -306,6 +311,7 @@ echo json_encode([
     'office_amount'         => $extracted['office_amount']   ?? null,
     'phone_amount'          => $extracted['phone_amount']    ?? null,
     'total_amount'          => $extracted['total_amount']    ?? null,
+    'other_amounts'         => scanOtherAmounts($extracted),
     'suggested_grant'       => $extracted['suggested_grant'] ?? null,
     'suggested_budget_line' => $extracted['suggested_budget_line'] ?? null,
     'suggested_grant_id'    => $suggestedGrantId,

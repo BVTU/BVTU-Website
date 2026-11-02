@@ -43,6 +43,13 @@ function lpDupeEnsureColumns(): void {
         'scan_vendor'    => 'VARCHAR(255) DEFAULT NULL',
         'scan_date'      => 'DATE DEFAULT NULL',
         'scan_total'     => 'DECIMAL(10,2) DEFAULT NULL',
+        // The other totals legible on the same photograph. A restaurant bill
+        // is photographed as a pair — the itemised bill and the card slip with
+        // the tip written on it — and whichever of the two the scanner reads as
+        // "the" total, the other is the figure being claimed about half the
+        // time. Keeping both lets the reviewer agree with either instead of
+        // flagging the most ordinary receipt in the pile.
+        'scan_alt_totals' => 'VARCHAR(255) DEFAULT NULL',
         // Receipts after the first. One line often needs two — the itemised
         // bill and the card slip — and until now the second overwrote the
         // first, leaving a note saying one had been provided and no way to
@@ -228,6 +235,27 @@ function lpDupeResult(string $kind, array $r): array {
  * Returns [vendor, date, total] with the vendor already normalised, so the
  * editor's hidden fields and this table always hold the same spelling.
  */
+/**
+ * The other amounts a receipt showed, cleaned up for storage.
+ *
+ * Arrives from the browser, so it is read back as numbers and re-joined rather
+ * than stored as posted. Capped at six: a photograph that yields more totals
+ * than that is a misread, not a bill.
+ */
+function lpDupeAltTotals($raw): ?string {
+    $out = [];
+    foreach (explode(',', (string)$raw) as $bit) {
+        $v = round((float)trim($bit), 2);
+        if ($v <= 0 || in_array($v, $out, true)) continue;
+        $out[] = $v;
+        if (count($out) >= 6) break;
+    }
+    if (!$out) return null;
+    return implode(',', array_map(function ($v) {
+        return number_format($v, 2, '.', '');
+    }, $out));
+}
+
 function lpDupeScanFields(?string $vendor, ?string $date, $total): array {
     $nv = lpDupeNormVendor($vendor);
     $d  = trim((string)$date);

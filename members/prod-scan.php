@@ -85,6 +85,7 @@ $prompt = 'You are reviewing a receipt submitted for a professional development 
           '{"vendor": string or null, "date": "YYYY-MM-DD" or null, "total_amount": number or null, ' .
           '"likely_category": "conference" | "course" | "materials" | "travel" | "other" | null, ' .
           '"concerns": string or null}. ' .
+          scanPairPrompt() . ' ' .
           scanConcernPrompt();
 
 $payload = json_encode([

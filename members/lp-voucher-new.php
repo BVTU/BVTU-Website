@@ -63,6 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $scanVendors = $_POST['scan_vendor'] ?? [];
     $scanDates   = $_POST['scan_date']   ?? [];
     $scanTotals  = $_POST['scan_total']  ?? [];
+    $scanAlts    = $_POST['scan_alt']    ?? [];
 
     // Draft voucher created by AJAX when Phone Upload was clicked
     $draftId = (int)($_POST['draft_voucher_id'] ?? 0);
@@ -123,8 +124,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               meals, gifts, misc, office, phone,
               receipt_path, receipt_filename, receipt_extra,
               grant_id, budget_line_id, notes, sort_order,
-              receipt_sha256, scan_vendor, scan_date, scan_total)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+              receipt_sha256, scan_vendor, scan_date, scan_total, scan_alt_totals)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         );
 
         foreach ($descs as $i => $desc) {
@@ -181,6 +182,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $sv,
                 $sdt,
                 $stot,
+                lpDupeAltTotals($scanAlts[$i] ?? ''),
             ]);
         }
         $saved = true;
@@ -729,6 +731,7 @@ function addRow(data = {}) {
         <input type="hidden" name="scan_vendor[]" id="svend-${id}" value="${escHtml(data.scan_vendor || '')}">
         <input type="hidden" name="scan_date[]"   id="sdate-${id}" value="${data.scan_date || ''}">
         <input type="hidden" name="scan_total[]"  id="stot-${id}"  value="${data.scan_total || ''}">
+        <input type="hidden" name="scan_alt[]"    id="salt-${id}"  value="${escHtml(data.scan_alt_totals || '')}">
       </td>
       <td data-label="Date"><input type="date" name="expense_date[]" class="cell-input" value="${date}" style="width:130px;"></td>
       <td data-label="Description"><input type="text" name="description[]" class="cell-input cell-desc" placeholder="Description"
@@ -1631,7 +1634,7 @@ function removeReceiptFromRow(rowId, index) {
     // belong to the first receipt. They go only when it does — otherwise
     // removing the card slip would wipe what the itemised bill told us.
     if (index === 0) {
-        ['svend-', 'sdate-', 'stot-'].forEach(function (pfx) {
+        ['svend-', 'sdate-', 'stot-', 'salt-'].forEach(function (pfx) {
             const el = document.getElementById(pfx + rowId);
             if (el) el.value = '';
         });
@@ -1890,6 +1893,34 @@ function scanTotal(sd) {
     return sum > 0 ? sum : (parseFloat(sd.total_amount) || 0);
 }
 
+/**
+ * The figures on the receipt that are not the one it was read as totalling.
+ *
+ * One photograph routinely holds the itemised bill and the card slip for the
+ * same meal, and the claim matches whichever of the two the scanner did not
+ * pick about half the time. Kept with the row so the reviewer can agree with
+ * either rather than flagging the commonest receipt there is.
+ */
+function altTotals(sd) {
+    var list = (sd && Array.isArray(sd.other_amounts)) ? sd.other_amounts : [];
+    return list.map(function (v) { return parseFloat(v) || 0; })
+               .filter(function (v) { return v > 0; });
+}
+
+/** Merge amounts into the row's list of other readings, keeping it unique. */
+function addRowAltTotals(id, values) {
+    var el = document.getElementById('salt-' + id);
+    if (!el) return;
+    var have = String(el.value || '').split(',')
+                 .map(function (v) { return parseFloat(v) || 0; })
+                 .filter(function (v) { return v > 0; });
+    (values || []).forEach(function (v) {
+        v = parseFloat(v) || 0;
+        if (v > 0 && have.indexOf(v) === -1) have.push(v);
+    });
+    el.value = have.slice(0, 6).map(function (v) { return v.toFixed(2); }).join(',');
+}
+
 function normVendor(v) {
     return String(v || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
@@ -2045,6 +2076,9 @@ function putReceiptOnRow(id, receipt, sd) {
     if (sv)  sv.value  = sd.vendor || '';
     if (sdd) sdd.value = sd.date || '';
     if (st)  st.value  = scanTotal(sd) > 0 ? scanTotal(sd).toFixed(2) : '';
+    var sa = document.getElementById('salt-' + id);
+    if (sa) sa.value = '';
+    addRowAltTotals(id, altTotals(sd));
 }
 
 /** Note on the row, kept with it into the database. */
@@ -2074,6 +2108,11 @@ function mergeIntoRow(tr, receipt, sd) {
      * reading "Also provided: …" about something nothing linked to any more.
      */
     addRowReceipt(id, receipt.saved_path, receipt.original_name || receipt.saved_path);
+    /* Both halves of the bill are now on the row, so both totals are readings
+     * of it. The lower one is the itemised subtotal as often as not, and a
+     * claim written against it is right — the row keeps the higher figure, but
+     * the reviewer should not flag the other. */
+    addRowAltTotals(id, altTotals(sd).concat([Math.min(had, coming)]));
     if (keepNew) {
         /* Promoted to first, so what the scan read has to describe it too —
          * otherwise the line carries the demoted receipt's figure against the

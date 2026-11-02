@@ -35,6 +35,57 @@ function scanConcernPrompt(): string {
          . "on. A clean receipt returns null.";
 }
 
+/**
+ * How to read a photograph holding two receipts for one purchase.
+ *
+ * A restaurant hands over an itemised bill and a card slip with the tip added,
+ * and both get photographed together. Which one a scanner calls "the" total is
+ * close to a coin toss, and reading the itemised one puts an amount on the
+ * voucher that was never charged — short by the tip, every time.
+ *
+ * $wantOthers asks for the figures it did not pick as well. Only the LP voucher
+ * has somewhere to keep them and a reviewer that compares against them.
+ */
+function scanPairPrompt(bool $wantOthers = false): string {
+    $out = "One photo often holds more than one receipt for the same purchase: "
+         . "an itemised bill and a card slip with the tip added. When it does, "
+         . "total_amount is the amount actually CHARGED — the card slip total, "
+         . "tip included. That is what was paid and what is being claimed. Never "
+         . "the itemised subtotal and never a pre-tip total when a higher charged "
+         . "amount is legible. A tip written on by hand is part of the charged "
+         . "amount; add it.";
+    if ($wantOthers) {
+        $out .= " other_amounts lists every other total legible anywhere in the "
+              . "image — the itemised subtotal, the pre-tip total, the second "
+              . "receipt's total. Amounts only, no labels, and [] when there is "
+              . "only one figure on the receipt.";
+    }
+    $out .= " Two receipts for two DIFFERENT purchases in one photo is not this "
+          . "case: read the one being claimed"
+          . ($wantOthers ? " and leave other_amounts empty." : ".");
+    return $out;
+}
+
+/**
+ * The model's other_amounts, reduced to figures worth comparing against.
+ *
+ * This is model output heading for a column the reviewer treats as permission:
+ * a claim matching anything in here raises no finding. One junk entry would
+ * quietly excuse a real mismatch, so only plausible money survives.
+ */
+function scanOtherAmounts($extracted): array {
+    $raw = is_array($extracted) ? ($extracted['other_amounts'] ?? null) : null;
+    if (!is_array($raw)) return [];
+    $out = [];
+    foreach ($raw as $v) {
+        if (!is_scalar($v)) continue;
+        $v = round((float)$v, 2);
+        if ($v > 0 && $v < 100000 && !in_array($v, $out, true)) $out[] = $v;
+        if (count($out) >= 6) break;
+    }
+    return $out;
+}
+
 /** A model's concerns value turned into something worth showing, or null. */
 function scanConcern($raw): ?string {
     if (!is_string($raw)) return null;

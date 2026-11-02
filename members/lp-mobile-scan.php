@@ -99,6 +99,7 @@ if (defined('CLAUDE_API_KEY')) {
     ];
 
     $concernRules = scanConcernPrompt();
+    $pairRules    = scanPairPrompt(true);
 $prompt = <<<PROMPT
 You are reviewing a receipt for a teachers' union president's expense reimbursement.
 Extract the following and return ONLY valid JSON — no markdown, no preamble:
@@ -113,6 +114,7 @@ Extract the following and return ONLY valid JSON — no markdown, no preamble:
   "office_amount": number or null,
   "phone_amount": number or null,
   "total_amount": number or null,
+  "other_amounts": [numbers],
   "suggested_grant": string or null,
   "suggested_budget_line": string or null,
   "concerns": string or null
@@ -129,6 +131,7 @@ Expense category rules:
 Available BCTF grants: {$grantNames}
 Available BVTU budget lines: {$blNames}
 For description: write a concise 3-7 word description (e.g. "Smithers school visit lunch").
+{$pairRules}
 {$concernRules}
 PROMPT;
 
@@ -202,6 +205,7 @@ PROMPT;
                 'office_amount'       => $extracted['office_amount']   ?? null,
                 'phone_amount'        => $extracted['phone_amount']    ?? null,
                 'total_amount'        => $extracted['total_amount']    ?? null,
+                'other_amounts'       => scanOtherAmounts($extracted),
                 'suggested_grant_id'  => $grantId,
                 'suggested_bl_id'     => $blId,
                 'concerns'            => scanConcern($extracted['concerns'] ?? null),

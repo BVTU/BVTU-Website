@@ -37,6 +37,25 @@ function lpScanTotal(array $e): ?float {
 }
 
 /**
+ * Every amount the receipt showed: the one read as the total, then the others.
+ *
+ * One photograph routinely holds two receipts for the same purchase — the
+ * itemised bill and the card slip with the tip — and a tip written on by hand
+ * makes a third figure out of the same slip. Which one the scanner calls "the"
+ * total is close to a coin toss, so the claim is compared against all of them.
+ */
+function lpScanTotals(array $e): array {
+    $all = [];
+    $t = lpScanTotal($e);
+    if ($t !== null) $all[] = $t;
+    foreach (explode(',', (string)($e['scan_alt_totals'] ?? '')) as $bit) {
+        $v = round((float)trim($bit), 2);
+        if ($v > 0 && !in_array($v, $all, true)) $all[] = $v;
+    }
+    return $all;
+}
+
+/**
  * Does the receipt's total disagree with what is claimed?
  * Null when there is nothing to compare, so "unknown" never reads as "fine".
  */
@@ -49,7 +68,14 @@ function lpTotalDiffers(array $e): ?bool {
     // reviewer that cries wolf is one nobody reads.
     $part = lpReceiptPortion($e);
     if (abs($part) < 0.01) return null;
-    return abs($scan - $part) >= 0.01;
+    // Agreeing with any figure the receipt showed is agreement. Flagging a
+    // claim that matches the card slip because it does not match the itemised
+    // bill beside it is the reviewer crying wolf at the commonest receipt
+    // there is, and a reviewer that cries wolf is one nobody reads.
+    foreach (lpScanTotals($e) as $amt) {
+        if (abs($amt - $part) < 0.01) return false;
+    }
+    return true;
 }
 
 /** Findings for one line. $n is its position, counting from 1. */
@@ -96,10 +122,13 @@ function lpReviewLine(array $e, int $n): array {
 
     $differs = lpTotalDiffers($e);
     if ($differs === true) {
-        $scan = lpScanTotal($e);
+        $reads = array_map('lpMoney', lpScanTotals($e));
         $add('check', 'Amount does not match the receipt',
              'Claimed ' . lpMoney(lpReceiptPortion($e)) . ', but the receipt reads '
-           . lpMoney($scan) . '. Often fine — a split bill, or one receipt across two lines.');
+           . (count($reads) > 1
+                ? implode(' and ', [implode(', ', array_slice($reads, 0, -1)), end($reads)])
+                : (string)reset($reads))
+           . '. Often fine — a split bill, or one receipt across two lines.');
     }
 
     if (!empty($e['scan_date']) && !empty($e['expense_date'])) {
