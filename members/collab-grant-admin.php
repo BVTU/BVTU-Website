@@ -92,10 +92,15 @@ if (isset($_GET['export']) && $_GET['export'] === 'days') {
             empty($lp['capped']) ? 'n/a' : ($lp['over'] ? 0 : $lp['left']),
             empty($lp['capped']) ? 'n/a' : ($lp['over'] ? 'Yes, by ' . ($lp['used'] - CG_DAY_CAP) : 'No'),
             implode(' + ', $roles),
-            $lp['exact'] ? 'Email address'
+            // The same note the row carries. Someone adding the applications up
+            // against this export needs to know why the total is lower.
+            trim(($lp['exact'] ? 'Email address'
                 : (strpos((string)$lp['key'], 'n:') === 0
                     ? 'No match for this name — days sit under the name as typed'
-                    : 'Some days matched by name'),
+                    : 'Some days matched by name'))
+              . (empty($lp['shared_days']) ? ''
+                 : '; ' . count($lp['shared_days']) . ' day(s) claimed by more than one '
+                   . 'application, counted once')),
             empty($lp['capped']) ? 'Not capped — ' . $lp['exempt_reason'] : 'Applies',
         ]));
     }
@@ -1036,6 +1041,33 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
                      * put the second on every other row and buried it. */
                     $unmatched = strpos((string)$lp['key'], 'n:') === 0;
                   ?>
+                  <?php if (!empty($lp['shared_days'])): ?>
+                    <?php
+                      /* The total is deliberately lower than the applications
+                       * add up to, so it has to say why on the row. A figure
+                       * that quietly disagrees with the paperwork behind it is
+                       * read as a bug, and then nobody trusts the column. */
+                      $sd = $lp['shared_days'];
+                      $when = implode(', ', array_map(
+                          function ($d) { return date('M j', strtotime($d)); },
+                          array_slice($sd, 0, 4)));
+                      if (count($sd) > 4) $when .= ' and ' . (count($sd) - 4) . ' more';
+                    ?>
+                    <div style="color:#92400e;font-size:.82rem;margin-top:.15rem;">
+                      <?= count($sd) ?> <?= count($sd) === 1 ? 'day is' : 'days are' ?>
+                      claimed by more than one application
+                      (<?= htmlspecialchars($when) ?>) — counted once, because they can
+                      only be away once.
+                      <?php foreach ($lp['shared_apps'] as $sid): ?>
+                        <a href="?year=<?= (int)$year ?>#app-<?= (int)$sid ?>">#<?= (int)$sid ?></a><?php endforeach; ?>
+                    </div>
+                  <?php endif; ?>
+                  <?php if (!empty($lp['undated']) && !empty($lp['shared_days'])): ?>
+                    <div style="color:var(--gray-500);font-size:.82rem;">
+                      Some of this total comes from applications with no usable dates, which
+                      could not be checked for overlap.
+                    </div>
+                  <?php endif; ?>
                   <?php if ($unmatched): ?>
                     <span style="color:#92400e;"
                           title="This name matched no contact and no applicant this year, so these days are attributed to the name as typed. They may belong to someone already listed above under their email address.">·
@@ -1095,6 +1127,11 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
         <p style="font-size:.8rem;color:var(--gray-500);line-height:1.7;margin:.9rem 0 0;">
           Each application spends its days twice — once for the lead and once for the
           collaborator, who books their own absence for the same days.
+          A release day is counted once per teacher however many applications claim it:
+          where a lead and a collaborator each submitted an application for the same
+          collaboration, that is one absence entered twice, not two. Applications whose
+          dates and day count disagree, or that have no dates, are added on without that
+          check, and rows carrying any say so.
           <?php if ($anyApprox): ?>
             Collaborators are typed names with no email address, so their days are
             attributed by matching the name against Contacts and against everyone who

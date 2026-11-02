@@ -1319,6 +1319,29 @@ function cgCanonEmail(string $email): string {
 }
 
 /**
+ * The release dates an application charges, or [] when they cannot be trusted.
+ *
+ * A teacher can only be released once on a given day, so knowing the actual
+ * dates is what lets the ledger count a day once when two applications both
+ * claim it. That only works when the dates and the day count agree: an
+ * applicant may add dates after approval and be granted fewer, and then nobody
+ * knows which of the listed days were the granted ones. Rather than guess, the
+ * caller is told to fall back to summing.
+ */
+function cgAppDates(array $app): array {
+    $raw = json_decode((string)($app['proposed_dates'] ?? ''), true);
+    if (!is_array($raw) || !$raw) return [];
+    $out = [];
+    foreach ($raw as $d) {
+        $t = strtotime((string)$d);
+        if (!$t) return [];   // one unreadable date and none of them are trusted
+        $iso = date('Y-m-d', $t);
+        if (!in_array($iso, $out, true)) $out[] = $iso;
+    }
+    return count($out) === cgEffectiveDays($app) ? $out : [];
+}
+
+/**
  * Everyone who spent a collaboration day in $year, keyed by person.
  *
  * Keys are 'e:<address>' for anyone we can identify by email and 'n:<name>' for
@@ -1337,11 +1360,18 @@ function cgDaysLedger(int $year): array {
     // the page cannot show the reader what it joined together.
     $add = function (string $key, string $name, string $email, string $status,
                      int $days, int $appId, string $role, bool $exact,
-                     string $seen = '') use (&$people) {
+                     string $seen = '', array $dates = []) use (&$people) {
         if (!isset($people[$key])) {
             $people[$key] = ['key' => $key, 'name' => $name, 'email' => $email,
                              'approved' => 0, 'pending' => 0, 'exact' => true,
-                             'emails' => [], 'apps' => []];
+                             'emails' => [], 'apps' => [],
+                             // date => ['status' => …, 'apps' => […]]. A day a
+                             // person is released counts once however many
+                             // applications claim it: they can only be away
+                             // once. The applications that claim it are kept so
+                             // a double claim can be named rather than silently
+                             // absorbed.
+                             'days' => [], 'undated_approved' => 0, 'undated_pending' => 0];
         }
         if ($email !== '' && $people[$key]['email'] === '') $people[$key]['email'] = $email;
         foreach ([$email, strtolower(trim($seen))] as $addr) {
@@ -1349,11 +1379,27 @@ function cgDaysLedger(int $year): array {
                 $people[$key]['emails'][] = $addr;
             }
         }
-        if ($status === 'approved') $people[$key]['approved'] += $days;
-        else                        $people[$key]['pending']  += $days;
+        if ($dates) {
+            foreach ($dates as $d) {
+                if (!isset($people[$key]['days'][$d])) {
+                    $people[$key]['days'][$d] = ['status' => $status, 'apps' => [$appId]];
+                    continue;
+                }
+                if (!in_array($appId, $people[$key]['days'][$d]['apps'], true)) {
+                    $people[$key]['days'][$d]['apps'][] = $appId;
+                }
+                // Approved outranks pending: the day is spoken for either way,
+                // and counting it as pending would understate what is committed.
+                if ($status === 'approved') $people[$key]['days'][$d]['status'] = 'approved';
+            }
+        } elseif ($status === 'approved') {
+            $people[$key]['undated_approved'] += $days;
+        } else {
+            $people[$key]['undated_pending'] += $days;
+        }
         if (!$exact) $people[$key]['exact'] = false;
-        $people[$key]['apps'][] = ['id' => $appId, 'role' => $role,
-                                   'status' => $status, 'days' => $days, 'exact' => $exact];
+        $people[$key]['apps'][] = ['id' => $appId, 'role' => $role, 'status' => $status,
+                                   'days' => $days, 'exact' => $exact, 'dated' => (bool)$dates];
     };
 
     try {
@@ -1363,9 +1409,15 @@ function cgDaysLedger(int $year): array {
         // whose address was already settled still counted as approximate and
         // still sat apart from their own applications.
         $hasCe = cgHasCollabEmail();
+        // Guarded like collaborator_email above. proposed_dates is added by a
+        // migration in cgEnsureTable(), and cgDaysLedger() does not call it —
+        // on a host that has not run it, naming the column unguarded would
+        // throw and every teacher's days would read as zero.
+        $hasPd = cgHasCollabColumn('proposed_dates');
         $st = getDB()->prepare(
             "SELECT id, applicant_name, applicant_email, collaborator_name,
                     " . ($hasCe ? "collaborator_email," : "'' AS collaborator_email,") . "
+                    " . ($hasPd ? "proposed_dates," : "NULL AS proposed_dates,") . "
                     has_collaborator, status, days_requested, days_approved
              FROM collab_grant_applications
              WHERE school_year=? AND status IN ('approved','pending')");
@@ -1398,7 +1450,8 @@ function cgDaysLedger(int $year): array {
         $email    = cgCanonEmail($rawEmail);
         $lName    = trim((string)$r['applicant_name']);
         $add($email !== '' ? 'e:' . $email : 'n:' . cgNameKey($lName),
-             $lName, $email, $r['status'], $days, (int)$r['id'], 'lead', true, $rawEmail);
+             $lName, $email, $r['status'], $days, (int)$r['id'], 'lead', true, $rawEmail,
+             cgAppDates($r));
 
         $ak = cgNameKey($lName);
         if ($ak === '' || $email === '') continue;
@@ -1427,7 +1480,10 @@ function cgDaysLedger(int $year): array {
         // this is, so it is used ahead of the name and counts as exact. It
         // belongs to the field as a whole, so it only settles anything when
         // the field names one person.
-        $named   = cgSplitNames($cName);
+        // The collaborator is released on the same days as the lead — that is
+        // what the approval email tells them to book.
+        $cDates   = cgAppDates($r);
+        $named    = cgSplitNames($cName);
         $rawTyped = $hasCe ? strtolower(trim((string)($r['collaborator_email'] ?? ''))) : '';
         $typed    = cgCanonEmail($rawTyped);
         $settled = (count($named) === 1 && $typed !== ''
@@ -1436,7 +1492,7 @@ function cgDaysLedger(int $year): array {
         foreach ($named as $one) {
             if ($settled !== '') {
                 $add('e:' . $settled, $one, $settled,
-                     $r['status'], $days, (int)$r['id'], 'collaborator', true, $rawTyped);
+                     $r['status'], $days, (int)$r['id'], 'collaborator', true, $rawTyped, $cDates);
                 continue;
             }
             // Matched by name, so never exact — the panel shows this as approximate.
@@ -1458,14 +1514,55 @@ function cgDaysLedger(int $year): array {
             if ($hit !== null) {
                 $cEmail = cgCanonEmail((string)$hit['email']);
                 $add('e:' . $cEmail, $hit['name'], $cEmail,
-                     $r['status'], $days, (int)$r['id'], 'collaborator', false);
+                     $r['status'], $days, (int)$r['id'], 'collaborator', false, '', $cDates);
             } else {
-                $add('n:' . $k, $one, '', $r['status'], $days, (int)$r['id'], 'collaborator', false);
+                $add('n:' . $k, $one, '', $r['status'], $days, (int)$r['id'],
+                     'collaborator', false, '', $cDates);
             }
         }
     }
 
     foreach ($people as $k => $p) {
+        /*
+         * A day claimed by two applications is still one day off work. Summing
+         * the applications charged Vittoria Yano six days for three — she led
+         * one grant and was named on a second for the same dates, which is one
+         * collaboration entered twice, not two absences.
+         *
+         * Days that could not be tied to dates are added on as before. Nothing
+         * is deduplicated there because nothing is known there, and quietly
+         * dropping them would understate a real total.
+         */
+        $appr = $pend = 0;
+        foreach ($p['days'] as $info) {
+            if ($info['status'] === 'approved') $appr++; else $pend++;
+        }
+        $p['approved'] = $appr + (int)$p['undated_approved'];
+        $p['pending']  = $pend + (int)$p['undated_pending'];
+
+        // Days two applications both claim, and who claimed them. Named on the
+        // page: the person has not used those days twice, and a total that
+        // quietly differs from the applications behind it reads as a bug.
+        $shared = [];
+        $withApps = [];
+        foreach ($p['days'] as $d => $info) {
+            if (count($info['apps']) < 2) continue;
+            $shared[] = $d;
+            foreach ($info['apps'] as $id) {
+                if (!in_array($id, $withApps, true)) $withApps[] = $id;
+            }
+        }
+        sort($shared);
+        // Applications in their own order, not the order this person happened
+        // to be reached in — a lead is added before any collaborator, so the
+        // list came out reversed for whoever led the later application.
+        sort($withApps);
+        $p['shared_days'] = $shared;
+        $p['shared_apps'] = $withApps;
+        // Some of this total was summed rather than counted by date, so the
+        // deduplication above could not reach it.
+        $p['undated'] = ((int)$p['undated_approved'] + (int)$p['undated_pending']) > 0;
+
         $people[$k] = cgApplyCap($p, $year);
     }
 
@@ -1495,7 +1592,9 @@ function cgPersonDays(int $year, string $email, string $name = ''): array {
     }
     return cgApplyCap(['key' => $email !== '' ? 'e:' . $email : 'n:' . $nk,
             'name' => $name, 'email' => $email, 'approved' => 0, 'pending' => 0,
-            'exact' => true, 'emails' => $email !== '' ? [$email] : [], 'apps' => []], $year);
+            'exact' => true, 'emails' => $email !== '' ? [$email] : [], 'apps' => [],
+            'days' => [], 'undated_approved' => 0, 'undated_pending' => 0,
+            'shared_days' => [], 'shared_apps' => [], 'undated' => false], $year);
 }
 
 /**
