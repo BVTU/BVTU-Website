@@ -1286,7 +1286,16 @@ function uploadAndScan(file, rowId, allowDup) {
             /* Kept with the row so the comparison still works next week, when
              * this page has been closed and reopened twice — and only for the
              * receipt those figures actually came off. */
-            if (wasFirst) bvtuSetRowScanFields(rowId, data);
+            if (wasFirst) {
+                bvtuSetRowScanFields(rowId, data);
+            } else {
+            /* A second receipt on the line is another reading of it: the
+             * card slip beside the itemised bill, photographed one at a time
+             * rather than together. Its totals join the alternates so the
+             * claim may match either — without this the desktop paperclip,
+             * which has no same-bill merge, still flags the pair. */
+                addRowAltTotals(rowId, [scanTotal(data)].concat(altTotals(data)));
+            }
 
             if (data && data.duplicate) {
                 bvtuDupeTell(data.duplicate, document.getElementById('row-' + rowId));
@@ -1926,7 +1935,10 @@ function addRowAltTotals(id, values) {
         v = parseFloat(v) || 0;
         if (v > 0 && have.indexOf(v) === -1) have.push(v);
     });
-    el.value = have.slice(0, 6).map(function (v) { return v.toFixed(2); }).join(',');
+    // Newest wins. Appending and then taking the first six dropped the figure
+    // just added — including the one mergeIntoRow() adds for the half of the
+    // bill that lost, which is the only reason that call exists.
+    el.value = have.slice(-6).map(function (v) { return v.toFixed(2); }).join(',');
 }
 
 function normVendor(v) {

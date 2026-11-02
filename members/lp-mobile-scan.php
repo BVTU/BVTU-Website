@@ -127,6 +127,7 @@ Expense category rules:
 - office_amount: office supplies, printing, equipment, software, subscriptions
 - phone_amount: phone bills, internet charges
 - misc_amount: anything else
+The category amounts must add up to total_amount — the amount charged. Where a tip takes the charge above the itemised bill, the category gets the charged figure, never the subtotal.
 
 Available BCTF grants: {$grantNames}
 Available BVTU budget lines: {$blNames}

@@ -183,7 +183,7 @@ Expense category rules:
 - phone_amount: phone bills, internet charges
 - misc_amount: anything else
 
-Put the full receipt total in the most appropriate single category. Split across multiple only if clearly mixed (e.g. a receipt with food AND office supplies).
+Put the full receipt total in the most appropriate single category. Split across multiple only if clearly mixed (e.g. a receipt with food AND office supplies). The category amounts must add up to total_amount — the amount charged. Where a tip takes the charge above the itemised bill, the category gets the charged figure, never the subtotal.
 
 {$pairRules}
 

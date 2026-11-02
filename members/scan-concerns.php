@@ -55,10 +55,13 @@ function scanPairPrompt(bool $wantOthers = false): string {
          . "amount is legible. A tip written on by hand is part of the charged "
          . "amount; add it.";
     if ($wantOthers) {
-        $out .= " other_amounts lists every other total legible anywhere in the "
-              . "image — the itemised subtotal, the pre-tip total, the second "
-              . "receipt's total. Amounts only, no labels, and [] when there is "
-              . "only one figure on the receipt.";
+        $out .= " other_amounts lists the other figures in the image that someone "
+              . "could reasonably have claimed as the cost of this purchase: the "
+              . "itemised bill's total, a pre-tip total, the second receipt's "
+              . "total. NOT amount tendered, change due, cash back, a tax or tip "
+              . "line on its own, individual item prices, a loyalty balance or a "
+              . "running account balance. Amounts only, no labels, and [] when "
+              . "there is only one figure anyone could claim.";
     }
     $out .= " Two receipts for two DIFFERENT purchases in one photo is not this "
           . "case: read the one being claimed"
