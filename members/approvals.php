@@ -108,7 +108,8 @@ function _lpNeedsMe(array $v): bool {
     // for the whole page cannot know that.
     if ($v['status'] === 'submitted')           return lpCanSign1For($v, $email);
     if ($v['status'] === 'treasurer_approved')  return lpCanSign2For($v, $email);
-    if ($v['status'] === 'vp_approved')         return lpCanSign1For($v, $email);
+    // vp_approved is waiting on a payment, not a signature.
+    if ($v['status'] === 'vp_approved')         return lpCanRecordPayment($v, $email);
     return false;
 }
 

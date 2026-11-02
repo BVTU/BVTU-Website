@@ -216,6 +216,11 @@ if (execIsAdmin($myEmail) && empty($myExecRoleSlugs)) {
                           if ($v['status'] === 'treasurer_approved') {
                               return lpCanSign2For($v, $member['email']);
                           }
+                          // Waiting to be paid is waiting on whoever may record
+                          // it, which is not the same set as the first signer.
+                          if ($v['status'] === 'vp_approved') {
+                              return lpCanRecordPayment($v, $member['email']);
+                          }
                           return lpCanSign1For($v, $member['email']);
                       }
                   ));

@@ -577,16 +577,15 @@ arsort($blSummary);
      */
     $whoCanPay = function () use ($voucher, $pay) {
         $out = [];
-        // Presidents included: when the Treasurer is the one being paid the
-        // slot falls to the President or the VP, and leaving the President out
-        // meant a page that said nobody could record it while somebody could.
-        // The admin constants are configuration rather than directory, so they
-        // are named here too.
+        // The Treasurer and the President, which is who may record a payment.
+        // No VPs: they sign, they do not pay. The admin constants are named
+        // because they are configuration rather than directory, and
+        // expIsPresident() admits them.
         $admins = [];
         foreach (['EXPENSE_ADMIN_EMAIL', 'PROD_ADMIN_EMAIL'] as $c) {
             if (defined($c)) $admins[] = (string)constant($c);
         }
-        foreach (array_merge(lpGetTreasurerEmails(), lpGetVPEmails(), lpGetPresidentEmails(),
+        foreach (array_merge(lpGetTreasurerEmails(), lpGetPresidentEmails(),
                              $admins, [(string)($voucher['submitted_by_email'] ?? '')]) as $cand) {
             $cand = trim((string)$cand);
             if ($cand === '' || isset($out[strtolower($cand)])) continue;

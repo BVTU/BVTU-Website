@@ -97,8 +97,12 @@ try {
             break;
 
         case 'mark_paid':
-            if (!lpCanSign1For($v, $member['email'])) {
-                throw new RuntimeException('Only the Treasurer can mark a voucher as paid.');
+            // Recording a payment, not signing — and this is where the form in
+            // the approvals queue actually posts, so leaving it on the signing
+            // rule made the newly-offered button refuse the very person it was
+            // offered to.
+            if (!lpCanRecordPayment($v, $member['email'])) {
+                throw new RuntimeException('Only the Treasurer or the President can record a payment.');
             }
             lpEnsureApprovalColumns();
             lpMarkPaid($voucherId, $member['email'], $member['name'], $note, $paymentRef, $paymentDate);

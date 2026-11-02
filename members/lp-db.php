@@ -383,7 +383,12 @@ function lpHasRealTreasurer(): bool {
  */
 function lpCanRecordPayment(array $v, string $email): bool {
     require_once __DIR__ . '/exp-db.php';
-    return expIsTreasurer($email) || expIsPresident($email);
+    /* expIsTreasurer() admits anyone with an admin constant as well, which
+     * would have let an admin record a payment while standing in for the
+     * Treasurer — the role the strict test exists to keep honest. The
+     * Treasurer in their own right, or the President, who already admits the
+     * admin constants deliberately. */
+    return expIsTreasurerRole($email) || expIsPresident($email);
 }
 
 /** Is the vendor on this voucher actually our own Treasurer? */
