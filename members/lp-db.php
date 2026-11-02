@@ -766,6 +766,28 @@ function lpGetTreasurerEmails(): array {
 }
 
 /** VP emails (signer 2) — exec_roles uses 'vice_president', exp_roles uses 'vp' */
+/**
+ * The President, from the EC directory.
+ *
+ * Needed to say who may record a payment when the Treasurer is the one being
+ * paid and the job falls to somebody else. Mirrors lpGetVPEmails(); the
+ * constant-defined admin is added by the caller, since it is a configuration
+ * fact rather than a directory one.
+ */
+function lpGetPresidentEmails(): array {
+    $emails = [];
+    foreach (['exec_roles' => 'president', 'exp_roles' => 'president'] as $tbl => $role) {
+        try {
+            $s = getDB()->query("SELECT DISTINCT user_email FROM {$tbl} WHERE role='{$role}'");
+            foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $e) {
+                $e = strtolower(trim((string)$e));
+                if ($e !== '' && !in_array($e, $emails, true)) $emails[] = $e;
+            }
+        } catch (\Throwable $ex) { /* a missing table simply names nobody */ }
+    }
+    return $emails;
+}
+
 function lpGetVPEmails(): array {
     $emails = [];
     $db     = getDB();
@@ -889,7 +911,17 @@ function lpMarkPaid(int $id, string $email, string $name, string $note, string $
     );
     $st->execute([$email, $name, $note ?: null, $paymentRef ?: null, $pd, $id]);
     if ($st->rowCount() === 0) {
-        throw new RuntimeException('That voucher has already been recorded as paid.');
+        // Nothing matched. Usually that means somebody got there first, but it
+        // also covers a voucher deleted or reset between the read and the
+        // write, and saying "already paid" about one of those would be a lie.
+        $now = lpGetVoucher($id);
+        throw new RuntimeException(
+            $now === null
+                ? 'That voucher no longer exists, so nothing was recorded.'
+                : (($now['status'] ?? '') === 'paid'
+                    ? 'That voucher has already been recorded as paid.'
+                    : 'That voucher is no longer ready to pay, so nothing was recorded.')
+        );
     }
 }
 

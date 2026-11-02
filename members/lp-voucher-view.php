@@ -91,12 +91,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'mark_
                    trim((string)($_POST['note'] ?? '')),
                    trim((string)($_POST['payment_ref'] ?? '')),
                    trim((string)($_POST['payment_date'] ?? '')));
-        $v = lpGetVoucher($id);
-        if ($v) {
-            $total = array_sum(array_map('lpRowTotal', lpGetExpenses($id)));
-            try { lpEmailPaid($v, $total); } catch (\Throwable $e) {
-                error_log('lp-voucher-view paid notice: ' . $e->getMessage());
-            }
+        /* Everything after the write is inside its own guard. The payment is
+         * recorded by this point, so nothing here may throw into the outer
+         * catch — which would report a payment this request had just made as
+         * one somebody else had already made. */
+        try {
+            $v = lpGetVoucher($id);
+            if ($v) lpEmailPaid($v, array_sum(array_map('lpRowTotal', lpGetExpenses($id))));
+        } catch (\Throwable $e) {
+            error_log('lp-voucher-view paid notice: ' . $e->getMessage());
         }
         header('Location: lp-voucher-view.php?id=' . $id . '&paid=1');
         exit;
@@ -109,8 +112,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'mark_
         if ($fresh && $fresh['status'] === 'paid') {
             $voucher = $fresh;
             $notice  = 'Already recorded as paid — nothing was sent twice.';
-        } else {
+        } elseif ($e instanceof RuntimeException) {
+            // Ours, written to be read.
             $error = $e->getMessage();
+        } else {
+            // A driver message — "SQLSTATE[22001] data too long" — helps nobody
+            // reading this page, and names the schema to whoever is.
+            error_log('lp-voucher-view mark_paid: ' . $e->getMessage());
+            $error = 'That could not be recorded. The problem has been logged — '
+                   . 'check the reference is not over-long and try again.';
         }
     }
 }
@@ -567,8 +577,17 @@ arsort($blSummary);
      */
     $whoCanPay = function () use ($voucher, $pay) {
         $out = [];
-        foreach (array_merge(lpGetTreasurerEmails(), lpGetVPEmails(),
-                             [(string)($voucher['submitted_by_email'] ?? '')]) as $cand) {
+        // Presidents included: when the Treasurer is the one being paid the
+        // slot falls to the President or the VP, and leaving the President out
+        // meant a page that said nobody could record it while somebody could.
+        // The admin constants are configuration rather than directory, so they
+        // are named here too.
+        $admins = [];
+        foreach (['EXPENSE_ADMIN_EMAIL', 'PROD_ADMIN_EMAIL'] as $c) {
+            if (defined($c)) $admins[] = (string)constant($c);
+        }
+        foreach (array_merge(lpGetTreasurerEmails(), lpGetVPEmails(), lpGetPresidentEmails(),
+                             $admins, [(string)($voucher['submitted_by_email'] ?? '')]) as $cand) {
             $cand = trim((string)$cand);
             if ($cand === '' || isset($out[strtolower($cand)])) continue;
             if (!lpCanSign1For($voucher, $cand)) continue;
