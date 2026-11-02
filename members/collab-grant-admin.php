@@ -952,6 +952,37 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
           $ledger = cgDaysLedger($year);
           $anyApprox = (bool)array_filter($ledger, fn($lp) => !$lp['exact']);
     ?>
+    <?php
+      /* Two rows, one name, different addresses. Never merged on this evidence:
+       * two teachers really do share a name, and adding their days together
+       * silently would be worse than the split rows it fixed. Recording the
+       * second address on the contact is what merges them — and that fixes it
+       * everywhere, not only on this page. */
+      $cgDupes = $ledger ? cgLedgerDuplicates($year) : [];
+    ?>
+    <?php if ($cgDupes): ?>
+    <div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;
+                padding:.9rem 1rem;margin-bottom:1rem;font-size:.88rem;">
+      <strong>Possibly the same person twice.</strong>
+      <?= count($cgDupes) === 1 ? 'One name appears' : count($cgDupes) . ' names appear' ?>
+      under more than one address, so their days are counted separately and the
+      <?= CG_DAY_CAP ?>-day cap cannot see the total. If it is one teacher, add the second
+      address to their contact record as a secondary email and they will count as one
+      person here and everywhere else. If they are two different people, leave it.
+      <ul style="margin:.6rem 0 0;padding-left:1.1rem;">
+        <?php foreach ($cgDupes as $d): ?>
+          <li style="margin-bottom:.25rem;">
+            <strong><?= htmlspecialchars($d['name']) ?></strong>
+            — <?= htmlspecialchars(implode(' and ', $d['addresses'])) ?>
+            <span style="color:var(--gray-500);">
+              (<?= (int)$d['used'] ?> <?= (int)$d['used'] === 1 ? 'day' : 'days' ?> between them)</span>
+            <a href="people.php?q=<?= urlencode($d['name']) ?>" style="margin-left:.35rem;">Open contact</a>
+          </li>
+        <?php endforeach; ?>
+      </ul>
+    </div>
+    <?php endif; ?>
+
     <?php if ($ledger): ?>
     <details style="margin-bottom:1.75rem;" <?= $cgReadOnly ? 'open' : '' ?>>
       <summary style="cursor:pointer;font-weight:700;color:var(--primary);font-size:.95rem;
@@ -983,8 +1014,15 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
               <tr style="border-top:1px solid var(--border);">
                 <td style="padding:.45rem .5rem;">
                   <strong><?= htmlspecialchars($lp['name']) ?></strong>
-                  <?php if ($lp['email']): ?>
-                    <span style="color:var(--gray-500);">· <?= htmlspecialchars($lp['email']) ?></span>
+                  <?php
+                    // Every address folded into this row, not just the first.
+                    // A teacher who applies from work and from home is one
+                    // person here, and the page should show what it merged
+                    // rather than quietly print one of the two.
+                    $addrs = $lp['emails'] ?? ($lp['email'] ? [$lp['email']] : []);
+                  ?>
+                  <?php if ($addrs): ?>
+                    <span style="color:var(--gray-500);">· <?= htmlspecialchars(implode(' · ', $addrs)) ?></span>
                   <?php endif; ?>
                   <?php if (!$lp['exact']): ?>
                     <span style="color:var(--gray-500);">· includes a name match</span>

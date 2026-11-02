@@ -1235,6 +1235,90 @@ function cgContactsByName(): array {
 }
 
 /**
+ * Split a collaborator field that names more than one person.
+ *
+ * The field is free text and people use it as such: "Leone MacDonald, Ellen
+ * Faubert" was being keyed as a single thirty-character pseudo-person, so the
+ * days landed on nobody real and neither teacher could reach the cap from that
+ * grant. Each named person is charged the grant's days in full, the same as a
+ * sole collaborator — being named means taking those release days off.
+ *
+ * Splitting has to be earned, because a wrong split invents a teacher and
+ * charges them days. Three things must hold, or the field is left whole and
+ * behaves exactly as it did before:
+ *
+ *   - every piece has at least two words, so a stray "team" or "etc" cannot
+ *     become a person;
+ *   - no piece contains a digit, which rules out "Grade 4 team" and room
+ *     numbers;
+ *   - at least one piece is the name of a real contact, which is what tells
+ *     "Leone MacDonald, Ellen Faubert" apart from "Smithers Secondary,
+ *     Riverside Elementary". Shape alone cannot separate those two, and only
+ *     one of them is a list of people.
+ *
+ * Pieces that match nobody still count, exactly as a lone unmatched
+ * collaborator does today — they are simply not exact.
+ */
+function cgSplitNames(string $raw): array {
+    $whole = [trim($raw)];
+    $parts = preg_split('/\s*(?:,|;|\n|\r|&|\band\b|\+)\s*/iu', trim($raw)) ?: [];
+    $parts = array_values(array_filter(array_map('trim', $parts), function ($p) {
+        return $p !== '';
+    }));
+    if (count($parts) < 2) return $whole;
+
+    foreach ($parts as $p) {
+        $k = cgNameKey($p);
+        if (count(preg_split('/\s+/', $k) ?: []) < 2) return $whole;
+        if (preg_match('/\d/', $k)) return $whole;
+    }
+
+    $byName = cgContactsByName();
+    foreach ($parts as $p) {
+        $k = cgNameKey($p);
+        if ($k !== '' && isset($byName[$k]) && empty($byName[$k]['ambiguous'])) return $parts;
+    }
+    return $whole;
+}
+
+/**
+ * Every address a person uses, mapped to the one they are counted under.
+ *
+ * contacts.secondary_email has been on the contact form and in the importer all
+ * along; the ledger just never read it, so one teacher applying from work and
+ * from home became two rows of one day each and the three-day cap could not see
+ * either. Built from a column an admin filled in deliberately — a shared name
+ * is a coincidence and is never merged here.
+ */
+function cgEmailAliases(): array {
+    static $map = null;
+    if ($map !== null) return $map;
+    $map = [];
+    try {
+        $rows = getDB()->query("SELECT * FROM contacts")->fetchAll();
+    } catch (Exception $e) {
+        return $map;   // no contacts table: every address stands alone
+    }
+    foreach ($rows as $r) {
+        $primary = strtolower(trim((string)($r['email'] ?? '')));
+        $second  = strtolower(trim((string)($r['secondary_email'] ?? '')));
+        if ($primary === '' || $second === '' || $primary === $second) continue;
+        // Only the secondary folds into the primary. Mapping both directions
+        // would let two contacts that name each other chase one another.
+        $map[$second] = $primary;
+    }
+    return $map;
+}
+
+/** The address a person is counted under, following one alias hop. */
+function cgCanonEmail(string $email): string {
+    $e = strtolower(trim($email));
+    if ($e === '') return '';
+    $map = cgEmailAliases();
+    return $map[$e] ?? $e;
+}
+
+/**
  * Everyone who spent a collaboration day in $year, keyed by person.
  *
  * Keys are 'e:<address>' for anyone we can identify by email and 'n:<name>' for
@@ -1248,13 +1332,23 @@ function cgDaysLedger(int $year): array {
     cgEnsureEditSupport();
     $people = [];
 
+    // $seen is the address as it was written, before the alias map folded it.
+    // Without it a merged row lists only the address it is counted under, and
+    // the page cannot show the reader what it joined together.
     $add = function (string $key, string $name, string $email, string $status,
-                     int $days, int $appId, string $role, bool $exact) use (&$people) {
+                     int $days, int $appId, string $role, bool $exact,
+                     string $seen = '') use (&$people) {
         if (!isset($people[$key])) {
             $people[$key] = ['key' => $key, 'name' => $name, 'email' => $email,
-                             'approved' => 0, 'pending' => 0, 'exact' => true, 'apps' => []];
+                             'approved' => 0, 'pending' => 0, 'exact' => true,
+                             'emails' => [], 'apps' => []];
         }
         if ($email !== '' && $people[$key]['email'] === '') $people[$key]['email'] = $email;
+        foreach ([$email, strtolower(trim($seen))] as $addr) {
+            if ($addr !== '' && !in_array($addr, $people[$key]['emails'], true)) {
+                $people[$key]['emails'][] = $addr;
+            }
+        }
         if ($status === 'approved') $people[$key]['approved'] += $days;
         else                        $people[$key]['pending']  += $days;
         if (!$exact) $people[$key]['exact'] = false;
@@ -1263,8 +1357,15 @@ function cgDaysLedger(int $year): array {
     };
 
     try {
+        // collaborator_email is the address an admin confirmed, or the
+        // collaborator themselves corrected through the "this is not me" link.
+        // The ledger used to ignore it and re-match by name, so a collaborator
+        // whose address was already settled still counted as approximate and
+        // still sat apart from their own applications.
+        $hasCe = cgHasCollabEmail();
         $st = getDB()->prepare(
             "SELECT id, applicant_name, applicant_email, collaborator_name,
+                    " . ($hasCe ? "collaborator_email," : "'' AS collaborator_email,") . "
                     has_collaborator, status, days_requested, days_approved
              FROM collab_grant_applications
              WHERE school_year=? AND status IN ('approved','pending')");
@@ -1281,10 +1382,11 @@ function cgDaysLedger(int $year): array {
         $days = cgEffectiveDays($r);
         if ($days < 1) continue;
 
-        $email = strtolower(trim((string)$r['applicant_email']));
-        $lName = trim((string)$r['applicant_name']);
+        $rawEmail = strtolower(trim((string)$r['applicant_email']));
+        $email    = cgCanonEmail($rawEmail);
+        $lName    = trim((string)$r['applicant_name']);
         $add($email !== '' ? 'e:' . $email : 'n:' . cgNameKey($lName),
-             $lName, $email, $r['status'], $days, (int)$r['id'], 'lead', true);
+             $lName, $email, $r['status'], $days, (int)$r['id'], 'lead', true, $rawEmail);
 
         // 'has_collaborator' is what the review panel reads, so the ledger reads
         // it too: a name left behind after someone switched back to "not yet"
@@ -1292,15 +1394,32 @@ function cgDaysLedger(int $year): array {
         $cName = trim((string)$r['collaborator_name']);
         if ($cName === '' || empty($r['has_collaborator'])) continue;
 
-        // Matched by name, so never exact — the panel shows this as approximate.
-        $k = cgNameKey($cName);
-        if ($byName === null) $byName = cgContactsByName();
-        if ($k !== '' && isset($byName[$k]) && !$byName[$k]['ambiguous']) {
-            $cEmail = strtolower(trim($byName[$k]['email']));
-            $add('e:' . $cEmail, $byName[$k]['name'], $cEmail,
-                 $r['status'], $days, (int)$r['id'], 'collaborator', false);
-        } else {
-            $add('n:' . $k, $cName, '', $r['status'], $days, (int)$r['id'], 'collaborator', false);
+        // An address typed or confirmed against the application settles who
+        // this is, so it is used ahead of the name and counts as exact. It
+        // belongs to the field as a whole, so it only settles anything when
+        // the field names one person.
+        $named   = cgSplitNames($cName);
+        $rawTyped = $hasCe ? strtolower(trim((string)($r['collaborator_email'] ?? ''))) : '';
+        $typed    = cgCanonEmail($rawTyped);
+        $settled = (count($named) === 1 && $typed !== ''
+                    && filter_var($typed, FILTER_VALIDATE_EMAIL)) ? $typed : '';
+
+        foreach ($named as $one) {
+            if ($settled !== '') {
+                $add('e:' . $settled, $one, $settled,
+                     $r['status'], $days, (int)$r['id'], 'collaborator', true, $rawTyped);
+                continue;
+            }
+            // Matched by name, so never exact — the panel shows this as approximate.
+            $k = cgNameKey($one);
+            if ($byName === null) $byName = cgContactsByName();
+            if ($k !== '' && isset($byName[$k]) && !$byName[$k]['ambiguous']) {
+                $cEmail = cgCanonEmail((string)$byName[$k]['email']);
+                $add('e:' . $cEmail, $byName[$k]['name'], $cEmail,
+                     $r['status'], $days, (int)$r['id'], 'collaborator', false);
+            } else {
+                $add('n:' . $k, $one, '', $r['status'], $days, (int)$r['id'], 'collaborator', false);
+            }
         }
     }
 
@@ -1318,21 +1437,59 @@ function cgDaysLedger(int $year): array {
 /** One person's standing for the year, whether or not they appear in the ledger. */
 function cgPersonDays(int $year, string $email, string $name = ''): array {
     $ledger = cgDaysLedger($year);
-    $email  = strtolower(trim($email));
+    // Through the alias map, or asking about the address someone applied from
+    // would miss the row their days were counted under.
+    $email  = cgCanonEmail($email);
     if ($email !== '' && isset($ledger['e:' . $email])) return $ledger['e:' . $email];
 
     $nk = $name === '' ? '' : cgNameKey($name);
     if ($nk !== '') {
         $byName = cgContactsByName();
         if (isset($byName[$nk]) && !$byName[$nk]['ambiguous']) {
-            $ck = 'e:' . strtolower(trim($byName[$nk]['email']));
+            $ck = 'e:' . cgCanonEmail((string)$byName[$nk]['email']);
             if (isset($ledger[$ck])) return $ledger[$ck];
         }
         if (isset($ledger['n:' . $nk])) return $ledger['n:' . $nk];
     }
     return cgApplyCap(['key' => $email !== '' ? 'e:' . $email : 'n:' . $nk,
             'name' => $name, 'email' => $email, 'approved' => 0, 'pending' => 0,
-            'exact' => true, 'apps' => []], $year);
+            'exact' => true, 'emails' => $email !== '' ? [$email] : [], 'apps' => []], $year);
+}
+
+/**
+ * Ledger rows that look like one person under two addresses.
+ *
+ * Never merged on this evidence — two teachers really do share a name, and
+ * silently adding their days together would be worse than the split rows it
+ * fixed. Shown instead, with the contact record to edit: recording the second
+ * address as a secondary_email is what actually merges them, and it does so
+ * everywhere rather than only here.
+ */
+function cgLedgerDuplicates(int $year): array {
+    $byName = [];
+    foreach (cgDaysLedger($year) as $p) {
+        $k = cgNameKey((string)$p['name']);
+        if ($k === '') continue;
+        $byName[$k][] = $p;
+    }
+    $out = [];
+    foreach ($byName as $k => $rows) {
+        if (count($rows) < 2) continue;
+        $addrs = [];
+        foreach ($rows as $r) {
+            foreach ($r['emails'] as $e) {
+                if (!in_array($e, $addrs, true)) $addrs[] = $e;
+            }
+        }
+        // Two rows and no address between them is one unmatched name counted
+        // twice, which the name key already rules out. Needs real addresses to
+        // be worth asking about.
+        if (count($addrs) < 2) continue;
+        $out[] = ['name' => $rows[0]['name'], 'addresses' => $addrs,
+                  'used' => array_sum(array_column($rows, 'used'))];
+    }
+    usort($out, function ($a, $b) { return strcasecmp($a['name'], $b['name']); });
+    return $out;
 }
 
 /**
@@ -1408,12 +1565,16 @@ function cgExemptAll(bool $fresh = false): array {
  */
 function cgExemptFor(array $person, int $year): ?array {
     $key   = (string)($person['key'] ?? '');
-    $email = strtolower(trim((string)($person['email'] ?? '')));
+    // Through the alias map on both sides. An exemption recorded against the
+    // address someone used last year must still find them after their two
+    // addresses are folded into one — otherwise a district support teacher
+    // silently becomes capped and shows over the limit in red.
+    $email = cgCanonEmail((string)($person['email'] ?? ''));
     $nk    = cgNameKey((string)($person['name'] ?? ''));
     foreach (cgExemptAll() as $r) {
         // Carried forward from the year it was recorded, never backwards.
         if ((int)$r['from_year'] > $year) continue;
-        $rEmail = strtolower(trim((string)$r['email']));
+        $rEmail = cgCanonEmail((string)$r['email']);
         if ($r['person_key'] === $key) return $r;
         if ($email !== '' && $rEmail === $email) return $r;
         // Two different addresses are two different people however alike the
