@@ -613,6 +613,11 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
     .btn-approve:hover  { background: #155a2a; }
     .btn-waitlist { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
     .btn-waitlist:hover { background: #dbeafe; }
+    /* A link wearing the row's button, so it lines up with the real buttons
+       beside it rather than looking like text that wandered in. */
+    .btn-edit { background: #fff; color: var(--primary); border: 1px solid var(--primary);
+      text-decoration: none; display: inline-flex; align-items: center; }
+    .btn-edit:hover { background: var(--accent); }
     .btn-decline  { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
     .btn-decline:hover  { background: #fee2e2; }
 
@@ -1251,7 +1256,7 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
 
             <?php if ($view !== 'followup'): ?>
             <div class="cg-decision">
-            <form class="app-action-form" method="post">
+            <form class="app-action-form" method="post" id="decide-<?= (int)$app['id'] ?>">
               <?= csrfField() ?>
               <input type="hidden" name="app_id" value="<?= $app['id'] ?>">
               <?php
@@ -1318,9 +1323,23 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
                 <span class="cg-field-note">Charged to both teachers on this application.</span>
               </label>
 
+              <?php /*
+               * Edit takes the place Waitlist had.
+               *
+               * Editing on somebody's behalf is asked for far more often than
+               * waitlisting, and it was folded away while Waitlist sat in the
+               * decision row — so the common job was the hidden one. Waitlist
+               * moves down with the other occasional actions rather than being
+               * removed: it is a real status, applications are in it, and it
+               * still shows on the card and in the figures.
+               *
+               * A link, not a submit: this form posts a decision, and Edit is
+               * not one. It carries the button's look so the row reads as one
+               * set of things you can do here.
+               */ ?>
               <div class="app-action-btns">
                 <button type="submit" name="action" value="approved"   class="btn btn-approve">✓ Approve &amp; notify applicant</button>
-                <button type="submit" name="action" value="waitlisted" class="btn btn-waitlist">Waitlist</button>
+                <a href="../collab-grant-edit.php?id=<?= (int)$app['id'] ?>" class="btn btn-edit">Edit application</a>
                 <button type="submit" name="action" value="declined"   class="btn btn-decline">Decline</button>
                 <?php if ($app['status'] !== 'pending'): ?>
                   <button type="submit" name="action" value="pending" class="btn" style="border:1px solid var(--border);background:#fff;color:var(--gray-500);">Reset to pending</button>
@@ -1353,17 +1372,30 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
              * not exist. Folded away is fine. Unlabelled is not.
              */ ?>
             <details class="app-more">
-              <summary>Edit this application, or send them the edit link</summary>
+              <summary>Waitlist it, or send them the edit link</summary>
               <div class="app-more-body">
-                <p>
-                  <a href="../collab-grant-edit.php?id=<?= (int)$app['id'] ?>">Edit this application</a>
-                  on <?= htmlspecialchars($app['applicant_name']) ?>'s behalf
-                  <?php if (!empty($app['edited_at'])): ?>
-                    <span class="app-more-note">— last changed
-                      <?= date('M j, Y', strtotime($app['edited_at'])) ?>
-                      by <?= htmlspecialchars($app['edited_by']) ?></span>
-                  <?php endif; ?>
+                <?php /*
+                 * Submits the decision form above rather than carrying its own.
+                 *
+                 * The handler writes admin_notes on every status change, so a
+                 * separate form here would have had to repost the notes — and
+                 * would still have thrown away anything typed into the box and
+                 * not yet saved. Pointing at the real form keeps the notes, the
+                 * day count and the token exactly as they are on screen.
+                 */ ?>
+                <p style="margin:0 0 .6rem;">
+                  <button type="submit" form="decide-<?= (int)$app['id'] ?>"
+                          name="action" value="waitlisted" class="btn app-more-btn">
+                    Waitlist this application
+                  </button>
+                  <span class="app-more-note">Holds it without deciding; the days are not counted.</span>
                 </p>
+                <?php if (!empty($app['edited_at'])): ?>
+                <p class="app-more-note" style="margin:0 0 .6rem;">
+                  Last changed <?= date('M j, Y', strtotime($app['edited_at'])) ?>
+                  by <?= htmlspecialchars($app['edited_by']) ?>.
+                </p>
+                <?php endif; ?>
                 <form method="post">
                   <?= csrfField() ?>
                   <input type="hidden" name="app_id" value="<?= (int)$app['id'] ?>">
