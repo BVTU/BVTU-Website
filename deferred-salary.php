@@ -108,7 +108,10 @@ $member   = $loggedIn ? getMember() : null;
     </div>
   </section>
 
-  <main class="main-content">
+  <?php // page-content, not main-content: the latter has no rule in style.css,
+        // so the first block sits flush against the hero. This is the shared
+        // 3.5rem the other member pages breathe with. ?>
+  <main class="page-content">
     <div class="container" style="max-width:820px">
 
       <div class="dsp-lede">
