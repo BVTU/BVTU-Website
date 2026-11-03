@@ -256,7 +256,13 @@ function libGetResources(array $filters = [], bool $adminView = false): array {
      * the word "grade" and emptied the library for the wrong reason.
      */
     if (!empty($filters['q'])) {
-        $gradeRe = '/\bgrades?\s*([k0-9]{1,2})(?:\s*(?:-|\x{2013}|to)\s*([k0-9]{1,2}))?\b/iu';
+        // The whole list, not the first of it. "grades 4, 5" and "grade 10/11"
+        // used to take one grade and leave the other behind as a word that had
+        // to appear in the text, which excluded the resources being asked for
+        // and, for "/11", matched nothing at all.
+        $gPart   = '[k0-9]{1,2}';
+        $gJoin   = '\s*(?:-|\x{2013}|\x{2014}|\/|,|&|to|and|\s)\s*';
+        $gradeRe = '/\bgrades?\s*(' . $gPart . '(?:' . $gJoin . $gPart . ')*)\b/iu';
         if (preg_match_all($gradeRe, (string)$filters['q'], $gm, PREG_SET_ORDER)) {
             // K sorts before 1 so a range can be walked; it is written back as
             // "K", which is how grade_levels stores it.
@@ -264,13 +270,25 @@ function libGetResources(array $filters = [], bool $adminView = false): array {
             $name = function ($n) { return $n === 0 ? 'K' : (string)$n; };
             $found = [];
             foreach ($gm as $m) {
-                $lo = $num($m[1]);
-                $hi = (isset($m[2]) && $m[2] !== '') ? $num($m[2]) : $lo;
-                if ($hi < $lo) { $t = $lo; $lo = $hi; $hi = $t; }
-                // Bounded so "grades 1-99" cannot build an endless list; an
-                // out-of-range grade still filters, and finds nothing.
-                for ($g = $lo; $g <= min($hi, 12) && $g - $lo < 13; $g++) $found[$name($g)] = true;
-                if ($hi === $lo && $hi > 12) $found[$name($hi)] = true;
+                $raw = (string)$m[1];
+                // A dash, an en dash or "to" spans; anything else just lists.
+                $isRange = (bool)preg_match('/\s*(?:-|\x{2013}|\x{2014}|to)\s*/iu', $raw);
+                $parts = preg_split('/' . $gJoin . '/iu', $raw, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+                $parts = array_map($num, $parts);
+                if ($isRange && count($parts) === 2) {
+                    $lo = min($parts[0], $parts[1]);
+                    $hi = max($parts[0], $parts[1]);
+                    /* Bounded by how many grades are produced, never by
+                     * clamping the upper end: clamping made a range entirely
+                     * above 12 produce no grades at all while the phrase was
+                     * still taken out of the text, so "grade 13-15 math" asked
+                     * for nothing and returned the whole library. Out-of-range
+                     * grades filter and find nothing, which is what a single
+                     * out-of-range grade already did. */
+                    for ($g = $lo; $g <= $hi && $g - $lo < 14; $g++) $found[$name($g)] = true;
+                } else {
+                    foreach ($parts as $g) $found[$name($g)] = true;
+                }
             }
             $filters['q']      = trim((string)preg_replace($gradeRe, ' ', (string)$filters['q']));
             $filters['grades'] = array_values(array_unique(array_merge(
@@ -364,12 +382,25 @@ function libGetResources(array $filters = [], bool $adminView = false): array {
              */
             static $stop = null;
             if ($stop === null) {
-                $stop = [];
+                /* InnoDB's built-in default list, written out because reading
+                 * it from INFORMATION_SCHEMA needs the PROCESS privilege,
+                 * which shared hosting does not grant. Caught and cached
+                 * empty, the lookup would have failed silently and left the
+                 * bug exactly where it was. The server's own list is still
+                 * preferred where it can be read, in case it was customised. */
+                $stop = array_fill_keys([
+                    'a','about','an','are','as','at','be','by','com','de','en','for','from',
+                    'how','i','in','is','it','la','of','on','or','that','the','this','to',
+                    'und','was','what','when','where','who','will','with','www',
+                ], true);
                 try {
                     $rows = getDB()->query(
                         "SELECT value FROM INFORMATION_SCHEMA.INNODB_FT_DEFAULT_STOPWORD")->fetchAll();
-                    foreach ($rows as $r) $stop[strtolower((string)$r['value'])] = true;
-                } catch (\Exception $e) { /* no list: short words still caught */ }
+                    if ($rows) {
+                        $stop = [];
+                        foreach ($rows as $r) $stop[mb_strtolower((string)$r['value'])] = true;
+                    }
+                } catch (\Exception $e) { /* keep the built-in list */ }
             }
 
             foreach ($words as $w) {
@@ -399,7 +430,7 @@ function libGetResources(array $filters = [], bool $adminView = false): array {
              * them. A single word worked and a phrase never did.
              */
             $cols = ['title', 'description', 'tags', 'bc_curriculum', 'subject',
-                     'grade_levels', 'resource_type', 'materials', 'uploader_name'];
+                     'grade_levels', 'resource_type', 'materials'];
             // Punctuation was already stripped into spaces above; fall back to
             // the raw query only where that left nothing to search for.
             /*
@@ -416,7 +447,15 @@ function libGetResources(array $filters = [], bool $adminView = false): array {
                 $like = '%' . str_replace(['|', '%', '_'], ['||', '|%', '|_'], $term) . '%';
                 $ors = [];
                 foreach ($cols as $c) { $ors[] = "$c LIKE ? ESCAPE '|'"; $params[] = $like; }
-                $where[] = '(' . implode(' OR ', $ors) . ')';
+                /* The uploader's name, but only where they did not ask to be
+                 * anonymous. The card hides that name and the uploader filter
+                 * already excludes them, but searching it matched them anyway
+                 * — and this branch now carries every search containing a
+                 * short word or a stopword, so "jo smith" would have named
+                 * someone who had asked not to be named. */
+                $ors[]    = "(uploader_name LIKE ? ESCAPE '|' AND anonymous = 0)";
+                $params[] = $like;
+                $where[]  = '(' . implode(' OR ', $ors) . ')';
             }
         }
     }
