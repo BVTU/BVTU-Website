@@ -271,6 +271,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'colla
     $apps = cgGetApplications($year);
 }
 
+// Folding one application under another, and undoing it. Never deletes: the
+// second teacher applied and was approved, and that record is what says they
+// have used the fund this year.
+if ($_SERVER['REQUEST_METHOD'] === 'POST'
+    && in_array($_POST['action'] ?? '', ['collab-fold', 'collab-unfold'], true)) {
+    csrfCheck();
+    $dupId  = (int)($_POST['app_id'] ?? 0);
+    $intoId = (int)($_POST['into_id'] ?? 0);
+    $dup    = $dupId ? cgGetApplication($dupId) : null;
+
+    if (!$dup) {
+        $notice = 'Could not find that application.';
+    } elseif ($_POST['action'] === 'collab-unfold') {
+        $notice = cgSetDuplicateOf($dupId, null)
+            ? 'Application #' . $dupId . ' is its own collaboration again, and will be costed.'
+            : 'That could not be undone.';
+    } elseif (cgSetDuplicateOf($dupId, $intoId)) {
+        $notice = 'Application #' . $dupId . ' is folded under #' . $intoId
+                . ' — one collaboration, costed once. The days were already counted once each.';
+    } else {
+        $notice = 'Those two cannot be folded together — check they are the same school year, '
+                . 'and that neither is already folded under something else.';
+    }
+    $apps = cgGetApplications($year);
+}
+
 // ── Status updates ────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_id'])
     && in_array($_POST['action'] ?? '', ['approved', 'declined', 'waitlisted', 'pending'], true)) {
@@ -364,6 +390,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'fulfi
 $view = $_GET['view'] ?? 'review';
 if (!in_array($view, ['review', 'followup', 'all', 'print', 'read'], true)) $view = 'review';
 if ($view === 'read') $view = 'print';    // the old toggle's name, still linked from bookmarks
+
+/*
+ * Applications folded under another as the same collaboration.
+ *
+ * Held aside rather than thrown away: the teacher did apply and the
+ * Executive did approve it, so the record stays and is shown on the
+ * application it duplicates. It comes out of the list, the count and the
+ * follow-up queue, because there is one collaboration to invoice, one
+ * Atrieve absence and one cost — chasing paperwork for the second copy is
+ * chasing something that will never exist.
+ *
+ * The days are untouched by this: the ledger counts each teacher's dates
+ * once whether or not anything is folded, and dropping a duplicate there
+ * would lose a collaborator the primary does not name.
+ */
+$foldedUnder = [];
+foreach ($apps as $a) {
+    if (!empty($a['duplicate_of'])) $foldedUnder[(int)$a['duplicate_of']][] = $a;
+}
+$apps = array_values(array_filter($apps, fn($a) => empty($a['duplicate_of'])));
 
 /** Approved, but the district paperwork is not finished. */
 $cgNeedsFollowUp = function (array $a): bool {
@@ -1036,8 +1082,58 @@ $totalDaysApproved = $personDays['approved'];
        * silently would be worse than the split rows it fixed. Recording the
        * second address on the contact is what merges them — and that fixes it
        * everywhere, not only on this page. */
-      $cgDupes = $ledger ? cgLedgerDuplicates($year) : [];
+      $cgDupes  = $ledger ? cgLedgerDuplicates($year) : [];
+      /* Applications claiming the same days for the same teacher. The ledger
+       * already counts those days once, so the figures are right either way —
+       * this is about the money, which is still recorded per application. */
+      $cgShared = $ledger && !$cgReadOnly ? cgSharedDayApps($year) : [];
     ?>
+    <?php if ($cgShared): ?>
+    <div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;
+                padding:.9rem 1rem;margin-bottom:1rem;font-size:.88rem;">
+      <strong>The same days, claimed twice.</strong>
+      <?= count($cgShared) === 1 ? 'One collaboration appears' : count($cgShared) . ' collaborations appear' ?>
+      to have been entered more than once — the lead applied, and so did someone
+      named on it, for the same dates. The day counts above already treat those as
+      one absence each. The <em>cost</em> does not: each application carries its own
+      invoice and release cost, so unless they are folded together the year will be
+      costed twice for one set of TTOCs.
+      <?php foreach ($cgShared as $set): ?>
+        <?php $first = $set[0]; ?>
+        <div style="margin-top:.7rem;padding-top:.6rem;border-top:1px solid #f3e3b4;">
+          <?php foreach ($set as $i => $a): ?>
+            <div>
+              <strong>#<?= (int)$a['id'] ?></strong>
+              <?= htmlspecialchars($a['applicant_name']) ?>
+              <span style="color:var(--gray-500);">
+                · <?= htmlspecialchars(cgDateList($a['proposed_dates'])) ?>
+                <?php if ($i === 0): ?>· first in<?php endif; ?>
+              </span>
+            </div>
+          <?php endforeach; ?>
+          <div style="margin-top:.45rem;display:flex;gap:.5rem;flex-wrap:wrap;">
+            <?php foreach (array_slice($set, 1) as $a): ?>
+              <form method="POST" style="display:inline;">
+                <?= csrfField() ?>
+                <input type="hidden" name="action"  value="collab-fold">
+                <input type="hidden" name="app_id"  value="<?= (int)$a['id'] ?>">
+                <input type="hidden" name="into_id" value="<?= (int)$first['id'] ?>">
+                <button type="submit" class="btn btn-outline" style="font-size:.82rem;padding:.3rem .7rem;">
+                  Fold #<?= (int)$a['id'] ?> under #<?= (int)$first['id'] ?> — cost it once
+                </button>
+              </form>
+            <?php endforeach; ?>
+          </div>
+          <div style="color:var(--gray-500);font-size:.8rem;margin-top:.35rem;">
+            Nothing is deleted. The folded application keeps its approval and still
+            counts as the applicant having used the fund; it stops being chased for
+            an invoice and drops out of the list. If they are genuinely two
+            collaborations, leave this alone.
+          </div>
+        </div>
+      <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
     <?php if ($cgDupes): ?>
     <div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;
                 padding:.9rem 1rem;margin-bottom:1rem;font-size:.88rem;">
@@ -1331,6 +1427,40 @@ $totalDaysApproved = $personDays['approved'];
           </div>
 
           <div class="app-card-body">
+            <?php
+              /* Anything folded under this one. Shown here because it is the
+               * only place it now appears: the row of its own is gone, and an
+               * application that silently vanished from the year would be
+               * worse than the double-costing this fixes. */
+              $folded = $foldedUnder[(int)$app['id']] ?? [];
+            ?>
+            <?php if ($folded): ?>
+            <div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;
+                        padding:.7rem .85rem;margin-bottom:.9rem;font-size:.87rem;">
+              <strong>Also submitted separately for this collaboration</strong>
+              <?php foreach ($folded as $f): ?>
+                <div style="margin-top:.35rem;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;">
+                  <span>#<?= (int)$f['id'] ?> <?= htmlspecialchars($f['applicant_name']) ?>
+                    <span style="color:var(--gray-500);">·
+                      <?= htmlspecialchars(ucfirst((string)$f['status'])) ?> ·
+                      <?= date('M j', strtotime((string)$f['submitted_at'])) ?></span></span>
+                  <?php if (!$cgReadOnly): ?>
+                  <form method="POST" style="display:inline;">
+                    <?= csrfField() ?>
+                    <input type="hidden" name="action" value="collab-unfold">
+                    <input type="hidden" name="app_id" value="<?= (int)$f['id'] ?>">
+                    <button type="submit" class="cg-flag-link">separate them again</button>
+                  </form>
+                  <?php endif; ?>
+                </div>
+              <?php endforeach; ?>
+              <div style="color:var(--gray-500);font-size:.8rem;margin-top:.45rem;">
+                Still approved and still counted against
+                <?= count($folded) === 1 ? 'their' : 'their' ?> three days; costed here rather
+                than separately, because it is one set of TTOCs.
+              </div>
+            </div>
+            <?php endif; ?>
             <div class="app-detail-grid">
               <div class="app-detail-item">
                 <div class="dl">Email</div>

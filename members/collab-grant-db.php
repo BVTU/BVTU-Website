@@ -80,6 +80,13 @@ function cgEnsureTable(): void {
         // record never claims an email went out that did not.
         'collab_waived_at'     => 'DATETIME DEFAULT NULL',
         'collab_waived_by'     => "VARCHAR(255) NOT NULL DEFAULT ''",
+        // One collaboration entered twice: the lead applies, then a
+        // collaborator applies for the same days. Both are real applications
+        // and both were approved, so neither is deleted — this says which one
+        // the costing belongs to. Only the primary is invoiced, carries an
+        // Atrieve confirmation and appears in the year's list; the days were
+        // already counted once each, by date, in the ledger.
+        'duplicate_of'         => 'INT DEFAULT NULL',
     ] as $col => $type) {
         try {
             $has = $db->query(
@@ -321,6 +328,59 @@ function cgSetCollaboratorEmail(int $id, string $email): bool {
     getDB()->prepare("UPDATE collab_grant_applications SET collaborator_email = ? WHERE id = ?")
            ->execute([mb_substr($email, 0, 255), $id]);
     return true;
+}
+
+/**
+ * Record that one application is the same collaboration as another, or clear it.
+ *
+ * Refuses a chain. If B is folded under A and someone then folds A under B,
+ * both vanish from the list and the cost of either is nobody's; and resolving
+ * "the one that is costed" would loop. A duplicate may only point at an
+ * application that is not itself a duplicate.
+ */
+function cgSetDuplicateOf(int $id, ?int $primaryId): bool {
+    cgEnsureTable();
+    if ($id < 1) return false;
+
+    $app = cgGetApplication($id);
+    if (!$app) return false;
+
+    if ($primaryId === null) {
+        getDB()->prepare("UPDATE collab_grant_applications SET duplicate_of=NULL WHERE id=?")
+               ->execute([$id]);
+        return true;
+    }
+
+    if ($primaryId === $id) return false;            // itself
+    $primary = cgGetApplication($primaryId);
+    if (!$primary) return false;
+    if (!empty($primary['duplicate_of'])) return false;   // no chains
+    // Different years are different budgets; folding across them would move
+    // money between them without saying so.
+    if ((int)$primary['school_year'] !== (int)$app['school_year']) return false;
+    // Something is already folded under this one, so it cannot become a
+    // duplicate itself — the same chain, from the other end.
+    $kids = getDB()->prepare("SELECT COUNT(*) FROM collab_grant_applications WHERE duplicate_of=?");
+    $kids->execute([$id]);
+    if ((int)$kids->fetchColumn() > 0) return false;
+
+    getDB()->prepare("UPDATE collab_grant_applications SET duplicate_of=? WHERE id=?")
+           ->execute([$primaryId, $id]);
+    return true;
+}
+
+/** The applications folded under this one, if any. */
+function cgDuplicatesOf(int $id): array {
+    cgEnsureTable();
+    try {
+        $s = getDB()->prepare(
+            "SELECT id, applicant_name, applicant_email, status, submitted_at
+             FROM collab_grant_applications WHERE duplicate_of=? ORDER BY submitted_at");
+        $s->execute([$id]);
+        return $s->fetchAll();
+    } catch (Exception $e) {
+        return [];
+    }
 }
 
 /** The token on the collaborator's "this is not me" link. */
@@ -833,11 +893,15 @@ function cgYearReleaseCost(int $year): array {
     $out = ['total' => 0.0, 'costed' => 0, 'approved' => 0, 'error' => false];
     try {
         $s = getDB()->prepare(
+            // duplicate_of IS NULL: a collaboration entered twice is costed
+            // once. Counting the folded one as approved-but-not-costed left
+            // "1 not yet costed" showing for ever against an invoice that was
+            // never going to exist.
             "SELECT COALESCE(SUM(release_cost),0) AS total,
                     SUM(CASE WHEN release_cost IS NOT NULL THEN 1 ELSE 0 END) AS costed,
                     COUNT(*) AS approved
              FROM collab_grant_applications
-             WHERE school_year=? AND status='approved'"
+             WHERE school_year=? AND status='approved' AND duplicate_of IS NULL"
         );
         $s->execute([$year]);
         $r = $s->fetch() ?: [];
@@ -1684,6 +1748,45 @@ function cgPersonDays(int $year, string $email, string $name = ''): array {
             'exact' => true, 'emails' => $email !== '' ? [$email] : [], 'apps' => [],
             'days' => [], 'undated_approved' => 0, 'undated_pending' => 0,
             'shared_days' => [], 'shared_apps' => [], 'undated' => false], $year);
+}
+
+/**
+ * Sets of applications that claim the same release days for the same teacher.
+ *
+ * Built from the ledger, which already works out that a teacher cannot be away
+ * twice on one date. The same pair shows up once here however many teachers
+ * they share, so the page offers the decision once rather than three times.
+ *
+ * Already-folded applications are left out: the question has been answered.
+ */
+function cgSharedDayApps(int $year): array {
+    $sets = [];
+    foreach (cgDaysLedger($year) as $p) {
+        if (count($p['shared_apps'] ?? []) < 2) continue;
+        $ids = $p['shared_apps'];
+        sort($ids);
+        $sets[implode(',', $ids)] = $ids;
+    }
+    if (!$sets) return [];
+
+    $out = [];
+    foreach ($sets as $ids) {
+        $apps = [];
+        foreach ($ids as $id) {
+            $a = cgGetApplication((int)$id);
+            // A folded one means this pair has been dealt with.
+            if (!$a || !empty($a['duplicate_of'])) { $apps = []; break; }
+            $apps[] = $a;
+        }
+        if (count($apps) < 2) continue;
+        // Earliest first: the application that came in first is the one the
+        // others are offered to fold under.
+        usort($apps, function ($x, $y) {
+            return [$x['submitted_at'], (int)$x['id']] <=> [$y['submitted_at'], (int)$y['id']];
+        });
+        $out[] = $apps;
+    }
+    return $out;
 }
 
 /**
