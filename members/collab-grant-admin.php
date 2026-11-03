@@ -1077,6 +1077,18 @@ $totalDaysApproved = $personDays['approved'];
       .cg-caret { flex:0 0 auto; color:var(--gray-500); transition:transform .12s ease; }
       .cg-row-btn[aria-expanded="true"] .cg-caret { transform:rotate(90deg); }
       .cg-rowdetail > td { border-top:0; }
+
+      /* A qualifier on a summary card: enough to reconcile the number, with
+         the sentence behind the hover rather than printed under it. */
+      .cg-sub { font-weight:400; color:var(--gray-500); white-space:nowrap; cursor:help;
+                border-bottom:1px dotted var(--border); }
+
+      /* The notes a successor needs, closed by default. */
+      .cg-how { margin:.9rem 0 0; font-size:.82rem; color:var(--gray-500); }
+      .cg-how > summary { cursor:pointer; color:var(--gray-600); width:fit-content; }
+      .cg-how dl { margin:.6rem 0 0; }
+      .cg-how dt { font-weight:700; color:var(--gray-700); margin-top:.55rem; }
+      .cg-how dd { margin:.1rem 0 0; line-height:1.6; }
     </style>
     <script>
       /* Remembered per browser: an admin who wants the working wants it every
@@ -1120,38 +1132,34 @@ $totalDaysApproved = $personDays['approved'];
     <div class="summary-row">
       <div class="summary-card">
         <div class="val"><?= count($apps) ?></div>
-        <div class="lbl"><?= $year ?>–<?= ($year + 1) % 100 ?> applications
-          <?php
-            // The CSV exports every application including the folded copies, so
-            // without this the card and the sheet disagree and nothing says why.
-            $nFolded = array_sum(array_map('count', $foldedUnder));
-          ?>
-          <?php if ($nFolded): ?>
-          <span style="display:block;font-weight:400;color:var(--gray-500);font-size:.78rem;">
-            <?= $nFolded ?> more folded in as the same collaboration; the CSV lists
-            <?= count($allApps) ?>
-          </span>
-          <?php endif; ?>
-        </div>
+        <?php
+          // The CSV exports the folded copies too, so the card and the sheet
+          // disagree. Said in the shortest form that still reconciles them.
+          $nFolded = array_sum(array_map('count', $foldedUnder));
+        ?>
+        <div class="lbl"><?= $year ?>–<?= ($year + 1) % 100 ?> applications<?php if ($nFolded): ?><span
+            class="cg-sub" title="<?= $nFolded ?> folded in as the same collaboration and not counted here; the CSV lists every application.">
+            · <?= count($allApps) ?> in the CSV</span><?php endif; ?></div>
       </div>
       <div class="summary-card">
         <div class="val"><?= $totalDaysApproved ?></div>
-        <div class="lbl">Release days approved
-          <?php // Says which days these are, because the obvious reading —
-                // add up the grants — gives a different and smaller number,
-                // and because the figure deliberately leaves days out. ?>
-          <span style="display:block;font-weight:400;color:var(--gray-500);font-size:.78rem;">
-            every teacher the local pays to release<?php
-              if ($personDays['pending'] > 0): ?>; <?= (int)$personDays['pending'] ?>
-              more awaiting a decision<?php endif; ?>
-            <?php if ($personDays['exempt_approved'] > 0): ?>
-              <br>plus <?= (int)$personDays['exempt_approved'] ?> day<?= $personDays['exempt_approved'] !== 1 ? 's' : '' ?>
-              for <?= (int)$personDays['exempt_people'] ?>
-              teacher<?= $personDays['exempt_people'] !== 1 ? 's' : '' ?> whose release costs
-              the local nothing, not counted here
-            <?php endif; ?>
-          </span>
-        </div>
+        <?php
+          // Two qualifiers that genuinely change the number, in the fewest
+          // words that still reconcile it; the rest is under "How these
+          // figures are worked out" below the table.
+          $capBits = [];
+          if ($personDays['pending'] > 0) {
+              $capBits[] = (int)$personDays['pending'] . ' pending';
+          }
+          if ($personDays['exempt_approved'] > 0) {
+              $capBits[] = '+' . (int)$personDays['exempt_approved'] . ' uncapped';
+          }
+        ?>
+        <div class="lbl">Release days approved<?php if ($capBits): ?><span class="cg-sub"
+            title="Counts every teacher the local pays to release.<?php
+              if ($personDays['pending'] > 0): ?> <?= (int)$personDays['pending'] ?> further day<?= $personDays['pending'] !== 1 ? 's are' : ' is' ?> awaiting a decision.<?php endif;
+              if ($personDays['exempt_approved'] > 0): ?> A further <?= (int)$personDays['exempt_approved'] ?> day<?= $personDays['exempt_approved'] !== 1 ? 's' : '' ?> for <?= (int)$personDays['exempt_people'] ?> teacher<?= $personDays['exempt_people'] !== 1 ? 's' : '' ?> marked not capped, whose release costs the local nothing, are not counted here.<?php endif; ?>">
+            · <?= htmlspecialchars(implode(' · ', $capBits)) ?></span><?php endif; ?></div>
       </div>
       <div class="summary-card">
         <?php if (!empty($rc['error'])): ?>
@@ -1199,13 +1207,8 @@ $totalDaysApproved = $personDays['approved'];
                 padding:.9rem 1rem;margin-bottom:1rem;font-size:.88rem;">
       <strong>The same days, claimed twice.</strong>
       <?= count($cgShared) === 1 ? 'One collaboration appears' : count($cgShared) . ' collaborations appear' ?>
-      to have been entered more than once — the lead applied, and so did someone
-      named on it, for overlapping dates. Days the two <em>share</em> are already
-      counted once per teacher above; any days only one of them lists are counted
-      as well, because a teacher really was released on those. The <em>cost</em> is
-      not deduplicated at all: each application carries its own invoice and release
-      cost, so unless they are folded together the year is costed twice for one set
-      of TTOCs.
+      to have been entered twice. The days already count once; the cost does not,
+      so fold them or the year pays twice for one set of TTOCs.
       <?php foreach ($cgShared as $set): ?>
         <?php $first = $set[0]; ?>
         <div style="margin-top:.7rem;padding-top:.6rem;border-top:1px solid #f3e3b4;">
@@ -1237,10 +1240,8 @@ $totalDaysApproved = $personDays['approved'];
             <?php endforeach; ?>
           </div>
           <div style="color:var(--gray-500);font-size:.8rem;margin-top:.35rem;">
-            Nothing is deleted. The folded application keeps its approval and still
-            counts as the applicant having used the fund; it stops being chased for
-            an invoice and drops out of the list. If they are genuinely two
-            collaborations, leave this alone.
+            Nothing is deleted — it keeps its approval and its days, and stops being
+            chased for an invoice. Leave it if they really are two collaborations.
           </div>
         </div>
       <?php endforeach; ?>
@@ -1251,10 +1252,8 @@ $totalDaysApproved = $personDays['approved'];
                 padding:.9rem 1rem;margin-bottom:1rem;font-size:.88rem;">
       <strong>Possibly the same person twice.</strong>
       <?= count($cgDupes) === 1 ? 'One name appears' : count($cgDupes) . ' names appear' ?>
-      under more than one address, so their days are counted separately and the
-      <?= CG_DAY_CAP ?>-day cap cannot see the total. If it is one teacher, add the second
-      address to their contact record as a secondary email and they will count as one
-      person here and everywhere else. If they are two different people, leave it.
+      under two addresses, so the <?= CG_DAY_CAP ?>-day cap cannot see their total. If it
+      is one teacher, add the second address to their contact as a secondary email.
       <ul style="margin:.6rem 0 0;padding-left:1.1rem;">
         <?php foreach ($cgDupes as $d): ?>
           <li style="margin-bottom:.25rem;">
@@ -1451,30 +1450,44 @@ $totalDaysApproved = $personDays['approved'];
             <?php endforeach; ?>
           </tbody>
         </table>
-        <p style="font-size:.8rem;color:var(--gray-500);line-height:1.7;margin:.9rem 0 0;">
-          Each application spends its days twice — once for the lead and once for the
-          collaborator, who books their own absence for the same days.
-          A release day is counted once per teacher however many applications claim it:
-          where a lead and a collaborator each submitted an application for the same
-          collaboration, that is one absence entered twice, not two. Applications whose
-          dates and day count disagree, or that have no dates, are added on without that
-          check, and rows carrying any say so. Everyone's days are listed below,
-          including teachers marked "not capped" — but those are left out of the
-          Release days approved figure above, because that figure is about release the
-          local pays for and theirs costs it nothing.
-          <?php if ($anyApprox): ?>
-            Collaborators are typed names with no email address, so their days are
-            attributed by matching the name against Contacts and against everyone who
-            applied this year. "Some days matched by name" means that worked and names
-            who it matched; <strong>"no match for this name"</strong> means it did not,
-            and those days sit under the name as typed — they may belong to someone
-            already listed above. Adding that teacher to Contacts, or typing their
-            address on the application, settles it.
-          <?php endif; ?>
-          Anyone who has applied for nothing this year does not appear here at all.
-          Mark someone "not capped" when releasing them costs the local nothing — a
-          district support teacher, say. Their days still show; the limit stops applying.
-        </p>
+        <?php
+          /*
+           * Folded away, and written as rules rather than paragraphs.
+           *
+           * Every one of these sentences was added to explain a figure that
+           * had surprised someone, and together they became a wall of prose
+           * under a table — which nobody reads, so the explaining stopped
+           * working. Kept because a successor needs them, closed because a
+           * working page should not have to argue for itself.
+           */
+        ?>
+        <details class="cg-how">
+          <summary>How these figures are worked out</summary>
+          <dl>
+            <dt>Days per teacher, not per application</dt>
+            <dd>An application releases the lead <em>and</em> everyone named on it, each
+                for the same days.</dd>
+
+            <dt>A day counts once</dt>
+            <dd>However many applications claim it — the same collaboration entered
+                twice is one absence, not two. Applications with no usable dates can't
+                be checked, and say so when opened.</dd>
+
+            <dt>&ldquo;Not capped&rdquo;</dt>
+            <dd>For teachers whose release costs the local nothing, a district support
+                teacher say. They keep their days and lose the limit, and their days are
+                not in <strong>Release days approved</strong>.</dd>
+
+            <dt>Collaborators are typed names</dt>
+            <dd>Matched against Contacts and against everyone who applied this year.
+                <strong>no match</strong> means neither worked, so those days sit under
+                the name as typed and may belong to someone already listed. Adding them
+                to Contacts, or typing their address on the application, settles it.</dd>
+
+            <dt>Who is missing</dt>
+            <dd>Anyone who has applied for nothing this year.</dd>
+          </dl>
+        </details>
       </div>
     </details>
     <?php endif; ?>
@@ -1646,9 +1659,8 @@ $totalDaysApproved = $personDays['approved'];
                 </div>
               <?php endforeach; ?>
               <div style="color:var(--gray-500);font-size:.8rem;margin-top:.45rem;">
-                Still <?= count($folded) === 1 ? 'a decision of its own' : 'decisions of their own' ?>,
-                and still counted against the applicant's three days; costed here rather than
-                separately, because it is one set of TTOCs.
+                Still decided on its own merits and still counted against the applicant's
+                days; costed here, because it is one set of TTOCs.
               </div>
             </div>
             <?php endif; ?>
