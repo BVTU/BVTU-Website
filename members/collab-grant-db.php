@@ -1470,6 +1470,168 @@ function cgAppDates(array $app): array {
 }
 
 /**
+ * The dates an application proposes, without asking whether they are the days
+ * that were granted.
+ *
+ * cgAppDates() refuses to answer when the count disagrees with the day total,
+ * because it is used to COUNT days and guessing which of five listed dates
+ * were the two granted would invent an absence. Asking whether two
+ * applications are the same collaboration is a different question: overlapping
+ * proposed dates is good evidence either way, and the strict gate was silently
+ * suppressing the offer whenever one of the pair had listed more dates than
+ * days — which is most of the pairs worth asking about.
+ */
+function cgAppDatesLoose(array $app): array {
+    $raw = json_decode((string)($app['proposed_dates'] ?? ''), true);
+    if (!is_array($raw)) return [];
+    $out = [];
+    foreach ($raw as $d) {
+        $t = strtotime((string)$d);
+        if (!$t) continue;   // skip the unreadable one, keep the rest
+        $iso = date('Y-m-d', $t);
+        if (!in_array($iso, $out, true)) $out[] = $iso;
+    }
+    return $out;
+}
+
+/**
+ * Who a typed collaborator name refers to.
+ *
+ * Shared by the ledger and the duplicate detector so the two can never
+ * disagree about whether Heather-named-on-a-form is Heather-who-applied. A
+ * name matching no contact and no applicant still gets a key of its own, the
+ * same as the ledger gives it, so those days are kept rather than dropped.
+ */
+function cgResolveCollaborator(string $name, array $byName, array $appsByName): array {
+    $k = cgNameKey($name);
+    if ($k !== '') {
+        if (isset($byName[$k]) && empty($byName[$k]['ambiguous'])) {
+            $e = cgCanonEmail((string)$byName[$k]['email']);
+            return ['key' => 'e:' . $e, 'name' => $byName[$k]['name'], 'email' => $e, 'exact' => false];
+        }
+        if (isset($appsByName[$k]) && empty($appsByName[$k]['ambiguous'])) {
+            $e = cgCanonEmail((string)$appsByName[$k]['email']);
+            return ['key' => 'e:' . $e, 'name' => $appsByName[$k]['name'], 'email' => $e, 'exact' => false];
+        }
+    }
+    return ['key' => 'n:' . $k, 'name' => trim($name), 'email' => '', 'exact' => false];
+}
+
+/** Applicants of $year indexed by comparable name; a shared name resolves to neither. */
+function cgApplicantsByName(int $year): array {
+    static $cache = [];
+    if (isset($cache[$year])) return $cache[$year];
+    $out = [];
+    try {
+        $st = getDB()->prepare(
+            "SELECT applicant_name, applicant_email FROM collab_grant_applications
+             WHERE school_year=? AND status IN ('approved','pending')");
+        $st->execute([$year]);
+        foreach ($st->fetchAll() as $r) {
+            $email = cgCanonEmail((string)$r['applicant_email']);
+            $k     = cgNameKey((string)$r['applicant_name']);
+            if ($k === '' || $email === '') continue;
+            if (isset($out[$k]) && $out[$k]['email'] !== $email) { $out[$k]['ambiguous'] = true; continue; }
+            $out[$k] = ['email' => $email, 'name' => trim((string)$r['applicant_name']),
+                        'ambiguous' => $out[$k]['ambiguous'] ?? false];
+        }
+    } catch (Exception $e) { /* none: collaborators fall back to contacts alone */ }
+    return $cache[$year] = $out;
+}
+
+/**
+ * Everyone an application releases, as ledger keys.
+ *
+ * The lead plus every name in the collaborator field, resolved the same way
+ * the ledger resolves them.
+ */
+function cgAppPeople(array $r, int $year): array {
+    $out   = [];
+    $email = cgCanonEmail((string)$r['applicant_email']);
+    $out[] = $email !== '' ? 'e:' . $email : 'n:' . cgNameKey((string)$r['applicant_name']);
+
+    $cName = trim((string)($r['collaborator_name'] ?? ''));
+    if ($cName === '' || empty($r['has_collaborator'])) return $out;
+
+    $typed = cgCanonEmail((string)($r['collaborator_email'] ?? ''));
+    $named = cgSplitNames($cName);
+    if (count($named) === 1 && $typed !== '' && filter_var($typed, FILTER_VALIDATE_EMAIL)) {
+        $out[] = 'e:' . $typed;
+        return $out;
+    }
+    $byName     = cgContactsByName();
+    $appsByName = cgApplicantsByName($year);
+    foreach ($named as $one) {
+        $hit = cgResolveCollaborator($one, $byName, $appsByName);
+        $out[] = $hit['key'];
+    }
+    return $out;
+}
+
+/**
+ * Applications that look like the same collaboration entered more than once.
+ *
+ * Two applications qualify when they share a teacher and share a date. That is
+ * a weaker test than the ledger's — deliberately. The ledger has to know which
+ * days were granted before it will count them; this only has to know the
+ * question is worth asking, and an admin answers it.
+ */
+function cgOverlappingApps(int $year): array {
+    cgEnsureEditSupport();
+    try {
+        $st = getDB()->prepare(
+            "SELECT * FROM collab_grant_applications
+             WHERE school_year=? AND status IN ('approved','pending') AND duplicate_of IS NULL
+             ORDER BY submitted_at, id");
+        $st->execute([$year]);
+        $rows = $st->fetchAll();
+    } catch (Exception $e) {
+        error_log('cgOverlappingApps: ' . $e->getMessage());
+        return [];
+    }
+
+    $info = [];
+    foreach ($rows as $r) {
+        $dates = cgAppDatesLoose($r);
+        if (!$dates) continue;   // nothing to overlap on
+        $info[] = ['row' => $r, 'dates' => $dates, 'people' => cgAppPeople($r, $year)];
+    }
+
+    // Grouped, not paired: three applications for one collaboration should be
+    // one question with two answers, not three questions.
+    $groups = [];
+    $of     = [];
+    for ($i = 0; $i < count($info); $i++) {
+        for ($j = $i + 1; $j < count($info); $j++) {
+            if (!array_intersect($info[$i]['people'], $info[$j]['people'])) continue;
+            if (!array_intersect($info[$i]['dates'],  $info[$j]['dates']))  continue;
+            $gi = $of[$i] ?? null;
+            $gj = $of[$j] ?? null;
+            if ($gi === null && $gj === null) {
+                $groups[] = [$i, $j];
+                $of[$i] = $of[$j] = count($groups) - 1;
+            } elseif ($gi === null) {
+                $groups[$gj][] = $i; $of[$i] = $gj;
+            } elseif ($gj === null) {
+                $groups[$gi][] = $j; $of[$j] = $gi;
+            } elseif ($gi !== $gj) {
+                foreach ($groups[$gj] as $k) { $groups[$gi][] = $k; $of[$k] = $gi; }
+                $groups[$gj] = [];
+            }
+        }
+    }
+
+    $out = [];
+    foreach ($groups as $g) {
+        if (count($g) < 2) continue;
+        $g = array_values(array_unique($g));
+        sort($g);
+        $out[] = array_map(function ($i) use ($info) { return $info[$i]['row']; }, $g);
+    }
+    return $out;
+}
+
+/**
  * Everyone who spent a collaboration day in $year, keyed by person.
  *
  * Keys are 'e:<address>' for anyone we can identify by email and 'n:<name>' for
@@ -1629,26 +1791,12 @@ function cgDaysLedger(int $year): array {
             $k = cgNameKey($one);
             if ($byName === null) $byName = cgContactsByName();
 
-            $hit = null;
-            if ($k !== '') {
-                if (isset($byName[$k]) && !$byName[$k]['ambiguous']) {
-                    $hit = $byName[$k];
-                } elseif (isset($appsByName[$k]) && !$appsByName[$k]['ambiguous']) {
-                    // Nobody in contacts, but someone of that name applied this
-                    // year and gave an address. Tried second so a maintained
-                    // contact record still wins.
-                    $hit = $appsByName[$k];
-                }
-            }
-
-            if ($hit !== null) {
-                $cEmail = cgCanonEmail((string)$hit['email']);
-                $add('e:' . $cEmail, $hit['name'], $cEmail,
-                     $r['status'], $days, (int)$r['id'], 'collaborator', false, '', $cDates);
-            } else {
-                $add('n:' . $k, $one, '', $r['status'], $days, (int)$r['id'],
-                     'collaborator', false, '', $cDates);
-            }
+            // Contacts first, then this year's applicants, then the name as
+            // typed. Shared with the duplicate detector so the two can never
+            // disagree about whether a name on a form is someone who applied.
+            $hit = cgResolveCollaborator($one, $byName, $appsByName);
+            $add($hit['key'], $hit['name'] !== '' ? $hit['name'] : $one, $hit['email'],
+                 $r['status'], $days, (int)$r['id'], 'collaborator', false, '', $cDates);
         }
     }
 
@@ -1748,45 +1896,6 @@ function cgPersonDays(int $year, string $email, string $name = ''): array {
             'exact' => true, 'emails' => $email !== '' ? [$email] : [], 'apps' => [],
             'days' => [], 'undated_approved' => 0, 'undated_pending' => 0,
             'shared_days' => [], 'shared_apps' => [], 'undated' => false], $year);
-}
-
-/**
- * Sets of applications that claim the same release days for the same teacher.
- *
- * Built from the ledger, which already works out that a teacher cannot be away
- * twice on one date. The same pair shows up once here however many teachers
- * they share, so the page offers the decision once rather than three times.
- *
- * Already-folded applications are left out: the question has been answered.
- */
-function cgSharedDayApps(int $year): array {
-    $sets = [];
-    foreach (cgDaysLedger($year) as $p) {
-        if (count($p['shared_apps'] ?? []) < 2) continue;
-        $ids = $p['shared_apps'];
-        sort($ids);
-        $sets[implode(',', $ids)] = $ids;
-    }
-    if (!$sets) return [];
-
-    $out = [];
-    foreach ($sets as $ids) {
-        $apps = [];
-        foreach ($ids as $id) {
-            $a = cgGetApplication((int)$id);
-            // A folded one means this pair has been dealt with.
-            if (!$a || !empty($a['duplicate_of'])) { $apps = []; break; }
-            $apps[] = $a;
-        }
-        if (count($apps) < 2) continue;
-        // Earliest first: the application that came in first is the one the
-        // others are offered to fold under.
-        usort($apps, function ($x, $y) {
-            return [$x['submitted_at'], (int)$x['id']] <=> [$y['submitted_at'], (int)$y['id']];
-        });
-        $out[] = $apps;
-    }
-    return $out;
 }
 
 /**

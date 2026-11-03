@@ -1086,7 +1086,11 @@ $totalDaysApproved = $personDays['approved'];
       /* Applications claiming the same days for the same teacher. The ledger
        * already counts those days once, so the figures are right either way —
        * this is about the money, which is still recorded per application. */
-      $cgShared = $ledger && !$cgReadOnly ? cgSharedDayApps($year) : [];
+      /* Deliberately looser than the day count: a shared teacher and a shared
+       * proposed date is enough to ask the question. The ledger will not count
+       * days it cannot tie to a decision, and that strictness was hiding the
+       * offer on exactly the pairs worth asking about. */
+      $cgShared = !$cgReadOnly ? cgOverlappingApps($year) : [];
     ?>
     <?php if ($cgShared): ?>
     <div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;
@@ -1105,8 +1109,12 @@ $totalDaysApproved = $personDays['approved'];
             <div>
               <strong>#<?= (int)$a['id'] ?></strong>
               <?= htmlspecialchars($a['applicant_name']) ?>
+              <?php if (trim((string)$a['collaborator_name']) !== '' && !empty($a['has_collaborator'])): ?>
+                <span style="color:var(--gray-500);">with <?= htmlspecialchars($a['collaborator_name']) ?></span>
+              <?php endif; ?>
               <span style="color:var(--gray-500);">
                 · <?= htmlspecialchars(cgDateList($a['proposed_dates'])) ?>
+                · <?= htmlspecialchars(ucfirst((string)$a['status'])) ?>
                 <?php if ($i === 0): ?>· first in<?php endif; ?>
               </span>
             </div>
