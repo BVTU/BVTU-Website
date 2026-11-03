@@ -1639,6 +1639,29 @@ function cgDaysLedger(int $year): array {
     return $cache[$year] = $people;
 }
 
+/**
+ * Release days the year has committed, counted per teacher.
+ *
+ * Not the same as adding up the applications, which is what the summary card
+ * used to do and why its figure never matched the table under it. An
+ * application releases the lead and everyone named on it, so a three-day grant
+ * with two collaborators is nine days of coverage the local pays for, not
+ * three. And where one collaboration was entered twice, summing applications
+ * counted the same three days again.
+ *
+ * Exempt teachers are included: an exemption lifts the limit on someone's own
+ * days, it does not mean they were not released.
+ */
+function cgYearPersonDays(int $year): array {
+    $out = ['approved' => 0, 'pending' => 0, 'people' => 0];
+    foreach (cgDaysLedger($year) as $p) {
+        $out['approved'] += (int)$p['approved'];
+        $out['pending']  += (int)$p['pending'];
+        $out['people']++;
+    }
+    return $out;
+}
+
 /** One person's standing for the year, whether or not they appear in the ledger. */
 function cgPersonDays(int $year, string $email, string $name = ''): array {
     $ledger = cgDaysLedger($year);

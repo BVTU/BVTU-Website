@@ -386,8 +386,20 @@ $statusColour = [
     'waitlisted' => ['bg' => '#eff6ff', 'border' => '#bfdbfe', 'text' => '#1e40af', 'label' => 'Waitlisted'],
 ];
 
-$totalDaysApproved = array_sum(array_map('cgEffectiveDays',
-    array_filter($apps, fn($a) => $a['status'] === 'approved')));
+/*
+ * Counted per teacher, not per application.
+ *
+ * Adding up the applications answered neither question anyone asks of this
+ * card. It left out the collaborators, who are released on the same days and
+ * whose coverage the local pays for just as much — so the figure sat under the
+ * release cost beside it understating what that cost bought. And where one
+ * collaboration had been entered twice, by the lead and again by a
+ * collaborator, it counted the same three days a second time.
+ *
+ * The ledger already answers this properly: every teacher, each day once.
+ */
+$personDays        = cgYearPersonDays($year);
+$totalDaysApproved = $personDays['approved'];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -983,7 +995,15 @@ $totalDaysApproved = array_sum(array_map('cgEffectiveDays',
       </div>
       <div class="summary-card">
         <div class="val"><?= $totalDaysApproved ?></div>
-        <div class="lbl">Release days approved</div>
+        <div class="lbl">Release days approved
+          <?php // Says which days these are, because the obvious reading —
+                // add up the grants — gives a different and smaller number. ?>
+          <span style="display:block;font-weight:400;color:var(--gray-500);font-size:.78rem;">
+            counting every teacher released<?php
+              if ($personDays['pending'] > 0): ?>; <?= (int)$personDays['pending'] ?>
+              more awaiting a decision<?php endif; ?>
+          </span>
+        </div>
       </div>
       <div class="summary-card">
         <?php if (!empty($rc['error'])): ?>
