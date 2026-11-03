@@ -1065,30 +1065,52 @@ $totalDaysApproved = $personDays['approved'];
       .cg-note { font-size:.82rem; margin-top:.15rem; }
       .cg-note.warn  { color:#92400e; }
       .cg-note.quiet { color:var(--gray-500); }
-      .cg-compact .cg-detail { display:none; }
-      #cg-days:not(.cg-compact) .cg-brief { display:none; }
+
+      /* The whole name cell is the control, so the target is a row rather than
+         a 12px chevron — and it carries aria-expanded, which a div cannot. */
+      .cg-row-btn { display:flex; align-items:center; gap:.35rem; flex-wrap:wrap;
+                    width:100%; background:none; border:0; padding:.1rem 0; margin:0;
+                    font:inherit; text-align:left; cursor:pointer; color:inherit; }
+      .cg-row-btn:hover .cg-em { color:var(--gray-700); }
+      .cg-row-btn:focus-visible { outline:2px solid var(--primary); outline-offset:2px; border-radius:4px; }
+      .cg-em { color:var(--gray-500); font-weight:400; }
+      .cg-caret { flex:0 0 auto; color:var(--gray-500); transition:transform .12s ease; }
+      .cg-row-btn[aria-expanded="true"] .cg-caret { transform:rotate(90deg); }
+      .cg-rowdetail > td { border-top:0; }
     </style>
     <script>
       /* Remembered per browser: an admin who wants the working wants it every
          time, and one who does not should not have to close it on every load. */
+      /* One teacher at a time. */
+      function cgRow(btn, id) {
+        var row = document.getElementById(id);
+        if (!row) return;
+        var open = row.hasAttribute('hidden');
+        if (open) row.removeAttribute('hidden'); else row.setAttribute('hidden', '');
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      }
+
+      /* All of them, for reading the year through rather than hunting a name.
+         Deliberately not remembered: everything open is a reading posture, not
+         a preference, and restoring it would undo the point of the change. */
       function cgToggleNotes() {
         var box = document.getElementById('cg-days');
         var btn = document.getElementById('cg-notes-toggle');
         if (!box || !btn) return;
-        var compact = box.classList.toggle('cg-compact');
-        btn.textContent = compact ? 'show the working' : 'hide the working';
-        try { localStorage.setItem('bvtuCgNotes', compact ? 'brief' : 'full'); } catch (e) {}
+        var rows = box.querySelectorAll('tr.cg-rowdetail');
+        var opening = btn.getAttribute('data-open') !== '1';
+        for (var i = 0; i < rows.length; i++) {
+            if (opening) rows[i].removeAttribute('hidden');
+            else rows[i].setAttribute('hidden', '');
+        }
+        var btns = box.querySelectorAll('.cg-row-btn');
+        for (var j = 0; j < btns.length; j++) {
+            btns[j].setAttribute('aria-expanded', opening ? 'true' : 'false');
+        }
+        btn.setAttribute('data-open', opening ? '1' : '0');
+        btn.textContent = opening ? 'collapse all' : 'expand all';
       }
-      /* On DOMContentLoaded, not inline: this block is written above the table
-         it restores, so running straight away found no element and the saved
-         preference was silently dropped on every load. */
-      document.addEventListener('DOMContentLoaded', function () {
-        var box = document.getElementById('cg-days');
-        if (!box) return;
-        var want = null;
-        try { want = localStorage.getItem('bvtuCgNotes'); } catch (e) {}
-        if (want === 'full') cgToggleNotes();
-      });
+
     </script>
 
     <?php $rc = cgYearReleaseCost($year); ?>
@@ -1254,15 +1276,15 @@ $totalDaysApproved = $personDays['approved'];
         Days used by person — <?= count($ledger) ?> <?= count($ledger) === 1 ? 'teacher' : 'teachers' ?>
         this year
       </summary>
-      <div id="cg-days" class="cg-compact"
+      <div id="cg-days"
            style="background:var(--white);border:1.5px solid var(--border);border-radius:10px;
                   padding:1rem;margin-top:.5rem;overflow-x:auto;">
         <?php // Compact by default. The notes matter, but all of them at once
               // turned a table into three lines of prose per teacher, and a
               // table nobody can scan is a table nobody reads. ?>
         <div style="display:flex;justify-content:flex-end;margin-bottom:.5rem;">
-          <button type="button" id="cg-notes-toggle" class="cg-flag-link"
-                  onclick="cgToggleNotes()">show the working</button>
+          <button type="button" id="cg-notes-toggle" class="cg-flag-link" data-open="0"
+                  onclick="cgToggleNotes()">expand all</button>
         </div>
         <table style="width:100%;border-collapse:collapse;font-size:.86rem;">
           <thead>
@@ -1283,99 +1305,74 @@ $totalDaysApproved = $personDays['approved'];
                 $roles = array_unique(array_column($lp['apps'], 'role'));
                 sort($roles);
               ?>
+              <?php
+                /*
+                 * One line per teacher, and one control that opens that teacher.
+                 *
+                 * Notes were shown as chips on every row, and "name match" was
+                 * on most of them — it is how a collaborator is normally
+                 * identified, not an exception, so it told the reader nothing
+                 * while pushing the row onto a second line. Only what changes a
+                 * decision stays on the surface: days claimed twice, and a name
+                 * matching nobody. Everything else, including the breakdown of
+                 * where the days came from, is behind the row's own toggle.
+                 */
+                $rowId     = 'cgp' . substr(md5((string)$lp['key']), 0, 8);
+                $unmatched = strpos((string)$lp['key'], 'n:') === 0;
+                $addrs     = $lp['emails'] ?? ($lp['email'] ? [$lp['email']] : []);
+
+                $flags = [];   // on the row: worth a second look
+                $notes = [];   // inside: true, but not a reason to act
+
+                if (!empty($lp['shared_days'])) {
+                    $sd   = $lp['shared_days'];
+                    $when = implode(', ', array_map(
+                        fn($d) => date('M j', strtotime($d)), array_slice($sd, 0, 6)));
+                    if (count($sd) > 6) $when .= ' and ' . (count($sd) - 6) . ' more';
+                    $links = '';
+                    foreach ($lp['shared_apps'] as $sid) {
+                        $links .= ' <a href="?year=' . (int)$year . '#app-' . (int)$sid . '">#'
+                                . (int)$sid . '</a>';
+                    }
+                    $flags[] = count($sd) . ' shared';
+                    $notes[] = ['tone' => 'warn',
+                        'text' => count($sd) . ' ' . (count($sd) === 1 ? 'day is' : 'days are')
+                                . ' claimed by more than one application (' . htmlspecialchars($when)
+                                . ') — counted once here, because they can only be away once.'
+                                . $links];
+                }
+                if ($unmatched) {
+                    $flags[] = 'no match';
+                    $notes[] = ['tone' => 'warn',
+                        'text' => 'This name matched no contact and nobody who applied this year, '
+                                . 'so these days sit under the name as typed. They may belong to '
+                                . 'someone already listed here under their email address.'];
+                } elseif (!$lp['exact']) {
+                    $notes[] = ['tone' => 'quiet',
+                        'text' => 'Some of these days come from an application naming this person '
+                                . 'as a collaborator. Collaborators are typed names, so those days '
+                                . 'were matched by name rather than by an email address.'];
+                }
+                if (!empty($lp['undated'])) {
+                    $notes[] = ['tone' => 'quiet',
+                        'text' => 'Some of this total comes from applications with no usable dates, '
+                                . 'which could not be checked for days claimed twice.'];
+                }
+              ?>
               <tr style="border-top:1px solid var(--border);">
                 <td style="padding:.45rem .5rem;">
-                  <strong><?= htmlspecialchars($lp['name']) ?></strong>
-                  <?php
-                    // Every address folded into this row, not just the first.
-                    // A teacher who applies from work and from home is one
-                    // person here, and the page should show what it merged
-                    // rather than quietly print one of the two.
-                    $addrs = $lp['emails'] ?? ($lp['email'] ? [$lp['email']] : []);
-                  ?>
-                  <?php
-                    /*
-                     * Everything a row has to say about itself, as a chip by
-                     * default and a sentence on request.
-                     *
-                     * Each of these notes earned its place one at a time, and
-                     * together they turned a table into three lines of prose
-                     * per teacher. None can simply go: a total that silently
-                     * disagrees with the applications behind it is read as a
-                     * bug. So the words move behind one toggle and a short
-                     * marker stays, which is enough to see that a row has
-                     * something to say and which rows to look at first.
-                     */
-                    $unmatched = strpos((string)$lp['key'], 'n:') === 0;
-                    $addrs     = $lp['emails'] ?? ($lp['email'] ? [$lp['email']] : []);
-                    $notes     = [];
-
-                    if (!empty($lp['shared_days'])) {
-                        $sd   = $lp['shared_days'];
-                        $when = implode(', ', array_map(
-                            fn($d) => date('M j', strtotime($d)), array_slice($sd, 0, 4)));
-                        if (count($sd) > 4) $when .= ' and ' . (count($sd) - 4) . ' more';
-                        $links = '';
-                        foreach ($lp['shared_apps'] as $sid) {
-                            $links .= ' <a href="?year=' . (int)$year . '#app-' . (int)$sid . '">#'
-                                    . (int)$sid . '</a>';
-                        }
-                        $notes[] = [
-                            'tone'  => 'warn',
-                            'chip'  => count($sd) . ' shared',
-                            'full'  => count($sd) . ' ' . (count($sd) === 1 ? 'day is' : 'days are')
-                                     . ' claimed by more than one application ('
-                                     . htmlspecialchars($when) . ') — counted once, because they'
-                                     . ' can only be away once.' . $links,
-                        ];
-                    }
-                    if (!empty($lp['undated'])) {
-                        $notes[] = [
-                            'tone' => 'quiet',
-                            'chip' => 'not all checked',
-                            'full' => 'Some of this total comes from applications with no usable '
-                                    . 'dates, which could not be checked for days claimed twice.',
-                        ];
-                    }
-                    if ($unmatched) {
-                        $notes[] = [
-                            'tone' => 'warn',
-                            'chip' => 'no match',
-                            'full' => 'This name matched no contact and no applicant this year, so '
-                                    . 'these days are attributed to the name as typed. They may '
-                                    . 'belong to someone already listed here under their email '
-                                    . 'address.',
-                        ];
-                    } elseif (!$lp['exact']) {
-                        $notes[] = [
-                            'tone' => 'quiet',
-                            'chip' => 'name match',
-                            'full' => 'Some of these days come from an application where this '
-                                    . 'person was named as a collaborator. Collaborators are typed '
-                                    . 'names, so the days were attributed by matching the name to '
-                                    . 'this person rather than by an email address.',
-                        ];
-                    }
-                  ?>
-                  <?php if ($addrs): ?>
-                    <span class="cg-addr" style="color:var(--gray-500);">·
-                      <?= htmlspecialchars($addrs[0]) ?><?php if (count($addrs) > 1): ?><span
-                        class="cg-detail"> · <?= htmlspecialchars(implode(' · ', array_slice($addrs, 1))) ?></span><span
-                        class="cg-brief" title="<?= htmlspecialchars(implode(', ', $addrs)) ?>"> +<?= count($addrs) - 1 ?></span><?php endif; ?>
-                    </span>
-                  <?php endif; ?>
-                  <?php if ($notes): ?>
-                    <span class="cg-brief">
-                      <?php foreach ($notes as $n): ?>
-                        <span class="cg-chip <?= $n['tone'] ?>" title="<?= htmlspecialchars(strip_tags($n['full'])) ?>"><?= htmlspecialchars($n['chip']) ?></span>
-                      <?php endforeach; ?>
-                    </span>
-                    <span class="cg-detail">
-                      <?php foreach ($notes as $n): ?>
-                        <div class="cg-note <?= $n['tone'] ?>"><?= $n['full'] ?></div>
-                      <?php endforeach; ?>
-                    </span>
-                  <?php endif; ?>
+                  <button type="button" class="cg-row-btn" aria-expanded="false"
+                          aria-controls="<?= $rowId ?>" onclick="cgRow(this, '<?= $rowId ?>')">
+                    <svg class="cg-caret" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="3" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+                    <strong><?= htmlspecialchars($lp['name']) ?></strong>
+                    <?php if ($addrs): ?>
+                      <span class="cg-em">· <?= htmlspecialchars($addrs[0]) ?></span>
+                    <?php endif; ?>
+                    <?php foreach ($flags as $f): ?>
+                      <span class="cg-chip warn"><?= htmlspecialchars($f) ?></span>
+                    <?php endforeach; ?>
+                  </button>
                 </td>
                 <td style="padding:.45rem .5rem;"><?= (int)$lp['approved'] ?></td>
                 <td style="padding:.45rem .5rem;"><?= (int)$lp['pending'] ?: '—' ?></td>
@@ -1418,6 +1415,37 @@ $totalDaysApproved = $personDays['approved'];
                       </button>
                     <?php endif; ?>
                   </form>
+                </td>
+              </tr>
+              <?php // Opened by the row above. Worth opening on every teacher,
+                    // not only the flagged ones: "where do these days come
+                    // from" is a question the page can now answer. ?>
+              <tr id="<?= $rowId ?>" class="cg-rowdetail" hidden>
+                <td colspan="7" style="padding:.1rem .5rem .8rem 1.6rem;">
+                  <?php if (count($addrs) > 1): ?>
+                    <div class="cg-note quiet">
+                      Counted as one person across
+                      <?= htmlspecialchars(implode(' and ', $addrs)) ?>.
+                    </div>
+                  <?php endif; ?>
+                  <?php foreach ($notes as $n): ?>
+                    <div class="cg-note <?= $n['tone'] ?>"><?= $n['text'] ?></div>
+                  <?php endforeach; ?>
+                  <?php if (!empty($lp['apps'])): ?>
+                    <div class="cg-note quiet" style="margin-top:.3rem;">
+                      <?php foreach ($lp['apps'] as $ap): ?>
+                        <div>
+                          <a href="?year=<?= (int)$year ?>#app-<?= (int)$ap['id'] ?>">#<?= (int)$ap['id'] ?></a>
+                          · <?= htmlspecialchars($ap['role']) ?>
+                          · <?= (int)$ap['days'] ?> day<?= (int)$ap['days'] !== 1 ? 's' : '' ?>
+                          · <?= htmlspecialchars($ap['status']) ?>
+                          <?php if (empty($ap['dated'])): ?>
+                            · <span title="No usable dates on this application, so it could not be checked for days claimed twice.">dates not usable</span>
+                          <?php endif; ?>
+                        </div>
+                      <?php endforeach; ?>
+                    </div>
+                  <?php endif; ?>
                 </td>
               </tr>
             <?php endforeach; ?>
