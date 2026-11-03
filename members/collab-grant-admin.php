@@ -1091,8 +1091,6 @@ $totalDaysApproved = $personDays['approved'];
       .cg-how dd { margin:.1rem 0 0; line-height:1.6; }
     </style>
     <script>
-      /* Remembered per browser: an admin who wants the working wants it every
-         time, and one who does not should not have to close it on every load. */
       /* One teacher at a time. */
       function cgRow(btn, id) {
         var row = document.getElementById(id);
@@ -1184,7 +1182,6 @@ $totalDaysApproved = $personDays['approved'];
           // count to take from here — that shows per application instead, where
           // the person being considered is known.
           $ledger = cgDaysLedger($year);
-          $anyApprox = (bool)array_filter($ledger, fn($lp) => !$lp['exact']);
     ?>
     <?php
       /* Two rows, one name, different addresses. Never merged on this evidence:

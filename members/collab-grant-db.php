@@ -1913,8 +1913,12 @@ function cgYearPersonDays(int $year): array {
     $out = ['approved' => 0, 'pending' => 0, 'people' => 0,
             'exempt_approved' => 0, 'exempt_pending' => 0, 'exempt_people' => 0];
     foreach (cgDaysLedger($year) as $p) {
-        // capped is false only where an exemption applied; cgApplyCap() sets it.
-        $free = empty($p['capped']);
+        /* cgApplyCap() sets capped on every ledger row, so the key is always
+         * there. Checked for anyway, and treated as capped when it is not:
+         * reading a missing key as exempt would put the whole year in the
+         * exempt bucket and show a headline of zero, which is the worst way
+         * for this to be wrong. */
+        $free = array_key_exists('capped', $p) && empty($p['capped']);
         $out[$free ? 'exempt_approved' : 'approved'] += (int)$p['approved'];
         $out[$free ? 'exempt_pending'  : 'pending']  += (int)$p['pending'];
         $out[$free ? 'exempt_people'   : 'people']++;
