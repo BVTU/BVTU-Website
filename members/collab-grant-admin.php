@@ -1081,11 +1081,18 @@ $totalDaysApproved = $personDays['approved'];
         <div class="val"><?= $totalDaysApproved ?></div>
         <div class="lbl">Release days approved
           <?php // Says which days these are, because the obvious reading —
-                // add up the grants — gives a different and smaller number. ?>
+                // add up the grants — gives a different and smaller number,
+                // and because the figure deliberately leaves days out. ?>
           <span style="display:block;font-weight:400;color:var(--gray-500);font-size:.78rem;">
-            counting every teacher released<?php
+            every teacher the local pays to release<?php
               if ($personDays['pending'] > 0): ?>; <?= (int)$personDays['pending'] ?>
               more awaiting a decision<?php endif; ?>
+            <?php if ($personDays['exempt_approved'] > 0): ?>
+              <br>plus <?= (int)$personDays['exempt_approved'] ?> day<?= $personDays['exempt_approved'] !== 1 ? 's' : '' ?>
+              for <?= (int)$personDays['exempt_people'] ?>
+              teacher<?= $personDays['exempt_people'] !== 1 ? 's' : '' ?> whose release costs
+              the local nothing, not counted here
+            <?php endif; ?>
           </span>
         </div>
       </div>
@@ -1351,7 +1358,10 @@ $totalDaysApproved = $personDays['approved'];
           where a lead and a collaborator each submitted an application for the same
           collaboration, that is one absence entered twice, not two. Applications whose
           dates and day count disagree, or that have no dates, are added on without that
-          check, and rows carrying any say so.
+          check, and rows carrying any say so. Everyone's days are listed below,
+          including teachers marked "not capped" — but those are left out of the
+          Release days approved figure above, because that figure is about release the
+          local pays for and theirs costs it nothing.
           <?php if ($anyApprox): ?>
             Collaborators are typed names with no email address, so their days are
             attributed by matching the name against Contacts and against everyone who

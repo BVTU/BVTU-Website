@@ -1900,15 +1900,24 @@ function cgDaysLedger(int $year): array {
  * three. And where one collaboration was entered twice, summing applications
  * counted the same three days again.
  *
- * Exempt teachers are included: an exemption lifts the limit on someone's own
- * days, it does not mean they were not released.
+ * Exempt teachers are counted separately, not in the headline.
+ *
+ * Someone is exempt precisely because releasing them costs the local nothing —
+ * a district support teacher is covered from elsewhere. This figure sits beside
+ * the release cost and answers "how much release did the local fund", so days
+ * that cost it nothing do not belong in it. They are still counted, in their own
+ * fields, because "we supported six days of collaboration this year" is a real
+ * and useful fact and quietly dropping it would be a different kind of wrong.
  */
 function cgYearPersonDays(int $year): array {
-    $out = ['approved' => 0, 'pending' => 0, 'people' => 0];
+    $out = ['approved' => 0, 'pending' => 0, 'people' => 0,
+            'exempt_approved' => 0, 'exempt_pending' => 0, 'exempt_people' => 0];
     foreach (cgDaysLedger($year) as $p) {
-        $out['approved'] += (int)$p['approved'];
-        $out['pending']  += (int)$p['pending'];
-        $out['people']++;
+        // capped is false only where an exemption applied; cgApplyCap() sets it.
+        $free = empty($p['capped']);
+        $out[$free ? 'exempt_approved' : 'approved'] += (int)$p['approved'];
+        $out[$free ? 'exempt_pending'  : 'pending']  += (int)$p['pending'];
+        $out[$free ? 'exempt_people'   : 'people']++;
     }
     return $out;
 }
