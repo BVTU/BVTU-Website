@@ -36,6 +36,12 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
         'Collaborator Name',
         'Days Requested', 'Days Granted', 'Proposed Dates', 'Reviewed At',
         'Atrieve Logged', 'Atrieve Confirmed', 'Invoice Number', 'Release Cost',
+        // The sixteenth column, and the only one not on the application itself.
+        // Both copies of a collaboration entered twice are exported — deleting
+        // one was never the answer — so without this the sheet holds two rows
+        // for one set of TTOCs and nothing to say so. Filter on it to find
+        // them; the ID points at the row that carries the invoice and the cost.
+        'Same Collaboration As',
     ]);
     foreach ($apps as $a) {
         $pdArr = json_decode($a['proposed_dates'] ?? '[]', true);
@@ -65,6 +71,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
             $a['invoice_number'] ?? '',
             ($a['release_cost'] ?? null) !== null
                 ? number_format((float)$a['release_cost'], 2, '.', '') : '',
+            !empty($a['duplicate_of']) ? '#' . (int)$a['duplicate_of'] : '',
         ]));
     }
     fclose($out);
@@ -849,6 +856,9 @@ $totalDaysApproved = $personDays['approved'];
         </select>
       </form>
       <?php endif; ?>
+      <?php // Both copies are in the file, with a column naming the one that
+            // carries the cost — a spreadsheet that quietly dropped an approved
+            // application would be worse than one that needs a filter. ?>
       <a href="?export=csv&year=<?= $year ?>" class="export-btn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Export CSV
