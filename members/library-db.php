@@ -239,6 +239,45 @@ function libGetResources(array $filters = [], bool $adminView = false): array {
         $params[] = $filters['status'];
     }
 
+    /*
+     * "grade 4" typed in the search box is a grade, not words to look for.
+     *
+     * The word "grade" is nowhere in the data — it is the name of the column,
+     * and the value is "4,5". So "math grade 4" asked for a word no resource
+     * can contain and came back empty, which reads as an empty library rather
+     * than a question that could not be answered.
+     *
+     * Merged into the grade filter rather than added as a second condition, so
+     * typing one grade and ticking another asks for either, the way two ticked
+     * boxes do — as its own AND group it asked for both at once and nothing
+     * came back. The phrase is always taken out of the text, including a grade
+     * that does not exist: "grade 13" then filters to grade 13 and finds
+     * nothing, which is the truthful answer, where leaving it in searched for
+     * the word "grade" and emptied the library for the wrong reason.
+     */
+    if (!empty($filters['q'])) {
+        $gradeRe = '/\bgrades?\s*([k0-9]{1,2})(?:\s*(?:-|\x{2013}|to)\s*([k0-9]{1,2}))?\b/iu';
+        if (preg_match_all($gradeRe, (string)$filters['q'], $gm, PREG_SET_ORDER)) {
+            // K sorts before 1 so a range can be walked; it is written back as
+            // "K", which is how grade_levels stores it.
+            $num  = function ($t) { return strcasecmp($t, 'k') === 0 ? 0 : (int)$t; };
+            $name = function ($n) { return $n === 0 ? 'K' : (string)$n; };
+            $found = [];
+            foreach ($gm as $m) {
+                $lo = $num($m[1]);
+                $hi = (isset($m[2]) && $m[2] !== '') ? $num($m[2]) : $lo;
+                if ($hi < $lo) { $t = $lo; $lo = $hi; $hi = $t; }
+                // Bounded so "grades 1-99" cannot build an endless list; an
+                // out-of-range grade still filters, and finds nothing.
+                for ($g = $lo; $g <= min($hi, 12) && $g - $lo < 13; $g++) $found[$name($g)] = true;
+                if ($hi === $lo && $hi > 12) $found[$name($hi)] = true;
+            }
+            $filters['q']      = trim((string)preg_replace($gradeRe, ' ', (string)$filters['q']));
+            $filters['grades'] = array_values(array_unique(array_merge(
+                array_map('strval', (array)($filters['grades'] ?? [])), array_keys($found))));
+        }
+    }
+
     // Grade filter — resource must include ANY of the selected grades
     if (!empty($filters['grades'])) {
         $gClauses = [];
@@ -280,34 +319,6 @@ function libGetResources(array $filters = [], bool $adminView = false): array {
             $hasFT = (bool) getDB()->query("SHOW INDEX FROM library_resources WHERE Key_name = 'ft_search'")->fetch();
         }
 
-        /*
-         * "grade 4" is a grade, not two words to look for.
-         *
-         * The word "grade" is nowhere in the data — it is the name of the
-         * column, and the value is "4,5". So "math grade 4" asked for a word
-         * that no resource can contain and came back empty, which reads as an
-         * empty library rather than a query that could not be answered. The
-         * phrase is lifted out and applied the way the grade checkboxes
-         * already do, and the rest of the words go to the text search.
-         */
-        if (preg_match_all('/\bgrades?\s*([k0-9]{1,2})\b/i', $q, $gm)) {
-            $asked = [];
-            foreach ($gm[1] as $g) {
-                $g = strtolower($g) === 'k' ? 'K' : (string)(int)$g;
-                if ($g === 'K' || ((int)$g >= 1 && (int)$g <= 12)) $asked[$g] = true;
-            }
-            if ($asked) {
-                $gClauses = [];
-                foreach (array_keys($asked) as $g) {
-                    $gClauses[] = 'FIND_IN_SET(?, grade_levels)';
-                    $params[]   = $g;
-                }
-                $where[] = '(' . implode(' OR ', $gClauses) . ')';
-                // Taken out so it is not also searched for as text.
-                $q = trim((string)preg_replace('/\bgrades?\s*[k0-9]{1,2}\b/i', ' ', $q));
-            }
-        }
-
         // Trimmed of the punctuation people type between words as well as the
         // characters that are special to boolean mode. Without the commas,
         // "math, grade 4" searched for the literal token "math," and matched
@@ -327,26 +338,49 @@ function libGetResources(array $filters = [], bool $adminView = false): array {
          * that". LIKE answers the same question correctly, just without a
          * relevance score, so a short word sends the query that way.
          */
-        $tooShort = false;
+        $unindexable = false;
         if ($hasFT && $words) {
+            // library_resources is declared ENGINE=InnoDB, so InnoDB's limit is
+            // the one that applies. Taking the larger of this and MyISAM's
+            // ft_min_word_len sent every three-letter word — "art", "pdf",
+            // "esl" — down the nine-column LIKE scan and lost the relevance
+            // ordering, for a setting this table is not governed by.
             static $minTok = null;
             if ($minTok === null) {
                 $minTok = 3;   // InnoDB's default, used if the lookup fails
                 try {
-                    foreach (['innodb_ft_min_token_size', 'ft_min_word_len'] as $v) {
-                        $row = getDB()->query("SHOW VARIABLES LIKE '{$v}'")->fetch();
-                        // The larger of the two, so a MyISAM table cannot be
-                        // judged by InnoDB's smaller limit and fail anyway.
-                        if ($row) $minTok = max($minTok, (int)$row['Value']);
-                    }
+                    $row = getDB()->query("SHOW VARIABLES LIKE 'innodb_ft_min_token_size'")->fetch();
+                    if ($row && (int)$row['Value'] > 0) $minTok = (int)$row['Value'];
                 } catch (\Exception $e) { /* keep the default */ }
             }
+
+            /*
+             * A stopword is as fatal as a short word, and less obvious.
+             *
+             * InnoDB does not index "with", "from", "where" and about thirty
+             * others, so "games with dice" asked boolean mode for "+with*" and
+             * returned nothing at all. The server publishes its own list, so
+             * it is read rather than guessed at.
+             */
+            static $stop = null;
+            if ($stop === null) {
+                $stop = [];
+                try {
+                    $rows = getDB()->query(
+                        "SELECT value FROM INFORMATION_SCHEMA.INNODB_FT_DEFAULT_STOPWORD")->fetchAll();
+                    foreach ($rows as $r) $stop[strtolower((string)$r['value'])] = true;
+                } catch (\Exception $e) { /* no list: short words still caught */ }
+            }
+
             foreach ($words as $w) {
-                if (mb_strlen($w) < $minTok) { $tooShort = true; break; }
+                if (mb_strlen($w) < $minTok || isset($stop[mb_strtolower($w)])) {
+                    $unindexable = true;
+                    break;
+                }
             }
         }
 
-        if ($hasFT && $words && !$tooShort) {
+        if ($hasFT && $words && !$unindexable) {
             // Boolean mode: each word becomes +word*, ensuring all words present
             $ftq = implode(' ', array_map(fn($w) => '+' . $w . '*', $words));
             $ftCols        = 'title, description, tags, bc_curriculum, subject, grade_levels, resource_type, materials';
@@ -368,7 +402,14 @@ function libGetResources(array $filters = [], bool $adminView = false): array {
                      'grade_levels', 'resource_type', 'materials', 'uploader_name'];
             // Punctuation was already stripped into spaces above; fall back to
             // the raw query only where that left nothing to search for.
-            foreach (array_slice($words ?: ($q === '' ? [] : [$q]), 0, 6) as $term) {
+            /*
+             * Every word, not the first six. Each one narrows the result, so
+             * dropping one returns resources that do not match what was asked
+             * — the one direction a truncation must not go. The bound is high
+             * enough that only a pasted block of prose reaches it, and such a
+             * search correctly finds nothing anyway.
+             */
+            foreach (array_slice($words ?: ($q === '' ? [] : [$q]), 0, 32) as $term) {
                 // Escape the LIKE metacharacters, naming the escape character
                 // rather than relying on MySQL's backslash default, which the
                 // NO_BACKSLASH_ESCAPES sql_mode removes.
