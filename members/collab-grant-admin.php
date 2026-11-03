@@ -291,15 +291,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
     if (!$dup) {
         $notice = 'Could not find that application.';
     } elseif ($_POST['action'] === 'collab-unfold') {
-        $notice = cgSetDuplicateOf($dupId, null)
+        $why = cgSetDuplicateOf($dupId, null);
+        $notice = $why === ''
             ? 'Application #' . $dupId . ' is its own collaboration again, and will be costed.'
-            : 'That could not be undone.';
-    } elseif (cgSetDuplicateOf($dupId, $intoId)) {
-        $notice = 'Application #' . $dupId . ' is folded under #' . $intoId
-                . ' — one collaboration, costed once. The days were already counted once each.';
+            : $why;
     } else {
-        $notice = 'Those two cannot be folded together — check they are the same school year, '
-                . 'and that neither is already folded under something else.';
+        // The refusal says which rule was hit. "Those cannot be folded" sent
+        // someone looking for a reason the page already knew.
+        $why = cgSetDuplicateOf($dupId, $intoId);
+        $notice = $why === ''
+            ? 'Application #' . $dupId . ' is folded under #' . $intoId
+              . ' — one collaboration, costed once. The days were already counted once each.'
+            : $why;
     }
     $apps = cgGetApplications($year);
 }
@@ -416,6 +419,7 @@ $foldedUnder = [];
 foreach ($apps as $a) {
     if (!empty($a['duplicate_of'])) $foldedUnder[(int)$a['duplicate_of']][] = $a;
 }
+$allApps = $apps;   // including the folded ones; the CSV exports from this
 $apps = array_values(array_filter($apps, fn($a) => empty($a['duplicate_of'])));
 
 /** Approved, but the district paperwork is not finished. */
@@ -425,7 +429,16 @@ $cgNeedsFollowUp = function (array $a): bool {
             || trim((string)($a['invoice_number'] ?? '')) === ''
             || ($a['release_cost'] ?? null) === null);
 };
-$pendingApps  = array_values(array_filter($apps, fn($a) => $a['status'] === 'pending'));
+/*
+ * Built from every application, folded or not.
+ *
+ * Folding is a decision about the money, and the money only matters once an
+ * application is approved — but a pending one still needs deciding. Taken out
+ * of the review queue as well it had no card and no status buttons anywhere,
+ * so it could never be approved or declined and simply sat there, invisible
+ * and undecided, which is worse than being costed twice.
+ */
+$pendingApps  = array_values(array_filter($allApps, fn($a) => $a['status'] === 'pending'));
 $followUpApps = array_values(array_filter($apps, $cgNeedsFollowUp));
 $shownApps    = $view === 'review' ? $pendingApps
               : ($view === 'followup' ? $followUpApps : $apps);
@@ -1047,7 +1060,19 @@ $totalDaysApproved = $personDays['approved'];
     <div class="summary-row">
       <div class="summary-card">
         <div class="val"><?= count($apps) ?></div>
-        <div class="lbl"><?= $year ?>–<?= ($year + 1) % 100 ?> applications</div>
+        <div class="lbl"><?= $year ?>–<?= ($year + 1) % 100 ?> applications
+          <?php
+            // The CSV exports every application including the folded copies, so
+            // without this the card and the sheet disagree and nothing says why.
+            $nFolded = array_sum(array_map('count', $foldedUnder));
+          ?>
+          <?php if ($nFolded): ?>
+          <span style="display:block;font-weight:400;color:var(--gray-500);font-size:.78rem;">
+            <?= $nFolded ?> more folded in as the same collaboration; the CSV lists
+            <?= count($allApps) ?>
+          </span>
+          <?php endif; ?>
+        </div>
       </div>
       <div class="summary-card">
         <div class="val"><?= $totalDaysApproved ?></div>
@@ -1374,6 +1399,19 @@ $totalDaysApproved = $personDays['approved'];
           </div>
 
           <div class="read-card-body">
+            <?php $foldedR = $foldedUnder[(int)$app['id']] ?? []; ?>
+            <?php if ($foldedR): ?>
+            <?php // The read-through is the meeting copy, and this is the only
+                  // place a folded application appears. Left out, an approved
+                  // grant would be missing from the record read aloud. ?>
+            <div class="read-fact" style="width:100%;">
+              <strong>Also submitted separately for this collaboration:</strong>
+              <?= htmlspecialchars(implode(', ', array_map(function ($f) {
+                    return '#' . (int)$f['id'] . ' ' . $f['applicant_name']
+                         . ' (' . ucfirst((string)$f['status']) . ')';
+                  }, $foldedR))) ?> — costed here, not separately.
+            </div>
+            <?php endif; ?>
             <div class="read-facts">
               <div class="read-fact"><strong>Email:</strong> <a href="mailto:<?= htmlspecialchars($app['applicant_email']) ?>"><?= htmlspecialchars($app['applicant_email']) ?></a></div>
               <div class="read-fact"><strong>Time in role:</strong> <?= htmlspecialchars($app['years_in_role'] ?: '—') ?></div>
@@ -1473,9 +1511,9 @@ $totalDaysApproved = $personDays['approved'];
                 </div>
               <?php endforeach; ?>
               <div style="color:var(--gray-500);font-size:.8rem;margin-top:.45rem;">
-                Still approved and still counted against
-                <?= count($folded) === 1 ? 'their' : 'their' ?> three days; costed here rather
-                than separately, because it is one set of TTOCs.
+                Still <?= count($folded) === 1 ? 'a decision of its own' : 'decisions of their own' ?>,
+                and still counted against the applicant's three days; costed here rather than
+                separately, because it is one set of TTOCs.
               </div>
             </div>
             <?php endif; ?>

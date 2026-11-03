@@ -338,48 +338,66 @@ function cgSetCollaboratorEmail(int $id, string $email): bool {
  * "the one that is costed" would loop. A duplicate may only point at an
  * application that is not itself a duplicate.
  */
-function cgSetDuplicateOf(int $id, ?int $primaryId): bool {
+function cgSetDuplicateOf(int $id, ?int $primaryId): string {
     cgEnsureTable();
-    if ($id < 1) return false;
+    if ($id < 1) return 'That application could not be found.';
 
     $app = cgGetApplication($id);
-    if (!$app) return false;
+    if (!$app) return 'That application could not be found.';
 
-    if ($primaryId === null) {
-        getDB()->prepare("UPDATE collab_grant_applications SET duplicate_of=NULL WHERE id=?")
-               ->execute([$id]);
-        return true;
-    }
-
-    if ($primaryId === $id) return false;            // itself
-    $primary = cgGetApplication($primaryId);
-    if (!$primary) return false;
-    if (!empty($primary['duplicate_of'])) return false;   // no chains
-    // Different years are different budgets; folding across them would move
-    // money between them without saying so.
-    if ((int)$primary['school_year'] !== (int)$app['school_year']) return false;
-    // Something is already folded under this one, so it cannot become a
-    // duplicate itself — the same chain, from the other end.
-    $kids = getDB()->prepare("SELECT COUNT(*) FROM collab_grant_applications WHERE duplicate_of=?");
-    $kids->execute([$id]);
-    if ((int)$kids->fetchColumn() > 0) return false;
-
-    getDB()->prepare("UPDATE collab_grant_applications SET duplicate_of=? WHERE id=?")
-           ->execute([$primaryId, $id]);
-    return true;
-}
-
-/** The applications folded under this one, if any. */
-function cgDuplicatesOf(int $id): array {
-    cgEnsureTable();
+    // Guarded like every other optional column. duplicate_of arrives through a
+    // best-effort ALTER, so on a host that could not run it this must say so
+    // rather than throw a 500 at someone pressing a button.
     try {
-        $s = getDB()->prepare(
-            "SELECT id, applicant_name, applicant_email, status, submitted_at
-             FROM collab_grant_applications WHERE duplicate_of=? ORDER BY submitted_at");
-        $s->execute([$id]);
-        return $s->fetchAll();
+        if ($primaryId === null) {
+            getDB()->prepare("UPDATE collab_grant_applications SET duplicate_of=NULL WHERE id=?")
+                   ->execute([$id]);
+            return '';
+        }
+
+        if ($primaryId === $id) return 'An application cannot be folded under itself.';
+        $primary = cgGetApplication($primaryId);
+        if (!$primary) return 'The application to fold it under could not be found.';
+        if (!empty($primary['duplicate_of'])) {
+            return 'That one is itself folded under another — fold this under the same one.';
+        }
+        // Different years are different budgets; folding across them would move
+        // money between them without saying so.
+        if ((int)$primary['school_year'] !== (int)$app['school_year']) {
+            return 'Those are different school years, and so different budgets.';
+        }
+        // Something is already folded under this one, so it cannot become a
+        // duplicate itself — the same chain, from the other end.
+        $kids = getDB()->prepare("SELECT COUNT(*) FROM collab_grant_applications WHERE duplicate_of=?");
+        $kids->execute([$id]);
+        if ((int)$kids->fetchColumn() > 0) {
+            return 'Something is already folded under this one, so it cannot be folded itself.';
+        }
+
+        /*
+         * Money already recorded against it would otherwise disappear.
+         *
+         * The year's cost total skips folded applications, and folding neither
+         * moves nor clears release_cost, so an invoiced application folded away
+         * takes its spend out of the year silently and out of the follow-up
+         * queue that would have caught it. Refused rather than moved: which
+         * invoice belongs to which collaboration is the Treasurer's call, not
+         * a guess this function should make.
+         */
+        if (($app['release_cost'] ?? null) !== null
+            || trim((string)($app['invoice_number'] ?? '')) !== '') {
+            return 'That application already has an invoice or a release cost on it. '
+                 . 'Fold the other one instead, or clear the figures here first — '
+                 . 'folding it now would take that spending out of the year without saying so.';
+        }
+
+        getDB()->prepare("UPDATE collab_grant_applications SET duplicate_of=? WHERE id=?")
+               ->execute([$primaryId, $id]);
+        return '';
     } catch (Exception $e) {
-        return [];
+        error_log('cgSetDuplicateOf: ' . $e->getMessage());
+        return 'That could not be saved — the duplicate_of column is missing on this server. '
+             . 'Tell the site admin.';
     }
 }
 
