@@ -271,30 +271,112 @@ function libGetResources(array $filters = [], bool $adminView = false): array {
         $params[] = $filters['uploader'];
     }
 
-    // Keyword search — FULLTEXT if index exists, LIKE fallback
+    // Keyword search — FULLTEXT if index exists, LIKE otherwise or where
+    // fulltext cannot answer the question honestly.
     if (!empty($filters['q'])) {
         $q = trim($filters['q']);
         static $hasFT = null;
         if ($hasFT === null) {
             $hasFT = (bool) getDB()->query("SHOW INDEX FROM library_resources WHERE Key_name = 'ft_search'")->fetch();
         }
-        if ($hasFT) {
-            // Boolean mode: each word becomes +word*, ensuring all words present
-            $words = array_values(array_filter(array_map('trim', preg_split('/\s+/', preg_replace('/[+\-><\(\)~*"@]+/', ' ', $q)))));
-            if ($words) {
-                $ftq = implode(' ', array_map(fn($w) => '+' . $w . '*', $words));
-                $ftCols        = 'title, description, tags, bc_curriculum, subject, grade_levels, resource_type, materials';
-                $where[]       = "MATCH({$ftCols}) AGAINST(? IN BOOLEAN MODE)";
-                $params[]      = $ftq;
-                $ftScoreExpr   = ", MATCH({$ftCols}) AGAINST(? IN BOOLEAN MODE) AS _score";
-                $ftParams      = [$ftq];
-                $useFulltext   = true;
+
+        /*
+         * "grade 4" is a grade, not two words to look for.
+         *
+         * The word "grade" is nowhere in the data — it is the name of the
+         * column, and the value is "4,5". So "math grade 4" asked for a word
+         * that no resource can contain and came back empty, which reads as an
+         * empty library rather than a query that could not be answered. The
+         * phrase is lifted out and applied the way the grade checkboxes
+         * already do, and the rest of the words go to the text search.
+         */
+        if (preg_match_all('/\bgrades?\s*([k0-9]{1,2})\b/i', $q, $gm)) {
+            $asked = [];
+            foreach ($gm[1] as $g) {
+                $g = strtolower($g) === 'k' ? 'K' : (string)(int)$g;
+                if ($g === 'K' || ((int)$g >= 1 && (int)$g <= 12)) $asked[$g] = true;
             }
+            if ($asked) {
+                $gClauses = [];
+                foreach (array_keys($asked) as $g) {
+                    $gClauses[] = 'FIND_IN_SET(?, grade_levels)';
+                    $params[]   = $g;
+                }
+                $where[] = '(' . implode(' OR ', $gClauses) . ')';
+                // Taken out so it is not also searched for as text.
+                $q = trim((string)preg_replace('/\bgrades?\s*[k0-9]{1,2}\b/i', ' ', $q));
+            }
+        }
+
+        // Trimmed of the punctuation people type between words as well as the
+        // characters that are special to boolean mode. Without the commas,
+        // "math, grade 4" searched for the literal token "math," and matched
+        // nothing — and the fulltext path would have asked for "+math,*".
+        $words = array_values(array_filter(array_map(
+            function ($w) { return trim($w, " \t\n\r,;:."); },
+            preg_split('/\s+/', preg_replace('/[+\-><\(\)~*"@]+/', ' ', $q)) ?: []
+        ), function ($w) { return $w !== ''; }));
+
+        /*
+         * A word too short for the index makes the whole search match nothing.
+         *
+         * Boolean mode requires every +term, and a word below the server's
+         * minimum token length was never indexed, so "math grade 4" became
+         * "+math* +grade* +4*" and returned an empty library — the search did
+         * not degrade, it failed silently and looked like "we have nothing on
+         * that". LIKE answers the same question correctly, just without a
+         * relevance score, so a short word sends the query that way.
+         */
+        $tooShort = false;
+        if ($hasFT && $words) {
+            static $minTok = null;
+            if ($minTok === null) {
+                $minTok = 3;   // InnoDB's default, used if the lookup fails
+                try {
+                    foreach (['innodb_ft_min_token_size', 'ft_min_word_len'] as $v) {
+                        $row = getDB()->query("SHOW VARIABLES LIKE '{$v}'")->fetch();
+                        // The larger of the two, so a MyISAM table cannot be
+                        // judged by InnoDB's smaller limit and fail anyway.
+                        if ($row) $minTok = max($minTok, (int)$row['Value']);
+                    }
+                } catch (\Exception $e) { /* keep the default */ }
+            }
+            foreach ($words as $w) {
+                if (mb_strlen($w) < $minTok) { $tooShort = true; break; }
+            }
+        }
+
+        if ($hasFT && $words && !$tooShort) {
+            // Boolean mode: each word becomes +word*, ensuring all words present
+            $ftq = implode(' ', array_map(fn($w) => '+' . $w . '*', $words));
+            $ftCols        = 'title, description, tags, bc_curriculum, subject, grade_levels, resource_type, materials';
+            $where[]       = "MATCH({$ftCols}) AGAINST(? IN BOOLEAN MODE)";
+            $params[]      = $ftq;
+            $ftScoreExpr   = ", MATCH({$ftCols}) AGAINST(? IN BOOLEAN MODE) AS _score";
+            $ftParams      = [$ftq];
+            $useFulltext   = true;
         } else {
-            // LIKE fallback across all text fields including subject, grade, and type
-            $term     = '%' . $q . '%';
-            $where[]  = "(title LIKE ? OR description LIKE ? OR tags LIKE ? OR bc_curriculum LIKE ? OR subject LIKE ? OR grade_levels LIKE ? OR resource_type LIKE ? OR materials LIKE ? OR uploader_name LIKE ?)";
-            $params   = array_merge($params, [$term, $term, $term, $term, $term, $term, $term, $term, $term]);
+            /*
+             * One word at a time, and every word has to land somewhere.
+             *
+             * The whole query used to be matched against each column on its
+             * own, so "math grade 4" was looked for inside title, inside
+             * description and inside each of the rest, and was in none of
+             * them. A single word worked and a phrase never did.
+             */
+            $cols = ['title', 'description', 'tags', 'bc_curriculum', 'subject',
+                     'grade_levels', 'resource_type', 'materials', 'uploader_name'];
+            // Punctuation was already stripped into spaces above; fall back to
+            // the raw query only where that left nothing to search for.
+            foreach (array_slice($words ?: ($q === '' ? [] : [$q]), 0, 6) as $term) {
+                // Escape the LIKE metacharacters, naming the escape character
+                // rather than relying on MySQL's backslash default, which the
+                // NO_BACKSLASH_ESCAPES sql_mode removes.
+                $like = '%' . str_replace(['|', '%', '_'], ['||', '|%', '|_'], $term) . '%';
+                $ors = [];
+                foreach ($cols as $c) { $ors[] = "$c LIKE ? ESCAPE '|'"; $params[] = $like; }
+                $where[] = '(' . implode(' OR ', $ors) . ')';
+            }
         }
     }
 
