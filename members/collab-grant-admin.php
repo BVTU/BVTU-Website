@@ -816,7 +816,10 @@ $totalDaysApproved = $personDays['approved'];
   <div class="admin-wrap">
 
     <div class="admin-title">Collaboration Grant</div>
-    <div class="admin-sub"><?= $year ?>–<?= $year + 1 ?> school year · <?= count($apps) ?> application<?= count($apps) !== 1 ? 's' : '' ?></div>
+    <?php // Every application received, folded copies included: the review
+          // badge counts those too, and "3 applications" above "To review (4)"
+          // reads as a bug in one of them. ?>
+    <div class="admin-sub"><?= $year ?>–<?= $year + 1 ?> school year · <?= count($allApps) ?> application<?= count($allApps) !== 1 ? 's' : '' ?></div>
 
     <!-- Toolbar -->
     <div class="admin-toolbar">
@@ -1133,10 +1136,12 @@ $totalDaysApproved = $personDays['approved'];
       <strong>The same days, claimed twice.</strong>
       <?= count($cgShared) === 1 ? 'One collaboration appears' : count($cgShared) . ' collaborations appear' ?>
       to have been entered more than once — the lead applied, and so did someone
-      named on it, for the same dates. The day counts above already treat those as
-      one absence each. The <em>cost</em> does not: each application carries its own
-      invoice and release cost, so unless they are folded together the year will be
-      costed twice for one set of TTOCs.
+      named on it, for overlapping dates. Days the two <em>share</em> are already
+      counted once per teacher above; any days only one of them lists are counted
+      as well, because a teacher really was released on those. The <em>cost</em> is
+      not deduplicated at all: each application carries its own invoice and release
+      cost, so unless they are folded together the year is costed twice for one set
+      of TTOCs.
       <?php foreach ($cgShared as $set): ?>
         <?php $first = $set[0]; ?>
         <div style="margin-top:.7rem;padding-top:.6rem;border-top:1px solid #f3e3b4;">
@@ -1483,6 +1488,26 @@ $totalDaysApproved = $personDays['approved'];
           </div>
 
           <div class="app-card-body">
+            <?php if (!empty($app['duplicate_of'])): ?>
+            <?php /* It is here because it still needs deciding, not because it
+                   * is an ordinary application. Unmarked it read as a second
+                   * grant for the same days, which is what the folding was
+                   * meant to stop someone believing. */ ?>
+            <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;
+                        padding:.6rem .8rem;margin-bottom:.9rem;font-size:.87rem;">
+              Folded under <a href="#app-<?= (int)$app['duplicate_of'] ?>">#<?= (int)$app['duplicate_of'] ?></a>
+              as the same collaboration — it will be costed there, not here. Still to be
+              decided, which is why it is in this queue.
+              <?php if (!$cgReadOnly): ?>
+                <form method="POST" style="display:inline;margin-left:.4rem;">
+                  <?= csrfField() ?>
+                  <input type="hidden" name="action" value="collab-unfold">
+                  <input type="hidden" name="app_id" value="<?= (int)$app['id'] ?>">
+                  <button type="submit" class="cg-flag-link">separate them again</button>
+                </form>
+              <?php endif; ?>
+            </div>
+            <?php endif; ?>
             <?php
               /* Anything folded under this one. Shown here because it is the
                * only place it now appears: the row of its own is gone, and an

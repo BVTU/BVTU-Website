@@ -1581,6 +1581,10 @@ function cgAppPeople(array $r, int $year): array {
     $appsByName = cgApplicantsByName($year);
     foreach ($named as $one) {
         $hit = cgResolveCollaborator($one, $byName, $appsByName);
+        // A name that reduces to nothing — "-", "n/a", punctuation alone —
+        // would key as a bare 'n:' that every such application shares, and two
+        // unrelated grants on one date would be offered as one collaboration.
+        if ($hit['key'] === 'n:') continue;
         $out[] = $hit['key'];
     }
     return $out;
@@ -1643,8 +1647,25 @@ function cgOverlappingApps(int $year): array {
     foreach ($groups as $g) {
         if (count($g) < 2) continue;
         $g = array_values(array_unique($g));
-        sort($g);
-        $out[] = array_map(function ($i) use ($info) { return $info[$i]['row']; }, $g);
+        $set = array_map(function ($i) use ($info) { return $info[$i]['row']; }, $g);
+        /*
+         * The one already holding money leads; otherwise the earliest.
+         *
+         * Folding refuses to move a recorded invoice or release cost, and the
+         * page only ever offers to fold the others under the first of the set.
+         * Ordered by submission alone, a pair whose later copy had been costed
+         * had one button, always refused, advising the admin to "fold the
+         * other one instead" — a control that does not exist.
+         */
+        usort($set, function ($x, $y) {
+            $unpaid = function ($a) {
+                return (($a['release_cost'] ?? null) !== null
+                        || trim((string)($a['invoice_number'] ?? '')) !== '') ? 0 : 1;
+            };
+            return [$unpaid($x), (string)$x['submitted_at'], (int)$x['id']]
+               <=> [$unpaid($y), (string)$y['submitted_at'], (int)$y['id']];
+        });
+        $out[] = $set;
     }
     return $out;
 }

@@ -1559,10 +1559,18 @@ function archiveSection(string $key, array $grants, array $lines, array $voucher
                            // NULL means nobody has costed it; 0.00 is a real
                            // figure and must export as 0.00, not as blank.
                            ($a['release_cost'] ?? null) !== null
-                               ? number_format((float)$a['release_cost'], 2, '.', '') : ''];
+                               ? number_format((float)$a['release_cost'], 2, '.', '') : '',
+                           // One collaboration entered twice is costed once, so
+                           // the year total skips the folded copy. The copy is
+                           // still exported — a permanent archive that quietly
+                           // dropped an approved application would be worse —
+                           // and this names the row carrying the invoice, so
+                           // the archive and the year's cost agree.
+                           !empty($a['duplicate_of']) ? '#' . (int)$a['duplicate_of'] : ''];
             }
             return [['Applicant', 'Email', 'School', 'Days', 'Status', 'Submitted',
-                     'Atrieve logged', 'Invoice number', 'Release cost'], $rows];
+                     'Atrieve logged', 'Invoice number', 'Release cost',
+                     'Same collaboration as'], $rows];
     }
     return [[], []];
 }
