@@ -1005,15 +1005,6 @@ body.has-vote-bar .search-fab { bottom: calc(1.75rem + var(--vote-bar-h, 3rem));
 @media (max-width: 620px) {
   .vote-bar .container { gap: .5rem .7rem; font-size: .84rem; }
 }
-.vote-promo-list { list-style: none; margin: .2rem 0 .9rem; padding: 0; }
-.vote-promo-list li { display: flex; gap: .6rem; align-items: baseline; flex-wrap: wrap;
-                      padding: .3rem 0; border-bottom: 1px solid var(--border); }
-.vote-promo-list li:last-child { border-bottom: 0; }
-.vote-promo-list .z { flex: 0 0 4.2rem; font-size: .76rem; font-weight: 800; text-transform: uppercase;
-                      letter-spacing: .05em; color: var(--gray-500); }
-.vote-promo-list .names { font-weight: 700; color: var(--gray-800); }
-.vote-promo-list .how { font-size: .8rem; color: var(--gray-600); }
-
 /* Forum band on the homepage, directly under the election block. Dark so the
    two read as a sequence rather than one long green stripe. It shows only while
    a recording is published AND the election promotion is still running, so the

@@ -246,39 +246,12 @@ $member   = $loggedIn ? getMember() : null;
           Enter your address on the map and it will tell you which zone you are in and how many
           trustees you elect there.
         </p>
-        <p>The BVTU endorses:</p>
-        <?php
-        /*
-         * By zone, with the seat count, because that is how the ballot works —
-         * and because Zone 4 endorses three candidates for two seats. The rule
-         * set on trustee-zones.php is that the "any two of these three" caveat
-         * appears wherever the names appear: three names above a two-seat zone
-         * invites a Houston voter to mark all three and spoil their ballot.
-         */
-        $endorsed = [
-            1 => ['seats' => 1, 'names' => ['Jessica Michell']],
-            2 => ['seats' => 3, 'names' => ['Phil Brienesse', 'Diane Mackay', 'Casda Thomas']],
-            3 => ['seats' => 1, 'names' => ['Kim Unger']],
-            4 => ['seats' => 2, 'names' => ['Matt Williamson', 'Sharon Redford', 'Kellie Dondale']],
-        ];
-        ?>
-        <ul class="vote-promo-list">
-          <?php foreach ($endorsed as $z => $e): ?>
-          <li>
-            <span class="z">Zone <?= $z ?></span>
-            <span class="names"><?= htmlspecialchars(implode(', ', $e['names'])) ?></span>
-            <span class="how"><?= count($e['names']) > $e['seats']
-                ? 'vote for any ' . $e['seats'] . ' of these ' . count($e['names'])
-                : 'vote for up to ' . $e['seats'] ?></span>
-          </li>
-          <?php endforeach; ?>
-        </ul>
         <p>
           Thirteen candidates were invited to answer a BVTU survey. Eleven answered, one replied
           declining to answer, and one did not reply. Every answer is published as it was written.
         </p>
         <div class="vote-promo-btns">
-          <a href="trustee-zones.php" class="btn btn-primary">Find your zone &amp; who we endorse</a>
+          <a href="trustee-zones.php" class="btn btn-primary">Find your voting zone</a>
           <a href="trustee-candidates.php" class="btn btn-outline">Read candidate responses</a>
         </div>
       </div>

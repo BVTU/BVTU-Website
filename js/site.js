@@ -143,7 +143,7 @@ document.querySelectorAll('.has-dropdown > a').forEach(link => {
     bar.innerHTML =
       '<div class="container">' +
         '<span><strong>School trustee election</strong> &middot; 17 October</span>' +
-        '<a href="trustee-zones.php">Your zone &amp; who we endorse</a>' +
+        '<a href="trustee-zones.php">Find your voting zone</a>' +
         '<span class="sep">|</span>' +
         '<a href="trustee-candidates.php">Candidate responses</a>' +
         '<button class="close" type="button" aria-label="Dismiss">&times;</button>' +
