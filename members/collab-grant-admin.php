@@ -1484,8 +1484,6 @@ $totalDaysApproved = $personDays['approved'];
                 the name as typed and may belong to someone already listed. Adding them
                 to Contacts, or typing their address on the application, settles it.</dd>
 
-            <dt>Who is missing</dt>
-            <dd>Anyone who has applied for nothing this year.</dd>
           </dl>
         </details>
       </div>
