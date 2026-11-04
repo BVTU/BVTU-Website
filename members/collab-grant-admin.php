@@ -358,6 +358,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_id'])
                     $notice .= ' ' . $target['collaborator_name'] . ' was already emailed on '
                              . date('M j', strtotime((string)$target['collab_notified_at']))
                              . ' — use "Send again" on the application if the details have changed.';
+                } elseif (cgEmailSuppressed(cgCollaboratorAddress($target)['email'],
+                                            (string)$target['collaborator_name'],
+                                            (int)($target['school_year'] ?? 0))) {
+                    // Its own branch, not the failure one below: "add an address
+                    // and send it" is advice that cannot work, pointing at a
+                    // panel row deliberately not there.
+                    $notice .= ' ' . $target['collaborator_name'] . ' was not emailed — the cap '
+                             . 'does not apply to them, so the grant does not write to them.';
                 } else {
                     $notice .= ' We could not email ' . $target['collaborator_name']
                              . ' — ' . lcfirst($collab['why'])
@@ -366,6 +374,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_id'])
             }
             try {
                 cgSendApprovalEmail(cgGetApplication($id) ?: $target);
+                /* Said out loud. The grant writes nothing at all to someone the
+                 * cap does not apply to, so this approval reaches them only if
+                 * somebody tells them — and an admin who was not told that
+                 * would reasonably assume it had been sent. */
+                if (cgEmailSuppressed($target['applicant_email'] ?? '',
+                                      (string)$target['applicant_name'],
+                                      (int)($target['school_year'] ?? 0))) {
+                    $notice .= ' ' . $target['applicant_name'] . ' was not emailed either — the '
+                             . 'cap does not apply to them, so the grant does not write to them. '
+                             . 'Tell them yourself.';
+                }
             } catch (\Throwable $e) {
                 error_log('approval email: ' . $e->getMessage());
                 $notice .= ' The applicant\'s own email did not send — check the mail settings.';

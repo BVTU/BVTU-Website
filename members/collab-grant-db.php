@@ -248,6 +248,15 @@ function cgCollaboratorNeedsAttention(array $app): bool {
     // Someone decided not to write to them. Still on the application, just no
     // longer asking to be dealt with.
     if (!empty($app['collab_waived_at']))      return false;
+    /* The cap does not apply to them, so neither does the email. Taken out of
+     * the queue rather than left in it: the Send button would refuse, and a
+     * row that cannot be cleared is a row that teaches you to ignore the
+     * whole list. */
+    $addr = cgCollaboratorAddress($app);
+    if (cgEmailSuppressed($addr['email'], (string)$app['collaborator_name'],
+                          (int)($app['school_year'] ?? 0))) {
+        return false;
+    }
     return true;
 }
 
@@ -672,6 +681,12 @@ function cgSendCollaboratorEmail(array $app, bool $force = false): array {
 
     $addr = cgCollaboratorAddress($app);
     if ($addr['email'] === '') return ['sent' => false, 'why' => $addr['why']];
+    // Checked after the address, so the refusal can name who it would have
+    // written to rather than saying something vague about the name typed.
+    if (cgEmailSuppressed($addr['email'], (string)$app['collaborator_name'], (int)($app['school_year'] ?? 0))) {
+        return ['sent' => false,
+                'why'  => 'the cap does not apply to them, so the grant does not write to them.'];
+    }
 
     $days    = cgEffectiveDays($app);
     $dayWord = $days === 1 ? 'day' : 'days';
@@ -724,6 +739,7 @@ function cgSendCollaboratorEmail(array $app, bool $force = false): array {
 function cgSendApprovalEmail(array $app): void {
     $name      = $app['applicant_name'];
     $email     = $app['applicant_email'];
+    if (cgEmailSuppressed($email, (string)$name, (int)($app['school_year'] ?? 0))) return;
     $days      = cgEffectiveDays($app);
     $dayWord   = $days === 1 ? 'day' : 'days';
     // has_collaborator as well as a name: the form hides its collaborator
@@ -842,6 +858,7 @@ TEXT;
 function cgSendSubmissionConfirmation(array $app): void {
     $name    = $app['applicant_name'];
     $email   = $app['applicant_email'];
+    if (cgEmailSuppressed($email, (string)$name, (int)($app['school_year'] ?? 0))) return;
     $tv      = ['{{name}}' => $name];
     $subject = emailTplSubject('collab_received', $tv);
     $body    = emailTplBlock('collab_received', 'body', $tv) . "\n" . cgEditFooter((int)$app['id']);
@@ -1180,6 +1197,7 @@ function cgDateList($json): string {
  * the copy that was printed for it.
  */
 function cgSendApplicantEditNotice(array $app, array $changed): void {
+    if (cgEmailSuppressed($app['applicant_email'] ?? '', (string)$app['applicant_name'], (int)($app['school_year'] ?? 0))) return;
     $body = 'Hi ' . $app['applicant_name'] . ",\n\n"
           . "The BVTU has updated your Collaboration Grant application.\n\n"
           . "What changed:\n  " . str_replace('; ', "\n  ", cgDescribeChanges($changed)) . "\n\n"
@@ -1215,6 +1233,10 @@ function cgSendEditNotification(array $app, array $changed, string $actor): void
  */
 function cgSendEditLink(array $app, string $actor): bool {
     cgEnsureEditSupport();
+    // Returns false rather than true: the caller reports whether a link went,
+    // and claiming one did would leave somebody waiting for an email that was
+    // never going to arrive.
+    if (cgEmailSuppressed($app['applicant_email'] ?? '', (string)$app['applicant_name'], (int)($app['school_year'] ?? 0))) return false;
     $tv   = ['{{name}}' => $app['applicant_name']];
     $body = emailTplBlock('collab_edit_link', 'body', $tv) . "\n" . cgEditFooter((int)$app['id']);
     $ok   = siteMail($app['applicant_email'], emailTplSubject('collab_edit_link', $tv), $body);
@@ -2077,6 +2099,33 @@ function cgExemptFor(array $person, int $year): ?array {
             && ($email === '' || $rEmail === '' || $rEmail === $email)) return $r;
     }
     return null;
+}
+
+/**
+ * Is this person off the collaboration grant's mailing entirely?
+ *
+ * Somebody the cap does not apply to is a district support teacher or the
+ * like: their release is covered elsewhere, so every word the grant writes to
+ * them is wrong. The collaborator notice is the plainest case — it tells them
+ * a day is coming off their three and to book an absence — but Cody asked for
+ * all of it (2026-11-03), approval included, and said he would tell those
+ * teachers himself.
+ *
+ * The two notifications addressed to lp54@bctf.ca are not covered: they are
+ * the union writing to itself about an application, not the grant writing to
+ * a participant, and an exec member who happened to be marked not capped
+ * would otherwise stop hearing about applications altogether.
+ */
+function cgEmailSuppressed(?string $email, string $name = '', int $year = 0): bool {
+    $email = cgCanonEmail((string)$email);
+    $nk    = cgNameKey($name);
+    if ($email === '' && $nk === '') return false;
+    if (!$year) $year = cgCurrentYear();
+    return cgExemptFor([
+        'key'   => $email !== '' ? 'e:' . $email : 'n:' . $nk,
+        'email' => $email,
+        'name'  => $name,
+    ], $year) !== null;
 }
 
 function cgExemptAdd(array $person, string $reason, string $actor, int $fromYear = 0): bool {
