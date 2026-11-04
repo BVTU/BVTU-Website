@@ -8,6 +8,7 @@ $loggedIn = isLoggedIn();
 $member   = $loggedIn ? getMember() : null;
 
 $formSuccess = false;
+$formQuiet   = false;   // submitted, but the grant does not write to them
 $formError   = '';
 $formData    = [];
 
@@ -77,6 +78,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
             $appRow = cgGetApplication($appId); // fetch DB record so column names match
             cgSendNewApplicationNotification($appRow);
             cgSendSubmissionConfirmation($appRow);
+            // Asked rather than assumed: the grant writes nothing to someone
+            // the cap does not apply to, so there is no confirmation and no
+            // edit link — and that confirmation is the only thing that ever
+            // carries the link.
+            $formQuiet   = cgEmailSuppressed($appRow['applicant_email'] ?? '',
+                                             (string)($appRow['applicant_name'] ?? ''),
+                                             (int)($appRow['school_year'] ?? 0));
             $formSuccess = true;
             $formData = []; // clear form
         } catch (Exception $e) {
@@ -657,8 +665,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
         <?php if ($formSuccess): ?>
           <div class="grant-success">
             <h3>✓ Application received — thank you!</h3>
-            <p>We've sent a confirmation to your email address. We'll be in touch once your application has been reviewed. If you have any questions in the meantime, reach out at <a href="mailto:lp54@bctf.ca">lp54@bctf.ca</a>.</p>
-            <p style="margin-bottom:0;">Need to change something later — a different date, an extra day? That confirmation email has a link that reopens your application, so keep it handy.</p>
+            <?php if ($formQuiet): ?>
+              <p>We'll be in touch once your application has been reviewed.</p>
+              <p style="margin-bottom:0;">Need to change something later &mdash; a different date, an extra day &mdash; or want to check where it is up to? Email <a href="mailto:lp54@bctf.ca">lp54@bctf.ca</a> and we'll sort it out with you directly.</p>
+            <?php else: ?>
+              <p>We've sent a confirmation to your email address. We'll be in touch once your application has been reviewed. If you have any questions in the meantime, reach out at <a href="mailto:lp54@bctf.ca">lp54@bctf.ca</a>.</p>
+              <p style="margin-bottom:0;">Need to change something later — a different date, an extra day? That confirmation email has a link that reopens your application, so keep it handy.</p>
+            <?php endif; ?>
           </div>
 
         <?php else: ?>

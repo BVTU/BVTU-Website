@@ -127,6 +127,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'resen
         $notice = 'Could not find that application.';
     } elseif (cgSendEditLink($target, $member['email'])) {
         $notice = 'Edit link sent to ' . $target['applicant_email'] . '.';
+    } elseif (cgEmailSuppressed($target['applicant_email'] ?? '',
+                                (string)$target['applicant_name'],
+                                (int)($target['school_year'] ?? 0))) {
+        // Its own branch, because "check the mail settings" is advice that
+        // cannot work. There is no link to send them, so the way to change
+        // their application is to open it and change it.
+        $notice = 'No link was sent — the cap does not apply to '
+                . $target['applicant_name'] . ', so the grant does not write to them. '
+                . 'Open the application and make the change yourself.';
     } else {
         $notice = 'The email would not send. Check the mail settings and try again.';
     }
@@ -328,7 +337,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_id'])
 
     if ($action === 'approved') {
         $target = cgGetApplication($id);
-        $notice = 'Application approved — notification email sent to the applicant.';
+        // Assembled after the sends, not before: seeding this with "email sent
+        // to the applicant" stated as fact something suppression or a mail
+        // failure was about to contradict two lines further down.
+        $collabMsg = $applicantMsg = '';
         if ($target) {
             // The collaborator first, so the applicant's email can say truthfully
             // whether we reached them — but never at the cost of the approval
@@ -342,12 +354,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_id'])
             }
             if (!empty($target['collaborator_name']) && !empty($target['has_collaborator'])) {
                 if ($collab['sent']) {
-                    $notice .= ' ' . $target['collaborator_name'] . ' has been emailed too.';
+                    $collabMsg = ' ' . $target['collaborator_name'] . ' has been emailed.';
                 } elseif (!empty($target['collab_waived_at'])) {
                     // Deliberately not emailed. Reporting that as a failure, and
                     // pointing at a panel row that is hidden precisely because
                     // of the decision, reads as something gone wrong.
-                    $notice .= ' ' . $target['collaborator_name'] . ' was not emailed — it was '
+                    $collabMsg = ' ' . $target['collaborator_name'] . ' was not emailed — it was '
                              . 'decided on '
                              . date('M j', strtotime((string)$target['collab_waived_at']))
                              . ' not to write to them.';
@@ -355,7 +367,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_id'])
                     // Re-approving to change the day count is a normal thing to
                     // do. Reporting it as a failure, with a pointer to a panel
                     // row that does not exist, reads as something gone wrong.
-                    $notice .= ' ' . $target['collaborator_name'] . ' was already emailed on '
+                    $collabMsg = ' ' . $target['collaborator_name'] . ' was already emailed on '
                              . date('M j', strtotime((string)$target['collab_notified_at']))
                              . ' — use "Send again" on the application if the details have changed.';
                 } elseif (cgEmailSuppressed(cgCollaboratorAddress($target)['email'],
@@ -364,10 +376,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_id'])
                     // Its own branch, not the failure one below: "add an address
                     // and send it" is advice that cannot work, pointing at a
                     // panel row deliberately not there.
-                    $notice .= ' ' . $target['collaborator_name'] . ' was not emailed — the cap '
+                    $collabMsg = ' ' . $target['collaborator_name'] . ' was not emailed — the cap '
                              . 'does not apply to them, so the grant does not write to them.';
                 } else {
-                    $notice .= ' We could not email ' . $target['collaborator_name']
+                    $collabMsg = ' We could not email ' . $target['collaborator_name']
                              . ' — ' . lcfirst($collab['why'])
                              . ' Add an address below and send it.';
                 }
@@ -378,18 +390,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_id'])
                  * cap does not apply to, so this approval reaches them only if
                  * somebody tells them — and an admin who was not told that
                  * would reasonably assume it had been sent. */
-                if (cgEmailSuppressed($target['applicant_email'] ?? '',
-                                      (string)$target['applicant_name'],
-                                      (int)($target['school_year'] ?? 0))) {
-                    $notice .= ' ' . $target['applicant_name'] . ' was not emailed either — the '
-                             . 'cap does not apply to them, so the grant does not write to them. '
-                             . 'Tell them yourself.';
-                }
+                $applicantMsg = cgEmailSuppressed($target['applicant_email'] ?? '',
+                                                  (string)$target['applicant_name'],
+                                                  (int)($target['school_year'] ?? 0))
+                    ? ' ' . $target['applicant_name'] . ' was not emailed — the cap does not '
+                      . 'apply to them, so the grant does not write to them. Tell them yourself.'
+                    : ' The applicant has been emailed.';
             } catch (\Throwable $e) {
                 error_log('approval email: ' . $e->getMessage());
-                $notice .= ' The applicant\'s own email did not send — check the mail settings.';
+                $applicantMsg = ' The applicant\'s own email did not send — check the mail settings.';
             }
         }
+        $notice = 'Application approved.' . $applicantMsg . $collabMsg;
     } else {
         $notice = 'Status updated to ' . ucfirst($action) . '.';
     }

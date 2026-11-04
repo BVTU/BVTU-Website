@@ -131,7 +131,16 @@ if (!$denied && $canEdit && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POS
                     if ($isAdmin) {
                         if (!empty($_POST['tell_applicant'])) {
                             cgSendApplicantEditNotice($app, $res['changed']);
-                            $notice = 'Saved, and the applicant has been emailed what changed.';
+                            // The grant writes nothing to someone the cap does
+                            // not apply to, and an admin told the applicant had
+                            // been emailed would reasonably stop there.
+                            $notice = cgEmailSuppressed($app['applicant_email'] ?? '',
+                                                        (string)$app['applicant_name'],
+                                                        (int)($app['school_year'] ?? 0))
+                                ? 'Saved. ' . $app['applicant_name'] . ' was not emailed — the cap '
+                                  . 'does not apply to them, so the grant does not write to them. '
+                                  . 'Tell them yourself.'
+                                : 'Saved, and the applicant has been emailed what changed.';
                         } else {
                             $notice = 'Saved. The applicant was not emailed.';
                         }

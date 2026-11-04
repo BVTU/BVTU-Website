@@ -764,6 +764,13 @@ function cgSendApprovalEmail(array $app): void {
             // forward it both contradicts that decision and quietly carries it
             // out anyway. Say nothing; the decision is on the application.
             $collabLine = '';
+        } elseif (cgEmailSuppressed(cgCollaboratorAddress($app)['email'],
+                                    (string)$collab,
+                                    (int)($app['school_year'] ?? 0))) {
+            // "Please forward this to them" is the collaborator notice
+            // delivered by hand, which is the one thing suppression exists to
+            // prevent. Say nothing; the admin is told to tell them instead.
+            $collabLine = '';
         } else {
             // Two different reasons we did not reach them, and only one of them
             // is "no address". Telling an applicant we have no address for
@@ -2115,6 +2122,18 @@ function cgExemptFor(array $person, int $year): ?array {
  * the union writing to itself about an application, not the grant writing to
  * a participant, and an exec member who happened to be marked not capped
  * would otherwise stop hearing about applications altogether.
+ *
+ * Matched exactly as the day ledger matches, cgExemptFor's shared-name rule
+ * included, so "not capped on the ledger" and "not written to" can never come
+ * apart. That rule can match a namesake when neither side has an address on
+ * record — and silence is a worse way to be wrong than a mis-stated cap,
+ * because nobody reads an email that did not arrive. So every caller says on
+ * screen that nothing was sent and who has to be told by hand: approval, the
+ * edit notice, the edit link, and the public page a suppressed applicant sees
+ * after submitting. Narrowing the match here instead would have broken the
+ * case Cody actually has — a collaborator exempted by name, with no address
+ * of their own on the exemption, whose address the send then finds in
+ * Contacts.
  */
 function cgEmailSuppressed(?string $email, string $name = '', int $year = 0): bool {
     $email = cgCanonEmail((string)$email);
