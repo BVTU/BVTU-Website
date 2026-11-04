@@ -11,9 +11,9 @@ lpEnsureTables();
 // the one that writes them — without this the vendor INSERT dies on "Unknown
 // column" the first time it runs on a server that has not had the ALTER.
 lpEnsureApprovalColumns();
-/* The duplicate-reminder columns, before anything writes to them. The save
- * below deletes this voucher's rows and re-inserts them, so a missing column
- * would throw between the two and take the voucher's expenses with it. */
+/* The duplicate-reminder columns, before anything writes to them: the insert
+ * below names them, so a missing column would throw and lose the whole
+ * voucher. */
 lpDupeEnsureColumns();
 
 if (!lpCanCreate($member['email'])) {
@@ -26,8 +26,9 @@ $mileageRate = LP_MILEAGE_RATE;
 $errors      = [];
 $voucherId   = null;
 
-// The voucher form saves expenses and can submit for approval, which
-// emails the Treasurer. Same transition the view page protects.
+// Creating a voucher is a state change like any other, and the form carries a
+// token for it. Submitting it to the Treasurer is the view page's job, not
+// this one's.
 if ($_SERVER['REQUEST_METHOD'] === 'POST') csrfCheck();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
