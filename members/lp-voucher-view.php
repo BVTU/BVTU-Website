@@ -650,6 +650,21 @@ arsort($blSummary);
         // from the &paid=1 URL would otherwise lose its own confirmation. ?>
   <?php if ($notice === null && ($_GET['paid'] ?? '') === '1' && $voucher['status'] === 'paid') $notice =
           'Recorded as paid. It shows as paid to everyone who can see this voucher.'; ?>
+
+  <?php /* Landed straight from the creation form, which no longer keeps a
+         * "saved" screen of its own. Its own banner rather than $notice,
+         * because the next thing to do is a link and that one is escaped
+         * text. Saying "still a draft" out loud: saving used to read as
+         * filing it, and the Treasurer never heard about it. */ ?>
+  <?php if ($notice === null && ($_GET['saved'] ?? '') === '1' && $voucher['status'] === 'draft'): ?>
+  <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:.75rem 1rem;
+              margin-bottom:1.25rem;font-size:.88rem;color:#166534;font-weight:600;
+              display:flex;gap:.75rem;align-items:baseline;flex-wrap:wrap;">
+    <span>&#10003; Voucher saved as a draft. Look it over, then submit it to the Treasurer<?php
+      if ($review['findings']) echo ' — there is something to check first'; ?>.</span>
+    <a href="lp-voucher-new.php" style="margin-left:auto;color:#166534;font-weight:600;">Start another voucher</a>
+  </div>
+  <?php endif; ?>
   <?php if ($error): ?>
     <?php // Styled outright: "notice" is not a class this page or the stylesheet
           // defines, so a refused payment rendered as bare tinted text. ?>

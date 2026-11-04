@@ -24,7 +24,6 @@ $grants      = lpGetGrants();
 $budgetLines = lpGetBudgetLines();
 $mileageRate = LP_MILEAGE_RATE;
 $errors      = [];
-$saved       = false;
 $voucherId   = null;
 
 // The voucher form saves expenses and can submit for approval, which
@@ -185,7 +184,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 lpDupeAltTotals($scanAlts[$i] ?? ''),
             ]);
         }
-        $saved = true;
+        /* Straight to the voucher, rather than a "saved" screen whose only
+         * onward steps were the dashboard and a link back in. Submitting, the
+         * pre-submit review, editing and export all live on the view page, so
+         * sending somebody to a confirmation and making them find the voucher
+         * again is a step that buys nothing. It also means a reload cannot
+         * post this form twice and file the same expenses as a second
+         * voucher. */
+        header('Location: lp-voucher-view.php?id=' . (int)$voucherId . '&saved=1');
+        exit;
     }
 }
 
@@ -489,9 +496,6 @@ $initRowsJson = json_encode($initRows);
     .lightbox-close { position: absolute; top: 1rem; right: 1.5rem; color: #fff; font-size: 2rem; cursor: pointer; line-height: 1; }
 
     /* Success */
-    .success-card { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 2rem; text-align: center; }
-    .success-card h2 { color: var(--primary); margin: 0 0 .5rem; }
-    .success-card p { color: var(--gray-600); font-size: .9rem; margin: .4rem 0; }
   </style>
 </head>
 <body>
@@ -501,19 +505,6 @@ $initRowsJson = json_encode($initRows);
     <h1>New Expense Voucher</h1>
     <a class="back-link" href="lp-dashboard.php">← Expenses &amp; Grants</a>
   </div>
-
-  <?php if ($saved): ?>
-  <div class="success-card">
-    <h2>✓ Voucher saved</h2>
-    <p>Your expenses have been saved. You can now view, edit, and export the voucher.</p>
-    <div style="display:flex;gap:.75rem;justify-content:center;margin-top:1.25rem;flex-wrap:wrap;">
-      <a href="lp-voucher-view.php?id=<?= $voucherId ?>" class="btn btn-primary" style="padding:.55rem 1.2rem;">View &amp; Export →</a>
-      <a href="lp-voucher-new.php" class="btn btn-outline" style="padding:.55rem 1.2rem;">New Voucher</a>
-      <a href="lp-dashboard.php"   class="btn btn-outline" style="padding:.55rem 1.2rem;">Dashboard</a>
-    </div>
-  </div>
-
-  <?php else: ?>
 
   <?php if ($errors): ?>
   <div class="error-list"><?= implode('<br>', array_map('htmlspecialchars', $errors)) ?></div>
@@ -669,8 +660,6 @@ $initRowsJson = json_encode($initRows);
   </div>
 
   </form>
-
-  <?php endif; ?>
 </div>
 
 <script src="../js/sort-by-date.js?v=<?= @filemtime(__DIR__ . '/../js/sort-by-date.js') ?>"></script>
