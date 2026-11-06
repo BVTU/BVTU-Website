@@ -5,6 +5,10 @@
  */
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/collab-grant-db.php';
+// Named outright: this page offers to put a collaborator's address on their
+// contact record, and cgEmailAliases()'s own require only fires when something
+// has already asked for the alias map.
+require_once __DIR__ . '/contacts-db.php';
 requireLogin();
 
 $member = getMember();
@@ -140,6 +144,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'resen
         $notice = 'The email would not send. Check the mail settings and try again.';
     }
     $apps = cgGetApplications($year);
+}
+
+/* ── One teacher, one record ───────────────────────────────────────────────
+ * An applicant types a collaborator's address on the form. The ledger counts
+ * that collaborator under it, which is right — but if the address is not on
+ * anybody's contact, the same teacher named on a later application by name
+ * alone lands in a different row, and neither row shows their real total. The
+ * fix is to put the address on their contact, which merges them here and
+ * everywhere else; this is that, as a button, at the moment you can see it
+ * needs doing. */
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'link_collab_email') {
+    csrfCheck();
+    $target    = cgGetApplication((int)($_POST['app_id'] ?? 0));
+    $linkAddr  = $target ? cgCollaboratorKeyEmail($target) : '';
+    $contactId = (int)($_POST['contact_id'] ?? 0);
+    $contact   = $contactId ? contactGet($contactId) : null;
+
+    if (!$target || $linkAddr === '' || !$contact) {
+        $notice = 'Could not link that address.';
+    } elseif ($own = contactEmailOwner($linkAddr)) {
+        // Somebody claimed it between the page loading and the button being
+        // pressed. Saying whose is more use than saying it failed.
+        $notice = $linkAddr . ' is already on ' . $own['name'] . "'s record.";
+    } else {
+        $err = contactEmailsCheck([$linkAddr], $contactId, (string)$contact['email']);
+        if ($err !== '') {
+            $notice = $err;
+        } else {
+            contactEmailsSync($contactId,
+                              array_merge(contactEmails($contactId), [$linkAddr]),
+                              $member['email']);
+            $notice = $linkAddr . ' is now on ' . contactDisplayName($contact)
+                    . "'s contact, so their days count together from here on.";
+            // Both caches were built before the alias map changed underneath
+            // them, and the page is about to redraw the figures.
+            cgCachesReset();
+            $apps = cgGetApplications($year);
+        }
+    }
 }
 
 // ── Who the three-day cap applies to ──────────────────────────────────────
@@ -682,6 +725,9 @@ $totalDaysApproved = $personDays['approved'];
     .cg-tag.over  { background: #fef2f2; color: #991b1b; }
     .cg-tag.good  { background: #f0fdf4; color: #166534; }
     .cg-tag.approx{ background: #fffbeb; color: #92400e; cursor: help; }
+    .cg-linkbtn { background: none; border: 0; padding: 0; font: inherit; font-size: .76rem;
+                  font-weight: 700; color: var(--primary); text-decoration: underline;
+                  cursor: pointer; margin-left: .15rem; }
 
     /* ── The things you need twice a term ─────────────────────── */
     .cg-field-note { display: block; font-weight: 400; font-size: .76rem;
@@ -1805,7 +1851,34 @@ $totalDaysApproved = $personDays['approved'];
                 // and the collaborator's are both worth seeing before deciding.
                 $standings = [['Applicant', cgPersonDays($year, $app['applicant_email'], $app['applicant_name']), $app['applicant_name']]];
                 if (trim((string)$app['collaborator_name']) !== '' && !empty($app['has_collaborator'])) {
-                    $standings[] = ['Collaborator', cgPersonDays($year, '', $app['collaborator_name']), $app['collaborator_name']];
+                    /* Asked under the address the ledger counted them under,
+                     * not under their name alone. Passing '' here looked them
+                     * up by name, found nothing where the ledger had keyed
+                     * them by the address the applicant typed, and reported a
+                     * collaborator who had been emailed and charged a day as
+                     * "0 of 3 days, no match". */
+                    $standings[] = ['Collaborator',
+                                    cgPersonDays($year, cgCollaboratorKeyEmail($app),
+                                                 $app['collaborator_name']),
+                                    $app['collaborator_name']];
+                }
+              ?>
+              <?php
+                /* The address this application settled its collaborator on,
+                 * when that address is on nobody's contact and the name points
+                 * at exactly one person. That is the case worth acting on: the
+                 * ledger is counting them under an address the contact list has
+                 * never heard of, so the next application that names them
+                 * without it starts a second row for the same teacher. */
+                $linkAddr = cgCollaboratorKeyEmail($app);
+                $linkTo   = null;
+                if ($linkAddr !== '' && !contactEmailOwner($linkAddr)) {
+                    $byNameIdx = cgContactsByName();
+                    $ck = cgNameKey((string)$app['collaborator_name']);
+                    if ($ck !== '' && isset($byNameIdx[$ck]) && empty($byNameIdx[$ck]['ambiguous'])) {
+                        $owner = contactEmailOwner((string)$byNameIdx[$ck]['email']);
+                        if ($owner) $linkTo = ['id' => $owner['id'], 'name' => $owner['name']];
+                    }
                 }
               ?>
               <div style="background:var(--off-white);border:1px solid var(--border);border-radius:8px;
@@ -1829,7 +1902,21 @@ $totalDaysApproved = $personDays['approved'];
                         <span class="cg-tag good">hasn't used the fund</span>
                       <?php endif; ?>
                     <?php endif; ?>
-                    <?php if (strpos((string)($p['key'] ?? ''), 'n:') === 0): ?>
+                    <?php if ($role === 'Collaborator' && $linkTo): ?>
+                      <?php /* Not a form of its own: this sits inside the
+                               decide form, and a nested form is dropped by the
+                               browser. The button names its own action. */ ?>
+                      <span class="cg-tag approx"
+                            title="<?= htmlspecialchars($linkAddr) ?> is not on anybody's contact record, so days charged to it sit apart from the rest of theirs.">address not on file</span>
+                      <button type="submit" name="action" value="link_collab_email"
+                              class="cg-linkbtn"
+                              onclick="return confirm(<?= htmlspecialchars(json_encode(
+                                  'Add ' . $linkAddr . " to " . $linkTo['name']
+                                  . "'s contact?\n\nTheir collaboration days will count together from then on, here and on every other page."), ENT_QUOTES) ?>)">
+                        link to <?= htmlspecialchars($linkTo['name']) ?>
+                      </button>
+                      <input type="hidden" name="contact_id" value="<?= (int)$linkTo['id'] ?>">
+                    <?php elseif (strpos((string)($p['key'] ?? ''), 'n:') === 0): ?>
                       <span class="cg-tag approx"
                             title="This name matched no contact and no applicant this year, so these days are attributed to the name as typed and could belong to someone else.">no match</span>
                     <?php elseif (!$p['exact']): ?>

@@ -698,8 +698,31 @@ function cgSendCollaboratorEmail(array $app, bool $force = false): array {
         '{{day_word}}'     => $dayWord,
     ];
 
+    /* Which days, not just how many.
+     *
+     * The booking paragraph opens "once you have your date(s) confirmed", and
+     * the applicant knows their own dates because they chose them. The
+     * collaborator was named on somebody else's form: they were told they had
+     * a day and sent to Atrieve to book it, without ever being told which day
+     * it was. Written here rather than put in the template, because the
+     * template can be edited and a booking date that can go missing is worse
+     * than none at all.
+     *
+     * They are released on the same days as the lead — the same days the
+     * ledger charges them for. */
+    $dates    = cgDateList($app['proposed_dates'] ?? '');
+    // Counted off the list being printed, not off the day count: one date
+    // beside the word "days" reads as a mistake, and the two can disagree on
+    // an application whose dates have not caught up with its days.
+    $dateCount = count((array)(json_decode((string)($app['proposed_dates'] ?? ''), true) ?: []));
+    $dateLine = $dates !== 'none'
+        ? 'The ' . ($dateCount === 1 ? 'day' : 'days') . ' to book: ' . $dates . "\n\n"
+        : 'The dates are still to be settled — ' . (string)$app['applicant_name']
+          . " will confirm them with you.\n\n";
+
     $body = emailTplBlock('collab_collaborator', 'intro', $tv) . "\n\n"
           . "─── NEXT STEP: BOOKING YOUR ABSENCE IN ATRIEVE ────────────────────\n\n"
+          . $dateLine
           // The same block the applicant is sent, so the two accounts of how to
           // book can never drift apart.
           . emailTplBlock('collab_approved', 'booking',
@@ -1368,8 +1391,9 @@ function cgNearestPerson(string $typed): ?array {
  * A name shared by two contacts resolves to neither: guessing which colleague
  * used three days is worse than admitting the name is ambiguous.
  */
-function cgContactsByName(): array {
+function cgContactsByName(bool $fresh = false): array {
     static $map = null;
+    if ($fresh) $map = null;
     if ($map !== null) return $map;
     $map = [];
     try {
@@ -1469,8 +1493,9 @@ function cgSplitNames(string $raw): array {
  * put the third; contact_emails holds as many as somebody turns out to have,
  * and contacts-db.php moved the old column's values into it.
  */
-function cgEmailAliases(): array {
+function cgEmailAliases(bool $fresh = false): array {
     static $map = null;
+    if ($fresh) $map = null;
     if ($map !== null) return $map;
     $map = [];
     /* contacts-db.php owns contact_emails and no grant page loads it, so
@@ -1723,8 +1748,9 @@ function cgOverlappingApps(int $year): array {
  * a collaborator whose name matches no contact — kept in the ledger rather than
  * dropped, because those days were still taken.
  */
-function cgDaysLedger(int $year): array {
+function cgDaysLedger(int $year, bool $fresh = false): array {
     static $cache = [];
+    if ($fresh) $cache = [];
     if (isset($cache[$year])) return $cache[$year];
 
     cgEnsureEditSupport();
@@ -1981,19 +2007,60 @@ function cgPersonDays(int $year, string $email, string $name = ''): array {
     if ($email !== '' && isset($ledger['e:' . $email])) return $ledger['e:' . $email];
 
     $nk = $name === '' ? '' : cgNameKey($name);
+    $matched = '';   // an address we know belongs to them, even with no days
     if ($nk !== '') {
         $byName = cgContactsByName();
         if (isset($byName[$nk]) && !$byName[$nk]['ambiguous']) {
-            $ck = 'e:' . cgCanonEmail((string)$byName[$nk]['email']);
+            $matched = cgCanonEmail((string)$byName[$nk]['email']);
+            $ck = 'e:' . $matched;
             if (isset($ledger[$ck])) return $ledger[$ck];
         }
         if (isset($ledger['n:' . $nk])) return $ledger['n:' . $nk];
     }
-    return cgApplyCap(['key' => $email !== '' ? 'e:' . $email : 'n:' . $nk,
-            'name' => $name, 'email' => $email, 'approved' => 0, 'pending' => 0,
-            'exact' => true, 'emails' => $email !== '' ? [$email] : [], 'apps' => [],
+    /* Nothing in the ledger, which means no days this year — not that we do
+     * not know who they are. Keyed on whatever did identify them, because the
+     * panel reads an 'n:' key as "this name matched nobody" and said exactly
+     * that about a teacher who is in Contacts and simply has not used the
+     * fund yet. */
+    $key = $email !== '' ? 'e:' . $email : ($matched !== '' ? 'e:' . $matched : 'n:' . $nk);
+    return cgApplyCap(['key' => $key,
+            'name' => $name, 'email' => $email ?: $matched, 'approved' => 0, 'pending' => 0,
+            'exact' => true, 'emails' => array_values(array_filter([$email ?: $matched])),
+            'apps' => [],
             'days' => [], 'undated_approved' => 0, 'undated_pending' => 0,
             'shared_days' => [], 'shared_apps' => [], 'undated' => false], $year);
+}
+
+/**
+ * Forget what was worked out from the contact list this request.
+ *
+ * Three caches are built from contacts and never expected to change mid-page:
+ * the alias map, the name index, and the day ledger that rests on both. Adding
+ * an address to a contact changes all three underneath whatever has already
+ * asked, so a page that does that and then redraws its figures has to say so.
+ */
+function cgCachesReset(): void {
+    cgEmailAliases(true);
+    cgContactsByName(true);
+    cgDaysLedger(0, true);
+}
+
+/**
+ * The address this application settles its collaborator on, or ''.
+ *
+ * The same test cgDaysLedger() applies: an address typed or confirmed against
+ * the application, when the field names one person. Shared so that asking
+ * "how is this collaborator doing for days?" cannot ask under a different key
+ * from the one their days were counted under — which is what made a
+ * collaborator who had been emailed, and charged a day, read as 0 of 3 with
+ * no match.
+ */
+function cgCollaboratorKeyEmail(array $app): string {
+    if (trim((string)($app['collaborator_name'] ?? '')) === '') return '';
+    if (empty($app['has_collaborator'])) return '';
+    if (count(cgSplitNames((string)$app['collaborator_name'])) !== 1) return '';
+    $typed = cgCanonEmail((string)($app['collaborator_email'] ?? ''));
+    return filter_var($typed, FILTER_VALIDATE_EMAIL) ? $typed : '';
 }
 
 /**
