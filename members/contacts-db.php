@@ -194,32 +194,41 @@ function contactsMigrateSecondary(PDO $db): void {
         $ins   = $db->prepare("INSERT IGNORE INTO contact_emails
                                (contact_id, email, email_normalized, created_by)
                                VALUES (?,?,?,'moved from secondary_email')");
+        /* Each row on its own, because the loop used to share one try/catch:
+         * a failure on row 40 of 300 left the rest in a column nothing reads
+         * any more, and the run never came back. contactsUnmigratedSecondary()
+         * is what notices, and People offers the retry. */
         $owner = $db->prepare("SELECT contact_id FROM contact_emails WHERE email_normalized=?");
         $prim  = $db->prepare("SELECT id FROM contacts WHERE email_normalized=?");
         $clear = $db->prepare("UPDATE contacts SET secondary_email='' WHERE id=?");
         $moved = $kept = 0;
 
         foreach ($rows as $r) {
-            $id = (int)$r['id'];
-            $e  = trim((string)$r['secondary_email']);
-            if ($e === '') continue;
-            $n  = contactNormalizeEmail($e);
+            try {
+                $id = (int)$r['id'];
+                $e  = trim((string)$r['secondary_email']);
+                if ($e === '') continue;
+                $n  = contactNormalizeEmail($e);
 
-            // Somebody's primary address already. Not an extra at all.
-            $prim->execute([$n]);
-            $pid = (int)($prim->fetchColumn() ?: 0);
-            if ($pid) {
-                if ($pid !== $id) { $kept++; continue; }
-                $clear->execute([$id]);   // their own primary, listed twice
-                continue;
+                // Somebody's primary address already. Not an extra at all.
+                $prim->execute([$n]);
+                $pid = (int)($prim->fetchColumn() ?: 0);
+                if ($pid) {
+                    if ($pid !== $id) { $kept++; continue; }
+                    $clear->execute([$id]);   // their own primary, listed twice
+                    continue;
+                }
+
+                $ins->execute([$id, $e, $n]);
+                // Cleared only once this contact is the one holding it, so a
+                // collision cannot delete the evidence of itself.
+                $owner->execute([$n]);
+                if ((int)($owner->fetchColumn() ?: 0) === $id) { $clear->execute([$id]); $moved++; }
+                else                                           { $kept++; }
+            } catch (Exception $e2) {
+                $kept++;
+                error_log('contact_emails migration, contact ' . (int)$r['id'] . ': ' . $e2->getMessage());
             }
-
-            $ins->execute([$id, $e, $n]);
-            // Cleared only once this contact is the one holding it, so a
-            // collision cannot delete the evidence of itself.
-            $owner->execute([$n]);
-            if ((int)($owner->fetchColumn() ?: 0) === $id) { $clear->execute([$id]); $moved++; }
-            else                                           { $kept++; }
         }
         if ($kept) {
             error_log("contact_emails migration: moved {$moved}, left {$kept} "
@@ -227,6 +236,26 @@ function contactsMigrateSecondary(PDO $db): void {
         }
     } catch (Exception $e) {
         error_log('contact_emails migration: ' . $e->getMessage());
+    }
+}
+
+/**
+ * Contacts still holding an address in the old secondary_email column.
+ *
+ * Nothing reads that column any more, so an address left there is invisible:
+ * not searchable, not shown, not folded for the grant's day cap. This is what
+ * gives it a reader again. People shows them and retries the move, so a
+ * migration that could not finish does not sit there unnoticed.
+ */
+function contactsUnmigratedSecondary(): array {
+    contactsEnsureTables();
+    try {
+        return getDB()->query(
+            "SELECT id, first_name, last_name, preferred_name, email, secondary_email
+             FROM contacts WHERE secondary_email <> '' ORDER BY last_name, first_name"
+        )->fetchAll();
+    } catch (Exception $e) {
+        return [];   // the column has been dropped: nothing can be left in it
     }
 }
 
@@ -240,6 +269,29 @@ function contactEmails(int $id): array {
     } catch (Exception $e) {
         return [];   // table not there yet: a contact has the one address
     }
+}
+
+/**
+ * The extra addresses for many contacts at once, as id => [email, ...].
+ *
+ * The export asks for every matching contact, and calling contactEmails() per
+ * row made that a query per person — up to a hundred thousand of them.
+ */
+function contactEmailsFor(array $ids): array {
+    contactsEnsureTables();
+    $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+    if (!$ids) return [];
+    $out = array_fill_keys($ids, []);
+    try {
+        $in = implode(',', array_fill(0, count($ids), '?'));
+        $s  = getDB()->prepare("SELECT contact_id, email FROM contact_emails
+                                WHERE contact_id IN ($in) ORDER BY id");
+        $s->execute($ids);
+        foreach ($s->fetchAll() as $r) $out[(int)$r['contact_id']][] = (string)$r['email'];
+    } catch (Exception $e) {
+        // No table yet: everyone has the one address.
+    }
+    return $out;
 }
 
 /** Primary first, then the rest. What "their email addresses" means. */
@@ -296,9 +348,12 @@ function contactEmailsCheck(array $emails, int $forId, string $primary = ''): st
             return '"' . $e . '" does not look like an email address.';
         }
         $n = contactNormalizeEmail($e);
-        if ($pn !== '' && $n === $pn) {
-            return 'That is already their main address, so it does not need listing again.';
-        }
+        /* Their own main address, still sitting in the list. Dropped rather
+         * than refused: promoting one of somebody's other addresses to the
+         * main one is a normal edit, and refusing it threw away every other
+         * change on the form and left the admin with no way through except
+         * clearing the box first. contactEmailsSync() will not store it. */
+        if ($pn !== '' && $n === $pn) continue;
         if (isset($seen[$n])) return 'The same address is listed twice: ' . $e;
         $seen[$n] = true;
 
@@ -331,11 +386,29 @@ function contactEmailsSync(int $id, array $emails, string $actor): array {
     $add = array_diff_key($want, $have);
     $del = array_diff_key($have, $want);
 
+    /* Never the contact's own main address, however it got into the list:
+     * stored, it would be listed twice and the alias map would carry an
+     * address to itself. */
+    $cur = contactGet($id);
+    $pn  = $cur ? contactNormalizeEmail((string)$cur['email']) : '';
+    if ($pn !== '') {
+        unset($want[$pn], $add[$pn]);
+        // Recomputed, not patched: a row left over from before equal to the
+        // main address should now be deleted, not quietly kept.
+        $del = array_diff_key($have, $want);
+    }
+
     if ($add) {
         $ins = getDB()->prepare("INSERT IGNORE INTO contact_emails
                                  (contact_id, email, email_normalized, created_by)
                                  VALUES (?,?,?,?)");
-        foreach ($add as $n => $e) $ins->execute([$id, $e, $n, $actor]);
+        foreach ($add as $n => $e) {
+            $ins->execute([$id, $e, $n, $actor]);
+            /* IGNORE means a race or a claim this contact does not own ends as
+             * zero rows, and reporting it as added would put an address in the
+             * notice and the audit log that is not on the record. */
+            if ($ins->rowCount() < 1) unset($add[$n]);
+        }
     }
     if ($del) {
         $rm = getDB()->prepare("DELETE FROM contact_emails WHERE contact_id=? AND email_normalized=?");

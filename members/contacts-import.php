@@ -112,9 +112,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     }
 
+                    /* contactEmailOwner(), not contactFindByEmail(): an
+                     * address may be somebody's second one, and creating a
+                     * contact around it is refused at the write. Classified
+                     * here so the preview says so, instead of the row
+                     * disappearing between the preview and the result. */
+                    $owner = contactValidEmail($email) ? contactEmailOwner($email) : null;
                     if (!contactValidEmail($email))      { $rec['_v'] = 'skip'; $rec['_why'] = 'Not a valid email'; $skip++; }
                     elseif (isset($seen[$norm]))         { $rec['_v'] = 'skip'; $rec['_why'] = 'Repeated in this file'; $skip++; }
                     elseif (contactFindByEmail($email))  { $rec['_v'] = 'update'; $upd++; $seen[$norm] = 1; }
+                    elseif ($owner) {
+                        $rec['_v']  = 'skip';
+                        $rec['_why'] = 'Already a second address on ' . $owner['name'] . "'s record";
+                        $skip++;
+                    }
                     else                                 { $rec['_v'] = 'add';    $add++; $seen[$norm] = 1; }
                     $items[] = $rec;
                 }
@@ -134,7 +145,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$items) {
             $error = 'That import expired. Upload the file again.';
         } else {
-            $added = $updated = $addrs = 0;
+            $added = $updated = $addrs = $refused = 0;
             foreach ($items as $rec) {
                 if (($rec['_v'] ?? '') === 'skip') continue;
                 $data = array_intersect_key($rec, array_flip(CONTACT_EDITABLE));
@@ -156,6 +167,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     $res = contactCreate($data, $member['email']);
                     if (empty($res['error'])) { $savedId = (int)$res['id']; $added++; }
+                    else {
+                        /* Counted and reported. The preview classifies with the
+                         * same rule, so this is a record that changed between
+                         * the preview and the confirm — rare, and not something
+                         * to swallow: a row that silently does not arrive is
+                         * worse than one that says why. */
+                        $refused++;
+                        error_log('contact import refused ' . $rec['email'] . ': ' . $res['error']);
+                    }
                 }
 
                 /* Added to whatever is already on the record, never matched to
@@ -176,6 +196,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header('Location: people.php?notice=' . urlencode(
                 "Import finished — {$added} added, {$updated} updated"
                 . ($addrs ? ", {$addrs} other address" . ($addrs === 1 ? '' : 'es') . " recorded" : '')
+                . ($refused ? ", {$refused} refused because the address is already on "
+                            . "another record" : '')
                 . ". Nobody was subscribed to email."));
             exit;
         }

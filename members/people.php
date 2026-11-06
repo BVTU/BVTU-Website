@@ -578,6 +578,33 @@ function stateBadge(string $s): string {
     </div>
   </div>
 
+  <?php /* Addresses still in the old secondary_email column, which nothing
+           reads any more. The move is retried here rather than only on the
+           request that created the table: a pass that could not finish would
+           otherwise leave those addresses invisible for good. What is left
+           after a retry is a real collision — two records claiming one
+           address — and needs a person. */
+        $stranded = contactsUnmigratedSecondary();
+        if ($stranded) { contactsMigrateSecondary(getDB()); $stranded = contactsUnmigratedSecondary(); } ?>
+  <?php if ($stranded): ?>
+  <div class="error-box">
+    <strong>&#x26A0; <?= count($stranded) ?></strong>
+    <?= count($stranded) === 1 ? 'contact has an old second address' : 'contacts have an old second address' ?>
+    that could not be moved to their list of addresses, because another record already
+    holds it. Until that is sorted out, the address is not searchable and the collaboration
+    grant counts those days separately.
+    <ul style="margin:.5rem 0 0;padding-left:1.1rem;font-size:.86rem;">
+      <?php foreach (array_slice($stranded, 0, 10) as $sc): ?>
+      <li><a href="person.php?id=<?= (int)$sc['id'] ?>"><?= htmlspecialchars(contactDisplayName($sc)) ?></a>
+        &mdash; <?= htmlspecialchars($sc['secondary_email']) ?></li>
+      <?php endforeach; ?>
+      <?php if (count($stranded) > 10): ?>
+      <li><?= count($stranded) - 10 ?> more.</li>
+      <?php endif; ?>
+    </ul>
+  </div>
+  <?php endif; ?>
+
   <?php if ($notice): ?><div class="notice">&#x2713; <?= $notice ?></div><?php endif; ?>
   <?php if ($error):  ?><div class="error-box">&#x26A0; <?= $error ?></div><?php endif; ?>
 
