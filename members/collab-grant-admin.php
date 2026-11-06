@@ -357,13 +357,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'colla
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'collab-rename') {
     csrfCheck();
     $cid     = (int)($_POST['app_id'] ?? 0);
-    $newName = trim(reqPostStr('collaborator_name'));
+    /* One box per person, joined back into the one column the application
+     * has. Commas, because that is what cgSplitNames() reads first and what
+     * it writes back out as two boxes next time; "and" only works until
+     * somebody is called Alexander. Blanks are how a name is removed. */
+    $posted  = $_POST['collaborator_name'] ?? '';
+    $parts   = [];
+    foreach ((array)$posted as $one) {
+        $one = trim(preg_replace('/\s+/', ' ', (string)$one) ?? '');
+        if ($one !== '' && !in_array($one, $parts, true)) $parts[] = $one;
+    }
+    $newName = implode(', ', $parts);
     $app     = $cid ? cgGetApplication($cid) : null;
 
     if (!$app) {
         $notice = 'Could not find that application.';
     } elseif ($newName === '') {
-        $notice = 'Type the collaborator\'s name.';
+        $notice = 'Type the collaborator\'s name. To take the collaborator off '
+                . 'altogether, open the application and untick it.';
     } elseif (mb_strlen($newName) > 255) {
         /* Refused, not trimmed. Cutting "Leone MacDonald and Ellen Faubert"
          * mid-name silently makes it a different person, which moves their
@@ -988,7 +999,8 @@ $totalDaysApproved = $personDays['approved'];
     }
 
     @media print {
-      .site-header, .admin-toolbar, .summary-row, .app-action-form { display: none !important; }
+      .site-header, .admin-toolbar, .summary-row, .app-action-form,
+      .cg-rename, .cg-cap, .cg-linkform { display: none !important; }
       .read-card { break-inside: avoid; }
     }
   </style>
@@ -1256,9 +1268,12 @@ $totalDaysApproved = $personDays['approved'];
                  border:1px solid; cursor:help; }
       .cg-chip.warn  { background:#fffbeb; border-color:#fcd34d; color:#92400e; }
       .cg-chip.quiet { background:var(--gray-50,#f8fafc); border-color:var(--border); color:var(--gray-500); }
-      .cg-rename { display:inline-flex; gap:.3rem; align-items:center; vertical-align:middle; }
+      .cg-rename { display:inline-flex; gap:.3rem; align-items:flex-start; vertical-align:middle; }
+      .cg-names { display:flex; flex-direction:column; gap:.25rem; }
       .cg-rename input { border:1px solid var(--border); border-radius:6px; padding:.15rem .4rem;
                          font-size:.86rem; font-family:inherit; width:210px; }
+      .cg-printname { display:none; }
+      @media print { .cg-printname { display:inline; } }
       .cg-rename button { border:1px solid var(--border); background:#fff; color:var(--gray-600);
                           border-radius:6px; font-size:.75rem; padding:.15rem .45rem; cursor:pointer; }
       .cg-rename button:hover { border-color:var(--primary); color:var(--primary); }
@@ -1618,7 +1633,7 @@ $totalDaysApproved = $personDays['approved'];
                            text box and a button on every row the rest of the
                            time is a column of furniture. */ ?>
                   <?php if (!$cgReadOnly): ?>
-                    <form class="app-action-form cg-cap" method="post">
+                    <form class="cg-cap" method="post">
                       <?= csrfField() ?>
                       <input type="hidden" name="person_key"   value="<?= htmlspecialchars($lp['key']) ?>">
                       <input type="hidden" name="person_email" value="<?= htmlspecialchars($lp['email']) ?>">
@@ -1897,21 +1912,33 @@ $totalDaysApproved = $personDays['approved'];
                 <div class="dl">Collaborator</div>
                 <div class="dd">
                   <?php if ($app['has_collaborator'] && $app['collaborator_name']): ?>
-                    <?php // Editable in place. Applicants type this from memory
-                          // and get it wrong, and this card is where you are
-                          // when you notice. ?>
-                    <form class="app-action-form cg-rename" method="post">
+                    <?php /* Editable in place, one box per person. Applicants
+                             type these from memory and get them wrong, and
+                             this card is where you are when you notice.
+                             Cut at the separators and nothing more, so the
+                             boxes always show what the field holds and
+                             saving puts back what was shown. Whether two
+                             pieces are really two teachers is the ledger's
+                             question, not this box's. */
+                          $cNames = cgNameParts((string)$app['collaborator_name']); ?>
+                    <span class="cg-printname"><?= htmlspecialchars($app['collaborator_name']) ?></span>
+                    <form class="cg-rename" method="post">
                       <?= csrfField() ?>
                       <input type="hidden" name="action" value="collab-rename">
                       <input type="hidden" name="app_id" value="<?= (int)$app['id'] ?>">
-                      <?php // Completes from Contacts. A name that matches a
-                            // contact is a name the ledger can count under one
-                            // person, so picking from the list is also what
-                            // stops a teacher's days splitting in two. ?>
-                      <input type="text" name="collaborator_name" maxlength="255"
-                             list="cg-contact-names" autocomplete="off"
-                             value="<?= htmlspecialchars($app['collaborator_name']) ?>"
-                             aria-label="Collaborator's name">
+                      <div class="cg-names">
+                        <?php // Completes from Contacts. A name that matches a
+                              // contact is a name the ledger can count under
+                              // one person, so picking from the list is also
+                              // what stops a teacher's days splitting in two. ?>
+                        <?php foreach (array_merge($cNames, ['']) as $cn): ?>
+                          <input type="text" name="collaborator_name[]" maxlength="255"
+                                 list="cg-contact-names" autocomplete="off"
+                                 placeholder="<?= $cn === '' ? 'another collaborator' : '' ?>"
+                                 value="<?= htmlspecialchars($cn) ?>"
+                                 aria-label="Collaborator's name">
+                        <?php endforeach; ?>
+                      </div>
                       <button type="submit">Save</button>
                     </form>
                     <?php if ($app['collaborator_school']): ?>
@@ -2070,7 +2097,7 @@ $totalDaysApproved = $personDays['approved'];
                                typed days away. */ ?>
                       <?php // app-action-form, which @media print hides: a
                             // button nobody can press has no business on paper. ?>
-                      <form class="app-action-form" method="post" style="display:inline;">
+                      <form class="cg-linkform" method="post" style="display:inline;">
                         <?= csrfField() ?>
                         <input type="hidden" name="action" value="link_collab_email">
                         <input type="hidden" name="app_id" value="<?= (int)$app['id'] ?>">

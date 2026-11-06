@@ -1491,12 +1491,25 @@ function cgContactsByName(bool $fresh = false): array {
  * Pieces that match nobody still count, exactly as a lone unmatched
  * collaborator does today — they are simply not exact.
  */
-function cgSplitNames(string $raw): array {
-    $whole = [trim($raw)];
+/**
+ * The collaborator field cut at its separators, with nothing judged.
+ *
+ * cgSplitNames() asks on top of this whether the pieces look like people.
+ * The admin rename boxes do not need that question answered — one box per
+ * piece is what the field says, and saving joins them back with the first
+ * separator in this list, so the round trip is stable even for a value this
+ * list would cut but cgSplitNames() would refuse to call two teachers.
+ */
+function cgNameParts(string $raw): array {
     $parts = preg_split('/\s*(?:,|;|\n|\r|&|\band\b|\+)\s*/iu', trim($raw)) ?: [];
-    $parts = array_values(array_filter(array_map('trim', $parts), function ($p) {
+    return array_values(array_filter(array_map('trim', $parts), function ($p) {
         return $p !== '';
     }));
+}
+
+function cgSplitNames(string $raw): array {
+    $whole = [trim($raw)];
+    $parts = cgNameParts($raw);
     if (count($parts) < 2) return $whole;
 
     foreach ($parts as $p) {
