@@ -357,17 +357,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'colla
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'collab-rename') {
     csrfCheck();
     $cid     = (int)($_POST['app_id'] ?? 0);
-    $newName = trim(mb_substr(reqPostStr('collaborator_name'), 0, 160));
+    $newName = trim(reqPostStr('collaborator_name'));
     $app     = $cid ? cgGetApplication($cid) : null;
 
     if (!$app) {
         $notice = 'Could not find that application.';
     } elseif ($newName === '') {
         $notice = 'Type the collaborator\'s name.';
+    } elseif (mb_strlen($newName) > 255) {
+        /* Refused, not trimmed. Cutting "Leone MacDonald and Ellen Faubert"
+         * mid-name silently makes it a different person, which moves their
+         * days to a row matching nobody. */
+        $notice = 'That name is too long for the field — 255 characters at most.';
     } else {
         $was = (string)$app['collaborator_name'];
-        $res = cgApplyEdit($cid, ['collaborator_name' => $newName], $member['email'], true);
-        if (!$res['changed']) {
+        try {
+            $res = cgApplyEdit($cid, ['collaborator_name' => $newName], $member['email'], true);
+        } catch (\Throwable $e) {
+            // The UPDATE may already have committed, so this cannot be
+            // reported as "nothing happened" either.
+            error_log('collab rename: ' . $e->getMessage());
+            $res = ['changed' => [], 'material' => false, 'failed' => true];
+        }
+        if (!empty($res['failed'])) {
+            $notice = 'Something went wrong saving that. Reload and check the name before '
+                    . 'trying again.';
+            $apps = cgGetApplications($year);
+        } elseif (!$res['changed']) {
             $notice = 'That is the name already on it.';
         } else {
             $notice = 'Collaborator is now ' . $newName . '.';
@@ -387,9 +403,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'colla
                  * the wrong teacher. Said out loud, because the panel will now
                  * ask for it again and an admin who was not told would read
                  * that as the page losing their work. */
-                if (trim((string)($app['collaborator_email'] ?? '')) !== '') {
-                    $notice .= ' The address on it was cleared — ' . $newName
-                             . "'s own will need confirming.";
+                $cleared = [];
+                if (trim((string)($app['collaborator_email'] ?? '')) !== '') $cleared[] = 'the address';
+                // The waiver and the dispute were decisions about the person
+                // who was named before, and the reset takes them too. Gone
+                // without a word, a recorded "we chose not to write to them"
+                // looks like the page lost it.
+                if (!empty($app['collab_waived_at']))   $cleared[] = 'the decision not to write';
+                if (!empty($app['collab_disputed_at'])) $cleared[] = 'their objection';
+                if ($cleared) {
+                    $last = array_pop($cleared);
+                    $notice .= ' Cleared with the old name: '
+                             . ($cleared ? implode(', ', $cleared) . ' and ' . $last : $last) . '.';
                 }
             }
             cgCachesReset();
@@ -1607,10 +1632,20 @@ $totalDaysApproved = $personDays['approved'];
                                   ? htmlspecialchars(implode(', ', array_map(function ($d) {
                                         return date('M j', strtotime((string)$d));
                                     }, $ad)))
-                                  : '<span title="No usable dates on this application.">'
+                                  : '<span title="No usable dates on this application, so these '
+                                    . 'days could not be checked against the others.">'
                                     . (int)$ap['days'] . ' day'
                                     . ((int)$ap['days'] !== 1 ? 's' : '') . ', no dates</span>';
                             ?>
+                          <?php if (empty($ap['exact'])): ?>
+                            <?php /* Two words on the lines where it is true,
+                                     rather than a paragraph on every teacher.
+                                     The days CSV says the same thing, and the
+                                     two have to agree about which days were
+                                     attributed by matching a typed name. */ ?>
+                            · <span style="color:var(--gray-400);"
+                                    title="Matched by name. Collaborators are typed names, so this application's days were attributed by matching the name rather than by an email address.">by name</span>
+                          <?php endif; ?>
                         </div>
                       <?php endforeach; ?>
                     </div>
@@ -1854,7 +1889,7 @@ $totalDaysApproved = $personDays['approved'];
                       <?= csrfField() ?>
                       <input type="hidden" name="action" value="collab-rename">
                       <input type="hidden" name="app_id" value="<?= (int)$app['id'] ?>">
-                      <input type="text" name="collaborator_name" maxlength="160"
+                      <input type="text" name="collaborator_name" maxlength="255"
                              value="<?= htmlspecialchars($app['collaborator_name']) ?>"
                              aria-label="Collaborator's name">
                       <button type="submit">Save</button>
