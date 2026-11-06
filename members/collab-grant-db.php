@@ -507,6 +507,26 @@ function cgRowTouched(PDOStatement $st, int $id): bool {
  * column is cleared only if it exists, so an older server with a failed ALTER
  * still edits applications normally.
  */
+/**
+ * Take back the "changed after it was approved" stamp.
+ *
+ * cgApplyEdit() sets it on any material change, which is right for a change
+ * of substance and wrong for tidying somebody's capitalisation: the applicant
+ * sees that banner on their own application for ever. Only the caller knows
+ * which it was, so only the caller can undo it.
+ */
+function cgUnflagChangedAfterOk(int $id): bool {
+    cgEnsureEditSupport();
+    try {
+        getDB()->prepare("UPDATE collab_grant_applications SET changed_after_ok=0 WHERE id=?")
+               ->execute([$id]);
+        return true;
+    } catch (Exception $e) {
+        error_log('cgUnflagChangedAfterOk: ' . $e->getMessage());
+        return false;
+    }
+}
+
 function cgResetCollabNotice(int $id): bool {
     // These columns are created by cgEnsureTable(), not cgEnsureEditSupport():
     // without this the first press on a freshly deployed server reports them
@@ -2066,6 +2086,7 @@ function cgCachesReset(): void {
     // is exactly why it would be missed later.
     cgApplicantsByName(0, true);
     cgContactPrimaries(true);
+    cgContactNameList(true);
     cgDaysLedger(0, true);
 }
 
@@ -2079,12 +2100,29 @@ function cgCachesReset(): void {
  * Archived contacts are left out — offering somebody who has left as the
  * completion for a name being corrected is how the wrong person gets picked.
  */
-function cgContactNameList(): array {
+function cgContactNameList(bool $fresh = false): array {
+    static $out = null;
+    if ($fresh) $out = null;
+    if ($out !== null) return $out;
     $names = [];
-    foreach (cgContactsByName() as $c) {
-        if (!empty($c['archived'])) continue;
-        $n = trim((string)($c['name'] ?? ''));
-        if ($n !== '') $names[$n] = true;
+    try {
+        /* Its own query, not the name index. That index keeps one entry per
+         * name, so for two people called Pat Smith the archived flag is
+         * whichever row happened to be read last — and the active Pat Smith
+         * would be dropped from the list, or the retired one offered, which
+         * is the opposite of what this is for. */
+        $rows = getDB()->query(
+            "SELECT first_name, last_name, preferred_name, status FROM contacts")->fetchAll();
+    } catch (Exception $e) {
+        return $out = [];
+    }
+    foreach ($rows as $r) {
+        if ((string)($r['status'] ?? 'active') === 'archived') continue;
+        foreach ([trim($r['first_name'] . ' ' . $r['last_name']),
+                  trim(($r['preferred_name'] ?? '') . ' ' . $r['last_name'])] as $n) {
+            $n = trim(preg_replace('/\s+/', ' ', $n) ?? '');
+            if ($n !== '' && strpos($n, ' ') !== false) $names[$n] = true;
+        }
     }
     $out = array_keys($names);
     sort($out, SORT_NATURAL | SORT_FLAG_CASE);

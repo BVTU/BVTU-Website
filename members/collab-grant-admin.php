@@ -370,18 +370,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'colla
          * days to a row matching nobody. */
         $notice = 'That name is too long for the field — 255 characters at most.';
     } else {
-        $was = (string)$app['collaborator_name'];
+        $was      = (string)$app['collaborator_name'];
+        $samePerson = cgNameKey($was) === cgNameKey($newName);
+        $wasFlagged = !empty($app['changed_after_ok']);
         try {
             $res = cgApplyEdit($cid, ['collaborator_name' => $newName], $member['email'], true);
         } catch (\Throwable $e) {
-            // The UPDATE may already have committed, so this cannot be
-            // reported as "nothing happened" either.
+            /* The UPDATE commits before the audit row is written and before
+             * the collaborator record is reset, so a throw can leave a new
+             * person holding the old one's address and "already emailed"
+             * date — and the next send would go to the previous teacher.
+             * Reset here rather than hope. */
             error_log('collab rename: ' . $e->getMessage());
+            if (!$samePerson) { try { cgResetCollabNotice($cid); } catch (\Throwable $e2) {} }
             $res = ['changed' => [], 'material' => false, 'failed' => true];
         }
+        /* collaborator_name is a material field, so cgApplyEdit stamps the
+         * application "changed after it was approved" — which the applicant
+         * sees, for ever, because somebody fixed their capitalisation. Only
+         * restored when it was not already set and the name key did not
+         * change: a real change of person is a real material change. */
+        if (!empty($res['changed']) && $samePerson && !$wasFlagged) {
+            cgUnflagChangedAfterOk($cid);
+        }
         if (!empty($res['failed'])) {
-            $notice = 'Something went wrong saving that. Reload and check the name before '
-                    . 'trying again.';
+            $notice = 'Something went wrong saving that. The name may have changed anyway — '
+                    . 'reload and check it, and check who is down to be emailed.';
             $apps = cgGetApplications($year);
         } elseif (!$res['changed']) {
             $notice = 'That is the name already on it.';
@@ -1248,6 +1262,14 @@ $totalDaysApproved = $personDays['approved'];
       .cg-rename button { border:1px solid var(--border); background:#fff; color:var(--gray-600);
                           border-radius:6px; font-size:.75rem; padding:.15rem .45rem; cursor:pointer; }
       .cg-rename button:hover { border-color:var(--primary); color:var(--primary); }
+      .cg-cap { display:flex; gap:.3rem; align-items:center; margin:.35rem 0 .1rem;
+                font-size:.8rem; color:var(--gray-500); }
+      .cg-cap input { border:1px solid var(--border); border-radius:6px; padding:.15rem .4rem;
+                      font-size:.78rem; font-family:inherit; width:190px; }
+      .cg-cap button { border:1px solid var(--border); background:#fff; color:var(--gray-600);
+                       border-radius:6px; font-size:.75rem; padding:.15rem .45rem;
+                       cursor:pointer; white-space:nowrap; }
+      .cg-cap button:hover { border-color:var(--primary); color:var(--primary); }
       .cg-days { display:flex; flex-wrap:wrap; gap:.3rem; margin:.15rem 0 .35rem; }
       .cg-day { font-size:.76rem; font-weight:600; padding:.12rem .45rem; border-radius:6px;
                 background:#f0fdf4; color:#166534; border:1px solid #bbf7d0; white-space:nowrap; }
@@ -1488,16 +1510,10 @@ $totalDaysApproved = $personDays['approved'];
               <th style="padding:.4rem .5rem;">Pending</th>
               <th style="padding:.4rem .5rem;">Used</th>
               <th style="padding:.4rem .5rem;">Left</th>
-              <th style="padding:.4rem .5rem;">As</th>
-              <th style="padding:.4rem .5rem;">Yearly cap</th>
             </tr>
           </thead>
           <tbody>
             <?php foreach ($ledger as $lp): ?>
-              <?php
-                $roles = array_unique(array_column($lp['apps'], 'role'));
-                sort($roles);
-              ?>
               <?php
                 /*
                  * One line per teacher, and one control that opens that teacher.
@@ -1560,44 +1576,12 @@ $totalDaysApproved = $personDays['approved'];
                     <?= $lp['over'] ? 'over by ' . ($lp['used'] - CG_DAY_CAP) : (int)$lp['left'] ?>
                   <?php endif; ?>
                 </td>
-                <td style="padding:.45rem .5rem;color:var(--gray-500);">
-                  <?= htmlspecialchars(implode(' + ', $roles)) ?>
-                </td>
-                <td style="padding:.45rem .5rem;">
-                  <form method="post" style="display:flex;gap:.3rem;align-items:center;">
-                    <?= csrfField() ?>
-                    <input type="hidden" name="person_key"   value="<?= htmlspecialchars($lp['key']) ?>">
-                    <input type="hidden" name="person_email" value="<?= htmlspecialchars($lp['email']) ?>">
-                    <input type="hidden" name="person_name"  value="<?= htmlspecialchars($lp['name']) ?>">
-                    <?php if (empty($lp['capped'])): ?>
-                      <span style="font-size:.8rem;color:var(--gray-500);"
-                            title="<?= htmlspecialchars($lp['exempt_reason']) ?>">
-                        <?= htmlspecialchars($lp['exempt_reason']) ?>
-                      </span>
-                      <button type="submit" name="action" value="exempt_off" class="btn"
-                              style="border:1px solid var(--border);background:#fff;color:var(--gray-600);
-                                     font-size:.75rem;padding:.2rem .5rem;white-space:nowrap;">
-                        Apply the cap
-                      </button>
-                    <?php else: ?>
-                      <input type="text" name="reason" maxlength="200"
-                             placeholder="why, e.g. district support teacher"
-                             style="width:190px;border:1px solid var(--border);border-radius:6px;
-                                    padding:.2rem .4rem;font-size:.78rem;font-family:inherit;">
-                      <button type="submit" name="action" value="exempt_on" class="btn"
-                              style="border:1px solid var(--border);background:#fff;color:var(--gray-600);
-                                     font-size:.75rem;padding:.2rem .5rem;white-space:nowrap;">
-                        Not capped
-                      </button>
-                    <?php endif; ?>
-                  </form>
-                </td>
               </tr>
               <?php // Opened by the row above. Worth opening on every teacher,
                     // not only the flagged ones: "where do these days come
                     // from" is a question the page can now answer. ?>
               <tr id="<?= $rowId ?>" class="cg-rowdetail" hidden>
-                <td colspan="7" style="padding:.1rem .5rem .8rem 1.6rem;">
+                <td colspan="5" style="padding:.1rem .5rem .8rem 1.6rem;">
                   <?php
                     /* The days themselves, which is what this panel is for:
                      * the figure in the table is checked against a district
@@ -1628,6 +1612,27 @@ $totalDaysApproved = $personDays['approved'];
                   <?php if (count($addrs) > 1): ?>
                     <div class="cg-note quiet">One person across
                       <?= htmlspecialchars(implode(' and ', $addrs)) ?>.</div>
+                  <?php endif; ?>
+                  <?php /* The cap control lives in here now. Marking somebody
+                           not capped happens a handful of times a year, and a
+                           text box and a button on every row the rest of the
+                           time is a column of furniture. */ ?>
+                  <?php if (!$cgReadOnly): ?>
+                    <form class="app-action-form cg-cap" method="post">
+                      <?= csrfField() ?>
+                      <input type="hidden" name="person_key"   value="<?= htmlspecialchars($lp['key']) ?>">
+                      <input type="hidden" name="person_email" value="<?= htmlspecialchars($lp['email']) ?>">
+                      <input type="hidden" name="person_name"  value="<?= htmlspecialchars($lp['name']) ?>">
+                      <?php if (empty($lp['capped'])): ?>
+                        <span>Not capped &mdash; <?= htmlspecialchars($lp['exempt_reason']) ?></span>
+                        <button type="submit" name="action" value="exempt_off">Apply the cap</button>
+                      <?php else: ?>
+                        <input type="text" name="reason" maxlength="200"
+                               placeholder="why, e.g. district support teacher"
+                               aria-label="Why the cap does not apply">
+                        <button type="submit" name="action" value="exempt_on">Not capped</button>
+                      <?php endif; ?>
+                    </form>
                   <?php endif; ?>
                   <?php if (!empty($lp['apps'])): ?>
                     <div class="cg-note quiet" style="margin-top:.3rem;">
