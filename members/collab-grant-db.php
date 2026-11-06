@@ -2070,6 +2070,28 @@ function cgCachesReset(): void {
 }
 
 /**
+ * Active contacts' names, for an admin-side autocomplete.
+ *
+ * Only ever rendered behind the login: the public application form must not
+ * get one of these, because an autocomplete over this list hands the staff
+ * directory to anybody who opens the page.
+ *
+ * Archived contacts are left out — offering somebody who has left as the
+ * completion for a name being corrected is how the wrong person gets picked.
+ */
+function cgContactNameList(): array {
+    $names = [];
+    foreach (cgContactsByName() as $c) {
+        if (!empty($c['archived'])) continue;
+        $n = trim((string)($c['name'] ?? ''));
+        if ($n !== '') $names[$n] = true;
+    }
+    $out = array_keys($names);
+    sort($out, SORT_NATURAL | SORT_FLAG_CASE);
+    return $out;
+}
+
+/**
  * Every contact's main address, folded, as a set.
  *
  * Read once so that asking "is this address on somebody's record?" costs

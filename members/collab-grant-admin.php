@@ -1061,6 +1061,16 @@ $totalDaysApproved = $personDays['approved'];
       <?php endif; ?>
     </div>
 
+    <?php /* One list for the page, shared by every rename box. Behind the
+             login, and never on the public application form: an autocomplete
+             over this list would hand the staff directory to anyone who
+             opened that page. */ ?>
+    <datalist id="cg-contact-names">
+      <?php foreach (cgContactNameList() as $cn): ?>
+        <option value="<?= htmlspecialchars($cn) ?>"></option>
+      <?php endforeach; ?>
+    </datalist>
+
     <?php if ($notice): ?>
       <div class="notice"><?= htmlspecialchars($notice) ?></div>
     <?php endif; ?>
@@ -1889,7 +1899,12 @@ $totalDaysApproved = $personDays['approved'];
                       <?= csrfField() ?>
                       <input type="hidden" name="action" value="collab-rename">
                       <input type="hidden" name="app_id" value="<?= (int)$app['id'] ?>">
+                      <?php // Completes from Contacts. A name that matches a
+                            // contact is a name the ledger can count under one
+                            // person, so picking from the list is also what
+                            // stops a teacher's days splitting in two. ?>
                       <input type="text" name="collaborator_name" maxlength="255"
+                             list="cg-contact-names" autocomplete="off"
                              value="<?= htmlspecialchars($app['collaborator_name']) ?>"
                              aria-label="Collaborator's name">
                       <button type="submit">Save</button>
