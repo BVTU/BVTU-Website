@@ -716,11 +716,22 @@ function cgSendCollaboratorEmail(array $app, bool $force = false): array {
      * approved told the collaborator to book three days in a letter whose
      * next paragraph said one. */
     $bookDates = cgAppDates($app);
-    $dateLine  = $bookDates
-        ? 'The ' . (count($bookDates) === 1 ? 'day' : 'days') . ' to book: '
-          . cgDateList($bookDates) . "\n\n"
-        : 'The dates are still to be settled — ' . (string)$app['applicant_name']
-          . " will confirm them with you.\n\n";
+    if ($bookDates) {
+        $dateLine = 'The ' . (count($bookDates) === 1 ? 'day' : 'days') . ' to book: '
+                  . cgDateList($bookDates) . "\n\n";
+    } elseif (cgDateList($app['proposed_dates'] ?? '') !== 'none') {
+        /* Dates are on the application, but not as many as the days granted,
+         * so which of them this release covers is genuinely unknown. Saying
+         * "still to be settled" would contradict the applicant's own letter,
+         * which lists them. */
+        $dateLine = 'The application lists ' . cgDateList($app['proposed_dates'] ?? '')
+                  . ', which does not match the ' . $days . ' ' . $dayWord
+                  . ' approved — ' . (string)$app['applicant_name']
+                  . " will confirm which with you.\n\n";
+    } else {
+        $dateLine = 'The dates are still to be settled — ' . (string)$app['applicant_name']
+                  . " will confirm them with you.\n\n";
+    }
 
     $body = emailTplBlock('collab_collaborator', 'intro', $tv) . "\n\n"
           . "─── NEXT STEP: BOOKING YOUR ABSENCE IN ATRIEVE ────────────────────\n\n"
@@ -2099,6 +2110,11 @@ function cgCollaboratorLinkTarget(array $app): ?array {
 
     $byName = cgContactsByName();
     if (!isset($byName[$k]) || !empty($byName[$k]['ambiguous'])) return null;
+    /* Archived as well as ambiguous. cgCollaboratorAddress() already refuses
+     * to write to a contact who has left, and this is a heavier step than an
+     * email: welding a working teacher's address onto a retired namesake's
+     * record merges their day totals, and this page has no un-link. */
+    if (!empty($byName[$k]['archived'])) return null;
 
     // Already somebody's, including already theirs: nothing to offer.
     if (contactEmailOwner($addr)) return null;

@@ -1858,9 +1858,6 @@ $totalDaysApproved = $personDays['approved'];
 
             <?php if ($view !== 'followup'): ?>
             <div class="cg-decision">
-            <form class="app-action-form" method="post" id="decide-<?= (int)$app['id'] ?>">
-              <?= csrfField() ?>
-              <input type="hidden" name="app_id" value="<?= $app['id'] ?>">
               <?php
                 // Both people on an application spend days, so the lead's standing
                 // and the collaborator's are both worth seeing before deciding.
@@ -1889,10 +1886,14 @@ $totalDaysApproved = $personDays['approved'];
                  * card on the page cost two queries to tell us there was
                  * nothing to offer. */
                 $linkAddr = cgCollaboratorKeyEmail($app);
-                $linkTo   = null;
-                if ($linkAddr !== '' && !isset(cgContactPrimaries()[$linkAddr])) {
-                    $linkTo = cgCollaboratorLinkTarget($app);
-                }
+                /* Two questions, not one. Whether the address is on anybody's
+                 * record is what is worth warning about; whether a contact can
+                 * be named is only whether the one-press fix can be offered.
+                 * Gating the warning on the offer hid it in the worse case of
+                 * the two — an address nobody holds and a name matching
+                 * nobody, which used to at least say "no match". */
+                $addrOnFile = $linkAddr === '' || isset(cgContactPrimaries()[$linkAddr]);
+                $linkTo     = $addrOnFile ? null : cgCollaboratorLinkTarget($app);
               ?>
               <div style="background:var(--off-white);border:1px solid var(--border);border-radius:8px;
                           padding:.7rem .85rem;margin:.75rem 0;font-size:.85rem;">
@@ -1915,21 +1916,29 @@ $totalDaysApproved = $personDays['approved'];
                         <span class="cg-tag good">hasn't used the fund</span>
                       <?php endif; ?>
                     <?php endif; ?>
-                    <?php if ($role === 'Collaborator' && $linkTo): ?>
-                      <?php /* Not a form of its own: this sits inside the
-                               decide form, and a nested form is dropped by the
-                               browser. The button names its own action. */ ?>
+                    <?php if ($role === 'Collaborator' && !$addrOnFile): ?>
                       <span class="cg-tag approx"
                             title="<?= htmlspecialchars($linkAddr) ?> is not on anybody's contact record, so days charged to it sit apart from the rest of theirs.">address not on file</span>
-                      <button type="submit" name="action" value="link_collab_email"
-                              class="cg-linkbtn"
-                              onclick="return confirm(<?= htmlspecialchars(json_encode(
-                                  'Add ' . $linkAddr . " to " . $linkTo['name']
-                                  . "'s contact?\n\nTheir collaboration days will count together from then on, here and on every other page."), ENT_QUOTES) ?>)">
-                        link to <?= htmlspecialchars($linkTo['name']) ?>
-                      </button>
-                      <?php // Checked against the page's own answer, never trusted. ?>
-                      <input type="hidden" name="contact_id" value="<?= (int)$linkTo['id'] ?>">
+                      <?php if ($linkTo): ?>
+                      <?php /* Its own form. As a button inside the decide form
+                               it was that form's first submit, so Enter in
+                               "Days to grant" fired this instead of approving,
+                               and on OK it linked the address and threw the
+                               typed days away. */ ?>
+                      <form method="post" style="display:inline;">
+                        <?= csrfField() ?>
+                        <input type="hidden" name="action" value="link_collab_email">
+                        <input type="hidden" name="app_id" value="<?= (int)$app['id'] ?>">
+                        <?php // Checked against the page's own answer, never trusted. ?>
+                        <input type="hidden" name="contact_id" value="<?= (int)$linkTo['id'] ?>">
+                        <button type="submit" class="cg-linkbtn"
+                                onclick="return confirm(<?= htmlspecialchars(json_encode(
+                                    'Add ' . $linkAddr . ' to ' . $linkTo['name']
+                                    . "'s contact?\n\nTheir collaboration days will count together from then on, here and on every other page."), ENT_QUOTES) ?>)">
+                          link to <?= htmlspecialchars($linkTo['name']) ?>
+                        </button>
+                      </form>
+                      <?php endif; ?>
                     <?php elseif (strpos((string)($p['key'] ?? ''), 'n:') === 0): ?>
                       <span class="cg-tag approx"
                             title="This name matched no contact and no applicant this year, so these days are attributed to the name as typed and could belong to someone else.">no match</span>
@@ -1946,6 +1955,13 @@ $totalDaysApproved = $personDays['approved'];
                     this application is <?= htmlspecialchars($app['status']) ?>.</div>
                 <?php endif; ?>
               </div>
+
+              <?php /* The decide form opens after the standings, so the
+                       "link to …" button above can be a form of its own
+                       without nesting one inside another. */ ?>
+              <form class="app-action-form" method="post" id="decide-<?= (int)$app['id'] ?>">
+              <?= csrfField() ?>
+              <input type="hidden" name="app_id" value="<?= $app['id'] ?>">
 
               <?php if ($app['status'] === 'approved' && ($app['days_approved'] ?? null) !== null
                         && (int)$app['days_approved'] !== (int)$app['days_requested']): ?>
