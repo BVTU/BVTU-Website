@@ -4,6 +4,9 @@ require_once __DIR__ . '/prod-db.php';
 require_once __DIR__ . '/lp-db.php';
 require_once __DIR__ . '/lp-dupes.php';
 require_once __DIR__ . '/exec-db.php';
+// The pre-submit checks. This page has a Submit for Approval button, so it
+// needs to be able to say what the checks found.
+require_once __DIR__ . '/lp-checks.php';
 requireLogin();
 
 $member = getMember();
@@ -250,6 +253,11 @@ $receiptCount = count(array_filter($expenses, function ($e) {
 }));
 // Reload voucher header in case it was updated
 $voucher = lpGetVoucher($id);
+
+/* After the reload, so fixing something and saving makes the finding go away
+ * rather than sitting there contradicting the rows on screen. */
+$review = lpReviewVoucher($voucher, $expenses);
+$revFix = false;   // this IS the fixing page
 
 $grantsJson      = json_encode(array_values($grants));
 $budgetLinesJson = json_encode(array_values($budgetLines));
@@ -557,6 +565,11 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
   <div class="error-list"><?= implode('<br>', array_map('htmlspecialchars', $errors)) ?></div>
   <?php endif; ?>
 
+  <?php // The same card the view page shows. Submitting from here used to skip
+        // it entirely, so the quicker route to filing a voucher was the one
+        // that never mentioned a missing receipt.
+        require __DIR__ . '/lp-review-card.php'; ?>
+
   <form method="POST" id="voucherForm">
     <?= csrfField() ?>
 
@@ -719,9 +732,30 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
     <?php elseif ($voucher['status'] === 'draft' || (($isOwner || $isAdmin) && !in_array($voucher['status'], ['paid']))): ?>
     <button type="submit" class="btn btn-primary" style="padding:.65rem 1.5rem;font-size:.95rem;">💾 Save Changes</button>
     <?php if ($voucher['status'] === 'draft' && count($expenses) > 0): ?>
+    <?php /* The warning here used to say "you will not be able to edit it
+             after submission", while the view page's button said "you can
+             still edit it after". The second one is true — the condition on
+             this very save bar lets an owner edit anything short of paid — so
+             the false one is gone.
+
+             The count comes with it because this button sits at the bottom of
+             a long form and the card listing those findings is at the top,
+             off screen by the time you reach here. */
+          $revN   = count($review['findings'] ?? []);
+          // Double-quoted for the line breaks: in a single-quoted string \n is
+          // a backslash and an n, and the dialog would say so.
+          $revWarn = $revN
+              ? 'There ' . ($revN === 1 ? 'is 1 thing' : "are {$revN} things")
+                . " worth checking at the top of this page. Submit anyway?\n\n"
+              : '';
+          $revMsg = $revWarn . 'Save and submit this voucher to the Treasurer for approval?'
+                  . ' You can still change it afterwards.'; ?>
     <button type="submit" name="_submit_for_approval" value="1"
             class="btn btn-primary" style="padding:.65rem 1.5rem;font-size:.95rem;background:#166534;"
-            onclick="return confirm('Save and submit this voucher for Treasurer approval? You will not be able to edit it after submission.')">
+            <?php // Entity-escaped, because json_encode() hands back a
+                  // double-quoted string and the attribute is double-quoted
+                  // too: raw, it would end the attribute mid-sentence. ?>
+            onclick="return confirm(<?= htmlspecialchars(json_encode($revMsg), ENT_QUOTES) ?>)">
       ✅ Submit for Approval
     </button>
     <?php endif; ?>
