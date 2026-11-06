@@ -1459,28 +1459,36 @@ function cgSplitNames(string $raw): array {
 /**
  * Every address a person uses, mapped to the one they are counted under.
  *
- * contacts.secondary_email has been on the contact form and in the importer all
- * along; the ledger just never read it, so one teacher applying from work and
- * from home became two rows of one day each and the three-day cap could not see
- * either. Built from a column an admin filled in deliberately — a shared name
- * is a coincidence and is never merged here.
+ * One teacher applying from work and from home became two ledger rows of one
+ * day each, and the three-day cap could not see either. Built from the contact
+ * record, where an admin has said these addresses are one person — a shared
+ * name is a coincidence and is never merged here.
+ *
+ * Any number of them. This read contacts.secondary_email, which held exactly
+ * one, until a teacher applied from three addresses and there was nowhere to
+ * put the third; contact_emails holds as many as somebody turns out to have,
+ * and contacts-db.php moved the old column's values into it.
  */
 function cgEmailAliases(): array {
     static $map = null;
     if ($map !== null) return $map;
     $map = [];
     try {
-        $rows = getDB()->query("SELECT * FROM contacts")->fetchAll();
+        $rows = getDB()->query(
+            "SELECT e.email AS alias, c.email AS primary_email
+             FROM contact_emails e JOIN contacts c ON c.id = e.contact_id"
+        )->fetchAll();
     } catch (Exception $e) {
-        return $map;   // no contacts table: every address stands alone
+        return $map;   // tables not there yet: every address stands alone
     }
     foreach ($rows as $r) {
-        $primary = strtolower(trim((string)($r['email'] ?? '')));
-        $second  = strtolower(trim((string)($r['secondary_email'] ?? '')));
-        if ($primary === '' || $second === '' || $primary === $second) continue;
-        // Only the secondary folds into the primary. Mapping both directions
-        // would let two contacts that name each other chase one another.
-        $map[$second] = $primary;
+        $primary = strtolower(trim((string)($r['primary_email'] ?? '')));
+        $alias   = strtolower(trim((string)($r['alias'] ?? '')));
+        if ($primary === '' || $alias === '' || $primary === $alias) continue;
+        // Only the extras fold into the primary, never the other way. Mapping
+        // both directions would let two addresses chase one another, and
+        // cgCanonEmail() follows exactly one hop.
+        $map[$alias] = $primary;
     }
     return $map;
 }
@@ -1980,13 +1988,14 @@ function cgPersonDays(int $year, string $email, string $name = ''): array {
 }
 
 /**
- * Ledger rows that look like one person under two addresses.
+ * Ledger rows that look like one person under several addresses.
  *
  * Never merged on this evidence — two teachers really do share a name, and
  * silently adding their days together would be worse than the split rows it
- * fixed. Shown instead, with the contact record to edit: recording the second
- * address as a secondary_email is what actually merges them, and it does so
- * everywhere rather than only here.
+ * fixed. Shown instead, with the contact record to edit: listing the other
+ * addresses on the contact is what actually merges them, and it does so
+ * everywhere rather than only here. Any number of them, which is the point:
+ * a teacher turned up having applied from three.
  */
 function cgLedgerDuplicates(int $year): array {
     $byName = [];

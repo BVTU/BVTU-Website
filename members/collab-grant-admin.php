@@ -1280,13 +1280,19 @@ $totalDaysApproved = $personDays['approved'];
                 padding:.9rem 1rem;margin-bottom:1rem;font-size:.88rem;">
       <strong>Possibly the same person twice.</strong>
       <?= count($cgDupes) === 1 ? 'One name appears' : count($cgDupes) . ' names appear' ?>
-      under two addresses, so the <?= CG_DAY_CAP ?>-day cap cannot see their total. If it
-      is one teacher, add the second address to their contact as a secondary email.
+      under more than one address, so the <?= CG_DAY_CAP ?>-day cap cannot see their total.
+      If it is one teacher, open their contact and list the other addresses there —
+      as many as they have.
       <ul style="margin:.6rem 0 0;padding-left:1.1rem;">
         <?php foreach ($cgDupes as $d): ?>
           <li style="margin-bottom:.25rem;">
             <strong><?= htmlspecialchars($d['name']) ?></strong>
-            — <?= htmlspecialchars(implode(' and ', $d['addresses'])) ?>
+            <?php /* Oxford-less list: "a and b" for two, "a, b and c" beyond,
+                     because three addresses is the case that prompted this. */
+                  $ad = $d['addresses'];
+                  $last = array_pop($ad);
+                  $addrLine = $ad ? implode(', ', $ad) . ' and ' . $last : $last; ?>
+            — <?= htmlspecialchars($addrLine) ?>
             <span style="color:var(--gray-500);">
               (<?= (int)$d['used'] ?> <?= (int)$d['used'] === 1 ? 'day' : 'days' ?> between them)</span>
             <a href="people.php?q=<?= urlencode($d['name']) ?>" style="margin-left:.35rem;">Open contact</a>

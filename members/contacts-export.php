@@ -67,7 +67,7 @@ list($rows) = contactSearch($filters, 1, 100000);
 $schools = [];
 foreach (contactSchools() as $s) $schools[(int)$s['id']] = $s['name'];
 
-$headers = ['First Name','Last Name','Preferred Name','Email','Secondary Email','Phone',
+$headers = ['First Name','Last Name','Preferred Name','Email','Other Emails','Phone',
             'School','Position','Role','Internal Status','Mailchimp Status','Last Updated'];
 
 $data = [];
@@ -75,7 +75,10 @@ foreach ($rows as $c) {
     $school = $c['school_id'] ? ($schools[(int)$c['school_id']] ?? '') : $c['school_other'];
     $data[] = [
         $c['first_name'], $c['last_name'], $c['preferred_name'], $c['email'],
-        $c['secondary_email'], $c['phone'], $school, $c['position'], $c['role'],
+        // Every other address they use, in one cell. A column per address
+        // would change width with the data and break anything reading this.
+        implode('; ', contactEmails((int)$c['id'])),
+        $c['phone'], $school, $c['position'], $c['role'],
         CONTACT_STATUSES[$c['status']] ?? $c['status'],
         MC_STATUSES[$c['mailchimp_status']] ?? $c['mailchimp_status'],
         $c['updated_at'] ? date('Y-m-d H:i', strtotime($c['updated_at'])) : '',

@@ -58,16 +58,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Keep what was typed so a validation error doesn't empty the form
     foreach (CONTACT_EDITABLE as $f) $form[$f] = trim((string)($_POST[$f] ?? ''));
+    $otherEmails = array_map('strval', (array)($_POST['other_email'] ?? []));
 
-    $res = $contact
-        ? contactUpdate($id, $_POST, $member['email'])
-        : contactCreate($_POST, $member['email']);
+    /* Checked before the save, not after: an address that belongs to somebody
+     * else has to stop the whole edit, or the other fields are written and the
+     * addresses are not, and the page says it failed. */
+    $res = ['error' => contactEmailsCheck($otherEmails, $id, (string)($_POST['email'] ?? ''))];
+    if ($res['error'] === '') {
+        $res = $contact
+            ? contactUpdate($id, $_POST, $member['email'])
+            : contactCreate($_POST, $member['email']);
+    }
 
     if (!empty($res['error'])) {
         $error = $res['error'];
     } else {
         $savedId = (int)$res['id'];
         $msg = $contact ? 'Contact saved.' : 'Contact added.';
+
+        /* Separate from the contact's own columns, and deliberately not in
+         * $mcFields below: adding an address a teacher also writes from must
+         * never push anything to Mailchimp. The ones Cody records are SD54
+         * work addresses, and union mail does not go there. */
+        $sync2 = contactEmailsSync($savedId, $otherEmails, $member['email']);
+        if ($sync2['added'] || $sync2['removed']) {
+            $bits = [];
+            if ($sync2['added'])   $bits[] = count($sync2['added'])   . ' address'
+                                           . (count($sync2['added']) === 1 ? '' : 'es') . ' added';
+            if ($sync2['removed']) $bits[] = count($sync2['removed']) . ' removed';
+            $msg .= ' ' . ucfirst(implode(', ', $bits)) . '.';
+        }
 
         // Push only when something Mailchimp mirrors actually changed, or the
         // contact is new. Avoids an API call on every unrelated edit.
@@ -86,6 +106,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 }
+
+// On a GET, what is stored; after a validation error, what was typed.
+if (!isset($otherEmails)) $otherEmails = $contact ? contactEmails((int)$contact['id']) : [];
+$otherEmails = array_values(array_filter(array_map('trim', $otherEmails), function ($e) {
+    return $e !== '';
+}));
 
 if (!empty($_GET['notice']))   $notice = htmlspecialchars($_GET['notice']);
 if (!empty($_GET['error']))    $error  = htmlspecialchars($_GET['error']);
@@ -142,6 +168,14 @@ if ($contact) {
     .act-btn.danger:hover { background:#fef2f2;border-color:#fecaca;color:#dc2626; }
     .bar { display:flex;gap:.6rem;align-items:center;flex-wrap:wrap; }
     .hist { font-size:.78rem;color:var(--gray-500);line-height:1.7; }
+    .oe-row { display:flex;gap:.45rem;align-items:center;margin-bottom:.4rem; }
+    .oe-row input { flex:1; }
+    .oe-rm { background:none;border:1px solid var(--gray-200);border-radius:6px;
+             padding:.4rem .6rem;font-size:.76rem;color:var(--gray-500);cursor:pointer;
+             white-space:nowrap; }
+    .oe-rm:hover { background:#fef2f2;border-color:#fecaca;color:#dc2626; }
+    .oe-add { background:none;border:0;padding:.1rem 0;font:inherit;font-size:.8rem;
+              color:var(--primary);text-decoration:underline;cursor:pointer; }
   </style>
 </head>
 <body>
@@ -170,13 +204,27 @@ if ($contact) {
       <div class="field"><label>Preferred name</label>
         <input name="preferred_name" value="<?= htmlspecialchars($form['preferred_name']) ?>">
         <div class="hint">Used instead of the first name where one is set.</div></div>
-      <div class="row">
-        <div class="field"><label>Email *</label>
-          <input type="email" name="email" required value="<?= htmlspecialchars($form['email']) ?>">
-          <div class="hint">Identifies the contact — matching ignores capitalisation.</div></div>
-        <div class="field"><label>Secondary email</label>
-          <input type="email" name="secondary_email" value="<?= htmlspecialchars($form['secondary_email']) ?>"></div>
-      </div>
+      <div class="field"><label>Email *</label>
+        <input type="email" name="email" required value="<?= htmlspecialchars($form['email']) ?>">
+        <div class="hint">Identifies the contact — matching ignores capitalisation. The only
+          address Mailchimp is ever told about.</div></div>
+
+      <div class="field"><label>Other email addresses</label>
+        <div id="otherEmails">
+          <?php foreach (array_merge($otherEmails, ['']) as $oe): ?>
+          <div class="oe-row">
+            <input type="email" name="other_email[]" placeholder="name@example.com"
+                   value="<?= htmlspecialchars($oe) ?>">
+            <button type="button" class="oe-rm" onclick="oeRemove(this)">Remove</button>
+          </div>
+          <?php endforeach; ?>
+        </div>
+        <button type="button" class="oe-add" onclick="oeAdd()">+ Add another address</button>
+        <div class="hint">Any other address this person writes from — a work address, an old
+          one. As many as they have. Searching People finds them by any of these, and the
+          collaboration grant counts one teacher's days together instead of as several people.
+          Clearing a box removes that address.</div></div>
+
       <div class="field" style="max-width:260px;"><label>Phone</label>
         <input name="phone" value="<?= htmlspecialchars($form['phone']) ?>"></div>
     </div>
@@ -287,5 +335,43 @@ if ($contact) {
   <?php endif; ?>
 
 </div>
+<script>
+/* Removing a row is the same thing as clearing it: the save matches the stored
+ * addresses to the boxes that came back with something in them. So this works
+ * with scripting off too — one empty box is always rendered, and emptying a
+ * box deletes that address. */
+function oeAdd() {
+    var box = document.getElementById('otherEmails');
+    if (!box) return;
+    var row = document.createElement('div');
+    row.className = 'oe-row';
+    var inp = document.createElement('input');
+    inp.type = 'email';
+    inp.name = 'other_email[]';
+    inp.placeholder = 'name@example.com';
+    var rm = document.createElement('button');
+    rm.type = 'button';
+    rm.className = 'oe-rm';
+    rm.textContent = 'Remove';
+    rm.onclick = function () { oeRemove(rm); };
+    row.appendChild(inp);
+    row.appendChild(rm);
+    box.appendChild(row);
+    inp.focus();
+}
+function oeRemove(btn) {
+    var box = document.getElementById('otherEmails');
+    var row = btn.parentNode;
+    if (!box || !row) return;
+    // The last box is left in place and emptied instead of removed, so there
+    // is always somewhere to type the next address.
+    if (box.children.length === 1) {
+        var inp = row.querySelector('input');
+        if (inp) { inp.value = ''; inp.focus(); }
+        return;
+    }
+    box.removeChild(row);
+}
+</script>
 </body>
 </html>

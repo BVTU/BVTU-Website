@@ -9,6 +9,7 @@
  *
  * Tables owned here — include these in any database backup:
  *   contacts             the people
+ *   contact_emails       the other addresses a person uses
  *   contact_audit        who changed what, when
  *   contact_sync_queue   Mailchimp pushes still to retry
  */
@@ -76,6 +77,43 @@ function contactsEnsureTables(): void {
         INDEX idx_last (last_name)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+    /* ── Every address a person uses ───────────────────────────────────────
+     * contacts.email still identifies them and is still the only address
+     * Mailchimp ever sees; these are the others. It replaces the single
+     * secondary_email column, which held exactly one and then ran out — a
+     * teacher turned up having applied for the collaboration grant from three
+     * addresses, and there was nowhere to put the third.
+     *
+     * Checked before the CREATE so the migration below runs once, on the
+     * request that first creates the table. On an older MySQL that will not
+     * answer the question, it is assumed absent and the migration runs: it is
+     * written to be safe to repeat, which is the cheaper way to be wrong. */
+    $hadEmails = false;
+    try {
+        $hadEmails = (bool)$db->query(
+            "SELECT COUNT(*) FROM information_schema.TABLES
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'contact_emails'"
+        )->fetchColumn();
+    } catch (Exception $e) {
+        // Left false on purpose — see above.
+    }
+
+    $db->exec("CREATE TABLE IF NOT EXISTS contact_emails (
+        id                INT AUTO_INCREMENT PRIMARY KEY,
+        contact_id        INT NOT NULL,
+        email             VARCHAR(255) NOT NULL,
+        email_normalized  VARCHAR(255) NOT NULL,
+        created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_by        VARCHAR(255) NOT NULL DEFAULT '',
+        -- One owner per address, the same rule contacts.email_normalized
+        -- keeps. Two people cannot both claim an address, or the grant's
+        -- ledger would not know whose day it was.
+        UNIQUE KEY uniq_extra_norm (email_normalized),
+        INDEX idx_contact (contact_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    if (!$hadEmails) contactsMigrateSecondary($db);
+
     $db->exec("CREATE TABLE IF NOT EXISTS contact_audit (
         id           INT AUTO_INCREMENT PRIMARY KEY,
         contact_id   INT DEFAULT NULL,
@@ -128,6 +166,188 @@ function contactValidEmail(string $email): bool {
     return (bool)filter_var(trim($email), FILTER_VALIDATE_EMAIL);
 }
 
+/**
+ * Move contacts.secondary_email into contact_emails, once.
+ *
+ * The column is cleared as each address is carried across, so an address lives
+ * in exactly one place afterwards. Leaving both populated would mean an
+ * address an admin had deleted went on being merged by whatever still read the
+ * column — the kind of fault that looks like the delete button not working.
+ *
+ * An address already claimed by somebody else is left in the column and
+ * logged, not force-moved: two contacts holding one address is a data problem
+ * for a person to look at, and silently picking a winner hides it.
+ */
+function contactsMigrateSecondary(PDO $db): void {
+    try {
+        $has = $db->query(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'contacts'
+             AND COLUMN_NAME = 'secondary_email'"
+        )->fetchColumn();
+        if (!$has) return;
+
+        $rows = $db->query("SELECT id, secondary_email FROM contacts
+                            WHERE secondary_email <> ''")->fetchAll();
+        if (!$rows) return;
+
+        $ins   = $db->prepare("INSERT IGNORE INTO contact_emails
+                               (contact_id, email, email_normalized, created_by)
+                               VALUES (?,?,?,'moved from secondary_email')");
+        $owner = $db->prepare("SELECT contact_id FROM contact_emails WHERE email_normalized=?");
+        $prim  = $db->prepare("SELECT id FROM contacts WHERE email_normalized=?");
+        $clear = $db->prepare("UPDATE contacts SET secondary_email='' WHERE id=?");
+        $moved = $kept = 0;
+
+        foreach ($rows as $r) {
+            $id = (int)$r['id'];
+            $e  = trim((string)$r['secondary_email']);
+            if ($e === '') continue;
+            $n  = contactNormalizeEmail($e);
+
+            // Somebody's primary address already. Not an extra at all.
+            $prim->execute([$n]);
+            $pid = (int)($prim->fetchColumn() ?: 0);
+            if ($pid) {
+                if ($pid !== $id) { $kept++; continue; }
+                $clear->execute([$id]);   // their own primary, listed twice
+                continue;
+            }
+
+            $ins->execute([$id, $e, $n]);
+            // Cleared only once this contact is the one holding it, so a
+            // collision cannot delete the evidence of itself.
+            $owner->execute([$n]);
+            if ((int)($owner->fetchColumn() ?: 0) === $id) { $clear->execute([$id]); $moved++; }
+            else                                           { $kept++; }
+        }
+        if ($kept) {
+            error_log("contact_emails migration: moved {$moved}, left {$kept} "
+                    . "in secondary_email because another contact holds the address");
+        }
+    } catch (Exception $e) {
+        error_log('contact_emails migration: ' . $e->getMessage());
+    }
+}
+
+/** The addresses a contact uses besides contacts.email, oldest first. */
+function contactEmails(int $id): array {
+    contactsEnsureTables();
+    try {
+        $s = getDB()->prepare("SELECT email FROM contact_emails WHERE contact_id=? ORDER BY id");
+        $s->execute([$id]);
+        return array_map('strval', array_column($s->fetchAll(), 'email'));
+    } catch (Exception $e) {
+        return [];   // table not there yet: a contact has the one address
+    }
+}
+
+/** Primary first, then the rest. What "their email addresses" means. */
+function contactAllEmails(array $c): array {
+    $out = [];
+    $p = trim((string)($c['email'] ?? ''));
+    if ($p !== '') $out[] = $p;
+    foreach (contactEmails((int)($c['id'] ?? 0)) as $e) {
+        if (strcasecmp($e, $p) !== 0) $out[] = $e;
+    }
+    return $out;
+}
+
+/**
+ * Who holds this address, counting primaries and extras alike.
+ * Returns [id, name, primary] or null.
+ */
+function contactEmailOwner(string $email): ?array {
+    contactsEnsureTables();
+    $n = contactNormalizeEmail($email);
+    if ($n === '') return null;
+    $s = getDB()->prepare("SELECT * FROM contacts WHERE email_normalized=?");
+    $s->execute([$n]);
+    if ($c = $s->fetch()) {
+        return ['id' => (int)$c['id'], 'name' => contactDisplayName($c), 'primary' => true];
+    }
+    try {
+        $s = getDB()->prepare(
+            "SELECT c.* FROM contact_emails e JOIN contacts c ON c.id = e.contact_id
+             WHERE e.email_normalized = ?");
+        $s->execute([$n]);
+        if ($c = $s->fetch()) {
+            return ['id' => (int)$c['id'], 'name' => contactDisplayName($c), 'primary' => false];
+        }
+    } catch (Exception $e) {
+        // No contact_emails table yet.
+    }
+    return null;
+}
+
+/**
+ * Are these usable as extra addresses for this contact? '' if so, else why not.
+ *
+ * Asked before anything is written, so a bad address in the list cannot leave
+ * the other fields saved and the addresses half-applied.
+ */
+function contactEmailsCheck(array $emails, int $forId, string $primary = ''): string {
+    $seen = [];
+    $pn   = contactNormalizeEmail($primary);
+    foreach ($emails as $e) {
+        $e = trim((string)$e);
+        if ($e === '') continue;
+        if (!contactValidEmail($e)) {
+            return '"' . $e . '" does not look like an email address.';
+        }
+        $n = contactNormalizeEmail($e);
+        if ($pn !== '' && $n === $pn) {
+            return 'That is already their main address, so it does not need listing again.';
+        }
+        if (isset($seen[$n])) return 'The same address is listed twice: ' . $e;
+        $seen[$n] = true;
+
+        $own = contactEmailOwner($e);
+        if ($own && $own['id'] !== $forId) {
+            return $e . ' is already on ' . $own['name'] . "'s record"
+                 . ($own['primary'] ? ' as their main address.' : '.')
+                 . ' One address belongs to one person.';
+        }
+    }
+    return '';
+}
+
+/**
+ * Make the stored extras match this list. Returns what changed.
+ *
+ * A straight diff rather than delete-all-and-reinsert: the audit entry should
+ * say an address was added, and created_at is worth keeping.
+ */
+function contactEmailsSync(int $id, array $emails, string $actor): array {
+    contactsEnsureTables();
+    $want = [];
+    foreach ($emails as $e) {
+        $e = trim((string)$e);
+        if ($e !== '') $want[contactNormalizeEmail($e)] = $e;
+    }
+    $have = [];
+    foreach (contactEmails($id) as $e) $have[contactNormalizeEmail($e)] = $e;
+
+    $add = array_diff_key($want, $have);
+    $del = array_diff_key($have, $want);
+
+    if ($add) {
+        $ins = getDB()->prepare("INSERT IGNORE INTO contact_emails
+                                 (contact_id, email, email_normalized, created_by)
+                                 VALUES (?,?,?,?)");
+        foreach ($add as $n => $e) $ins->execute([$id, $e, $n, $actor]);
+    }
+    if ($del) {
+        $rm = getDB()->prepare("DELETE FROM contact_emails WHERE contact_id=? AND email_normalized=?");
+        foreach ($del as $n => $e) $rm->execute([$id, $n]);
+    }
+    if ($add || $del) {
+        contactAudit($id, 'edited', $actor, 'other email addresses',
+                     count($add) . ' added, ' . count($del) . ' removed');
+    }
+    return ['added' => array_values($add), 'removed' => array_values($del)];
+}
+
 function contactDisplayName(array $c): string {
     $first = trim($c['preferred_name'] ?: $c['first_name']);
     $name  = trim($first . ' ' . trim($c['last_name']));
@@ -170,7 +390,7 @@ function contactSearch(array $f, int $page = 1, int $perPage = 50): array {
          * word separately makes a full name work in either order, and still
          * finds "cod li".
          */
-        $cols  = ['first_name', 'last_name', 'preferred_name', 'email', 'secondary_email'];
+        $cols  = ['first_name', 'last_name', 'preferred_name', 'email'];
         $terms = preg_split('/\s+/', trim((string)$f['q']), -1, PREG_SPLIT_NO_EMPTY) ?: [];
         // "Lind, Cody" is a name as people write it; the comma is punctuation,
         // not something to search for. Trimmed at the edges only, so an address
@@ -194,6 +414,14 @@ function contactSearch(array $f, int $page = 1, int $perPage = 50): array {
             $like = '%' . str_replace(['|', '%', '_'], ['||', '|%', '|_'], $term) . '%';
             $ors = [];
             foreach ($cols as $c) { $ors[] = "$c LIKE ? ESCAPE '|'"; $params[] = $like; }
+            /* The other addresses they use. They were a column, so searching
+             * them came free; now they are rows, and leaving them out would
+             * mean typing the address somebody actually wrote from found
+             * nobody. Both queries below select from `contacts` unaliased, so
+             * the correlation names the table. */
+            $ors[] = "EXISTS (SELECT 1 FROM contact_emails ce"
+                   . " WHERE ce.contact_id = contacts.id AND ce.email LIKE ? ESCAPE '|')";
+            $params[] = $like;
             $where[] = '(' . implode(' OR ', $ors) . ')';
         }
     }
@@ -289,7 +517,7 @@ function contactAudit(?int $contactId, string $action, string $actor, string $ch
 
 /** Fields an administrator may set. Mailchimp's own columns are not here. */
 const CONTACT_EDITABLE = [
-    'first_name', 'last_name', 'preferred_name', 'email', 'secondary_email',
+    'first_name', 'last_name', 'preferred_name', 'email',
     'phone', 'school_id', 'school_other', 'position', 'role', 'status', 'notes',
 ];
 
@@ -300,6 +528,12 @@ function contactCreate(array $d, string $actor): array {
 
     if ($existing = contactFindByEmail($email)) {
         return ['error' => 'A contact with that email already exists.', 'existing' => $existing];
+    }
+    // Also when it is somebody's second address. Creating a contact around an
+    // address another record already answers for is how one person becomes two.
+    if ($own = contactEmailOwner($email)) {
+        return ['error' => 'That address is already listed on ' . $own['name']
+                         . "'s record. One address belongs to one person."];
     }
 
     $cols = ['email', 'email_normalized', 'created_by', 'updated_by'];
@@ -330,9 +564,12 @@ function contactUpdate(int $id, array $d, string $actor): array {
 
     $norm = contactNormalizeEmail($email);
     if ($norm !== $cur['email_normalized']) {
-        $clash = contactFindByEmail($email);
-        if ($clash && (int)$clash['id'] !== $id) {
-            return ['error' => 'Another contact already uses that email address.'];
+        $clash = contactEmailOwner($email);
+        if ($clash && $clash['id'] !== $id) {
+            return ['error' => $clash['primary']
+                ? 'Another contact already uses that email address.'
+                : 'That address is listed as a second address on ' . $clash['name']
+                  . "'s record. Take it off there first."];
         }
     }
 
@@ -353,6 +590,18 @@ function contactUpdate(int $id, array $d, string $actor): array {
     }
     $vals[] = $id;
     getDB()->prepare("UPDATE contacts SET " . implode(', ', $set) . " WHERE id = ?")->execute($vals);
+
+    /* Promoted one of their own second addresses to the main one. Left in
+     * place it would be listed twice, and the alias map would carry an address
+     * to itself. */
+    if ($norm !== $cur['email_normalized']) {
+        try {
+            getDB()->prepare("DELETE FROM contact_emails WHERE contact_id=? AND email_normalized=?")
+                   ->execute([$id, $norm]);
+        } catch (Exception $e) {
+            // No contact_emails table yet; nothing to tidy.
+        }
+    }
 
     if ($changed) contactAudit($id, 'edited', $actor, implode(', ', $changed));
     return ['id' => $id, 'changed' => $changed];

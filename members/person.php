@@ -146,6 +146,19 @@ function when($v, string $fmt = 'M j, Y'): string {
           <a href="mailto:<?= pv($c['email']) ?>"><?= pv($c['email']) ?></a>
           <?php if ($c['phone']): ?> &middot; <?= pv($c['phone']) ?><?php endif; ?>
         </div>
+        <?php /* The other addresses they write from. Shown on the record, not
+                 only on the edit form: the collaboration grant counts their
+                 days under one person because of these, so which ones are
+                 listed is something you need to be able to see. Union mail
+                 still only ever goes to the main address. */ ?>
+        <?php $alsoEmails = contactEmails((int)$c['id']); ?>
+        <?php if ($alsoEmails): ?>
+        <div class="sub" style="margin-top:.2rem;">
+          <span style="color:var(--gray-400);">also</span>
+          <?php foreach ($alsoEmails as $n => $ae): ?><?= $n ? ' &middot; ' : ' ' ?><a
+            href="mailto:<?= pv($ae) ?>"><?= pv($ae) ?></a><?php endforeach; ?>
+        </div>
+        <?php endif; ?>
         <?php if ($c['status'] === 'archived'): ?>
           <div style="margin-top:.5rem;">
             <span class="badge b-slate">Archived</span>

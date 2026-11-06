@@ -34,7 +34,12 @@ function importGuessField(string $h): string {
         'last_name'       => ['last name','lastname','last','surname','family name'],
         'preferred_name'  => ['preferred name','preferred','goes by','nickname'],
         'email'           => ['email','email address','e-mail','emailaddress','primary email'],
-        'secondary_email' => ['secondary email','alt email','personal email','other email'],
+        // Any number of these columns, and one cell may list several
+        // addresses. They become rows in contact_emails, not one field that
+        // the next one overwrites.
+        'other_email'     => ['secondary email','second email','alt email','alternate email',
+                              'personal email','other email','other emails','work email',
+                              'email 2','email2','email 3','email3'],
         'phone'           => ['phone','telephone','mobile','cell'],
         'school_other'    => ['school','worksite','site','location'],
         'position'        => ['position','job title','title'],
@@ -45,6 +50,24 @@ function importGuessField(string $h): string {
         if (in_array($h, $names, true)) return $field;
     }
     return '';
+}
+
+/**
+ * The addresses from a row that may actually be attached to this contact:
+ * valid, not their own main address, not already somebody else's.
+ *
+ * Asked through contactEmailsCheck() one at a time rather than reimplemented,
+ * so the import obeys the same rule as the contact form. A row that cannot be
+ * used is dropped, not fatal: an import of two hundred people should not stop
+ * because one spreadsheet cell has a stale address in it.
+ */
+function importUsableEmails(array $emails, int $forId, string $primary): array {
+    $out = [];
+    foreach ($emails as $e) {
+        if (contactEmailsCheck([$e], $forId, $primary) !== '') continue;
+        $out[] = $e;
+    }
+    return $out;
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -59,8 +82,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $header = array_shift($rows);
             $cols = [];
+            // Kept as a list, because a sheet may carry two or three of them.
+            $otherCols = [];
             foreach ($header as $i => $h) {
                 $f = importGuessField((string)$h);
+                if ($f === 'other_email') { $otherCols[] = $i; continue; }
                 if ($f !== '') $cols[$f] = $i;
             }
             if (!isset($cols['email'])) {
@@ -75,6 +101,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $rec = ['email' => $email];
                     foreach ($cols as $f => $i) {
                         if ($f !== 'email') $rec[$f] = trim((string)($r[$i] ?? ''));
+                    }
+                    // Split, because one cell headed "Other emails" usually
+                    // holds a list rather than a single address.
+                    $rec['_emails'] = [];
+                    foreach ($otherCols as $i) {
+                        foreach (preg_split('/[;,\s]+/', (string)($r[$i] ?? '')) ?: [] as $e) {
+                            $e = trim($e);
+                            if ($e !== '') $rec['_emails'][] = $e;
+                        }
                     }
 
                     if (!contactValidEmail($email))      { $rec['_v'] = 'skip'; $rec['_why'] = 'Not a valid email'; $skip++; }
@@ -99,11 +134,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$items) {
             $error = 'That import expired. Upload the file again.';
         } else {
-            $added = $updated = 0;
+            $added = $updated = $addrs = 0;
             foreach ($items as $rec) {
                 if (($rec['_v'] ?? '') === 'skip') continue;
                 $data = array_intersect_key($rec, array_flip(CONTACT_EDITABLE));
                 if (empty($data['status'])) $data['status'] = 'active';
+                $extra  = (array)($rec['_emails'] ?? []);
+                $savedId = 0;
 
                 if (($rec['_v'] ?? '') === 'update') {
                     $existing = contactFindByEmail($rec['email']);
@@ -113,17 +150,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $merged = $existing;
                         foreach ($data as $k => $v) if ($v !== '') $merged[$k] = $v;
                         contactUpdate((int)$existing['id'], $merged, $member['email']);
+                        $savedId = (int)$existing['id'];
                         $updated++;
                     }
                 } else {
                     $res = contactCreate($data, $member['email']);
-                    if (empty($res['error'])) $added++;
+                    if (empty($res['error'])) { $savedId = (int)$res['id']; $added++; }
+                }
+
+                /* Added to whatever is already on the record, never matched to
+                 * it: a file with no address columns must not delete the
+                 * addresses somebody entered by hand, which is the same rule
+                 * the field merge above follows. */
+                if ($savedId && $extra) {
+                    $use = importUsableEmails($extra, $savedId, (string)$rec['email']);
+                    if ($use) {
+                        $before = contactEmails($savedId);
+                        $r = contactEmailsSync($savedId, array_merge($before, $use), $member['email']);
+                        $addrs += count($r['added']);
+                    }
                 }
             }
             unset($_SESSION['contact_import']);
             contactAudit(null, 'import', $member['email'], '', "{$added} added, {$updated} updated");
             header('Location: people.php?notice=' . urlencode(
-                "Import finished — {$added} added, {$updated} updated. Nobody was subscribed to email."));
+                "Import finished — {$added} added, {$updated} updated"
+                . ($addrs ? ", {$addrs} other address" . ($addrs === 1 ? '' : 'es') . " recorded" : '')
+                . ". Nobody was subscribed to email."));
             exit;
         }
     }
