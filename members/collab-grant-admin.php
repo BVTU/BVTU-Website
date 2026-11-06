@@ -371,11 +371,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'colla
             $notice = 'That is the name already on it.';
         } else {
             $notice = 'Collaborator is now ' . $newName . '.';
-            // An email that has gone cannot be unsent, and the admin is the
-            // only one who can put that right.
-            if (!empty($app['collab_notified_at'])) {
-                $notice .= ' ' . $was . ' was already emailed on '
-                         . date('M j', strtotime((string)$app['collab_notified_at'])) . '.';
+            /* Gated on the same comparison cgApplyEdit() uses to decide
+             * whether this is a different person. Fixing "pat smith" to "Pat
+             * Smith" resets nothing and still reaches the right teacher, so
+             * raising the alarm on it is noise of the kind that teaches you
+             * to ignore the alarm. */
+            if (cgNameKey($was) !== cgNameKey($newName)) {
+                if (!empty($app['collab_notified_at'])) {
+                    $notice .= ' ' . $was . ' was emailed on '
+                             . date('M j', strtotime((string)$app['collab_notified_at']))
+                             . ' and that cannot be unsent.';
+                }
+                /* The confirmed address went with the old name — kept, it
+                 * would write "a day is booked against your name" to entirely
+                 * the wrong teacher. Said out loud, because the panel will now
+                 * ask for it again and an admin who was not told would read
+                 * that as the page losing their work. */
+                if (trim((string)($app['collaborator_email'] ?? '')) !== '') {
+                    $notice .= ' The address on it was cleared — ' . $newName
+                             . "'s own will need confirming.";
+                }
             }
             cgCachesReset();
             $apps = cgGetApplications($year);
@@ -1464,24 +1479,26 @@ $totalDaysApproved = $personDays['approved'];
                 $unmatched = strpos((string)$lp['key'], 'n:') === 0;
                 $addrs     = $lp['emails'] ?? ($lp['email'] ? [$lp['email']] : []);
 
-                $flags = [];   // on the row: worth a second look
+                /* On the row: only what changes a decision, and each one
+                 * says what it means on hover. "name match" is how a
+                 * collaborator is normally identified, not an exception — it
+                 * was on most rows, which is a marker that teaches you to
+                 * ignore markers. The dates below answer it. */
+                $flags = [];
 
                 if (!empty($lp['shared_days'])) {
-                    // Which days, and which applications, are on the chips
-                    // below rather than in a sentence here.
-                    $flags[] = count($lp['shared_days']) . ' shared';
+                    $n = count($lp['shared_days']);
+                    $flags[] = [$n . ' shared',
+                        $n . ' ' . ($n === 1 ? 'day is' : 'days are') . ' claimed by more than '
+                        . 'one application — counted once, because they can only be away once. '
+                        . 'Outlined in the dates below.'];
                 }
-                /* Chips with tooltips, not paragraphs. Every one of these was
-                 * once a sentence explaining a figure, and a stack of
-                 * sentences under a table is a thing nobody reads — so the
-                 * explaining was not working anyway. The dates below are the
-                 * answer to most of what they were saying. */
                 if ($unmatched) {
-                    $flags[] = 'no match';
-                } elseif (!$lp['exact']) {
-                    $flags[] = 'name match';
+                    $flags[] = ['no match',
+                        'This name matched no contact and nobody who applied this year, so these '
+                        . 'days sit under the name as typed. They may belong to someone already '
+                        . 'listed here under their email address.'];
                 }
-                if (!empty($lp['undated'])) $flags[] = 'undated';
               ?>
               <tr style="border-top:1px solid var(--border);">
                 <td style="padding:.45rem .5rem;">
@@ -1493,8 +1510,8 @@ $totalDaysApproved = $personDays['approved'];
                     <?php if ($addrs): ?>
                       <span class="cg-em">· <?= htmlspecialchars($addrs[0]) ?></span>
                     <?php endif; ?>
-                    <?php foreach ($flags as $f): ?>
-                      <span class="cg-chip warn"><?= htmlspecialchars($f) ?></span>
+                    <?php foreach ($flags as [$fText, $fWhy]): ?>
+                      <span class="cg-chip warn" title="<?= htmlspecialchars($fWhy) ?>"><?= htmlspecialchars($fText) ?></span>
                     <?php endforeach; ?>
                   </button>
                 </td>
@@ -1711,23 +1728,9 @@ $totalDaysApproved = $personDays['approved'];
               <div class="read-fact">
                 <strong>Collaborator:</strong>
                 <?php if ($app['has_collaborator'] && $app['collaborator_name']): ?>
-                  <?php if ($cgReadOnly): ?>
-                    <?= htmlspecialchars($app['collaborator_name']) ?><?= $app['collaborator_school'] ? ' (' . htmlspecialchars($app['collaborator_school']) . ')' : '' ?>
-                  <?php else: ?>
-                    <?php // Editable in place: a name typed from memory is the
-                          // field most often wrong, and this is where you are
-                          // when you spot it. ?>
-                    <form class="app-action-form cg-rename" method="post">
-                      <?= csrfField() ?>
-                      <input type="hidden" name="action" value="collab-rename">
-                      <input type="hidden" name="app_id" value="<?= (int)$app['id'] ?>">
-                      <input type="text" name="collaborator_name" maxlength="160"
-                             value="<?= htmlspecialchars($app['collaborator_name']) ?>"
-                             aria-label="Collaborator's name">
-                      <button type="submit">Save</button>
-                    </form>
-                    <?= $app['collaborator_school'] ? '(' . htmlspecialchars($app['collaborator_school']) . ')' : '' ?>
-                  <?php endif; ?>
+                  <?php // The print card. The name is plain text here: this is
+                        // the copy taken to a meeting. ?>
+                  <?= htmlspecialchars($app['collaborator_name']) ?><?= $app['collaborator_school'] ? ' (' . htmlspecialchars($app['collaborator_school']) . ')' : '' ?>
                 <?php elseif ($app['needs_partner']): ?>
                   <em>Needs help finding partner</em>
                 <?php else: ?>
@@ -1844,7 +1847,18 @@ $totalDaysApproved = $personDays['approved'];
                 <div class="dl">Collaborator</div>
                 <div class="dd">
                   <?php if ($app['has_collaborator'] && $app['collaborator_name']): ?>
-                    <?= htmlspecialchars($app['collaborator_name']) ?>
+                    <?php // Editable in place. Applicants type this from memory
+                          // and get it wrong, and this card is where you are
+                          // when you notice. ?>
+                    <form class="app-action-form cg-rename" method="post">
+                      <?= csrfField() ?>
+                      <input type="hidden" name="action" value="collab-rename">
+                      <input type="hidden" name="app_id" value="<?= (int)$app['id'] ?>">
+                      <input type="text" name="collaborator_name" maxlength="160"
+                             value="<?= htmlspecialchars($app['collaborator_name']) ?>"
+                             aria-label="Collaborator's name">
+                      <button type="submit">Save</button>
+                    </form>
                     <?php if ($app['collaborator_school']): ?>
                       <span style="color:var(--gray-400);font-weight:400;"> · <?= htmlspecialchars($app['collaborator_school']) ?></span>
                     <?php endif; ?>
