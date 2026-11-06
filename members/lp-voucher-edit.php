@@ -250,8 +250,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                  * out to be fine, so a second press goes through; refusing
                  * outright would leave a voucher that could never be filed. */
                 $fresh = lpReviewVoucher($freshVoucher, $freshExpenses);
-                if ($fresh['findings'] && empty($_POST['_checked'])) {
-                    header('Location: lp-voucher-edit.php?id=' . $id . '&needs_check=1');
+                $stamp = lpReviewStamp($freshVoucher, $freshExpenses);
+                /* The acknowledgement has to name the rows it acknowledges. A
+                 * bare flag in the URL was carried in the form from page load,
+                 * so editing a line on the needs_check page and pressing
+                 * Submit anyway sent rows the check had never seen — and any
+                 * bookmarked or back-buttoned ?needs_check=1 skipped the first
+                 * check outright. */
+                /* Bounded. A mismatch means the rows moved since the check,
+                 * which is exactly when to check again — but if the stamp
+                 * will not settle, because some future save churns row ids,
+                 * the alternative to a bound is a voucher that can never be
+                 * submitted at all. Two rounds, then it goes. */
+                $tries = (int)($_POST['_tries'] ?? 0);
+                if ($fresh['findings']
+                    && (string)($_POST['_checked'] ?? '') !== $stamp
+                    && $tries < 2) {
+                    header('Location: lp-voucher-edit.php?id=' . $id
+                         . '&needs_check=' . $stamp . '&t=' . ($tries + 1));
                     exit;
                 }
 
@@ -277,6 +293,9 @@ $voucher = lpGetVoucher($id);
  * rather than sitting there contradicting the rows on screen. */
 $review = lpReviewVoucher($voucher, $expenses);
 $revFix = false;   // this IS the fixing page
+/* Worked out once, up here, because the banner near the top of the page and
+ * the button at the bottom have to agree about it. */
+$revAckBanner = ($_GET['needs_check'] ?? '') === lpReviewStamp($voucher, $expenses);
 
 $grantsJson      = json_encode(array_values($grants));
 $budgetLinesJson = json_encode(array_values($budgetLines));
@@ -574,10 +593,16 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
   <?php if ($saved): ?>
   <div class="saved-notice">&#x2713; Voucher updated successfully.</div>
   <?php endif; ?>
-  <?php if (isset($_GET['needs_check'])): ?>
+  <?php /* Gated on the same stamp as the button, not on the query string:
+           after a save in between, the button has gone back to checking, and
+           a banner still saying "press it again to send it anyway" would be
+           telling you to do something that bounces straight back here. The
+           stamp is also why this cannot claim "Saved" on a render where
+           validation errors meant nothing was written. */ ?>
+  <?php if ($revAckBanner): ?>
   <div class="saved-notice" style="background:#fffbeb;border-color:#fde68a;color:#92400e;">
     &#x2713; Saved, but not submitted yet &mdash; have a look at what is flagged below first.
-    Press Submit for Approval again to send it anyway.
+    Press Submit anyway to send it as it is.
   </div>
   <?php endif; ?>
   <?php if (isset($_GET['submitted'])): ?>
@@ -768,13 +793,15 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
              re-runs the check against what it actually wrote and brings you
              back to the card if anything is flagged, which is a promise that
              holds whatever you typed. */
-          /* ...and the acknowledgement does not survive another save. Press
-             Save Changes on this page and the next Submit re-runs the check,
-             because the rows it would be acknowledging are not the rows that
-             were checked. */
-          $revAck = isset($_GET['needs_check']) && !$saved; ?>
+          /* Only the rows that were actually checked. Anything else — a
+             save in between, a line edited, a bookmarked URL — and the stamp
+             does not match, so the next press checks again. */
+          $revAck = $revAckBanner; ?>
     <?php if ($revAck): ?>
-    <input type="hidden" name="_checked" value="1">
+    <input type="hidden" name="_checked" value="<?= htmlspecialchars((string)$_GET['needs_check']) ?>">
+    <?php endif; ?>
+    <?php if ((int)($_GET['t'] ?? 0) > 0): ?>
+    <input type="hidden" name="_tries" value="<?= (int)$_GET['t'] ?>">
     <?php endif; ?>
     <button type="submit" name="_submit_for_approval" value="1"
             class="btn btn-primary" style="padding:.65rem 1.5rem;font-size:.95rem;background:#166534;"

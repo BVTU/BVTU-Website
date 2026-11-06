@@ -151,6 +151,38 @@ function lpReviewLine(array $e, int $n): array {
  *
  * Returns ['findings' => [...], 'missing' => int, 'check' => int].
  */
+/**
+ * A fingerprint of exactly what the pre-submit check looked at.
+ *
+ * The edit page's Submit for Approval saves and then submits, so "you have
+ * seen the findings" cannot be a flag in the URL: the rows move underneath it.
+ * The acknowledgement carries this instead, and is only honoured when the rows
+ * being submitted are the rows that were checked — so editing a line and
+ * pressing Submit again re-runs the check, and a bookmarked or back-buttoned
+ * needs_check URL acknowledges nothing.
+ *
+ * Every field a finding can come from, so a change that could alter the
+ * findings always changes the stamp. Cheaper than being clever and wrong.
+ */
+function lpReviewStamp(array $voucher, array $expenses): string {
+    $parts = [(string)($voucher['mileage_rate'] ?? '')];
+    foreach (array_values($expenses) as $e) {
+        $parts[] = implode('|', [
+            (string)($e['id'] ?? ''),            (string)($e['expense_date'] ?? ''),
+            (string)($e['description'] ?? ''),   (string)($e['travel_km'] ?? ''),
+            (string)($e['travel_amt'] ?? ''),    (string)($e['meals'] ?? ''),
+            (string)($e['gifts'] ?? ''),         (string)($e['misc'] ?? ''),
+            (string)($e['office'] ?? ''),        (string)($e['phone'] ?? ''),
+            (string)($e['receipt_path'] ?? ''),  (string)($e['receipt_extra'] ?? ''),
+            (string)($e['receipt_sha256'] ?? ''),(string)($e['scan_vendor'] ?? ''),
+            (string)($e['scan_date'] ?? ''),     (string)($e['scan_total'] ?? ''),
+            (string)($e['scan_alt_totals'] ?? ''),
+            (string)($e['grant_id'] ?? ''),      (string)($e['budget_line_id'] ?? ''),
+        ]);
+    }
+    return substr(hash('sha256', implode("\n", $parts)), 0, 32);
+}
+
 function lpReviewVoucher(array $voucher, array $expenses): array {
     $findings = [];
 
