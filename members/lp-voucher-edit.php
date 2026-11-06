@@ -236,6 +236,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $freshExpenses = lpGetExpenses($id);
             if (count($freshExpenses) > 0) {
                 $freshVoucher = lpGetVoucher($id);
+
+                /* Checked here, against the rows that were just written. The
+                 * card at the top of the page and the dialog on the button
+                 * were both built when the page loaded, so adding a line with
+                 * no receipt and pressing Submit sent the voucher with no
+                 * warning at all — this button saves and submits in one go,
+                 * and what it saved is not what either of them had seen. On
+                 * the way back the page re-reads the rows, so the card then
+                 * lists what is actually there.
+                 *
+                 * It stops at the first attempt only. Plenty of findings turn
+                 * out to be fine, so a second press goes through; refusing
+                 * outright would leave a voucher that could never be filed. */
+                $fresh = lpReviewVoucher($freshVoucher, $freshExpenses);
+                if ($fresh['findings'] && empty($_POST['_checked'])) {
+                    header('Location: lp-voucher-edit.php?id=' . $id . '&needs_check=1');
+                    exit;
+                }
+
                 $total = array_sum(array_map('lpRowTotal', $freshExpenses));
                 lpSubmitVoucher($id);
                 lpEmailSubmitted($freshVoucher, $total);
@@ -555,6 +574,12 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
   <?php if ($saved): ?>
   <div class="saved-notice">&#x2713; Voucher updated successfully.</div>
   <?php endif; ?>
+  <?php if (isset($_GET['needs_check'])): ?>
+  <div class="saved-notice" style="background:#fffbeb;border-color:#fde68a;color:#92400e;">
+    &#x2713; Saved, but not submitted yet &mdash; have a look at what is flagged below first.
+    Press Submit for Approval again to send it anyway.
+  </div>
+  <?php endif; ?>
   <?php if (isset($_GET['submitted'])): ?>
   <div class="saved-notice" style="background:#fffbeb;border-color:#fde68a;color:#92400e;">
     &#x2713; Voucher submitted for approval. The Treasurer has been notified.
@@ -734,29 +759,29 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
     <?php if ($voucher['status'] === 'draft' && count($expenses) > 0): ?>
     <?php /* The warning here used to say "you will not be able to edit it
              after submission", while the view page's button said "you can
-             still edit it after". The second one is true — the condition on
-             this very save bar lets an owner edit anything short of paid — so
-             the false one is gone.
+             still edit it after". The second one is true while the Treasurer
+             still has it, so the false one is gone.
 
-             The count comes with it because this button sits at the bottom of
-             a long form and the card listing those findings is at the top,
-             off screen by the time you reach here. */
-          $revN   = count($review['findings'] ?? []);
-          // Double-quoted for the line breaks: in a single-quoted string \n is
-          // a backslash and an n, and the dialog would say so.
-          $revWarn = $revN
-              ? 'There ' . ($revN === 1 ? 'is 1 thing' : "are {$revN} things")
-                . " worth checking at the top of this page. Submit anyway?\n\n"
-              : '';
-          $revMsg = $revWarn . 'Save and submit this voucher to the Treasurer for approval?'
-                  . ' You can still change it afterwards.'; ?>
+             No count of findings in the dialog. It would be read off the page
+             as it loaded, and this button saves before it submits — so the
+             number could be describing rows that no longer exist. The save
+             re-runs the check against what it actually wrote and brings you
+             back to the card if anything is flagged, which is a promise that
+             holds whatever you typed. */
+          /* ...and the acknowledgement does not survive another save. Press
+             Save Changes on this page and the next Submit re-runs the check,
+             because the rows it would be acknowledging are not the rows that
+             were checked. */
+          $revAck = isset($_GET['needs_check']) && !$saved; ?>
+    <?php if ($revAck): ?>
+    <input type="hidden" name="_checked" value="1">
+    <?php endif; ?>
     <button type="submit" name="_submit_for_approval" value="1"
             class="btn btn-primary" style="padding:.65rem 1.5rem;font-size:.95rem;background:#166534;"
-            <?php // Entity-escaped, because json_encode() hands back a
-                  // double-quoted string and the attribute is double-quoted
-                  // too: raw, it would end the attribute mid-sentence. ?>
-            onclick="return confirm(<?= htmlspecialchars(json_encode($revMsg), ENT_QUOTES) ?>)">
-      ✅ Submit for Approval
+            onclick="return confirm('<?= $revAck
+                ? 'Submit it anyway, with the flagged lines as they are?'
+                : 'Save and submit this voucher to the Treasurer for approval? You can still correct it while they have it.' ?>')">
+      <?= $revAck ? '✅ Submit anyway' : '✅ Submit for Approval' ?>
     </button>
     <?php endif; ?>
     <?php if ($voucher['status'] !== 'draft'): ?>
