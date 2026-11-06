@@ -156,31 +156,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'resen
  * needs doing. */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'link_collab_email') {
     csrfCheck();
-    $target    = cgGetApplication((int)($_POST['app_id'] ?? 0));
-    $linkAddr  = $target ? cgCollaboratorKeyEmail($target) : '';
-    $contactId = (int)($_POST['contact_id'] ?? 0);
-    $contact   = $contactId ? contactGet($contactId) : null;
+    $target = cgGetApplication((int)($_POST['app_id'] ?? 0));
+    /* Worked out here, not taken from the form. The posted contact id is only
+     * ever checked against it: on a page left open while the name became
+     * ambiguous, or on a hand-made POST, the form's id could name a contact
+     * this page would no longer offer — and attaching an address to the wrong
+     * record merges two teachers' totals with no un-link to undo it. */
+    $link   = $target ? cgCollaboratorLinkTarget($target) : null;
+    $asked  = (int)($_POST['contact_id'] ?? 0);
 
-    if (!$target || $linkAddr === '' || !$contact) {
-        $notice = 'Could not link that address.';
-    } elseif ($own = contactEmailOwner($linkAddr)) {
-        // Somebody claimed it between the page loading and the button being
-        // pressed. Saying whose is more use than saying it failed.
-        $notice = $linkAddr . ' is already on ' . $own['name'] . "'s record.";
+    if (!$target || !$link) {
+        $notice = 'Nothing to link — that address is already on a contact, or the '
+                . 'name no longer points at exactly one person.';
+    } elseif ($asked !== $link['id']) {
+        $notice = 'The contact list has changed since this page was opened. '
+                . 'Reload it and have another look before linking.';
     } else {
-        $err = contactEmailsCheck([$linkAddr], $contactId, (string)$contact['email']);
+        $contact = contactGet($link['id']);
+        $err     = $contact
+            ? contactEmailsCheck([$link['email']], $link['id'], (string)$contact['email'])
+            : 'Could not find that contact.';
         if ($err !== '') {
             $notice = $err;
         } else {
-            contactEmailsSync($contactId,
-                              array_merge(contactEmails($contactId), [$linkAddr]),
-                              $member['email']);
-            $notice = $linkAddr . ' is now on ' . contactDisplayName($contact)
-                    . "'s contact, so their days count together from here on.";
-            // Both caches were built before the alias map changed underneath
-            // them, and the page is about to redraw the figures.
-            cgCachesReset();
-            $apps = cgGetApplications($year);
+            $r = contactEmailsSync($link['id'],
+                                   array_merge(contactEmails($link['id']), [$link['email']]),
+                                   $member['email']);
+            /* Reported from what was written. The insert ignores an address
+             * claimed in the meantime, so claiming success on having asked
+             * would put a merge on screen that did not happen. */
+            if ($r['added']) {
+                $notice = $link['email'] . ' is now on ' . $link['name']
+                        . "'s contact, so their days count together from here on.";
+                // Built before the alias map changed underneath them, and the
+                // page is about to redraw the figures.
+                cgCachesReset();
+                $apps = cgGetApplications($year);
+            } else {
+                $notice = 'That address was not added — somebody else claimed it just now. '
+                        . 'Reload and have another look.';
+            }
         }
     }
 }
@@ -1864,21 +1879,19 @@ $totalDaysApproved = $personDays['approved'];
                 }
               ?>
               <?php
-                /* The address this application settled its collaborator on,
-                 * when that address is on nobody's contact and the name points
-                 * at exactly one person. That is the case worth acting on: the
-                 * ledger is counting them under an address the contact list has
-                 * never heard of, so the next application that names them
-                 * without it starts a second row for the same teacher. */
+                /* The case worth acting on: the ledger is counting this
+                 * collaborator under an address the contact list has never
+                 * heard of, so the next application naming them without it
+                 * starts a second row for the same teacher.
+                 *
+                 * Screened against the primary addresses already in memory
+                 * before any of it reaches the database. Asked outright, every
+                 * card on the page cost two queries to tell us there was
+                 * nothing to offer. */
                 $linkAddr = cgCollaboratorKeyEmail($app);
                 $linkTo   = null;
-                if ($linkAddr !== '' && !contactEmailOwner($linkAddr)) {
-                    $byNameIdx = cgContactsByName();
-                    $ck = cgNameKey((string)$app['collaborator_name']);
-                    if ($ck !== '' && isset($byNameIdx[$ck]) && empty($byNameIdx[$ck]['ambiguous'])) {
-                        $owner = contactEmailOwner((string)$byNameIdx[$ck]['email']);
-                        if ($owner) $linkTo = ['id' => $owner['id'], 'name' => $owner['name']];
-                    }
+                if ($linkAddr !== '' && !isset(cgContactPrimaries()[$linkAddr])) {
+                    $linkTo = cgCollaboratorLinkTarget($app);
                 }
               ?>
               <div style="background:var(--off-white);border:1px solid var(--border);border-radius:8px;
@@ -1915,6 +1928,7 @@ $totalDaysApproved = $personDays['approved'];
                                   . "'s contact?\n\nTheir collaboration days will count together from then on, here and on every other page."), ENT_QUOTES) ?>)">
                         link to <?= htmlspecialchars($linkTo['name']) ?>
                       </button>
+                      <?php // Checked against the page's own answer, never trusted. ?>
                       <input type="hidden" name="contact_id" value="<?= (int)$linkTo['id'] ?>">
                     <?php elseif (strpos((string)($p['key'] ?? ''), 'n:') === 0): ?>
                       <span class="cg-tag approx"

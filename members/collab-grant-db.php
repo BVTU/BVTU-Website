@@ -710,13 +710,15 @@ function cgSendCollaboratorEmail(array $app, bool $force = false): array {
      *
      * They are released on the same days as the lead — the same days the
      * ledger charges them for. */
-    $dates    = cgDateList($app['proposed_dates'] ?? '');
-    // Counted off the list being printed, not off the day count: one date
-    // beside the word "days" reads as a mistake, and the two can disagree on
-    // an application whose dates have not caught up with its days.
-    $dateCount = count((array)(json_decode((string)($app['proposed_dates'] ?? ''), true) ?: []));
-    $dateLine = $dates !== 'none'
-        ? 'The ' . ($dateCount === 1 ? 'day' : 'days') . ' to book: ' . $dates . "\n\n"
+    /* cgAppDates(), not the raw column: it refuses a date list that does not
+     * match the days granted, and those are the dates the ledger charges. Off
+     * the raw column, an application proposing three dates with one day
+     * approved told the collaborator to book three days in a letter whose
+     * next paragraph said one. */
+    $bookDates = cgAppDates($app);
+    $dateLine  = $bookDates
+        ? 'The ' . (count($bookDates) === 1 ? 'day' : 'days') . ' to book: '
+          . cgDateList($bookDates) . "\n\n"
         : 'The dates are still to be settled — ' . (string)$app['applicant_name']
           . " will confirm them with you.\n\n";
 
@@ -1607,8 +1609,9 @@ function cgResolveCollaborator(string $name, array $byName, array $appsByName): 
 }
 
 /** Applicants of $year indexed by comparable name; a shared name resolves to neither. */
-function cgApplicantsByName(int $year): array {
+function cgApplicantsByName(int $year, bool $fresh = false): array {
     static $cache = [];
+    if ($fresh) { $cache = []; if ($year <= 0) return []; }
     if (isset($cache[$year])) return $cache[$year];
     $out = [];
     try {
@@ -1750,7 +1753,12 @@ function cgOverlappingApps(int $year): array {
  */
 function cgDaysLedger(int $year, bool $fresh = false): array {
     static $cache = [];
-    if ($fresh) $cache = [];
+    if ($fresh) {
+        $cache = [];
+        // Clearing is all that was asked for. Falling through would build a
+        // whole ledger for school year 0 and file the empty result under it.
+        if ($year <= 0) return [];
+    }
     if (isset($cache[$year])) return $cache[$year];
 
     cgEnsureEditSupport();
@@ -2042,7 +2050,62 @@ function cgPersonDays(int $year, string $email, string $name = ''): array {
 function cgCachesReset(): void {
     cgEmailAliases(true);
     cgContactsByName(true);
+    // Also folds addresses through the alias map, so it is as stale as the
+    // rest. Nothing warms it before the one handler that resets today, which
+    // is exactly why it would be missed later.
+    cgApplicantsByName(0, true);
+    cgContactPrimaries(true);
     cgDaysLedger(0, true);
+}
+
+/**
+ * Every contact's main address, folded, as a set.
+ *
+ * Built from the name index that is already in memory, so asking "is this
+ * address on somebody's record?" costs nothing. An address that is one of
+ * somebody's extras folds to their main one through cgCanonEmail(), so it is
+ * in here too — which is the whole question.
+ */
+function cgContactPrimaries(bool $fresh = false): array {
+    static $set = null;
+    if ($fresh) $set = null;
+    if ($set !== null) return $set;
+    $set = [];
+    foreach (cgContactsByName() as $c) {
+        $e = cgCanonEmail((string)($c['email'] ?? ''));
+        if ($e !== '') $set[$e] = true;
+    }
+    return $set;
+}
+
+/**
+ * The contact this application's collaborator should be linked to, or null.
+ *
+ * Both the page that offers the link and the handler that performs it work it
+ * out from the application, so a contact id arriving in a POST is checked
+ * against the answer rather than trusted. Attaching an address to the wrong
+ * record merges two teachers' day totals, and this page has no un-link.
+ *
+ * Returns ['id','name','email'] only when the application settles on an
+ * address, that address is on nobody's record, and the collaborator's name
+ * matches exactly one contact.
+ */
+function cgCollaboratorLinkTarget(array $app): ?array {
+    $addr = cgCollaboratorKeyEmail($app);
+    if ($addr === '') return null;
+    if (!function_exists('contactEmailOwner')) return null;
+    $k = cgNameKey((string)($app['collaborator_name'] ?? ''));
+    if ($k === '') return null;
+
+    $byName = cgContactsByName();
+    if (!isset($byName[$k]) || !empty($byName[$k]['ambiguous'])) return null;
+
+    // Already somebody's, including already theirs: nothing to offer.
+    if (contactEmailOwner($addr)) return null;
+
+    $owner = contactEmailOwner((string)$byName[$k]['email']);
+    if (!$owner) return null;
+    return ['id' => $owner['id'], 'name' => $owner['name'], 'email' => $addr];
 }
 
 /**
