@@ -508,6 +508,37 @@ function cgRowTouched(PDOStatement $st, int $id): bool {
  * still edits applications normally.
  */
 /**
+ * The people a collaborator field names, as comparable keys.
+ *
+ * Identity has to survive being rewritten. "Vittoria Yano and Tanya Davidson"
+ * and "Vittoria Yano, Tanya Davidson" name the same two teachers, and pressing
+ * Save on the rename boxes turns the first into the second — so comparing the
+ * whole field as one key made a no-op save look like a change of person and
+ * wiped the record of who had been emailed.
+ */
+function cgNameKeySet(string $raw): array {
+    $keys = [];
+    foreach (cgNameParts($raw) as $one) {
+        $k = cgNameKey($one);
+        if ($k !== '') $keys[$k] = true;
+    }
+    ksort($keys);
+    return array_keys($keys);
+}
+
+/**
+ * Has anybody been taken off, or had their name changed into somebody else's?
+ *
+ * The question the collaborator record turns on: the stored address and the
+ * "we emailed them" date belong to the people who were named. Adding a second
+ * collaborator leaves the first still named, so that record is still theirs
+ * and must survive — only a name that has gone invalidates it.
+ */
+function cgCollaboratorDropped(string $was, string $now): bool {
+    return (bool)array_diff(cgNameKeySet($was), cgNameKeySet($now));
+}
+
+/**
  * Take back the "changed after it was approved" stamp.
  *
  * cgApplyEdit() sets it on any material change, which is right for a change
@@ -527,6 +558,14 @@ function cgUnflagChangedAfterOk(int $id): bool {
     }
 }
 
+/**
+ * Forget everything we recorded about telling a collaborator.
+ *
+ * For when a collaborator is taken off: whatever we did, we did it to somebody
+ * else, and the address we had reaches them rather than whoever is named now.
+ * Each column is cleared only if it exists, so an older server with a failed
+ * ALTER still edits applications normally.
+ */
 function cgResetCollabNotice(int $id): bool {
     // These columns are created by cgEnsureTable(), not cgEnsureEditSupport():
     // without this the first press on a freshly deployed server reports them
@@ -1194,9 +1233,13 @@ function cgApplyEdit(int $id, array $values, string $actor, bool $isAdmin): arra
     // Compared the way Contacts compares them: fixing "pat smith" to
     // "Pat Smith" is the same teacher, and wiping the record would re-flag them
     // for a second "a day is counted against your three".
+    // Only when somebody has gone. Rewriting "A and B" as "A, B" names the
+    // same two teachers, and adding a second collaborator leaves the first
+    // one named — neither is a reason to throw away their address and the
+    // proof we wrote to them.
     if (array_key_exists('collaborator_name', $changed)
-        && cgNameKey((string)$changed['collaborator_name'][0])
-           !== cgNameKey((string)$changed['collaborator_name'][1])) {
+        && cgCollaboratorDropped((string)$changed['collaborator_name'][0],
+                                 (string)$changed['collaborator_name'][1])) {
         cgResetCollabNotice($id);
     }
 

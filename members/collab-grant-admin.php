@@ -381,27 +381,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'colla
          * days to a row matching nobody. */
         $notice = 'That name is too long for the field — 255 characters at most.';
     } else {
-        $was      = (string)$app['collaborator_name'];
-        $samePerson = cgNameKey($was) === cgNameKey($newName);
+        $was        = (string)$app['collaborator_name'];
+        /* The same test cgApplyEdit() resets on: has anybody been taken off?
+         * Adding a collaborator, or rewriting "A and B" as "A, B", names
+         * everybody who was named before. */
+        $dropped    = cgCollaboratorDropped($was, $newName);
         $wasFlagged = !empty($app['changed_after_ok']);
         try {
             $res = cgApplyEdit($cid, ['collaborator_name' => $newName], $member['email'], true);
         } catch (\Throwable $e) {
             /* The UPDATE commits before the audit row is written and before
-             * the collaborator record is reset, so a throw can leave a new
-             * person holding the old one's address and "already emailed"
-             * date — and the next send would go to the previous teacher.
-             * Reset here rather than hope. */
+             * the collaborator record is reset, so a throw in between can
+             * leave a new person holding the old one's address and "already
+             * emailed" date, and the next send would go to the previous
+             * teacher. Asked of what is actually stored now, because a throw
+             * from the UPDATE itself wrote nothing — and resetting on that
+             * would destroy a confirmed address over a lock timeout. */
             error_log('collab rename: ' . $e->getMessage());
-            if (!$samePerson) { try { cgResetCollabNotice($cid); } catch (\Throwable $e2) {} }
+            try {
+                $after = cgGetApplication($cid);
+                if ($after && cgCollaboratorDropped($was, (string)$after['collaborator_name'])) {
+                    cgResetCollabNotice($cid);
+                }
+            } catch (\Throwable $e2) { /* nothing more to be done here */ }
             $res = ['changed' => [], 'material' => false, 'failed' => true];
         }
         /* collaborator_name is a material field, so cgApplyEdit stamps the
          * application "changed after it was approved" — which the applicant
          * sees, for ever, because somebody fixed their capitalisation. Only
-         * restored when it was not already set and the name key did not
-         * change: a real change of person is a real material change. */
-        if (!empty($res['changed']) && $samePerson && !$wasFlagged) {
+         * restored when it was not already set and nobody was taken off: a
+         * real change of person is a real material change. */
+        if (!empty($res['changed']) && !$dropped && !$wasFlagged) {
             cgUnflagChangedAfterOk($cid);
         }
         if (!empty($res['failed'])) {
@@ -417,7 +427,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'colla
              * Smith" resets nothing and still reaches the right teacher, so
              * raising the alarm on it is noise of the kind that teaches you
              * to ignore the alarm. */
-            if (cgNameKey($was) !== cgNameKey($newName)) {
+            if ($dropped) {
                 if (!empty($app['collab_notified_at'])) {
                     $notice .= ' ' . $was . ' was emailed on '
                              . date('M j', strtotime((string)$app['collab_notified_at']))
@@ -1180,9 +1190,8 @@ $totalDaysApproved = $personDays['approved'];
         <input type="hidden" name="app_id" value="<?= (int)$a['id'] ?>">
         <div style="flex:1 1 14rem;min-width:0;">
           <strong><?= htmlspecialchars($a['collaborator_name']) ?></strong>
-          <?php if (trim((string)$a['collaborator_school']) !== ''): ?>
-          <span class="cg-flag-when">&middot; <?= htmlspecialchars($a['collaborator_school']) ?></span>
-          <?php endif; ?>
+          <?php // No school here either: one school on the application, and
+                // possibly several names, so it cannot say whose it is. ?>
           <div class="cg-flag-when">
             Named by <?= htmlspecialchars($a['applicant_name']) ?> &middot; #<?= (int)$a['id'] ?>
             <?php // The year, so a 2019 leftover and a grant approved last week
@@ -1268,10 +1277,14 @@ $totalDaysApproved = $personDays['approved'];
                  border:1px solid; cursor:help; }
       .cg-chip.warn  { background:#fffbeb; border-color:#fcd34d; color:#92400e; }
       .cg-chip.quiet { background:var(--gray-50,#f8fafc); border-color:var(--border); color:var(--gray-500); }
-      .cg-rename { display:inline-flex; gap:.3rem; align-items:flex-start; vertical-align:middle; }
+      /* Block, not inline-flex: beside a column of boxes the Save button was
+         pushed out of this cell and landed on top of "Days requested". */
+      .cg-rename { display:block; max-width:230px; }
       .cg-names { display:flex; flex-direction:column; gap:.25rem; }
       .cg-rename input { border:1px solid var(--border); border-radius:6px; padding:.15rem .4rem;
-                         font-size:.86rem; font-family:inherit; width:210px; }
+                         font-size:.86rem; font-family:inherit; width:100%;
+                         box-sizing:border-box; }
+      .cg-rename button { margin-top:.3rem; }
       .cg-printname { display:none; }
       @media print { .cg-printname { display:inline; } }
       .cg-rename button { border:1px solid var(--border); background:#fff; color:var(--gray-600);
@@ -1795,7 +1808,7 @@ $totalDaysApproved = $personDays['approved'];
                 <?php if ($app['has_collaborator'] && $app['collaborator_name']): ?>
                   <?php // The print card. The name is plain text here: this is
                         // the copy taken to a meeting. ?>
-                  <?= htmlspecialchars($app['collaborator_name']) ?><?= $app['collaborator_school'] ? ' (' . htmlspecialchars($app['collaborator_school']) . ')' : '' ?>
+                  <?= htmlspecialchars($app['collaborator_name']) ?>
                 <?php elseif ($app['needs_partner']): ?>
                   <em>Needs help finding partner</em>
                 <?php else: ?>
@@ -1941,9 +1954,11 @@ $totalDaysApproved = $personDays['approved'];
                       </div>
                       <button type="submit">Save</button>
                     </form>
-                    <?php if ($app['collaborator_school']): ?>
-                      <span style="color:var(--gray-400);font-weight:400;"> · <?= htmlspecialchars($app['collaborator_school']) ?></span>
-                    <?php endif; ?>
+                    <?php /* The collaborator's school is not shown. There is
+                             one school on the application and there may be
+                             several collaborators, so it cannot say whose it
+                             is — and a label that might be about the wrong
+                             person is worse than no label. */ ?>
                     <?php // Where the telling stands. A cleared row leaves the panel but
                           // must not leave the record: "we chose not to write to them" and
                           // "we emailed them" have to stay tellable apart for ever. ?>
