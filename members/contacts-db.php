@@ -294,17 +294,6 @@ function contactEmailsFor(array $ids): array {
     return $out;
 }
 
-/** Primary first, then the rest. What "their email addresses" means. */
-function contactAllEmails(array $c): array {
-    $out = [];
-    $p = trim((string)($c['email'] ?? ''));
-    if ($p !== '') $out[] = $p;
-    foreach (contactEmails((int)($c['id'] ?? 0)) as $e) {
-        if (strcasecmp($e, $p) !== 0) $out[] = $e;
-    }
-    return $out;
-}
-
 /**
  * Who holds this address, counting primaries and extras alike.
  * Returns [id, name, primary] or null.
@@ -808,7 +797,9 @@ function contactsMigrateFromInvitations(string $actor = 'migration'): int {
 
     foreach ($rows as $r) {
         $email = trim($r['email'] ?? '');
-        if (!contactValidEmail($email) || contactFindByEmail($email)) continue;
+        // contactEmailOwner(), not contactFindByEmail(): an address somebody
+        // already lists as a second one is not a new person.
+        if (!contactValidEmail($email) || contactEmailOwner($email)) continue;
 
         // Roster names are "First Last"; split on the last space so double
         // first names stay intact and only the final token becomes the surname.
@@ -931,7 +922,9 @@ function contactsMigrateFromMembers(string $actor = 'migration'): int {
 
     foreach ($rows as $r) {
         $email = trim($r['email'] ?? '');
-        if (!contactValidEmail($email) || contactFindByEmail($email)) continue;
+        // contactEmailOwner(), not contactFindByEmail(): an address somebody
+        // already lists as a second one is not a new person.
+        if (!contactValidEmail($email) || contactEmailOwner($email)) continue;
 
         list($first, $last) = contactSplitName((string)($r['name'] ?? ''));
         $ins->execute([$first, $last, $email, contactNormalizeEmail($email),
@@ -1029,7 +1022,14 @@ function contactEnsureForAccount(int $memberId, string $name, string $email, str
     if (!contactValidEmail($email)) return;
     try {
         contactsEnsureTables();
-        $existing = contactFindByEmail($email);
+        /* Through contactEmailOwner(), so an address already listed as
+         * somebody's second one links to that person instead of creating a
+         * second record for them. A duplicate here is the exact thing the new
+         * unique key and contactEmailsCheck() are there to prevent, and it
+         * would be created by a teacher registering rather than by an admin,
+         * where nobody is watching. */
+        $owner    = contactEmailOwner($email);
+        $existing = $owner ? contactGet($owner['id']) : null;
         if ($existing) {
             if ((int)($existing['member_id'] ?? 0) !== $memberId) {
                 // Not pinned: this runs when someone registers or an account is

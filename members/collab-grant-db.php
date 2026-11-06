@@ -1473,6 +1473,15 @@ function cgEmailAliases(): array {
     static $map = null;
     if ($map !== null) return $map;
     $map = [];
+    /* contacts-db.php owns contact_emails and no grant page loads it, so
+     * without this the table may not exist here yet: the catch below would
+     * return an empty map, memoised for the request, and a teacher applying
+     * from a second address would get past the three-day cap with nothing on
+     * screen to say so. The old column needed no such care, contacts having
+     * always existed. Required inside the one function that reads the table,
+     * so it cannot stop happening because some other call path changed. */
+    require_once __DIR__ . '/contacts-db.php';
+    contactsEnsureTables();
     try {
         $rows = getDB()->query(
             "SELECT e.email AS alias, c.email AS primary_email

@@ -585,7 +585,15 @@ function stateBadge(string $s): string {
            after a retry is a real collision — two records claiming one
            address — and needs a person. */
         $stranded = contactsUnmigratedSecondary();
-        if ($stranded) { contactsMigrateSecondary(getDB()); $stranded = contactsUnmigratedSecondary(); } ?>
+        $movable  = false;
+        foreach ($stranded as $sc) {
+            // Only worth another pass if something could actually move. A row
+            // whose address somebody else holds will survive every retry, and
+            // re-running the whole migration on each page load is work that
+            // can never finish differently.
+            if (!contactEmailOwner((string)$sc['secondary_email'])) { $movable = true; break; }
+        }
+        if ($movable) { contactsMigrateSecondary(getDB()); $stranded = contactsUnmigratedSecondary(); } ?>
   <?php if ($stranded): ?>
   <div class="error-box">
     <strong>&#x26A0; <?= count($stranded) ?></strong>

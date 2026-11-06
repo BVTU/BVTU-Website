@@ -163,6 +163,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         contactUpdate((int)$existing['id'], $merged, $member['email']);
                         $savedId = (int)$existing['id'];
                         $updated++;
+                    } else {
+                        // Gone between the preview and the confirm. Counted,
+                        // like the refusals below: a row that silently does
+                        // not arrive is worse than one that says why.
+                        $refused++;
+                        error_log('contact import: ' . $rec['email'] . ' was no longer there');
                     }
                 } else {
                     $res = contactCreate($data, $member['email']);
@@ -196,8 +202,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header('Location: people.php?notice=' . urlencode(
                 "Import finished — {$added} added, {$updated} updated"
                 . ($addrs ? ", {$addrs} other address" . ($addrs === 1 ? '' : 'es') . " recorded" : '')
-                . ($refused ? ", {$refused} refused because the address is already on "
-                            . "another record" : '')
+                . ($refused ? ", {$refused} not done — the address is on another record, "
+                            . "or the row changed while you were looking at it" : '')
                 . ". Nobody was subscribed to email."));
             exit;
         }
