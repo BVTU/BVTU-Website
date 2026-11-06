@@ -345,6 +345,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'colla
     $apps = cgGetApplications($year);
 }
 
+/* Correcting a collaborator's name.
+ *
+ * Applicants type the name from memory and get it wrong — "Mcyntire" for
+ * McIntyre — and a misspelled name matches no contact, so the ledger files
+ * those days under the name as typed. The whole-application edit page could
+ * already fix it; nothing on the review panel could, which is where you are
+ * when you notice. Routed through cgApplyEdit() so it lands in the
+ * application's edit history like any other change.
+ */
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'collab-rename') {
+    csrfCheck();
+    $cid     = (int)($_POST['app_id'] ?? 0);
+    $newName = trim(mb_substr(reqPostStr('collaborator_name'), 0, 160));
+    $app     = $cid ? cgGetApplication($cid) : null;
+
+    if (!$app) {
+        $notice = 'Could not find that application.';
+    } elseif ($newName === '') {
+        $notice = 'Type the collaborator\'s name.';
+    } else {
+        $was = (string)$app['collaborator_name'];
+        $res = cgApplyEdit($cid, ['collaborator_name' => $newName], $member['email'], true);
+        if (!$res['changed']) {
+            $notice = 'That is the name already on it.';
+        } else {
+            $notice = 'Collaborator is now ' . $newName . '.';
+            // An email that has gone cannot be unsent, and the admin is the
+            // only one who can put that right.
+            if (!empty($app['collab_notified_at'])) {
+                $notice .= ' ' . $was . ' was already emailed on '
+                         . date('M j', strtotime((string)$app['collab_notified_at'])) . '.';
+            }
+            cgCachesReset();
+            $apps = cgGetApplications($year);
+        }
+    }
+}
+
 // Folding one application under another, and undoing it. Never deletes: the
 // second teacher applied and was approved, and that record is what says they
 // have used the fund this year.
@@ -1154,6 +1192,17 @@ $totalDaysApproved = $personDays['approved'];
                  border:1px solid; cursor:help; }
       .cg-chip.warn  { background:#fffbeb; border-color:#fcd34d; color:#92400e; }
       .cg-chip.quiet { background:var(--gray-50,#f8fafc); border-color:var(--border); color:var(--gray-500); }
+      .cg-rename { display:inline-flex; gap:.3rem; align-items:center; vertical-align:middle; }
+      .cg-rename input { border:1px solid var(--border); border-radius:6px; padding:.15rem .4rem;
+                         font-size:.86rem; font-family:inherit; width:210px; }
+      .cg-rename button { border:1px solid var(--border); background:#fff; color:var(--gray-600);
+                          border-radius:6px; font-size:.75rem; padding:.15rem .45rem; cursor:pointer; }
+      .cg-rename button:hover { border-color:var(--primary); color:var(--primary); }
+      .cg-days { display:flex; flex-wrap:wrap; gap:.3rem; margin:.15rem 0 .35rem; }
+      .cg-day { font-size:.76rem; font-weight:600; padding:.12rem .45rem; border-radius:6px;
+                background:#f0fdf4; color:#166534; border:1px solid #bbf7d0; white-space:nowrap; }
+      .cg-day.pend { background:#fffbeb; color:#92400e; border-color:#fde68a; }
+      .cg-day.dbl  { box-shadow:inset 0 0 0 1px #92400e; cursor:help; }
       .cg-note { font-size:.82rem; margin-top:.15rem; }
       .cg-note.warn  { color:#92400e; }
       .cg-note.quiet { color:var(--gray-500); }
@@ -1416,42 +1465,23 @@ $totalDaysApproved = $personDays['approved'];
                 $addrs     = $lp['emails'] ?? ($lp['email'] ? [$lp['email']] : []);
 
                 $flags = [];   // on the row: worth a second look
-                $notes = [];   // inside: true, but not a reason to act
 
                 if (!empty($lp['shared_days'])) {
-                    $sd   = $lp['shared_days'];
-                    $when = implode(', ', array_map(
-                        fn($d) => date('M j', strtotime($d)), array_slice($sd, 0, 6)));
-                    if (count($sd) > 6) $when .= ' and ' . (count($sd) - 6) . ' more';
-                    $links = '';
-                    foreach ($lp['shared_apps'] as $sid) {
-                        $links .= ' <a href="?year=' . (int)$year . '#app-' . (int)$sid . '">#'
-                                . (int)$sid . '</a>';
-                    }
-                    $flags[] = count($sd) . ' shared';
-                    $notes[] = ['tone' => 'warn',
-                        'text' => count($sd) . ' ' . (count($sd) === 1 ? 'day is' : 'days are')
-                                . ' claimed by more than one application (' . htmlspecialchars($when)
-                                . ') — counted once here, because they can only be away once.'
-                                . $links];
+                    // Which days, and which applications, are on the chips
+                    // below rather than in a sentence here.
+                    $flags[] = count($lp['shared_days']) . ' shared';
                 }
+                /* Chips with tooltips, not paragraphs. Every one of these was
+                 * once a sentence explaining a figure, and a stack of
+                 * sentences under a table is a thing nobody reads — so the
+                 * explaining was not working anyway. The dates below are the
+                 * answer to most of what they were saying. */
                 if ($unmatched) {
                     $flags[] = 'no match';
-                    $notes[] = ['tone' => 'warn',
-                        'text' => 'This name matched no contact and nobody who applied this year, '
-                                . 'so these days sit under the name as typed. They may belong to '
-                                . 'someone already listed here under their email address.'];
                 } elseif (!$lp['exact']) {
-                    $notes[] = ['tone' => 'quiet',
-                        'text' => 'Some of these days come from an application naming this person '
-                                . 'as a collaborator. Collaborators are typed names, so those days '
-                                . 'were matched by name rather than by an email address.'];
+                    $flags[] = 'name match';
                 }
-                if (!empty($lp['undated'])) {
-                    $notes[] = ['tone' => 'quiet',
-                        'text' => 'Some of this total comes from applications with no usable dates, '
-                                . 'which could not be checked for days claimed twice.'];
-                }
+                if (!empty($lp['undated'])) $flags[] = 'undated';
               ?>
               <tr style="border-top:1px solid var(--border);">
                 <td style="padding:.45rem .5rem;">
@@ -1516,26 +1546,54 @@ $totalDaysApproved = $personDays['approved'];
                     // from" is a question the page can now answer. ?>
               <tr id="<?= $rowId ?>" class="cg-rowdetail" hidden>
                 <td colspan="7" style="padding:.1rem .5rem .8rem 1.6rem;">
-                  <?php if (count($addrs) > 1): ?>
-                    <div class="cg-note quiet">
-                      Counted as one person across
-                      <?= htmlspecialchars(implode(' and ', $addrs)) ?>.
+                  <?php
+                    /* The days themselves, which is what this panel is for:
+                     * the figure in the table is checked against a district
+                     * invoice one date at a time. Taken from the ledger's own
+                     * day map, so a day two applications both claim appears
+                     * once here exactly as it is counted once there. */
+                    $dayMap = $lp['days'] ?? [];
+                    ksort($dayMap);
+                    $datesOfApp = [];
+                    foreach ($dayMap as $d => $info) {
+                        foreach ($info['apps'] as $aid) $datesOfApp[$aid][] = $d;
+                    }
+                  ?>
+                  <?php if ($dayMap): ?>
+                    <div class="cg-days">
+                      <?php foreach ($dayMap as $d => $info): ?>
+                        <span class="cg-day<?= $info['status'] === 'approved' ? '' : ' pend' ?><?=
+                                 count($info['apps']) > 1 ? ' dbl' : '' ?>"
+                              title="<?= htmlspecialchars(
+                                  ($info['status'] === 'approved' ? 'Approved' : 'Awaiting a decision')
+                                  . ' — #' . implode(', #', $info['apps'])
+                                  . (count($info['apps']) > 1 ? ', which both claim this day' : '')) ?>">
+                          <?= date('D M j', strtotime((string)$d)) ?>
+                        </span>
+                      <?php endforeach; ?>
                     </div>
                   <?php endif; ?>
-                  <?php foreach ($notes as $n): ?>
-                    <div class="cg-note <?= $n['tone'] ?>"><?= $n['text'] ?></div>
-                  <?php endforeach; ?>
+                  <?php if (count($addrs) > 1): ?>
+                    <div class="cg-note quiet">One person across
+                      <?= htmlspecialchars(implode(' and ', $addrs)) ?>.</div>
+                  <?php endif; ?>
                   <?php if (!empty($lp['apps'])): ?>
                     <div class="cg-note quiet" style="margin-top:.3rem;">
                       <?php foreach ($lp['apps'] as $ap): ?>
                         <div>
                           <a href="?year=<?= (int)$year ?>#app-<?= (int)$ap['id'] ?>">#<?= (int)$ap['id'] ?></a>
                           · <?= htmlspecialchars($ap['role']) ?>
-                          · <?= (int)$ap['days'] ?> day<?= (int)$ap['days'] !== 1 ? 's' : '' ?>
                           · <?= htmlspecialchars($ap['status']) ?>
-                          <?php if (empty($ap['dated'])): ?>
-                            · <span title="No usable dates on this application, so it could not be checked for days claimed twice.">dates not usable</span>
-                          <?php endif; ?>
+                          · <?php
+                              $ad = $datesOfApp[(int)$ap['id']] ?? [];
+                              echo $ad
+                                  ? htmlspecialchars(implode(', ', array_map(function ($d) {
+                                        return date('M j', strtotime((string)$d));
+                                    }, $ad)))
+                                  : '<span title="No usable dates on this application.">'
+                                    . (int)$ap['days'] . ' day'
+                                    . ((int)$ap['days'] !== 1 ? 's' : '') . ', no dates</span>';
+                            ?>
                         </div>
                       <?php endforeach; ?>
                     </div>
@@ -1653,7 +1711,23 @@ $totalDaysApproved = $personDays['approved'];
               <div class="read-fact">
                 <strong>Collaborator:</strong>
                 <?php if ($app['has_collaborator'] && $app['collaborator_name']): ?>
-                  <?= htmlspecialchars($app['collaborator_name']) ?><?= $app['collaborator_school'] ? ' (' . htmlspecialchars($app['collaborator_school']) . ')' : '' ?>
+                  <?php if ($cgReadOnly): ?>
+                    <?= htmlspecialchars($app['collaborator_name']) ?><?= $app['collaborator_school'] ? ' (' . htmlspecialchars($app['collaborator_school']) . ')' : '' ?>
+                  <?php else: ?>
+                    <?php // Editable in place: a name typed from memory is the
+                          // field most often wrong, and this is where you are
+                          // when you spot it. ?>
+                    <form class="app-action-form cg-rename" method="post">
+                      <?= csrfField() ?>
+                      <input type="hidden" name="action" value="collab-rename">
+                      <input type="hidden" name="app_id" value="<?= (int)$app['id'] ?>">
+                      <input type="text" name="collaborator_name" maxlength="160"
+                             value="<?= htmlspecialchars($app['collaborator_name']) ?>"
+                             aria-label="Collaborator's name">
+                      <button type="submit">Save</button>
+                    </form>
+                    <?= $app['collaborator_school'] ? '(' . htmlspecialchars($app['collaborator_school']) . ')' : '' ?>
+                  <?php endif; ?>
                 <?php elseif ($app['needs_partner']): ?>
                   <em>Needs help finding partner</em>
                 <?php else: ?>
