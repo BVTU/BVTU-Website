@@ -2072,19 +2072,31 @@ function cgCachesReset(): void {
 /**
  * Every contact's main address, folded, as a set.
  *
- * Built from the name index that is already in memory, so asking "is this
- * address on somebody's record?" costs nothing. An address that is one of
- * somebody's extras folds to their main one through cgCanonEmail(), so it is
- * in here too — which is the whole question.
+ * Read once so that asking "is this address on somebody's record?" costs
+ * nothing per card. An address that is one of somebody's extras folds to their
+ * main one through cgCanonEmail(), so it is in here too — which is the whole
+ * question.
+ *
+ * Its own query rather than the name index already in memory: that index is
+ * keyed by name, so it holds nothing for a contact imported with an address
+ * and no name, and only the first of two people who share one. Either gap
+ * showed "not on anybody's contact record" about an address plainly on
+ * somebody's record — and for the shared name, with no fix offered, because
+ * the link target refuses to guess between them.
  */
 function cgContactPrimaries(bool $fresh = false): array {
     static $set = null;
     if ($fresh) $set = null;
     if ($set !== null) return $set;
     $set = [];
-    foreach (cgContactsByName() as $c) {
-        $e = cgCanonEmail((string)($c['email'] ?? ''));
-        if ($e !== '') $set[$e] = true;
+    try {
+        foreach (getDB()->query("SELECT email FROM contacts")->fetchAll() as $r) {
+            $e = cgCanonEmail((string)($r['email'] ?? ''));
+            if ($e !== '') $set[$e] = true;
+        }
+    } catch (Exception $e) {
+        // No contacts table: nothing is on file, and the link target's own
+        // check still has the last word before anything is written.
     }
     return $set;
 }

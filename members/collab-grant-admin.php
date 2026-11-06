@@ -1919,13 +1919,15 @@ $totalDaysApproved = $personDays['approved'];
                     <?php if ($role === 'Collaborator' && !$addrOnFile): ?>
                       <span class="cg-tag approx"
                             title="<?= htmlspecialchars($linkAddr) ?> is not on anybody's contact record, so days charged to it sit apart from the rest of theirs.">address not on file</span>
-                      <?php if ($linkTo): ?>
+                      <?php if ($linkTo && !$cgReadOnly): ?>
                       <?php /* Its own form. As a button inside the decide form
                                it was that form's first submit, so Enter in
                                "Days to grant" fired this instead of approving,
                                and on OK it linked the address and threw the
                                typed days away. */ ?>
-                      <form method="post" style="display:inline;">
+                      <?php // app-action-form, which @media print hides: a
+                            // button nobody can press has no business on paper. ?>
+                      <form class="app-action-form" method="post" style="display:inline;">
                         <?= csrfField() ?>
                         <input type="hidden" name="action" value="link_collab_email">
                         <input type="hidden" name="app_id" value="<?= (int)$app['id'] ?>">
