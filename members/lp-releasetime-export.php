@@ -50,7 +50,6 @@ $rows       = [];
 $dayTotal   = 0.0;
 $costTotal  = 0.0;
 $noCost     = [];
-$mixed      = [];   // invoices covering days BVTU decided not to claim
 
 foreach ($invoices as $inv) {
     $num = $inv['invoice_number'] !== '' ? $inv['invoice_number'] : ('#' . (int)$inv['id']);
@@ -65,9 +64,6 @@ foreach ($invoices as $inv) {
      * send the BCTF. So the cost is reported as invoiced and the mismatch is
      * stated, loudly, for a human to settle before submitting.
      */
-    $skipped = 0.0;
-    foreach ($inv['entries'] as $en) if ((int)$en['excluded']) $skipped += (float)$en['days'];
-    if ($skipped > 0) $mixed[] = ['num' => $num, 'days' => $skipped];
     $rows[] = [
         'num'   => $num,
         'dates' => $inv['dates_text'],
@@ -92,15 +88,6 @@ if ($noCost) {
     $csv[] = ['', '', csvSafeText('Cost not yet recorded for invoice(s): ' . implode(', ', $noCost)
                                   . ' - the total above excludes them.'), '', ''];
 }
-if ($mixed) {
-    $bits = [];
-    foreach ($mixed as $m) $bits[] = $m['num'] . ' (' . lpRtDays($m['days']) . ' day(s))';
-    $csv[] = [];
-    $csv[] = ['', '', csvSafeText('CHECK BEFORE SENDING - these invoices also cover release days '
-        . 'BVTU is not claiming: ' . implode(', ', $bits) . '. The day counts exclude them but the '
-        . 'costs are as invoiced by the district and still include them.'), '', ''];
-}
-
 $h = fopen('php://temp', 'w+');
 foreach ($csv as $row) fputcsv($h, $row);
 rewind($h);
@@ -141,17 +128,6 @@ ob_start(); ?>
 <div class="warn">
   Cost is not yet recorded for invoice<?= count($noCost) === 1 ? '' : 's' ?>
   <?= $e(implode(', ', $noCost)) ?>. Those rows are blank below and the total excludes them.
-</div>
-<?php endif; ?>
-
-<?php if ($mixed): ?>
-<div class="warn">
-  <strong>Check before sending.</strong>
-  <?php $bits = []; foreach ($mixed as $m) $bits[] = $m['num'] . ' (' . lpRtDays($m['days']) . ' day' . ($m['days'] == 1 ? '' : 's') . ')'; ?>
-  These invoices also cover release days the BVTU is not claiming &mdash;
-  <?= $e(implode(', ', $bits)) ?>. The day counts below leave those days out, but the costs are
-  as the district invoiced them and still include them. There is no per-day rate to subtract,
-  so adjust the figure yourself rather than sending it as it stands.
 </div>
 <?php endif; ?>
 

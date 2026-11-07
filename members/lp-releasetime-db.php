@@ -94,8 +94,9 @@ function lpRtEnsureTables(): void {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
     // days is DECIMAL(3,1): half days are real — 2025-26 invoice 590 was 0.5.
-    // excluded/excluded_reason record a deliberate decision not to claim, so a
-    // year later it is clear the day was considered rather than forgotten.
+    // excluded/excluded_reason are no longer written or read: a day in this
+    // log is a day being claimed. Kept so the decisions taken while the
+    // button existed can still be read out of the table.
     $db->exec("CREATE TABLE IF NOT EXISTS lp_rt_entries (
         id              INT AUTO_INCREMENT PRIMARY KEY,
         year            INT NOT NULL,
@@ -288,21 +289,6 @@ function lpRtUpdateEntry(int $id, string $date, string $name, float $days,
     }
 }
 
-/**
- * Mark an entry as not being claimed, with the reason.
- *
- * The grant excludes contractor and office-staff salaries, the ongoing cost of
- * regularly released officers, and anything another BCTF grant already covers.
- * This records the decision rather than enforcing it — the call is the
- * president's, and a tool that silently dropped a day would be worse than one
- * that asks.
- */
-function lpRtSetExcluded(int $id, bool $excluded, string $reason): void {
-    lpRtEnsureTables();
-    getDB()->prepare("UPDATE lp_rt_entries SET excluded=?, excluded_reason=? WHERE id=?")
-           ->execute([$excluded ? 1 : 0, $excluded ? mb_substr(trim($reason), 0, 255) : '', $id]);
-}
-
 function lpRtDeleteEntry(int $id): void {
     lpRtEnsureTables();
     getDB()->prepare("DELETE FROM lp_rt_entries WHERE id=?")->execute([$id]);
@@ -313,9 +299,11 @@ function lpRtDeleteEntry(int $id): void {
 /**
  * The numbers the page and the BCTF form both need.
  *
- * 'claimable' excludes the days deliberately marked not-claimable; 'logged'
- * counts everything. Both are shown, because the difference is the point: it
- * is the record of what was considered and set aside.
+ * 'claimable' and 'logged' are the same figure now. A day in this log is a
+ * day being claimed — deciding that twice was work with nothing resting on
+ * it — so the key is kept for the callers and the two no longer differ.
+ * Days marked not-claimed before the button went count like any other; the
+ * columns are still on the table, so the old decisions are not lost.
  */
 function lpRtTotals(int $year): array {
     $entries = lpRtEntries($year);
@@ -326,7 +314,6 @@ function lpRtTotals(int $year): array {
     foreach ($entries as $e) {
         $d = (float)$e['days'];
         $out['logged'] += $d;
-        if ((int)$e['excluded']) continue;
         $out['claimable'] += $d;
         if ($e['invoice_id']) $out['invoiced'] += $d;
         else                  $out['unbilled'] += $d;
@@ -378,7 +365,6 @@ function lpRtInvoices(int $year): array {
         $dates = [];
         $names = [];
         foreach ($rows as $r) {
-            if ((int)$r['excluded']) continue;
             $days += (float)$r['days'];
             $d = date('M j', strtotime($r['release_date']));
             if (!in_array($d, $dates, true))                 $dates[] = $d;

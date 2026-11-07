@@ -90,20 +90,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    if ($action === 'exclude') {
-        $id   = (int)($_POST['entry_id'] ?? 0);
-        $on   = !empty($_POST['excluded']);
-        $why  = trim($_POST['excluded_reason'] ?? '');
-        $row  = $id ? lpRtEntry($id) : null;
-        if (!$row || (int)$row['year'] !== $year) {
-            $error = 'That entry could not be found.';
-        } elseif ($on && $why === '') {
-            $error = 'Say why the day is not being claimed — a year from now the reason is the useful part.';
-        } else {
-            lpRtSetExcluded($id, $on, $why);
-            $notice = $on ? 'Marked as not claimed.' : 'Back in the claim.';
-        }
-    }
+    /* No "don't claim" any more. A day typed into this log is a day being
+     * claimed — if it is not being claimed it does not belong here, and
+     * deciding twice was work with nothing resting on it. Days recorded as
+     * not-claimed before now count like any other; the columns are still on
+     * the table, so what was set aside and why is not lost.
+     */
 
     if ($action === 'delete') {
         $id  = (int)($_POST['entry_id'] ?? 0);
@@ -345,7 +337,6 @@ function rtMoney($v): string { return $v === null ? '' : '$' . number_format((fl
     th { padding:.6rem .8rem; text-align:left; font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#fff; white-space:nowrap; }
     td { padding:.6rem .8rem; border-bottom:1px solid var(--gray-100); color:var(--gray-700); vertical-align:middle; }
     tr:last-child td { border-bottom:none; }
-    tr.excluded td { opacity:.55; }
     .num { text-align:right; font-weight:700; white-space:nowrap; }
     .why { font-size:.78rem; color:var(--gray-500); }
     .pill { display:inline-block; font-size:.68rem; font-weight:700; border-radius:100px; padding:.1rem .5rem; white-space:nowrap; }
@@ -408,11 +399,6 @@ function rtMoney($v): string { return $v === null ? '' : '$' . number_format((fl
       <div class="l">Not yet invoiced</div>
       <div class="s"><?= $totals['unbilled'] > 0 ? 'Still owed to you' : 'Nothing outstanding' ?></div>
     </div>
-    <div class="stat">
-      <div class="n"><?= lpRtDays($totals['logged'] - $totals['claimable']) ?></div>
-      <div class="l">Not claimed</div>
-      <div class="s">Set aside on purpose</div>
-    </div>
     <div class="stat<?= $totals['cost_missing'] > 0 ? ' warn' : '' ?>">
       <div class="n" style="font-size:1.25rem;"><?= htmlspecialchars(rtMoney($totals['cost'])) ?></div>
       <div class="l">Invoiced cost</div>
@@ -471,7 +457,7 @@ function rtMoney($v): string { return $v === null ? '' : '$' . number_format((fl
         <tr class="empty-row"><td colspan="7">No release days logged for <?= htmlspecialchars(lpYearLabel($year)) ?> yet.</td></tr>
         <?php endif; ?>
         <?php foreach ($entries as $e): $eid = (int)$e['id']; ?>
-        <tr class="<?= (int)$e['excluded'] ? 'excluded' : '' ?>">
+        <tr>
           <td style="white-space:nowrap;"><?= htmlspecialchars(rtDate($e['release_date'])) ?></td>
           <td><?= htmlspecialchars($e['member_name']) ?></td>
           <td class="num"><?= lpRtDays((float)$e['days']) ?></td>
@@ -480,16 +466,11 @@ function rtMoney($v): string { return $v === null ? '' : '$' . number_format((fl
               : '<span style="color:var(--gray-300);">—</span>' ?></td>
           <td>
             <?= htmlspecialchars($e['reason']) ?>
-            <?php if ((int)$e['excluded']): ?>
-              <div class="why">Not claimed — <?= htmlspecialchars($e['excluded_reason']) ?></div>
-            <?php endif; ?>
           </td>
           <td>
             <?php if ($e['invoice_id']): ?>
               <?php $inum = (string)($e['invoice_number'] ?? ''); ?>
               <?= htmlspecialchars($inum !== '' ? $inum : '#' . (int)$e['invoice_id']) ?>
-            <?php elseif ((int)$e['excluded']): ?>
-              <span class="pill no">not claimed</span>
             <?php else: ?>
               <span class="pill none">not invoiced</span>
             <?php endif; ?>
@@ -497,18 +478,6 @@ function rtMoney($v): string { return $v === null ? '' : '$' . number_format((fl
           <td>
             <div class="acts">
               <button class="act-btn" onclick="tog(<?= $eid ?>)">&#x270F; Edit</button>
-              <?php if ((int)$e['excluded']): ?>
-              <form method="POST" style="display:inline;">
-                <?= csrfField() ?>
-                <input type="hidden" name="action"   value="exclude">
-                <input type="hidden" name="year"     value="<?= $year ?>">
-                <input type="hidden" name="entry_id" value="<?= $eid ?>">
-                <input type="hidden" name="excluded" value="">
-                <button type="submit" class="act-btn">&#x21BA; Claim it</button>
-              </form>
-              <?php else: ?>
-              <button class="act-btn" onclick="tog('x<?= $eid ?>')">&#8856; Don't claim</button>
-              <?php endif; ?>
               <form method="POST" style="display:inline;"
                     onsubmit="return confirm('Delete this release day? This cannot be undone.')">
                 <?= csrfField() ?>
@@ -543,29 +512,6 @@ function rtMoney($v): string { return $v === null ? '' : '$' . number_format((fl
             </form>
           </td>
         </tr>
-        <tr class="edit-row" id="row-x<?= $eid ?>">
-          <td colspan="7">
-            <form method="POST" class="f">
-              <?= csrfField() ?>
-              <input type="hidden" name="action"   value="exclude">
-              <input type="hidden" name="year"     value="<?= $year ?>">
-              <input type="hidden" name="entry_id" value="<?= $eid ?>">
-              <input type="hidden" name="excluded" value="1">
-              <label>Why is this day not being claimed?</label>
-              <div style="display:flex;gap:.5rem;align-items:center;">
-                <input type="text" name="excluded_reason" required style="flex:1;"
-                       placeholder="e.g. covered by the Collaboration Grant / ongoing released officer time / support staff">
-                <button type="submit" class="btn btn-primary" style="padding:.45rem .9rem;font-size:.85rem;">Save</button>
-                <button type="button" class="act-btn" onclick="tog('x<?= $eid ?>')">Cancel</button>
-              </div>
-              <div class="hintline">
-                The grant does not cover contractor or office-staff salaries, the ongoing cost of a
-                regularly released officer, or release another BCTF grant already pays for. The day
-                stays in the log either way — this records that you considered it.
-              </div>
-            </form>
-          </td>
-        </tr>
         <?php endforeach; ?>
       </tbody>
       <?php if ($entries): ?>
@@ -576,7 +522,6 @@ function rtMoney($v): string { return $v === null ? '' : '$' . number_format((fl
          * of both figures, the way everything else on this page treats them. */
         $fDays = 0.0; $fCost = 0.0; $fGaps = 0; $fAny = false;
         foreach ($entries as $fe) {
-            if ((int)$fe['excluded']) continue;
             $fDays += (float)$fe['days'];
             // $fAny, not $fCost > 0: a day the district charged nothing for
             // is a recorded 0.00, and showing a dash for it would read as
@@ -712,9 +657,6 @@ function rtMoney($v): string { return $v === null ? '' : '$' . number_format((fl
                     <?= htmlspecialchars(rtDate($e['release_date'])) ?> &middot;
                     <?= htmlspecialchars($e['member_name']) ?>
                     &middot; <?= lpRtDays((float)$e['days']) ?>d
-                    <?php if ((int)$e['excluded']): ?>
-                      <span class="pill no" style="margin-left:.2rem;">not claimed</span>
-                    <?php endif; ?>
                   </span>
                 </label>
                 <?php endforeach; ?>
