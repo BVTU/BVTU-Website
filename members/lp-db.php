@@ -766,6 +766,27 @@ function lpRowTotal(array $expense): float {
          + (float)$expense['office']     + (float)$expense['phone'];
 }
 
+/**
+ * What the district has invoiced for release time this year.
+ *
+ * Read straight from the release-time table rather than through
+ * lp-releasetime-db.php, which the dashboard does not load. An invoice with
+ * no figure yet is skipped, not read as zero.
+ */
+function lpRtInvoicedCost(int $year): float {
+    try {
+        $s = getDB()->prepare(
+            "SELECT COALESCE(SUM(total_cost),0) FROM lp_rt_invoices
+             WHERE year=? AND total_cost IS NOT NULL");
+        $s->execute([$year]);
+        return (float)$s->fetchColumn();
+    } catch (\Throwable $e) {
+        // The table is created by the release time page; before anyone has
+        // opened it there is nothing to count.
+        return 0.0;
+    }
+}
+
 function lpGrantSummary(int $year = 0): array {
     if (!$year) $year = lpCurrentYear();
     $grants = lpGetGrants($year);
@@ -781,7 +802,18 @@ function lpGrantSummary(int $year = 0): array {
         $s->execute([$g['id']]);
         $g['spent_vouchers'] = (float)$s->fetchColumn();
         $g['spent_direct']   = $direct[(int)$g['id']] ?? 0.0;
-        $g['spent']          = $g['spent_vouchers'] + $g['spent_direct'];
+        /* District release-time invoices are money out of this grant, and they
+         * are entered on the release time page rather than as vouchers or
+         * direct payments — so without this the card read $0 spent against
+         * $16,000 while the release time page listed real invoices.
+         *
+         * Only for that grant, matched on its name, which is the same handle
+         * the dashboard card uses to link there. Cody confirmed (2026-11-06)
+         * the invoices are entered in one place only, so nothing is counted
+         * twice; the card says so if anything ever is. */
+        $g['spent_rt'] = stripos((string)$g['name'], 'release time') !== false
+            ? lpRtInvoicedCost($year) : 0.0;
+        $g['spent']          = $g['spent_vouchers'] + $g['spent_direct'] + $g['spent_rt'];
         $g['remaining']      = $g['budget'] - $g['spent'];
         $g['pct']            = $g['budget'] > 0 ? round($g['spent'] / $g['budget'] * 100) : 0;
     }

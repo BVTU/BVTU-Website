@@ -387,6 +387,14 @@ $grantSumJson      = json_encode(array_values($grantSum));
         <span class="spent-lbl">$<?= number_format($g['spent'],2) ?> spent</span>
         <span class="rem-lbl <?= $class ?>">$<?= number_format(max(0,$g['remaining']),2) ?> left</span>
       </div>
+      <?php /* Those invoices are entered in one place, so money reaching this
+               grant from both sides means the same bill has been recorded
+               twice and the figure above is too high. Shown only then. */ ?>
+      <?php if (!empty($g['spent_rt']) && ($g['spent_vouchers'] + $g['spent_direct']) > 0): ?>
+      <div class="bctf-status bctf-status-due">&#9888; $<?= number_format($g['spent_rt'], 2) ?>
+        of this is release time invoices, and $<?= number_format($g['spent_vouchers'] + $g['spent_direct'], 2) ?>
+        came from Expenses &mdash; check it is not the same bill twice.</div>
+      <?php endif; ?>
       <?php if ($rtCard): ?>
       <span class="view-link">Days, invoices and the bill →</span>
       <?php elseif ($hasSpend): ?>
