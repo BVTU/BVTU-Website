@@ -123,7 +123,19 @@ $catLabels = [
     'other' => 'Other',
 ];
 
-function _badge(string $status): string {
+/**
+ * The badge for an LP voucher, which has to ask the voucher and not just its
+ * status: who the first signature is waiting on depends on whether the
+ * Treasurer is the one being paid.
+ */
+function _voucherBadge(array $v): string {
+    $status = (string)$v['status'];
+    if ($status === 'submitted')          return _badge($status, 'Awaiting ' . lpFirstSignerRole($v));
+    if ($status === 'treasurer_approved') return _badge($status, 'Awaiting ' . lpSecondSignerRole($v));
+    return _badge($status);
+}
+
+function _badge(string $status, string $label = ''): string {
     $map = [
         'pending'            => ['#fffbeb', '#d97706', 'Awaiting President'],
         'signer1_approved'   => ['#eff6ff', '#1e40af', 'Awaiting Treasurer'],
@@ -135,7 +147,9 @@ function _badge(string $status): string {
         'rejected'           => ['#fef2f2', '#991b1b', 'Rejected'],
     ];
     $c = $map[$status] ?? ['#f8f9fa', '#555', ucfirst($status)];
-    return '<span class="badge" style="background:' . $c[0] . ';color:' . $c[1] . ';">' . $c[2] . '</span>';
+    if ($label !== '') $c[2] = $label;
+    return '<span class="badge" style="background:' . $c[0] . ';color:' . $c[1] . ';">'
+         . htmlspecialchars($c[2]) . '</span>';
 }
 
 function _signedLine(array $r, string $role1, string $role2): string {
@@ -366,7 +380,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
   <div class="pcard <?= $mine ? 'mine' : '' ?>">
     <div class="card-top">
       <span class="card-name"><?= htmlspecialchars($v['name']) ?></span>
-      <?= _badge($v['status']) ?>
+      <?= _voucherBadge($v) ?>
       <span class="card-amt">$<?= number_format($vTotal, 2) ?></span>
     </div>
     <div class="card-meta">
@@ -468,7 +482,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
     <div class="pcard done">
       <div class="card-top">
         <span class="card-name"><?= htmlspecialchars($v['name']) ?></span>
-        <?= _badge($v['status']) ?>
+        <?= _voucherBadge($v) ?>
         <span class="card-amt">$<?= number_format($vTotal, 2) ?></span>
       </div>
       <div class="card-meta">

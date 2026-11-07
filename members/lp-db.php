@@ -324,6 +324,35 @@ function lpCanSign1For(array $v, string $email): bool {
 }
 
 /**
+ * Who may give the FIRST signature on this particular voucher.
+ *
+ * The Treasurer, almost always. On a vendor payment there are two documented
+ * ways it is somebody else: the Treasurer is the one being paid, so cannot
+ * sign it, or nobody holds the Treasurer role at all. Both leave the slot to
+ * the President or the VP.
+ *
+ * It exists because every status badge in the portal read the label off the
+ * status alone — "Awaiting Treasurer" on a voucher the Treasurer is barred
+ * from signing, with an Approve button beside it for the President. The
+ * button was right and the badge was wrong, which is the worst way round:
+ * it reads as the page letting somebody approve their own claim.
+ */
+function lpFirstSignerRole(array $v): string {
+    require_once __DIR__ . '/exp-db.php';
+    $who = trim((string)($v['signer1_email'] ?? ''));
+    if ($who !== '') {
+        if (expIsTreasurerRole($who)) return 'Treasurer';
+        if (expIsPresident($who))     return 'President';
+        if (expIsVP($who))            return 'Vice-President';
+        return 'first signer';
+    }
+    if (lpIsVendorPayment($v) && (!lpHasRealTreasurer() || lpTreasurerIsPayee($v))) {
+        return 'President or Vice-President';
+    }
+    return 'Treasurer';
+}
+
+/**
  * What to call the second signature on this voucher.
  *
  * Once it has been given, the role of whoever gave it. Before that, who it is
