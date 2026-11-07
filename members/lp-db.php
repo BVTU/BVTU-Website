@@ -366,7 +366,34 @@ function lpSecondSignerRole(array $v): string {
         if (expIsPresident($who)) return 'President';
         return 'second signer';
     }
-    return lpIsVendorPayment($v) ? 'President or Vice-President' : 'Vice-President';
+    // A vendor payment never waits here: the submission is its second
+    // signature and the Treasurer's approval takes it to ready-to-pay.
+    return 'Vice-President';
+}
+
+/**
+ * Vendor payments left waiting on a second signature nobody can now give.
+ *
+ * Until 2026-11-06 a vendor payment went submitted -> Treasurer -> VP or
+ * President. The submission is the first signature now, so the Treasurer's
+ * approval finishes it — and any voucher already sitting at
+ * 'treasurer_approved' has both signatures by the new rule while waiting for
+ * a third that lpCanSign2For() no longer offers to anybody. Moved on once,
+ * rather than stranded.
+ */
+function lpReleaseStrandedVendorVouchers(): void {
+    try {
+        $n = getDB()->exec(
+            "UPDATE lp_vouchers SET status='vp_approved',
+                    signer2_email = CASE WHEN COALESCE(signer2_email,'')='' THEN submitted_by_email ELSE signer2_email END,
+                    signer2_name  = CASE WHEN COALESCE(signer2_name,'')=''  THEN submitted_by      ELSE signer2_name  END,
+                    signer2_at    = COALESCE(signer2_at, NOW())
+              WHERE status='treasurer_approved' AND COALESCE(payee_name,'') <> ''");
+        if ($n) error_log("lp_vouchers: {$n} vendor payment(s) moved to ready-to-pay; "
+                        . 'the submission is now the first signature.');
+    } catch (Exception $e) {
+        error_log('lpReleaseStrandedVendorVouchers: ' . $e->getMessage());
+    }
 }
 
 /**
@@ -459,14 +486,14 @@ function lpTreasurerIsPayee(array $v): bool {
 /**
  * Who may give the SECOND signature on this particular voucher.
  *
- * The VP always, as before. On a vendor payment the President too: they are
- * not the one being paid, so their name is a second pair of eyes rather than
- * self-approval. Still two unique people, and still never the payee.
+ * The VP, on the President's own expenses. A vendor payment never reaches
+ * this slot: its second signature is the submission, and the Treasurer's
+ * approval takes it straight to ready-to-pay.
  */
 function lpCanSign2For(array $v, string $email): bool {
     require_once __DIR__ . '/exp-db.php';
-    if (lpCanSign2($email)) return true;
-    return lpIsVendorPayment($v) && expIsPresident($email);
+    if (lpIsVendorPayment($v)) return false;
+    return lpCanSign2($email);
 }
 
 /**
@@ -481,14 +508,15 @@ function lpCanSign2For(array $v, string $email): bool {
  * the President names their own address as the vendor, they cannot sign it.
  */
 function lpSignBlockedClaimant(array $v): ?string {
-    // Only lifted when we actually know who the payee is. A vendor row with a
-    // blank e-transfer address has no payee to bar, so lifting the submitter
-    // bar as well would leave the voucher with no self-dealing guard at all —
-    // the submitter could sign their own. The forms refuse a blank address;
-    // this is the belt for older rows and anything edited straight in the DB.
-    if (lpIsVendorPayment($v) && trim((string)(lpPayTo($v)['email'] ?? '')) !== '') {
-        return null;
-    }
+    /* Always the submitter, vendor payment or not.
+     *
+     * It used to be lifted on vendor payments, so the President could submit
+     * one and then also approve it. Cody settled what that rule meant
+     * (2026-11-06): submitting a vendor payment IS his signature on it — he
+     * brought it forward, that is the authorisation — and the Treasurer's
+     * approval is the second. Two people, one button each, and the person who
+     * raised it is never asked to approve what they raised.
+     */
     return ($v['submitted_by_email'] ?? null) ?: null;
 }
 
@@ -544,6 +572,8 @@ function lpEnsureApprovalColumns(): void {
             }
         } catch (Exception $e) { /* already exists */ }
     }
+    // After the columns, because it writes to signer2_*.
+    lpReleaseStrandedVendorVouchers();
 }
 
 // ── Data helpers ──────────────────────────────────────────────────────────────
@@ -982,6 +1012,24 @@ function lpApproveAsSigner1(int $id, string $email, string $name, string $note =
             ? "The first signature on a vendor payment has to be the Treasurer."
             : "Only the BVTU Treasurer can give first approval.");
     }
+    /* A vendor payment is finished here. The submission was the first
+     * signature, so the Treasurer's is the second and there is nothing left
+     * to wait for — going to 'treasurer_approved' would park it waiting on a
+     * VP who has no part in this. The submitter goes into the second slot so
+     * the record names both people who stand behind the payment, which is
+     * what the ledger and the payment email read.
+     */
+    if (lpIsVendorPayment($v)) {
+        getDB()->prepare(
+            "UPDATE lp_vouchers SET status='vp_approved',
+             signer1_email=?, signer1_name=?, signer1_at=NOW(), signer1_note=?,
+             signer2_email=?, signer2_name=?, signer2_at=NOW()
+             WHERE id=?"
+        )->execute([$email, $name, $note ?: null,
+                    (string)($v['submitted_by_email'] ?? ''),
+                    (string)($v['submitted_by'] ?? ''), $id]);
+        return;
+    }
     getDB()->prepare(
         "UPDATE lp_vouchers SET status='treasurer_approved',
          signer1_email=?, signer1_name=?, signer1_at=NOW(), signer1_note=? WHERE id=?"
@@ -992,6 +1040,13 @@ function lpApproveAsSigner2(int $id, string $email, string $name, string $note =
     $v = lpGetVoucher($id);
     if (!$v) throw new RuntimeException("Voucher not found.");
     if ($v['status'] !== 'treasurer_approved') throw new RuntimeException("Voucher must have Treasurer approval first.");
+    // Unreachable through the page, which never offers it: a vendor payment
+    // is finished by the Treasurer. Named anyway, because a stale tab or a
+    // hand-made post should be refused rather than adding a third signature.
+    if (lpIsVendorPayment($v)) {
+        throw new RuntimeException(
+            'A vendor payment needs the submitter and the Treasurer, and has both.');
+    }
     // Both the payee and the submitter. Passing only the submitter meant a
     // vendor payment could name a signer's own address as the "vendor", and
     // that signer could then approve and pay themselves — two signatures on

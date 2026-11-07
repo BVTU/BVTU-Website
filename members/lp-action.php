@@ -65,18 +65,25 @@ try {
                     ? 'The first signature on a vendor payment has to be the Treasurer.'
                     : 'Only the BVTU Treasurer can give first approval.');
             }
+            $wasVendor = lpIsVendorPayment($v);
             lpApproveAsSigner1($voucherId, $member['email'], $member['name'], $note);
             $v = lpGetVoucher($voucherId); // reload
-            lpEmailTreasurerApproved($v, $total);
-            $msg = lpIsVendorPayment($v)
-                 ? 'Voucher approved. The President and VP have been notified for the second signature.'
-                 : 'Voucher approved. VP has been notified for second signature.';
+            /* A vendor payment is finished by this signature — the submission
+             * was the other one — so it gets the ready-to-pay notice, not the
+             * one asking a second signer to come and look. */
+            if ($wasVendor) {
+                lpEmailVPApproved($v, $total);
+                $msg = 'Voucher approved and ready to pay.';
+            } else {
+                lpEmailTreasurerApproved($v, $total);
+                $msg = 'Voucher approved. VP has been notified for second signature.';
+            }
             break;
 
         case 'vp_approve':
             if (!lpCanSign2For($v, $member['email'])) {
                 throw new RuntimeException(lpIsVendorPayment($v)
-                    ? 'The second signature on a vendor payment has to be the President or the Vice-President.'
+                    ? 'A vendor payment needs the submitter and the Treasurer, and has both.'
                     : 'Only the Vice-President can give second approval.');
             }
             lpApproveAsSigner2($voucherId, $member['email'], $member['name'], $note);
