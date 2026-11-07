@@ -772,6 +772,12 @@ function lpRowTotal(array $expense): float {
  * Read straight from the release-time table rather than through
  * lp-releasetime-db.php, which the dashboard does not load. An invoice with
  * no figure yet is skipped, not read as zero.
+ *
+ * Invoices covering days marked "not claimed" are counted. That mark means
+ * BVTU is not claiming the day back from the BCTF; the district still billed
+ * for it and BVTU still paid, so it is still money out of this grant. The
+ * release time page's own totals leave those days out because they answer
+ * the other question — what goes on the BCTF form.
  */
 function lpRtInvoicedCost(int $year): float {
     try {
@@ -781,10 +787,36 @@ function lpRtInvoicedCost(int $year): float {
         $s->execute([$year]);
         return (float)$s->fetchColumn();
     } catch (\Throwable $e) {
-        // The table is created by the release time page; before anyone has
-        // opened it there is nothing to count.
+        /* Almost always the table not existing yet: it is created by the
+         * release time page, and on a fresh install nobody has opened it.
+         * Logged rather than swallowed, because every other reason this can
+         * fail ends with a card confidently reporting a full budget. */
+        error_log('lpRtInvoicedCost: ' . $e->getMessage());
         return 0.0;
     }
+}
+
+/**
+ * Is this the grant the district's release-time invoices belong to?
+ *
+ * Matched on the name, which is the only handle there is — grant ids are per
+ * year and the name is what the seed list in this file calls it. The lowest
+ * id among the matches wins, so two grants that both mention release time
+ * cannot each be charged the whole invoice total; the second reads $0 and the
+ * figures stay addable.
+ *
+ * An admin who renames it past matching gets $0 here and loses the dashboard
+ * link with it. A column on the grant saying what kind it is would settle
+ * that properly, and is worth doing the next time this table is touched.
+ */
+function lpIsReleaseTimeGrant(array $grant, array $all): bool {
+    if (stripos((string)$grant['name'], 'release time') === false) return false;
+    $best = null;
+    foreach ($all as $g) {
+        if (stripos((string)$g['name'], 'release time') === false) continue;
+        if ($best === null || (int)$g['id'] < $best) $best = (int)$g['id'];
+    }
+    return $best !== null && (int)$grant['id'] === $best;
 }
 
 function lpGrantSummary(int $year = 0): array {
@@ -811,8 +843,8 @@ function lpGrantSummary(int $year = 0): array {
          * the dashboard card uses to link there. Cody confirmed (2026-11-06)
          * the invoices are entered in one place only, so nothing is counted
          * twice; the card says so if anything ever is. */
-        $g['spent_rt'] = stripos((string)$g['name'], 'release time') !== false
-            ? lpRtInvoicedCost($year) : 0.0;
+        $g['is_rt']    = lpIsReleaseTimeGrant($g, $grants);
+        $g['spent_rt'] = $g['is_rt'] ? lpRtInvoicedCost($year) : 0.0;
         $g['spent']          = $g['spent_vouchers'] + $g['spent_direct'] + $g['spent_rt'];
         $g['remaining']      = $g['budget'] - $g['spent'];
         $g['pct']            = $g['budget'] > 0 ? round($g['spent'] / $g['budget'] * 100) : 0;

@@ -574,12 +574,15 @@ function rtMoney($v): string { return $v === null ? '' : '$' . number_format((fl
          * invoices below, because this is the table that gets checked against
          * a district bill line by line. Days marked not-claimed are left out
          * of both figures, the way everything else on this page treats them. */
-        $fDays = 0.0; $fCost = 0.0; $fGaps = 0;
+        $fDays = 0.0; $fCost = 0.0; $fGaps = 0; $fAny = false;
         foreach ($entries as $fe) {
             if ((int)$fe['excluded']) continue;
             $fDays += (float)$fe['days'];
-            if ($fe['cost'] === null) $fGaps++;
-            else                      $fCost += (float)$fe['cost'];
+            // $fAny, not $fCost > 0: a day the district charged nothing for
+            // is a recorded 0.00, and showing a dash for it would read as
+            // nobody having typed it in.
+            if ($fe['cost'] === null) { $fGaps++; }
+            else                      { $fCost += (float)$fe['cost']; $fAny = true; }
         }
       ?>
       <tfoot>
@@ -588,7 +591,7 @@ function rtMoney($v): string { return $v === null ? '' : '$' . number_format((fl
             <div class="why" style="font-weight:400;">costs as typed here, not the invoice totals</div></td>
           <td class="num" style="font-weight:700;"><?= lpRtDays($fDays) ?></td>
           <td class="num" style="font-weight:700;">
-            <?= $fCost > 0 ? '$' . number_format($fCost, 2) : '—' ?>
+            <?= $fAny ? '$' . number_format($fCost, 2) : '—' ?>
             <?php if ($fGaps): ?>
               <div class="why" style="font-weight:400;"><?= (int)$fGaps ?> without a cost</div>
             <?php endif; ?>

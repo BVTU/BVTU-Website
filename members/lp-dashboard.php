@@ -363,16 +363,24 @@ $grantSumJson      = json_encode(array_values($grantSum));
        * or Treasurer; lp-releasetime.php is President only, so a Treasurer
        * clicking this would have been bounced to the member dashboard. The
        * sibling button above is gated the same way. */
-      $rtCard = stripos((string)$g['name'], 'release time') !== false
-             && execIsAdmin($member['email']);
+      /* The flag, not the money: before the first invoice is entered the
+       * figure is 0.00, and that is exactly when somebody needs the link in
+       * order to enter one. */
+      $isRt   = !empty($g['is_rt']);
+      $rtCard = $isRt && execIsAdmin($member['email']);
     ?>
     <?php if ($rtCard): ?>
     <?php // Carrying the year, or the card's figures and the page's days
           // would be from different school years. ?>
     <a class="grant-card is-link" href="lp-releasetime.php?year=<?= (int)$year ?>">
     <?php else: ?>
-    <div class="grant-card <?= $hasSpend ? 'has-spend' : '' ?>"
-         <?= $hasSpend ? 'onclick="openGrantModal('.$g['id'].')" title="Click to view transactions"' : '' ?>>
+    <?php /* No modal for the release time grant even when it is not a link.
+             Its money is district invoices, and the modal lists vouchers and
+             direct payments — a Treasurer clicking "$4,086.75 spent" would
+             get an empty box and no way to the real detail. */
+          $modal = $hasSpend && !$isRt; ?>
+    <div class="grant-card <?= $modal ? 'has-spend' : '' ?>"
+         <?= $modal ? 'onclick="openGrantModal('.$g['id'].')" title="Click to view transactions"' : '' ?>>
     <?php endif; ?>
       <div class="name"><?= htmlspecialchars($g['name']) ?></div>
       <?php if ($sentOk): ?>
@@ -397,7 +405,7 @@ $grantSumJson      = json_encode(array_values($grantSum));
       <?php endif; ?>
       <?php if ($rtCard): ?>
       <span class="view-link">Days, invoices and the bill →</span>
-      <?php elseif ($hasSpend): ?>
+      <?php elseif ($modal): ?>
       <span class="view-link">View transactions →</span>
       <?php endif; ?>
     <?= $rtCard ? '</a>' : '</div>' ?>

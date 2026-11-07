@@ -115,11 +115,15 @@ function lpRtEnsureTables(): void {
     /* What this day cost, when the district breaks it out.
      *
      * NULL rather than 0: a day logged before the invoice arrives has no cost
-     * known, and 0.00 would read as free. Added to the table rather than
-     * split from the invoice total, because an even split across a lump
-     * invoice is a made-up number — TTOC rates differ, and the column that
-     * gets added to a BCTF claim should hold what the district actually
-     * charged. The invoice keeps its own total alongside.
+     * known, and 0.00 would read as free. Typed rather than split from the
+     * invoice total, because an even split across a lump invoice is a number
+     * nobody charged — TTOC rates differ between teachers.
+     *
+     * It is the breakdown, not the figure of record. What BVTU paid is the
+     * invoice total, and that is what the grant budget, the page's own
+     * totals and the BCTF export all count. These add up underneath the log
+     * so a bill can be checked against it line by line; if the two disagree,
+     * the invoice is right and one of these rows is wrong.
      */
     try {
         $has = $db->query(
@@ -169,7 +173,9 @@ function lpRtCost($raw) {
     $v = trim((string)$raw);
     if ($v === '') return null;
     $v = str_replace([',', '$', ' '], '', $v);
-    if (!is_numeric($v)) return false;
+    // Digits and at most one point. is_numeric() also accepts "1e5", which
+    // is a typo that stores a hundred-thousand-dollar release day.
+    if (!preg_match('/^\d+(\.\d{1,2})?$/', $v)) return false;
     $n = round((float)$v, 2);
     // Negative would subtract from the claimed total; too large overflows
     // DECIMAL(10,2) and throws where a message was wanted.
@@ -223,15 +229,21 @@ function lpRtYears(): array {
 function lpRtEntries(int $year): array {
     lpRtEnsureTables();
     $s = getDB()->prepare(
-        "SELECT e.*, " . (lpRtHasCost() ? '' : 'NULL AS cost, ') . "
-                i.invoice_number, i.invoice_date, i.total_cost
+        "SELECT e.*, i.invoice_number, i.invoice_date, i.total_cost
            FROM lp_rt_entries e
            LEFT JOIN lp_rt_invoices i ON i.id = e.invoice_id
           WHERE e.year = ?
           ORDER BY e.release_date, e.member_name, e.id"
     );
     $s->execute([$year]);
-    return $s->fetchAll();
+    $rows = $s->fetchAll();
+    /* Filled in after the fetch rather than aliased into the SELECT. Aliased,
+     * a server that has the column while the information_schema probe fails
+     * would name it twice — and the NULL alias wins under FETCH_ASSOC, so
+     * every recorded cost would read as blank. */
+    foreach ($rows as &$r) { if (!array_key_exists('cost', $r)) $r['cost'] = null; }
+    unset($r);
+    return $rows;
 }
 
 function lpRtEntry(int $id): ?array {
