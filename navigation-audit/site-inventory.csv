@@ -1,0 +1,110 @@
+Title,URL / route,Type,Area,Navigation location,Authentication,Linked from homepage,Has own landing page,Audience,What it does
+Home,/index.php,Internal page,Homepage,Logo / root,Public (calls isLoggedIn),no,yes,"Public, Teachers","Landing page: hero, quick links, events, union news, external bodies."
+About,/about.php,Internal page,About,About (top-level); footer,Public (calls isLoggedIn),yes,yes,"Public, Teachers","Who the BVTU is, the executive, what the local does."
+Contact Us,/contact.php,Internal page,About,Footer; About page; 8 other pages,Public (calls isLoggedIn),no,yes,"Public, Teachers",Contact form and office address.
+Privacy,/privacy.php,Internal page,Legal,Footer small print,Public (calls isLoggedIn),no,yes,Public,Privacy statement.
+All Documents,/documents.php,Internal page,Documents,Documents (top-level + 1st dropdown item),Public,yes,yes,"Teachers, TTOCs",Searchable index of everything the local holds.
+Collective Agreement,/collective-agreement.php,Internal page,Documents,Documents dropdown,Public (calls isLoggedIn),yes,yes,"Teachers, TTOCs","The contract with School District 54, browsable by article."
+Side agreements (LOUs),/lous.php,Internal page,Documents,Documents dropdown,Public (calls isLoggedIn),no,yes,Teachers,Letters of understanding agreed since the contract was signed.
+Contract Assistant,/ca-assistant.php,Internal page,Documents,Documents dropdown,Public (calls isLoggedIn),no,yes,"Teachers, TTOCs","Ask a contract question, get the article that answers it (AI assisted)."
+School Calendars,/calendars.php,Internal page,Documents,Documents dropdown,Public (calls isLoggedIn),no,yes,"Teachers, TTOCs",SD54 instructional and Pro-D days.
+Trustee Zone Map,/trustee-zones.php,Internal page,Documents,Documents dropdown; homepage,Public,yes,yes,Public,Interactive map of school trustee voting zones.
+Trustee Candidate Responses,/trustee-candidates.php,Internal page,Documents,Documents dropdown; homepage,Public (calls isLoggedIn),yes,yes,Public,Candidate answers to BVTU questions.
+Member Resources,/members.php,Internal page,Members,Members (top-level + 1st dropdown item); homepage,Public (calls isLoggedIn),yes,yes,"Teachers, TTOCs",Hub listing everything for members.
+Salary Grids,/salary.php,Internal page,Members,Members dropdown; homepage,Public (calls isLoggedIn),yes,yes,"Teachers, TTOCs",Pay scales and how to move up a category.
+Health & Dental,/benefits.php,Internal page,Members,Members dropdown; homepage,Public (calls isLoggedIn),yes,yes,Teachers,Pacific Blue Cross coverage and claiming.
+Life Insurance,/life-insurance.php,Internal page,Members,Members dropdown,Public (calls isLoggedIn),no,yes,Teachers,"Coverage, beneficiaries, conversion rights."
+Student Loan Forgiveness,/loan-forgiveness.php,Internal page,Members,Members dropdown,Public (calls isLoggedIn),no,yes,Teachers,Federal forgiveness for teaching in the north.
+Deferred Salary Leave Plan,/deferred-salary.php,Internal page,Members,Members dropdown; Documents landing page,Public (calls isLoggedIn),no,yes,Teachers,"Save part of your pay now, take a year off later."
+Booking time off,/atrieve.php,Internal page,Members,Members dropdown,Public (calls isLoggedIn),no,yes,"Teachers, TTOCs","Release time and absences, and how to enter them in Atrieve."
+Class size & remedy,/remedy-tracker.php,Internal page,Members,Members dropdown,Public (calls isLoggedIn),no,yes,Teachers,Calculator for what you are owed when a class is over size.
+Collaboration Grant,/collab-grant.php,Internal page,Members,Members dropdown; PRO-D page; homepage,Public (calls isLoggedIn),yes,yes,Teachers,Public application form for release days to plan with a colleague.
+Change your Collaboration Grant application,/collab-grant-edit.php,Internal page,Members,Not in nav — link emailed to the applicant,Public (calls isLoggedIn),no,no,Teachers,Token link letting an applicant edit their own submission.
+Collaborator: this is not me,/collab-not-me.php,Internal page,Members,Not in nav — link at the foot of a collaborator email,Public,no,no,Teachers,Lets a named collaborator say they did not agree.
+Training & workshops,/events.php,Internal page,Members,Members dropdown,Public,no,yes,"Teachers, TTOCs",SURTs and sessions members can sign up for.
+Event detail / signup,/event.php,Internal page,Members,"From events.php, whats-on.php, homepage",Public (calls isLoggedIn),yes,no,"Teachers, TTOCs","One event, with registration."
+Cancel an event registration,/event-cancel.php,Internal page,Members,Not in nav — link in a confirmation email,Public,no,no,Teachers,Self-serve cancellation by token.
+What’s On,/whats-on.php,Internal page,Members,Members dropdown; homepage; events.php,Login + role,yes,yes,Teachers,"Union events, meetings and deadlines on one calendar."
+TTOC Resources,/ttoc.php,Internal page,Members,Members dropdown,Public (calls isLoggedIn),no,yes,TTOCs,"Pay, seniority and call-out for teachers on call."
+PRO-D,/prod.php,Internal page,PRO-D,"PRO-D (top-level, no dropdown); homepage",Public (calls isLoggedIn),yes,yes,"Teachers, TTOCs",Professional development funding and process.
+Health & Safety,/health-safety.php,Internal page,Health & Safety,Health & Safety (top-level + 1st dropdown item); homepage,Public (calls isLoggedIn),yes,yes,"Teachers, TTOCs","Committees, reporting, right to refuse unsafe work."
+BCTF Resources,/bctf.php,Internal page,BCTF,BCTF (top-level + 1st dropdown item); homepage,Public (calls isLoggedIn),yes,yes,"Teachers, TTOCs",What the provincial federation offers.
+Resource Library,/library.php,Internal page,Resources,Resources (top-level + 1st dropdown item); homepage,Public (calls isLoggedIn),yes,yes,Teachers,"Lesson plans, units and rubrics shared by members."
+Library resource detail,/library-resource.php,Internal page,Resources,From library.php,Public (calls isLoggedIn),no,no,Teachers,"One shared resource, with files and ratings."
+Share a resource,/library-upload.php,Internal page,Resources,From library.php,Login (redirect),no,no,Teachers,Upload a resource to the library.
+Saved resources,/library-saved.php,Internal page,Resources,From library.php,Login (redirect),no,no,Teachers,A member’s bookmarked resources.
+Edit a resource,/library-edit.php,Internal page,Resources,From library-resource.php,Login (redirect),no,no,Teachers,Edit your own upload.
+Curated Resources,/curated.php,Internal page,Resources,Resources dropdown,Public (calls isLoggedIn),no,yes,Teachers,Outside resources picked out by the BVTU.
+Newsletters,/newsletter-archive.php,Internal page,Newsletters,"Newsletters (top-level, no dropdown)",Login (redirect),no,yes,Teachers,Archive of past newsletters.
+Newsletter issue,/newsletter.php,Internal page,Newsletters,From newsletter-archive.php,Login (redirect),no,no,Teachers,One newsletter issue.
+All-Candidates Forum,/forum.php,Internal page,Other,Homepage; trustee-candidates.php; privacy.php,Public (calls isLoggedIn),yes,yes,Public,Recording and chapters of the trustee all-candidates forum.
+Search,/search.php,Internal page,Site-wide,Magnifier button in the header,Public (calls isLoggedIn),no,no,"Public, Teachers",Site-wide search results.
+Ask (site assistant),/ask.php,JSON endpoint,Site-wide,Not in nav — used by the search/assistant UI,Public,no,no,Teachers,Answers questions about the site.
+Contract Assistant: ask,/ca-ask.php,JSON endpoint,Documents,Not in nav — called by ca-assistant.php,Public,no,no,Teachers,Backend for the contract question box.
+Contract Assistant: search,/ca-search.php,Endpoint / redirect,Documents,Not in nav — called by ca-assistant.php,Public,no,no,Teachers,Contract text search behind the assistant.
+Shared expense voucher (read-only),/voucher.php,Internal page,Expenses,Not in nav — reached by a share link,Public,no,no,Union leadership,A voucher shown to someone holding a share token.
+Shared voucher receipt,/voucher-receipt.php,Endpoint / redirect,Expenses,From voucher.php,Public,no,no,Union leadership,Receipt image behind a share token.
+Short link redirect,/go.php,Internal page,Site-wide,Not in nav — QR codes and short URLs,Public,no,no,Public,Resolves /go.php?c=CODE to its destination.
+Click tracking,/track.php,Endpoint / redirect,Site-wide,Not in nav — fired by page scripts,Public,no,no,Site administrators,Records a click for analytics.
+Rebuild search index,/reindex.php,Internal page,Site-wide,Not in nav — admin utility,Public (calls isLoggedIn),no,no,Site administrators,Rebuilds the site search index.
+Calendar feed (.ics),/calendar.ics.php,Calendar feed,Members,Not in nav — subscribe link on whats-on.php,Public,no,no,Teachers,iCalendar feed of union events.
+Event calendar file,/event-ics.php,Calendar feed,Members,From an event page,Public,no,no,Teachers,Single-event .ics download.
+Event document,/event-doc.php,Endpoint / redirect,Members,From an event page,Public (calls isLoggedIn),no,no,Teachers,Serves a file attached to an event.
+Bookmark a resource,/library-bookmark.php,JSON endpoint,Resources,Not in nav — button on a resource,Public (calls isLoggedIn),no,no,Teachers,Toggles a bookmark.
+Resource thumbnail capture,/library-thumb-capture.php,JSON endpoint,Resources,Not in nav — background job,Public (calls isLoggedIn),no,no,Site administrators,Generates a resource thumbnail.
+Trustee candidate data,/trustee-candidates-data.php,Endpoint / redirect,Documents,Not in nav — feeds trustee-candidates.php,Public,no,no,Public,Candidate responses as data.
+Member Login,/members/login.php,Internal page,Member portal,Header button (signed out); footer of every members page,Public (calls isLoggedIn),no,yes,"Teachers, TTOCs",Sign in.
+Sign Out,/members/logout.php,Endpoint / redirect,Member portal,Members dropdown (signed in); dashboard,Public,no,no,Teachers,Sign out.
+Register,/members/register.php,Internal page,Member portal,Not linked — reached from an invitation email,Public (calls isLoggedIn),no,no,Teachers,Create an account from an invite.
+Register from invitation,/members/invite-register.php,Internal page,Member portal,Not linked — invitation token,Public (calls isLoggedIn),no,no,Teachers,Account creation via a one-time invite link.
+Forgot your password,/members/forgot-password.php,Internal page,Member portal,Login page,Public (calls isLoggedIn),no,no,Teachers,Request a reset email.
+Reset password,/members/reset-password.php,Internal page,Member portal,Not linked — emailed token,Public (calls isLoggedIn),no,no,Teachers,Set a new password.
+Change Password,/members/change-password.php,Internal page,Member portal,Dashboard → My Account,Public,no,no,Teachers,Change your own password.
+My Dashboard,/members/dashboard.php,Internal page,Member portal,Header button (signed in); Members dropdown,Login + role,no,yes,"Teachers, Union leadership",The member landing page; tiles for everything the member can reach.
+My Profile,/members/my-account.php,Internal page,Member portal,Dashboard → My Account,Login,no,no,Teachers,Your own details.
+My Expense Submissions,/members/exp-dashboard.php,Internal page,Expenses,Dashboard,Login,no,yes,Teachers,A member’s own expense claims.
+Submit New Expense,/members/exp-submit.php,Internal page,Expenses,Dashboard,Login,no,no,Teachers,Member expense claim form.
+Approvals & Payments,/members/approvals.php,Internal page,Expenses,Dashboard,Login,no,yes,Union leadership,Both signing queues: member reimbursements and President’s expenses.
+Expenses & Grants,/members/lp-dashboard.php,Internal page,Expenses,Dashboard,Login + role,no,yes,Union leadership,"LP budget, grant cards, vouchers, release time."
+New Expense Voucher,/members/lp-voucher-new.php,Internal page,Expenses,LP dashboard,Login,no,no,Union leadership,Create a voucher.
+Voucher detail,/members/lp-voucher-view.php,CSV download,Expenses,LP dashboard,Login + role,no,no,Union leadership,"One voucher, with signing and payment."
+Edit voucher,/members/lp-voucher-edit.php,Internal page,Expenses,Voucher detail,Login + role,no,no,Union leadership,Change a voucher’s lines.
+Release Time Grant,/members/lp-releasetime.php,Internal page,Expenses,LP dashboard; the Local Release Time Grant card,Login + role,no,yes,Union leadership,"Release days, district invoices and the 40-day BCTF claim."
+Manage grants and budget lines,/members/lp-grants-manage.php,Internal page,Expenses,LP dashboard,Login + role,no,no,Union leadership,Edit grant budgets.
+Year archive,/members/lp-archive.php,CSV download,Expenses,LP dashboard,Login + role,no,yes,Union leadership,"A closed year, read-only."
+Year end,/members/lp-year-end.php,Internal page,Expenses,LP dashboard,Login + role,no,no,Union leadership,Close off a school year.
+Treasurer ledger,/members/treasurer-ledger.php,Internal page,Expenses,"NOT LINKED — paused, carries a banner saying so",Login + role,no,no,Union leadership,Unified payment ledger across all three expense systems.
+Collaboration Grant admin,/members/collab-grant-admin.php,CSV download,Collaboration Grant,Dashboard,Login + role,no,yes,Union leadership,"Review applications, day ledger, CSV export."
+People,/members/people.php,Internal page,Administration,Dashboard → Administration,Login + role,no,yes,"Union leadership, Site administrators",The contact list.
+Person record,/members/person.php,Internal page,Administration,From people.php,Login + role,no,no,Union leadership,One contact.
+Add or edit a contact,/members/contact-edit.php,Internal page,Administration,From people.php / person.php,Login + role,no,no,Union leadership,Contact form.
+Member accounts,/members/member-manage.php,Internal page,Administration,From people.php,Login + role,no,yes,Site administrators,Login accounts and invitations.
+Roles & Directory,/members/roles-overview.php,Internal page,Administration,Dashboard → Administration,Login + role,no,yes,Union leadership,Who holds which executive role.
+Email,/members/email-templates.php,Internal page,Administration,Dashboard → Administration,Login + role,no,yes,Site administrators,Edit the wording of automated emails.
+Email log,/members/email-log.php,Internal page,Administration,From email-templates.php,Login + role,no,no,Site administrators,What has been sent.
+BCTF Forms,/members/bctf-forms.php,Internal page,Administration,Dashboard → Administration; BCTF nav section,Login + role,no,yes,Union leadership,Store and fill BCTF forms.
+OneDrive Doc Upload,/members/onedrive.php,Internal page,Administration,Dashboard → Administration,Login + role,no,yes,Site administrators,Push documents to OneDrive.
+Events admin,/members/event-admin.php,Internal page,Administration,Dashboard → Administration,Login + role,no,yes,Union leadership,Create and manage events.
+Edit an event,/members/event-edit.php,Internal page,Administration,From event-admin.php,Login + role,no,no,Union leadership,Event form.
+Event signups,/members/event-signups.php,CSV download,Administration,From event-admin.php,Login + role,no,no,Union leadership,Who registered.
+Short links & QR codes,/members/links-manage.php,Internal page,Administration,Dashboard → Administration,Login + role,no,yes,Site administrators,Manage /go.php short links.
+Forum Recording,/members/forum-admin.php,Internal page,Administration,Dashboard → Administration,Login + role,no,no,Site administrators,Chapters for the all-candidates forum video.
+Library Admin Panel,/members/library-admin.php,CSV download,Administration,Dashboard → Resource Library,Login,no,yes,Site administrators,Moderate the resource library.
+Curated resources admin,/members/curated-admin.php,Internal page,Administration,From curated.php,Login,no,no,Site administrators,Manage curated links.
+Sync from Mailchimp,/members/newsletter-admin.php,Internal page,Administration,Dashboard → Newsletter Archive,Login,no,no,Site administrators,Pull newsletters from Mailchimp.
+Site Analytics,/members/analytics.php,Internal page,Administration,Dashboard → Administration,Login + role,no,yes,Site administrators,Page views and clicks.
+Claude API Token Usage,/members/token-usage.php,Internal page,Administration,Dashboard → Administration,Login,no,no,Site administrators,AI spend.
+PRO-D claims (member),/members/prod-dashboard.php,Internal page,PRO-D admin,Not on the member dashboard — see report,Login,no,yes,Teachers,A member’s Pro-D claims and requests.
+PRO-D administration,/members/prod-admin.php,Internal page,PRO-D admin,Not on the member dashboard — see report,Login + role,no,yes,Union leadership,"Allocations, claims and requests across the district."
+Expense claims administration,/members/exp-admin.php,Internal page,Expenses,Not on the member dashboard — see report,Login + role,no,yes,Union leadership,"All member claims, filterable."
+Treasurer expense tools,/members/exp-treasurer.php,Internal page,Expenses,Not on the member dashboard — see report,Login + role,no,yes,Union leadership,Treasurer view of member claims.
+Expense payments,/members/exp-payments.php,Internal page,Expenses,From the treasurer tools,Login + role,no,no,Union leadership,Payments against member claims.
+Contacts (legacy),/members/contacts.php,Internal page,Administration,Not linked from the dashboard,Login + role,no,no,Union leadership,Older contact list view.
+Mailchimp sync,/members/contacts-sync.php,Internal page,Administration,From people.php,Login + role,no,no,Site administrators,Push contacts to Mailchimp.
+Invitations (superseded),/members/invite-manage.php,Endpoint / redirect,Administration,NOT LINKED — superseded by member-manage.php,Public,no,no,Site administrators,Old invitation manager.
+Exec manage (redirect),/members/exec-manage.php,Endpoint / redirect,Administration,NOT LINKED — redirects to roles-overview.php,Public,no,no,Union leadership,Legacy route.
+LP voucher review (retired),/members/lp-review.php,Endpoint / redirect,Expenses,NOT LINKED — merged into approvals.php,Public,no,no,Union leadership,Superseded queue.
+Expense claim review (retired),/members/exp-claim-review.php,Endpoint / redirect,Expenses,NOT LINKED — merged into approvals.php,Public,no,no,Union leadership,Superseded queue.
+Camera test,/members/camera-test.php,Internal page,Utility,NOT LINKED — developer utility,Login,no,no,Site administrators,Checks how a phone opens its camera.
+Status,/members/status.php,JSON endpoint,Utility,NOT LINKED — health check,Public (calls isLoggedIn),no,no,Site administrators,Service status output.
+Test email,/members/test-email.php,Internal page,Utility,Not linked from the dashboard,Login + role,no,no,Site administrators,Sends a test message.

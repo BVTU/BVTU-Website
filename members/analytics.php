@@ -112,6 +112,8 @@ function anPct(int $n, int $total): float { return $total > 0 ? ($n / $total) * 
       <h1>Site Analytics</h1>
     </div>
     <div class="range">
+      <?php // Everything, per page, as a file — for joining to something else. ?>
+      <a href="analytics-export.php">Export CSV</a>
       <?php foreach ([7 => '7 days', 30 => '30 days', 90 => '90 days'] as $d => $lbl): ?>
       <a href="?days=<?= $d ?>" class="<?= $d === $days ? 'on' : '' ?>"><?= $lbl ?></a>
       <?php endforeach; ?>
