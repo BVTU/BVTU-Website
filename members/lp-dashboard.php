@@ -359,10 +359,17 @@ $grantSumJson      = json_encode(array_values($grantSum));
        * onclick: it is navigation, so it should be keyboard-reachable and
        * open in a new tab if somebody wants that.
        */
-      $rtCard = stripos((string)$g['name'], 'release time') !== false;
+      /* Only for somebody who can open the page. lp-dashboard is President
+       * or Treasurer; lp-releasetime.php is President only, so a Treasurer
+       * clicking this would have been bounced to the member dashboard. The
+       * sibling button above is gated the same way. */
+      $rtCard = stripos((string)$g['name'], 'release time') !== false
+             && execIsAdmin($member['email']);
     ?>
     <?php if ($rtCard): ?>
-    <a class="grant-card is-link" href="lp-releasetime.php">
+    <?php // Carrying the year, or the card's figures and the page's days
+          // would be from different school years. ?>
+    <a class="grant-card is-link" href="lp-releasetime.php?year=<?= (int)$year ?>">
     <?php else: ?>
     <div class="grant-card <?= $hasSpend ? 'has-spend' : '' ?>"
          <?= $hasSpend ? 'onclick="openGrantModal('.$g['id'].')" title="Click to view transactions"' : '' ?>>

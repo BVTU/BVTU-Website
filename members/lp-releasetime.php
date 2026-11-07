@@ -42,7 +42,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $name   = trim($_POST['member_name']  ?? '');
         $days   = (float)($_POST['days'] ?? 0);
         $reason = trim($_POST['reason'] ?? '');
-        if ($date === '' || $name === '') {
+        $cost   = lpRtCost($_POST['cost'] ?? '');
+        if ($cost === false) {
+            // Refused, not dropped: silently blanking it would report
+            // "Release day logged" with no cost on the row.
+            $error = 'That cost could not be read. Figures only — 412.50 or $1,362.25.';
+        } elseif ($date === '' || $name === '') {
             $error = 'A date and a name are required.';
         } elseif (!rtIsoDate($date)) {
             $error = 'That date could not be read. Use the date picker.';
@@ -57,8 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                    . ', not ' . lpYearLabel($year)
                    . '. Switch year at the top, or correct the date.';
         } else {
-            lpRtAddEntry($year, $date, $name, $days, $reason, $member['email'],
-                         lpRtCost($_POST['cost'] ?? ''));
+            lpRtAddEntry($year, $date, $name, $days, $reason, $member['email'], $cost);
             $notice = 'Release day logged.';
         }
     }
@@ -69,8 +73,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $name   = trim($_POST['member_name']  ?? '');
         $days   = (float)($_POST['days'] ?? 0);
         $reason = trim($_POST['reason'] ?? '');
+        $cost   = lpRtCost($_POST['cost'] ?? '');
         $row    = $id ? lpRtEntry($id) : null;
-        if (!$row || (int)$row['year'] !== $year) {
+        if ($cost === false) {
+            $error = 'That cost could not be read. Figures only — 412.50 or $1,362.25.';
+        } elseif (!$row || (int)$row['year'] !== $year) {
             $error = 'That entry could not be found.';
         } elseif ($date === '' || $name === '' || $days <= 0 || $days > 20) {
             $error = 'A date, a name and a sensible number of days are required.';
@@ -78,8 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'That date is not in ' . lpYearLabel($year)
                    . '. Entries stay in the year they belong to.';
         } else {
-            lpRtUpdateEntry($id, $date, $name, $days, $reason,
-                            lpRtCost($_POST['cost'] ?? ''));
+            lpRtUpdateEntry($id, $date, $name, $days, $reason, $cost);
             $notice = 'Entry updated.';
         }
     }
@@ -578,7 +584,8 @@ function rtMoney($v): string { return $v === null ? '' : '$' . number_format((fl
       ?>
       <tfoot>
         <tr>
-          <td colspan="2" style="text-align:right;font-weight:700;">Claimed</td>
+          <td colspan="2" style="text-align:right;font-weight:700;">Claimed
+            <div class="why" style="font-weight:400;">costs as typed here, not the invoice totals</div></td>
           <td class="num" style="font-weight:700;"><?= lpRtDays($fDays) ?></td>
           <td class="num" style="font-weight:700;">
             <?= $fCost > 0 ? '$' . number_format($fCost, 2) : '—' ?>

@@ -133,12 +133,48 @@ function lpRtEnsureTables(): void {
     }
 }
 
-/** A typed dollar figure, or null when the box was left empty. */
-function lpRtCost($raw): ?float {
+/**
+ * Did the cost column make it onto the table?
+ *
+ * The ALTER above is best-effort and logs rather than throws, so naming the
+ * column unconditionally in the INSERT and UPDATE would turn one failed
+ * migration into every add and every edit fatalling. Same shape as
+ * lpHasPayeeColumns() in lp-db.php.
+ */
+function lpRtHasCost(): bool {
+    static $ok = null;
+    if ($ok !== null) return $ok;
+    try {
+        $ok = (int)getDB()->query(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='lp_rt_entries'
+               AND COLUMN_NAME='cost'"
+        )->fetchColumn() > 0;
+    } catch (\Throwable $e) {
+        error_log('lpRtHasCost: ' . $e->getMessage());
+        $ok = false;
+    }
+    return $ok;
+}
+
+/**
+ * A typed dollar figure, null when the box was left empty, or false when what
+ * was typed is not a figure at all.
+ *
+ * Three answers, not two. Folding "450.oo" into null would wipe a cost that
+ * had been recorded and report "Entry updated" — the invoice form has always
+ * refused that input, and this one should too.
+ */
+function lpRtCost($raw) {
     $v = trim((string)$raw);
     if ($v === '') return null;
     $v = str_replace([',', '$', ' '], '', $v);
-    return is_numeric($v) ? round((float)$v, 2) : null;
+    if (!is_numeric($v)) return false;
+    $n = round((float)$v, 2);
+    // Negative would subtract from the claimed total; too large overflows
+    // DECIMAL(10,2) and throws where a message was wanted.
+    if ($n < 0 || $n > 99999999.99) return false;
+    return $n;
 }
 
 /** Days without trailing zeros: 1, 0.5, 2.5 — never "1.0". */
@@ -187,7 +223,8 @@ function lpRtYears(): array {
 function lpRtEntries(int $year): array {
     lpRtEnsureTables();
     $s = getDB()->prepare(
-        "SELECT e.*, i.invoice_number, i.invoice_date, i.total_cost
+        "SELECT e.*, " . (lpRtHasCost() ? '' : 'NULL AS cost, ') . "
+                i.invoice_number, i.invoice_date, i.total_cost
            FROM lp_rt_entries e
            LEFT JOIN lp_rt_invoices i ON i.id = e.invoice_id
           WHERE e.year = ?
@@ -207,21 +244,36 @@ function lpRtEntry(int $id): ?array {
 function lpRtAddEntry(int $year, string $date, string $name, float $days,
                       string $reason, string $by, ?float $cost = null): int {
     lpRtEnsureTables();
-    getDB()->prepare(
-        "INSERT INTO lp_rt_entries (year, release_date, member_name, days, reason, cost, created_by)
-         VALUES (?,?,?,?,?,?,?)"
-    )->execute([$year, $date, mb_substr(trim($name), 0, 255), $days,
-                mb_substr(trim($reason), 0, 500), $cost, $by]);
+    if (lpRtHasCost()) {
+        getDB()->prepare(
+            "INSERT INTO lp_rt_entries (year, release_date, member_name, days, reason, cost, created_by)
+             VALUES (?,?,?,?,?,?,?)"
+        )->execute([$year, $date, mb_substr(trim($name), 0, 255), $days,
+                    mb_substr(trim($reason), 0, 500), $cost, $by]);
+    } else {
+        getDB()->prepare(
+            "INSERT INTO lp_rt_entries (year, release_date, member_name, days, reason, created_by)
+             VALUES (?,?,?,?,?,?)"
+        )->execute([$year, $date, mb_substr(trim($name), 0, 255), $days,
+                    mb_substr(trim($reason), 0, 500), $by]);
+    }
     return (int)getDB()->lastInsertId();
 }
 
 function lpRtUpdateEntry(int $id, string $date, string $name, float $days,
                          string $reason, ?float $cost = null): void {
     lpRtEnsureTables();
-    getDB()->prepare(
-        "UPDATE lp_rt_entries SET release_date=?, member_name=?, days=?, reason=?, cost=? WHERE id=?"
-    )->execute([$date, mb_substr(trim($name), 0, 255), $days,
-                mb_substr(trim($reason), 0, 500), $cost, $id]);
+    if (lpRtHasCost()) {
+        getDB()->prepare(
+            "UPDATE lp_rt_entries SET release_date=?, member_name=?, days=?, reason=?, cost=? WHERE id=?"
+        )->execute([$date, mb_substr(trim($name), 0, 255), $days,
+                    mb_substr(trim($reason), 0, 500), $cost, $id]);
+    } else {
+        getDB()->prepare(
+            "UPDATE lp_rt_entries SET release_date=?, member_name=?, days=?, reason=? WHERE id=?"
+        )->execute([$date, mb_substr(trim($name), 0, 255), $days,
+                    mb_substr(trim($reason), 0, 500), $id]);
+    }
 }
 
 /**
