@@ -79,7 +79,6 @@ foreach ($grantSum as &$g) {
 }
 unset($g);
 
-$needsSubmission = array_filter($grantSum, fn($g) => $g['spent'] > 0 && $g['outstanding_count'] > 0);
 
 $grantExpensesJson = json_encode($grantExpenses);
 $grantSumJson      = json_encode(array_values($grantSum));
@@ -315,17 +314,9 @@ $grantSumJson      = json_encode(array_values($grantSum));
   </div>
   <?php endif; ?>
 
-  <?php if ($needsSubmission): ?>
-  <div class="bctf-banner">
-    <strong>⚠ BCTF submission outstanding</strong> — the following grant<?= count($needsSubmission) !== 1 ? 's have' : ' has' ?> receipts not yet sent to the BCTF:
-    <ul>
-      <?php foreach ($needsSubmission as $g): ?>
-      <li><a href="javascript:void(0)" onclick="openGrantModal(<?= $g['id'] ?>)"><?= htmlspecialchars($g['name']) ?></a>
-        — <?= $g['outstanding_count'] ?> receipt<?= $g['outstanding_count'] != 1 ? 's' : '' ?> ($<?= number_format($g['outstanding_total'], 2) ?>)<?= $g['submission'] ? ' since last submission' : '' ?></li>
-      <?php endforeach; ?>
-    </ul>
-  </div>
-  <?php endif; ?>
+  <?php /* No banner listing the grants with receipts still to send: every
+           one of those cards already says "Not yet sent to BCTF" on itself,
+           a few lines below, and saying it twice says it no better. */ ?>
 
   <!-- Grant summary -->
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.85rem;flex-wrap:wrap;gap:.5rem;">

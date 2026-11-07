@@ -355,7 +355,6 @@ function rtMoney($v): string { return $v === null ? '' : '$' . number_format((fl
     .edit-row { display:none; background:#f8fafc; }
     .edit-row.open { display:table-row; }
     .empty-row td { text-align:center; color:var(--gray-400); padding:2.5rem; }
-    .stage-note { font-size:.78rem; color:var(--gray-500); background:var(--gray-50,#f9fafb); border:1px solid var(--gray-200); border-radius:8px; padding:.7rem .9rem; margin-bottom:1.5rem; line-height:1.55; }
   </style>
 </head>
 <body>
@@ -382,13 +381,6 @@ function rtMoney($v): string { return $v === null ? '' : '$' . number_format((fl
 
   <?php if ($notice): ?><div class="notice">&#x2713; <?= htmlspecialchars($notice) ?></div><?php endif; ?>
   <?php if ($error):  ?><div class="error-box">&#x26A0; <?= htmlspecialchars($error) ?></div><?php endif; ?>
-
-  <div class="stage-note">
-    Log each release day as it happens. When the district invoice arrives, add it below, attach the
-    PDF, and tick the days it covers — the BCTF reimbursement table is then built from that, one row
-    per invoice with dates and names grouped and totals added up. The export package is the next
-    stage; until then the table below is the thing you copy from.
-  </div>
 
   <div class="stat-row">
     <div class="stat">
@@ -526,26 +518,21 @@ function rtMoney($v): string { return $v === null ? '' : '$' . number_format((fl
          * invoices below, because this is the table that gets checked against
          * a district bill line by line. Every day in the log counts: a day
          * that is not being claimed does not go in. */
-        $fDays = 0.0; $fCost = 0.0; $fGaps = 0; $fAny = false;
+        $fDays = 0.0; $fCost = 0.0; $fAny = false;
         foreach ($entries as $fe) {
             $fDays += (float)$fe['days'];
             // $fAny, not $fCost > 0: a day the district charged nothing for
             // is a recorded 0.00, and showing a dash for it would read as
             // nobody having typed it in.
-            if ($fe['cost'] === null) { $fGaps++; }
-            else                      { $fCost += (float)$fe['cost']; $fAny = true; }
+            if ($fe['cost'] !== null) { $fCost += (float)$fe['cost']; $fAny = true; }
         }
       ?>
       <tfoot>
         <tr>
-          <td colspan="2" style="text-align:right;font-weight:700;">Claimed
-            <div class="why" style="font-weight:400;">costs as typed here, not the invoice totals</div></td>
+          <td colspan="2" style="text-align:right;font-weight:700;">Claimed</td>
           <td class="num" style="font-weight:700;"><?= lpRtDays($fDays) ?></td>
           <td class="num" style="font-weight:700;">
             <?= $fAny ? '$' . number_format($fCost, 2) : '—' ?>
-            <?php if ($fGaps): ?>
-              <div class="why" style="font-weight:400;"><?= (int)$fGaps ?> without a cost</div>
-            <?php endif; ?>
           </td>
           <td colspan="3"></td>
         </tr>
@@ -567,10 +554,6 @@ function rtMoney($v): string { return $v === null ? '' : '$' . number_format((fl
         <div><label for="icost">Total cost</label><input type="number" id="icost" name="total_cost" step="0.01" min="0" placeholder="leave blank"></div>
         <div><label for="ifile">Invoice PDF or photo</label><input type="file" id="ifile" name="invoice_file" accept=".pdf,image/*"></div>
         <div><button type="submit" class="btn btn-primary" style="padding:.5rem 1.1rem;font-size:.9rem;">Add</button></div>
-      </div>
-      <div class="hintline">
-        Leave the cost blank until the district tells you — blank reads as
-        <em>not known yet</em>, where 0 would read as free.
       </div>
     </form>
   </div>
@@ -669,11 +652,6 @@ function rtMoney($v): string { return $v === null ? '' : '$' . number_format((fl
               </div>
               <button type="submit" class="btn btn-primary" style="padding:.45rem .9rem;font-size:.85rem;">Save days</button>
               <button type="button" class="act-btn" onclick="tog('a<?= $iid ?>')">Cancel</button>
-              <div class="hintline">
-                Unticking is as real as ticking — a day removed here goes back to
-                <em>not invoiced</em> rather than staying attached. A day marked not claimed can sit
-                on the invoice without being billed to the BCTF.
-              </div>
               <?php endif; ?>
             </form>
           </td>
