@@ -57,7 +57,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                    . ', not ' . lpYearLabel($year)
                    . '. Switch year at the top, or correct the date.';
         } else {
-            lpRtAddEntry($year, $date, $name, $days, $reason, $member['email']);
+            lpRtAddEntry($year, $date, $name, $days, $reason, $member['email'],
+                         lpRtCost($_POST['cost'] ?? ''));
             $notice = 'Release day logged.';
         }
     }
@@ -77,7 +78,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'That date is not in ' . lpYearLabel($year)
                    . '. Entries stay in the year they belong to.';
         } else {
-            lpRtUpdateEntry($id, $date, $name, $days, $reason);
+            lpRtUpdateEntry($id, $date, $name, $days, $reason,
+                            lpRtCost($_POST['cost'] ?? ''));
             $notice = 'Entry updated.';
         }
     }
@@ -430,11 +432,16 @@ function rtMoney($v): string { return $v === null ? '' : '$' . number_format((fl
         <div><label for="n">Member released</label><input type="text" id="n" name="member_name" required placeholder="e.g. Amanda Forstbaurer-Bourie"></div>
         <div><label for="dy">Days</label><input type="number" id="dy" name="days" value="1" step="0.5" min="0.5" max="20" required></div>
         <div><label for="r">Reason</label><input type="text" id="r" name="reason" placeholder="e.g. Treasurer transition"></div>
+        <?php // Blank until the district bills it. Typed, not split from the
+              // invoice total: TTOC rates differ, so an even share would be a
+              // number nobody charged. ?>
+        <div><label for="c">Cost</label><input type="text" id="c" name="cost" inputmode="decimal"
+             placeholder="when known" style="width:7.5rem;"></div>
         <div><button type="submit" class="btn btn-primary" style="padding:.5rem 1.1rem;font-size:.9rem;">Add</button></div>
       </div>
       <div class="hintline">
         One row per person per day — if three people were released on the same day, that is three rows.
-        Half days are fine.
+        Half days are fine. Cost can wait for the invoice.
       </div>
     </form>
   </div>
@@ -447,6 +454,7 @@ function rtMoney($v): string { return $v === null ? '' : '$' . number_format((fl
           <th>Date</th>
           <th>Member</th>
           <th style="text-align:right;">Days</th>
+          <th style="text-align:right;">Cost</th>
           <th>Reason</th>
           <th>Invoice</th>
           <th>Actions</th>
@@ -454,13 +462,16 @@ function rtMoney($v): string { return $v === null ? '' : '$' . number_format((fl
       </thead>
       <tbody>
         <?php if (!$entries): ?>
-        <tr class="empty-row"><td colspan="6">No release days logged for <?= htmlspecialchars(lpYearLabel($year)) ?> yet.</td></tr>
+        <tr class="empty-row"><td colspan="7">No release days logged for <?= htmlspecialchars(lpYearLabel($year)) ?> yet.</td></tr>
         <?php endif; ?>
         <?php foreach ($entries as $e): $eid = (int)$e['id']; ?>
         <tr class="<?= (int)$e['excluded'] ? 'excluded' : '' ?>">
           <td style="white-space:nowrap;"><?= htmlspecialchars(rtDate($e['release_date'])) ?></td>
           <td><?= htmlspecialchars($e['member_name']) ?></td>
           <td class="num"><?= lpRtDays((float)$e['days']) ?></td>
+          <td class="num"><?= $e['cost'] !== null
+              ? '$' . number_format((float)$e['cost'], 2)
+              : '<span style="color:var(--gray-300);">—</span>' ?></td>
           <td>
             <?= htmlspecialchars($e['reason']) ?>
             <?php if ((int)$e['excluded']): ?>
@@ -504,7 +515,7 @@ function rtMoney($v): string { return $v === null ? '' : '$' . number_format((fl
           </td>
         </tr>
         <tr class="edit-row" id="row-<?= $eid ?>">
-          <td colspan="6">
+          <td colspan="7">
             <form method="POST" class="f">
               <?= csrfField() ?>
               <input type="hidden" name="action"   value="update">
@@ -514,6 +525,9 @@ function rtMoney($v): string { return $v === null ? '' : '$' . number_format((fl
                 <div><label>Date</label><input type="date" name="release_date" value="<?= htmlspecialchars($e['release_date']) ?>" required></div>
                 <div><label>Member released</label><input type="text" name="member_name" value="<?= htmlspecialchars($e['member_name']) ?>" required></div>
                 <div><label>Days</label><input type="number" name="days" value="<?= htmlspecialchars(lpRtDays((float)$e['days'])) ?>" step="0.5" min="0.5" max="20" required></div>
+                <div><label>Cost</label><input type="text" name="cost" inputmode="decimal"
+                     style="width:7.5rem;" placeholder="when known"
+                     value="<?= $e['cost'] !== null ? htmlspecialchars(number_format((float)$e['cost'], 2, '.', '')) : '' ?>"></div>
                 <div><label>Reason</label><input type="text" name="reason" value="<?= htmlspecialchars($e['reason']) ?>"></div>
                 <div style="display:flex;gap:.35rem;">
                   <button type="submit" class="btn btn-primary" style="padding:.45rem .9rem;font-size:.85rem;">Save</button>
@@ -524,7 +538,7 @@ function rtMoney($v): string { return $v === null ? '' : '$' . number_format((fl
           </td>
         </tr>
         <tr class="edit-row" id="row-x<?= $eid ?>">
-          <td colspan="6">
+          <td colspan="7">
             <form method="POST" class="f">
               <?= csrfField() ?>
               <input type="hidden" name="action"   value="exclude">
@@ -548,6 +562,34 @@ function rtMoney($v): string { return $v === null ? '' : '$' . number_format((fl
         </tr>
         <?php endforeach; ?>
       </tbody>
+      <?php if ($entries): ?>
+      <?php
+        /* What the claimed days cost, added up. Here rather than only on the
+         * invoices below, because this is the table that gets checked against
+         * a district bill line by line. Days marked not-claimed are left out
+         * of both figures, the way everything else on this page treats them. */
+        $fDays = 0.0; $fCost = 0.0; $fGaps = 0;
+        foreach ($entries as $fe) {
+            if ((int)$fe['excluded']) continue;
+            $fDays += (float)$fe['days'];
+            if ($fe['cost'] === null) $fGaps++;
+            else                      $fCost += (float)$fe['cost'];
+        }
+      ?>
+      <tfoot>
+        <tr>
+          <td colspan="2" style="text-align:right;font-weight:700;">Claimed</td>
+          <td class="num" style="font-weight:700;"><?= lpRtDays($fDays) ?></td>
+          <td class="num" style="font-weight:700;">
+            <?= $fCost > 0 ? '$' . number_format($fCost, 2) : '—' ?>
+            <?php if ($fGaps): ?>
+              <div class="why" style="font-weight:400;"><?= (int)$fGaps ?> without a cost</div>
+            <?php endif; ?>
+          </td>
+          <td colspan="3"></td>
+        </tr>
+      </tfoot>
+      <?php endif; ?>
     </table>
   </div>
 

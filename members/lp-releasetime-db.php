@@ -111,6 +111,34 @@ function lpRtEnsureTables(): void {
         INDEX idx_year (year),
         INDEX idx_invoice (invoice_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    /* What this day cost, when the district breaks it out.
+     *
+     * NULL rather than 0: a day logged before the invoice arrives has no cost
+     * known, and 0.00 would read as free. Added to the table rather than
+     * split from the invoice total, because an even split across a lump
+     * invoice is a made-up number — TTOC rates differ, and the column that
+     * gets added to a BCTF claim should hold what the district actually
+     * charged. The invoice keeps its own total alongside.
+     */
+    try {
+        $has = $db->query(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'lp_rt_entries'
+             AND COLUMN_NAME = 'cost'"
+        )->fetchColumn();
+        if (!$has) $db->exec("ALTER TABLE lp_rt_entries ADD COLUMN cost DECIMAL(10,2) DEFAULT NULL");
+    } catch (Exception $e) {
+        error_log('lp_rt_entries.cost: ' . $e->getMessage());
+    }
+}
+
+/** A typed dollar figure, or null when the box was left empty. */
+function lpRtCost($raw): ?float {
+    $v = trim((string)$raw);
+    if ($v === '') return null;
+    $v = str_replace([',', '$', ' '], '', $v);
+    return is_numeric($v) ? round((float)$v, 2) : null;
 }
 
 /** Days without trailing zeros: 1, 0.5, 2.5 — never "1.0". */
@@ -177,22 +205,23 @@ function lpRtEntry(int $id): ?array {
 }
 
 function lpRtAddEntry(int $year, string $date, string $name, float $days,
-                      string $reason, string $by): int {
+                      string $reason, string $by, ?float $cost = null): int {
     lpRtEnsureTables();
     getDB()->prepare(
-        "INSERT INTO lp_rt_entries (year, release_date, member_name, days, reason, created_by)
-         VALUES (?,?,?,?,?,?)"
+        "INSERT INTO lp_rt_entries (year, release_date, member_name, days, reason, cost, created_by)
+         VALUES (?,?,?,?,?,?,?)"
     )->execute([$year, $date, mb_substr(trim($name), 0, 255), $days,
-                mb_substr(trim($reason), 0, 500), $by]);
+                mb_substr(trim($reason), 0, 500), $cost, $by]);
     return (int)getDB()->lastInsertId();
 }
 
-function lpRtUpdateEntry(int $id, string $date, string $name, float $days, string $reason): void {
+function lpRtUpdateEntry(int $id, string $date, string $name, float $days,
+                         string $reason, ?float $cost = null): void {
     lpRtEnsureTables();
     getDB()->prepare(
-        "UPDATE lp_rt_entries SET release_date=?, member_name=?, days=?, reason=? WHERE id=?"
+        "UPDATE lp_rt_entries SET release_date=?, member_name=?, days=?, reason=?, cost=? WHERE id=?"
     )->execute([$date, mb_substr(trim($name), 0, 255), $days,
-                mb_substr(trim($reason), 0, 500), $id]);
+                mb_substr(trim($reason), 0, 500), $cost, $id]);
 }
 
 /**

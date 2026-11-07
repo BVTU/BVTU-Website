@@ -146,7 +146,11 @@ $grantSumJson      = json_encode(array_values($grantSum));
     .bctf-status-due { background: #fef2f2; color: #991b1b; }
     .grant-card { background: #fff; border: 1px solid var(--gray-200); border-radius: 10px; padding: 1rem 1.15rem; transition: border-color .15s, box-shadow .15s; }
     .grant-card.has-spend { cursor: pointer; }
-    .grant-card.has-spend:hover { border-color: var(--primary); box-shadow: 0 2px 12px rgba(26,107,53,.1); }
+    .grant-card.has-spend:hover,
+    .grant-card.is-link:hover { border-color: var(--primary); box-shadow: 0 2px 12px rgba(26,107,53,.1); }
+    /* An anchor, so it needs telling not to look like body copy. */
+    .grant-card.is-link { display: block; text-decoration: none; color: inherit; }
+    .grant-card.is-link .view-link { opacity: 1; }
     .grant-card .name { font-size: .82rem; font-weight: 700; color: var(--gray-800); margin-bottom: .6rem; line-height: 1.3; }
     .grant-card .bar-wrap { height: 6px; background: var(--gray-100); border-radius: 3px; overflow: hidden; margin-bottom: .5rem; }
     .grant-card .bar { height: 100%; border-radius: 3px; background: var(--primary); }
@@ -347,8 +351,22 @@ $grantSumJson      = json_encode(array_values($grantSum));
       $sentOk   = $hasSpend && $g['outstanding_count'] === 0 && $g['submission'];
       $needsSub = $hasSpend && $g['outstanding_count'] > 0;
     ?>
+    <?php
+      /* The release-time grant keeps its real detail on its own page — the
+       * days, who was released, the district invoices and the scanned bill —
+       * and that page had no way in except a small button further down, so
+       * the obvious thing to click did nothing. An anchor rather than an
+       * onclick: it is navigation, so it should be keyboard-reachable and
+       * open in a new tab if somebody wants that.
+       */
+      $rtCard = stripos((string)$g['name'], 'release time') !== false;
+    ?>
+    <?php if ($rtCard): ?>
+    <a class="grant-card is-link" href="lp-releasetime.php">
+    <?php else: ?>
     <div class="grant-card <?= $hasSpend ? 'has-spend' : '' ?>"
          <?= $hasSpend ? 'onclick="openGrantModal('.$g['id'].')" title="Click to view transactions"' : '' ?>>
+    <?php endif; ?>
       <div class="name"><?= htmlspecialchars($g['name']) ?></div>
       <?php if ($sentOk): ?>
       <div class="bctf-status bctf-status-ok">✓ Sent to BCTF — <?= date('M j, Y', strtotime($g['submission']['submitted_at'])) ?></div>
@@ -362,10 +380,12 @@ $grantSumJson      = json_encode(array_values($grantSum));
         <span class="spent-lbl">$<?= number_format($g['spent'],2) ?> spent</span>
         <span class="rem-lbl <?= $class ?>">$<?= number_format(max(0,$g['remaining']),2) ?> left</span>
       </div>
-      <?php if ($hasSpend): ?>
+      <?php if ($rtCard): ?>
+      <span class="view-link">Days, invoices and the bill →</span>
+      <?php elseif ($hasSpend): ?>
       <span class="view-link">View transactions →</span>
       <?php endif; ?>
-    </div>
+    <?= $rtCard ? '</a>' : '</div>' ?>
     <?php endforeach; ?>
   </div>
 
