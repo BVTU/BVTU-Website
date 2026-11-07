@@ -824,9 +824,12 @@ $totalDaysApproved = $personDays['approved'];
 
     .app-detail-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-      gap: .75rem 1.25rem;
-      margin-bottom: 1.25rem;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      /* start, not stretch: one tall cell used to set the height of every
+         short one beside it. */
+      align-items: start;
+      gap: .6rem 1.25rem;
+      margin-bottom: .9rem;
     }
     .app-detail-item .dl { color: var(--gray-400); font-size: .74rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; margin-bottom: .15rem; }
     .app-detail-item .dd { color: var(--text); font-size: .88rem; font-weight: 500; }
@@ -1298,6 +1301,21 @@ $totalDaysApproved = $personDays['approved'];
                        border-radius:6px; font-size:.75rem; padding:.15rem .45rem;
                        cursor:pointer; white-space:nowrap; }
       .cg-cap button:hover { border-color:var(--primary); color:var(--primary); }
+      /* It keeps .app-action-form's separator line, which is wanted here, but
+         not that form's generous padding: this is one row, not a decision. */
+      .app-action-form.fulfil { padding-top:.6rem; margin-top:.6rem; gap:.4rem; }
+      .ft-row { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem .85rem; }
+      .ft-head { font-size:.74rem; font-weight:800; text-transform:uppercase;
+                 letter-spacing:.05em; color:var(--gray-400); }
+      .ft-check { display:flex; align-items:center; gap:.35rem; font-size:.86rem;
+                  color:var(--gray-700); }
+      .ft-f { display:flex; align-items:center; gap:.35rem; font-size:.8rem;
+              color:var(--gray-500); }
+      .ft-f input { border:1px solid var(--border); border-radius:6px; padding:.25rem .45rem;
+                    font-size:.86rem; font-family:inherit; }
+      .ft-save { border:1px solid var(--border); background:#fff; color:var(--gray-700);
+                 font-size:.8rem; padding:.3rem .7rem; }
+      .ft-when { font-size:.76rem; color:var(--gray-400); }
       .cg-days { display:flex; flex-wrap:wrap; gap:.3rem; margin:.15rem 0 .35rem; }
       .cg-day { font-size:.76rem; font-weight:600; padding:.12rem .45rem; border-radius:6px;
                 background:#f0fdf4; color:#166534; border:1px solid #bbf7d0; white-space:nowrap; }
@@ -1922,6 +1940,51 @@ $totalDaysApproved = $personDays['approved'];
                 <div class="dd"><?= htmlspecialchars($app['years_in_role'] ?: '—') ?></div>
               </div>
               <div class="app-detail-item">
+                <div class="dl">Days requested</div>
+                <div class="dd">
+                  <?= $days ?>
+                  <?php /*
+                   * The editor has always taken an id for a signed-in admin and
+                   * has always let one edit a locked or declined application —
+                   * it was simply never linked from here, so the only way in
+                   * was to email the applicant a link and ask them to do it.
+                   *
+                   * Here rather than in the actions below, because days are what
+                   * people ask to change. Days requested is the number of
+                   * proposed dates, so the editor changes the dates and the
+                   * count follows; a box for the number on its own would let the
+                   * two disagree.
+                   */ ?>
+                  <?php // The print view renders its own read-only card and never
+                        // reaches this markup, so no guard is needed here. ?>
+                  <a class="cg-edit-link"
+                     href="../collab-grant-edit.php?id=<?= (int)$app['id'] ?>"
+                     title="Change the dates, and anything else on the application">change</a>
+                </div>
+              </div>
+              <?php
+                $pdDates = [];
+                if (!empty($app['proposed_dates'])) {
+                    $pd = json_decode($app['proposed_dates'], true);
+                    if (is_array($pd)) $pdDates = $pd;
+                }
+              ?>
+              <?php if ($pdDates): ?>
+              <div class="app-detail-item">
+                <div class="dl">Proposed dates</div>
+                <div class="dd">
+                  <?php foreach ($pdDates as $pd): ?>
+                    <span style="display:inline-block;background:#e8f5ed;border:1px solid #b3d9bf;border-radius:20px;padding:.15rem .65rem;font-size:.82rem;font-weight:600;color:#1a5c2e;margin:.1rem .2rem .1rem 0;">
+                      <?= date('D, M j Y', strtotime($pd)) ?>
+                    </span>
+                  <?php endforeach; ?>
+                </div>
+              </div>
+              <?php endif; ?>
+              <?php /* Full width, below the short facts. As an ordinary
+                       cell it stretched the row to its own height and left
+                       a field of white under Email and Time in role. */ ?>
+              <div class="app-detail-item" style="grid-column:1/-1;">
                 <div class="dl">Collaborator</div>
                 <div class="dd">
                   <?php if ($app['has_collaborator'] && $app['collaborator_name']): ?>
@@ -1987,48 +2050,6 @@ $totalDaysApproved = $personDays['approved'];
                   <?php endif; ?>
                 </div>
               </div>
-              <div class="app-detail-item">
-                <div class="dl">Days requested</div>
-                <div class="dd">
-                  <?= $days ?>
-                  <?php /*
-                   * The editor has always taken an id for a signed-in admin and
-                   * has always let one edit a locked or declined application —
-                   * it was simply never linked from here, so the only way in
-                   * was to email the applicant a link and ask them to do it.
-                   *
-                   * Here rather than in the actions below, because days are what
-                   * people ask to change. Days requested is the number of
-                   * proposed dates, so the editor changes the dates and the
-                   * count follows; a box for the number on its own would let the
-                   * two disagree.
-                   */ ?>
-                  <?php // The print view renders its own read-only card and never
-                        // reaches this markup, so no guard is needed here. ?>
-                  <a class="cg-edit-link"
-                     href="../collab-grant-edit.php?id=<?= (int)$app['id'] ?>"
-                     title="Change the dates, and anything else on the application">change</a>
-                </div>
-              </div>
-              <?php
-                $pdDates = [];
-                if (!empty($app['proposed_dates'])) {
-                    $pd = json_decode($app['proposed_dates'], true);
-                    if (is_array($pd)) $pdDates = $pd;
-                }
-              ?>
-              <?php if ($pdDates): ?>
-              <div class="app-detail-item" style="grid-column:1/-1;">
-                <div class="dl">Proposed dates</div>
-                <div class="dd">
-                  <?php foreach ($pdDates as $pd): ?>
-                    <span style="display:inline-block;background:#e8f5ed;border:1px solid #b3d9bf;border-radius:20px;padding:.15rem .65rem;font-size:.82rem;font-weight:600;color:#1a5c2e;margin:.1rem .2rem .1rem 0;">
-                      <?= date('D, M j Y', strtotime($pd)) ?>
-                    </span>
-                  <?php endforeach; ?>
-                </div>
-              </div>
-              <?php endif; ?>
             </div>
 
             <?php if ($view !== 'followup'): ?>
@@ -2205,8 +2226,7 @@ $totalDaysApproved = $personDays['approved'];
                 <div class="app-text-label">Internal notes</div>
                 <div class="app-text-block" style="font-style:italic;"><?= htmlspecialchars($app['admin_notes']) ?></div>
               <?php endif; ?>
-              <p class="cg-followup-hint">Already approved — to change the decision or the
-                days, open it under <a href="?view=all&amp;year=<?= $year ?>#app-<?= (int)$app['id'] ?>">All</a>.</p>
+              <p class="cg-followup-hint"><a href="?view=all&amp;year=<?= $year ?>#app-<?= (int)$app['id'] ?>">Change the decision or the days →</a></p>
             <?php endif; ?>
 
             <?php /*
@@ -2273,43 +2293,35 @@ $totalDaysApproved = $personDays['approved'];
               <?= csrfField() ?>
               <input type="hidden" name="app_id" value="<?= $app['id'] ?>">
               <input type="hidden" name="action" value="fulfilment">
-              <div style="font-size:.78rem;font-weight:800;text-transform:uppercase;
-                          letter-spacing:.05em;color:var(--gray-500);margin-bottom:.5rem;">
-                Follow-through
-              </div>
-              <label style="display:flex;align-items:center;gap:.45rem;font-size:.88rem;
-                            color:var(--gray-700);margin-bottom:.6rem;">
-                <input type="checkbox" name="atrieve" value="1"
-                       <?= !empty($app['atrieve_confirmed']) ? 'checked' : '' ?>>
-                Absence logged in Atrieve
-              </label>
-              <?php if (!empty($app['atrieve_confirmed']) && !empty($app['atrieve_confirmed_at'])): ?>
-                <div style="font-size:.78rem;color:var(--gray-500);margin:-.35rem 0 .6rem 1.6rem;">
-                  Confirmed <?= date('M j, Y', strtotime($app['atrieve_confirmed_at'])) ?>
-                  <?= $app['atrieve_confirmed_by'] ? 'by ' . htmlspecialchars($app['atrieve_confirmed_by']) : '' ?>
-                </div>
-              <?php endif; ?>
-              <label style="font-size:.85rem;font-weight:600;color:var(--gray-600);">
-                District invoice number
-                <input type="text" name="invoice_number" maxlength="100"
-                       placeholder="e.g. 45219"
-                       value="<?= htmlspecialchars($app['invoice_number'] ?? '') ?>"
-                       style="width:100%;border:1px solid var(--border);border-radius:7px;
-                              padding:.45rem .6rem;font-size:.9rem;font-family:inherit;
-                              box-sizing:border-box;margin-top:.25rem;">
-              </label>
-              <label style="font-size:.85rem;font-weight:600;color:var(--gray-600);display:block;margin-top:.6rem;">
-                Cost of release time
-                <input type="number" name="release_cost" step="0.01" min="0"
-                       placeholder="not recorded yet"
-                       value="<?= ($app['release_cost'] ?? null) !== null
-                                  ? number_format((float)$app['release_cost'], 2, '.', '') : '' ?>"
-                       style="width:100%;border:1px solid var(--border);border-radius:7px;
-                              padding:.45rem .6rem;font-size:.9rem;font-family:inherit;
-                              box-sizing:border-box;margin-top:.25rem;">
-              </label>
-              <div class="app-action-btns" style="margin-top:.6rem;">
-                <button type="submit" class="btn" style="border:1px solid var(--border);background:#fff;color:var(--gray-700);">Save follow-through</button>
+              <?php /* One line. An invoice number and a dollar figure are
+                       both about eight characters, and they had a full-width
+                       box each, a heading each and a button on its own row
+                       under them — four stacked bands for two short values. */ ?>
+              <div class="ft-row">
+                <span class="ft-head">Follow-through</span>
+                <label class="ft-check">
+                  <input type="checkbox" name="atrieve" value="1"
+                         <?= !empty($app['atrieve_confirmed']) ? 'checked' : '' ?>>
+                  Atrieve
+                </label>
+                <label class="ft-f">Invoice
+                  <input type="text" name="invoice_number" maxlength="100"
+                         placeholder="45219" style="width:7.5rem;"
+                         value="<?= htmlspecialchars($app['invoice_number'] ?? '') ?>">
+                </label>
+                <label class="ft-f">Cost
+                  <input type="number" name="release_cost" step="0.01" min="0"
+                         placeholder="—" style="width:6.5rem;"
+                         value="<?= ($app['release_cost'] ?? null) !== null
+                                    ? number_format((float)$app['release_cost'], 2, '.', '') : '' ?>">
+                </label>
+                <button type="submit" class="btn ft-save">Save</button>
+                <?php if (!empty($app['atrieve_confirmed']) && !empty($app['atrieve_confirmed_at'])): ?>
+                  <span class="ft-when">Atrieve confirmed
+                    <?= date('M j', strtotime($app['atrieve_confirmed_at'])) ?><?=
+                      $app['atrieve_confirmed_by']
+                        ? ' by ' . htmlspecialchars($app['atrieve_confirmed_by']) : '' ?></span>
+                <?php endif; ?>
               </div>
             </form>
             <?php endif; ?>
