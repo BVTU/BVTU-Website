@@ -444,7 +444,7 @@ arsort($blSummary);
           </form>
           <?php endif; ?>
           <?php else: ?>
-          <span style="padding:.45rem .5rem;"><?= lpStatusBadge($voucher['status']) ?></span>
+          <span style="padding:.45rem .5rem;"><?= lpVoucherBadge($voucher) ?></span>
           <a href="lp-voucher-edit.php?id=<?= $id ?>" class="btn btn-outline" style="padding:.45rem .85rem;font-size:.83rem;">✏ Edit</a>
           <?php if (execIsAdmin($member['email']) && $voucher['status'] !== 'paid'): ?>
           <?php if ($voucher['status'] === 'submitted'): ?>

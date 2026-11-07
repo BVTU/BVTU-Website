@@ -382,17 +382,41 @@ function lpSecondSignerRole(array $v): string {
  * rather than stranded.
  */
 function lpReleaseStrandedVendorVouchers(): void {
+    static $done = false;
+    if ($done) return;
+    $done = true;
     try {
+        /* Two signatures, two people. A row whose Treasurer-approval was given
+         * by the submitter themselves — possible while the old rule let them
+         * sign their own vendor payment — has one human in both slots, and
+         * promoting it would launder a self-approval into "ready to pay". Sent
+         * back to awaiting-Treasurer instead, where it needs the one real
+         * second person the new rule asks for. */
+        $back = getDB()->exec(
+            "UPDATE lp_vouchers
+                SET status='submitted', signer1_email=NULL, signer1_name=NULL,
+                    signer1_at=NULL, signer1_note=NULL
+              WHERE status='treasurer_approved' AND COALESCE(payee_name,'') <> ''
+                AND LOWER(TRIM(COALESCE(signer1_email,''))) = LOWER(TRIM(COALESCE(submitted_by_email,'')))");
+        if ($back) error_log("lp_vouchers: {$back} vendor payment(s) had been approved by their "
+                           . 'own submitter and are back awaiting the Treasurer.');
+
         $n = getDB()->exec(
             "UPDATE lp_vouchers SET status='vp_approved',
                     signer2_email = CASE WHEN COALESCE(signer2_email,'')='' THEN submitted_by_email ELSE signer2_email END,
                     signer2_name  = CASE WHEN COALESCE(signer2_name,'')=''  THEN submitted_by      ELSE signer2_name  END,
                     signer2_at    = COALESCE(signer2_at, NOW())
-              WHERE status='treasurer_approved' AND COALESCE(payee_name,'') <> ''");
+              WHERE status='treasurer_approved' AND COALESCE(payee_name,'') <> ''
+                AND LOWER(TRIM(COALESCE(signer1_email,''))) <> LOWER(TRIM(COALESCE(submitted_by_email,'')))");
         if ($n) error_log("lp_vouchers: {$n} vendor payment(s) moved to ready-to-pay; "
                         . 'the submission is now the first signature.');
     } catch (Exception $e) {
+        /* Logged, and it will be tried again on the next request because the
+         * once-per-request guard above is not a once-ever one. A row left
+         * behind reads "Awaiting Vice-President" with no button for anybody,
+         * so it must not be allowed to fail quietly for good. */
         error_log('lpReleaseStrandedVendorVouchers: ' . $e->getMessage());
+        $done = false;
     }
 }
 
@@ -463,7 +487,8 @@ function lpPaymentRecorderEmails(array $v): array {
         if (defined($c)) $admins[] = (string)constant($c);
     }
     $pay     = lpPayTo($v);
-    $blocked = lpSignBlockedClaimant($v);
+    // Paying, not signing — see lpPayBlockedClaimant().
+    $blocked = lpPayBlockedClaimant($v);
     $out     = [];
     foreach (array_merge(lpGetTreasurerEmails(), lpGetPresidentEmails(), $admins,
                          [(string)($v['submitted_by_email'] ?? '')]) as $cand) {
@@ -517,6 +542,23 @@ function lpSignBlockedClaimant(array $v): ?string {
      * approval is the second. Two people, one button each, and the person who
      * raised it is never asked to approve what they raised.
      */
+    return ($v['submitted_by_email'] ?? null) ?: null;
+}
+
+/**
+ * Who is barred from RECORDING THE PAYMENT, as opposed to signing.
+ *
+ * Sending the money is not a third signature. The person who must never do it
+ * is the one receiving it, and on a vendor payment that is the payee, not the
+ * submitter — who has already put their name to it by raising it.
+ *
+ * On an ordinary voucher the submitter is the payee in all but name, so they
+ * stay barred there.
+ */
+function lpPayBlockedClaimant(array $v): ?string {
+    if (lpIsVendorPayment($v) && trim((string)(lpPayTo($v)['email'] ?? '')) !== '') {
+        return null;
+    }
     return ($v['submitted_by_email'] ?? null) ?: null;
 }
 
@@ -595,8 +637,22 @@ function lpGetBudgetLines(int $year = 0): array {
  * Vouchers in any of the given statuses, newest activity first.
  * Used by the review page's history section, which spans several statuses.
  */
+/**
+ * Coloured status pill for a whole voucher, naming who it waits on.
+ *
+ * lpStatusBadge() can only read the status, and on a vendor payment that is
+ * not enough: who the signatures are waiting on depends on the voucher. Pass
+ * the row wherever you have it.
+ */
+function lpVoucherBadge(array $v): string {
+    $status = (string)($v['status'] ?? '');
+    if ($status === 'submitted')          return lpStatusBadge($status, 'Awaiting ' . lpFirstSignerRole($v));
+    if ($status === 'treasurer_approved') return lpStatusBadge($status, 'Awaiting ' . lpSecondSignerRole($v));
+    return lpStatusBadge($status);
+}
+
 /** Coloured status pill. Shared so every page labels a status identically. */
-function lpStatusBadge(string $status): string {
+function lpStatusBadge(string $status, string $label = ''): string {
     $map = [
         'draft'              => ['#f1f5f9', '#64748b', 'Draft'],
         'submitted'          => ['#fffbeb', '#d97706', 'Awaiting Treasurer'],
@@ -606,6 +662,7 @@ function lpStatusBadge(string $status): string {
         'rejected'           => ['#fef2f2', '#991b1b', 'Rejected'],
     ];
     $c = $map[$status] ?? ['#f8f9fa', '#555', ucfirst($status)];
+    if ($label !== '') $c[2] = $label;
     return '<span style="display:inline-block;font-size:.72rem;font-weight:700;'
          . 'text-transform:uppercase;letter-spacing:.04em;padding:.2rem .6rem;'
          . 'border-radius:100px;background:' . $c[0] . ';color:' . $c[1] . ';">'
@@ -1083,11 +1140,12 @@ function lpMarkPaid(int $id, string $email, string $name, string $note, string $
     $v = lpGetVoucher($id);
     if (!$v) throw new RuntimeException("Voucher not found.");
     if ($v['status'] !== 'vp_approved') throw new RuntimeException("Voucher must have both signatures before marking paid.");
-    // Both the payee and the submitter. Passing only the submitter meant a
-    // vendor payment could name a signer's own address as the "vendor", and
-    // that signer could then approve and pay themselves — two signatures on
-    // paper, self-authorisation in fact.
-    expAssertNotOwnClaim($email, lpPayTo($v)['email'] ?: null, lpSignBlockedClaimant($v));
+    /* lpPayBlockedClaimant(), not the signing one. Paying is not signing:
+     * the bar that matters here is paying yourself, and the submitter of a
+     * vendor payment is not the one receiving it. Barred from both, a
+     * voucher whose Treasurer is the payee — or whose local has no Treasurer
+     * — reached ready-to-pay with nobody able to pay it and no way back. */
+    expAssertNotOwnClaim($email, lpPayTo($v)['email'] ?: null, lpPayBlockedClaimant($v));
     if (!lpCanRecordPayment($v, $email)) {
         throw new RuntimeException('Only the Treasurer or the President can record a payment.');
     }

@@ -814,13 +814,16 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
     <?php if ($voucher['status'] !== 'draft'): ?>
     <span style="font-size:.88rem;color:var(--gray-500);font-style:italic;">
       <?php
+        /* Asked of the voucher, like the approvals page. Read off the status
+         * alone this said "Awaiting Treasurer approval" on a voucher the
+         * Treasurer is barred from signing, and the two pages disagreed. */
         $statusLabels = [
-          'submitted'          => '⏳ Awaiting Treasurer approval',
-          'treasurer_approved' => '⏳ Awaiting VP signature',
+          'submitted'          => '⏳ Awaiting ' . lpFirstSignerRole($voucher),
+          'treasurer_approved' => '⏳ Awaiting ' . lpSecondSignerRole($voucher),
           'vp_approved'        => '✅ Approved — awaiting payment',
           'rejected'           => '❌ Rejected',
         ];
-        echo $statusLabels[$voucher['status']] ?? ucfirst($voucher['status']);
+        echo htmlspecialchars($statusLabels[$voucher['status']] ?? ucfirst($voucher['status']));
       ?>
     </span>
     <?php endif; ?>

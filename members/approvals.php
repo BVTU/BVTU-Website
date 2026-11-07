@@ -88,6 +88,15 @@ function _cannotSignVoucher(array $v): bool {
 }
 
 /**
+ * The same question lpMarkPaid() throws on — which is not the signing one.
+ * Sending the money bars the person receiving it, not the one who raised it.
+ */
+function _cannotPayVoucher(array $v): bool {
+    global $email;
+    return expWouldSelfSign($email, lpPayTo($v)['email'] ?: null, lpPayBlockedClaimant($v));
+}
+
+/**
  * A voucher this person actually submitted.
  *
  * Kept separate from _cannotSignVoucher(): being named as the vendor also bars
@@ -102,14 +111,19 @@ function _isMyVoucher(array $v): bool {
 /** Whether a voucher is waiting on this person. */
 function _lpNeedsMe(array $v): bool {
     global $email;
-    if (_cannotSignVoucher($v)) return false;    // as for claims: never your own
-    // Asked of the voucher, not of the page's role flags: on a vendor payment
-    // the President is an eligible second signature, and a flag worked out once
-    // for the whole page cannot know that.
+    /* The signing bar belongs to the signing branches, not to the whole
+     * function: a vendor payment's submitter cannot sign it — the submission
+     * was the signature — but they can still be the one to send the money,
+     * and a blanket return here took the voucher off their queue at exactly
+     * the point it was waiting on them. */
+    if (_cannotSignVoucher($v)
+        && in_array($v['status'], ['submitted', 'treasurer_approved'], true)) return false;
+    // Asked of the voucher, not of the page's role flags.
     if ($v['status'] === 'submitted')           return lpCanSign1For($v, $email);
     if ($v['status'] === 'treasurer_approved')  return lpCanSign2For($v, $email);
     // vp_approved is waiting on a payment, not a signature.
-    if ($v['status'] === 'vp_approved')         return lpCanRecordPayment($v, $email);
+    if ($v['status'] === 'vp_approved')         return lpCanRecordPayment($v, $email)
+                                                      && !_cannotPayVoucher($v);
     return false;
 }
 
@@ -441,7 +455,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
 
     <?php // Recording a payment is not signing: the Treasurer or the President,
           // and never whoever is being paid. ?>
-    <?php if ($v['status'] === 'vp_approved' && lpCanRecordPayment($v, $email) && !_cannotSignVoucher($v)): ?>
+    <?php if ($v['status'] === 'vp_approved' && lpCanRecordPayment($v, $email) && !_cannotPayVoucher($v)): ?>
     <details class="more">
       <summary>&#x25B8; Record e-transfer</summary>
       <form method="POST" action="lp-action.php" class="form-inline">
