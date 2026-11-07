@@ -527,15 +527,37 @@ function cgNameKeySet(string $raw): array {
 }
 
 /**
- * Has anybody been taken off, or had their name changed into somebody else's?
+ * Do these two fields name a different set of people?
  *
- * The question the collaborator record turns on: the stored address and the
- * "we emailed them" date belong to the people who were named. Adding a second
- * collaborator leaves the first still named, so that record is still theirs
- * and must survive — only a name that has gone invalidates it.
+ * The question the collaborator record turns on. That record — one address,
+ * one "we emailed them" date — belongs to the application, not to a person,
+ * so it cannot say "we told A but not B". While it cannot, any change to who
+ * is named has to invalidate the lot:
+ *
+ *   - somebody added and the record kept: the new teacher is never told. The
+ *     application already counts as notified, so the follow-up panel does not
+ *     list it and the Send button refuses, and the only address on file is
+ *     the first collaborator's. A day comes off their three in silence, which
+ *     is the one thing this notice exists to prevent.
+ *   - somebody removed and the record kept: the same, in reverse, for whoever
+ *     is left.
+ *
+ * The cost is that a teacher who was already told may be told again when a
+ * second name is added. Being told twice about a day that really is counted
+ * against them is noise; never being told is the fault.
+ *
+ * What it does NOT count is the field being rewritten: same people in a
+ * different order, in different capitals, or with the separators changed by
+ * the rename boxes. That is what made pressing Save on an unchanged field
+ * throw the record away.
+ *
+ * Per-person notices would let an addition leave the first collaborator's
+ * record alone. That is a column per collaborator, or a table — a bigger
+ * change than this one, and worth doing if two-collaborator grants stop being
+ * rare.
  */
-function cgCollaboratorDropped(string $was, string $now): bool {
-    return (bool)array_diff(cgNameKeySet($was), cgNameKeySet($now));
+function cgCollaboratorSetChanged(string $was, string $now): bool {
+    return cgNameKeySet($was) !== cgNameKeySet($now);
 }
 
 /**
@@ -1233,13 +1255,13 @@ function cgApplyEdit(int $id, array $values, string $actor, bool $isAdmin): arra
     // Compared the way Contacts compares them: fixing "pat smith" to
     // "Pat Smith" is the same teacher, and wiping the record would re-flag them
     // for a second "a day is counted against your three".
-    // Only when somebody has gone. Rewriting "A and B" as "A, B" names the
-    // same two teachers, and adding a second collaborator leaves the first
-    // one named — neither is a reason to throw away their address and the
-    // proof we wrote to them.
+    // Only when the people named actually change. Rewriting "A and B" as
+    // "A, B" names the same two teachers and must leave the record alone;
+    // anybody added or removed invalidates it, because it cannot be held per
+    // person. See cgCollaboratorSetChanged().
     if (array_key_exists('collaborator_name', $changed)
-        && cgCollaboratorDropped((string)$changed['collaborator_name'][0],
-                                 (string)$changed['collaborator_name'][1])) {
+        && cgCollaboratorSetChanged((string)$changed['collaborator_name'][0],
+                                    (string)$changed['collaborator_name'][1])) {
         cgResetCollabNotice($id);
     }
 

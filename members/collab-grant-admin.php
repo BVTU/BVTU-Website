@@ -382,10 +382,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'colla
         $notice = 'That name is too long for the field — 255 characters at most.';
     } else {
         $was        = (string)$app['collaborator_name'];
-        /* The same test cgApplyEdit() resets on: has anybody been taken off?
-         * Adding a collaborator, or rewriting "A and B" as "A, B", names
-         * everybody who was named before. */
-        $dropped    = cgCollaboratorDropped($was, $newName);
+        /* The same test cgApplyEdit() resets on: do these name a different
+         * set of people? Rewriting "A and B" as "A, B" does not. Adding or
+         * removing somebody does — and is a real change to an approved
+         * application, so the stamp stays. */
+        $changedWho = cgCollaboratorSetChanged($was, $newName);
         $wasFlagged = !empty($app['changed_after_ok']);
         try {
             $res = cgApplyEdit($cid, ['collaborator_name' => $newName], $member['email'], true);
@@ -400,7 +401,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'colla
             error_log('collab rename: ' . $e->getMessage());
             try {
                 $after = cgGetApplication($cid);
-                if ($after && cgCollaboratorDropped($was, (string)$after['collaborator_name'])) {
+                if ($after && cgCollaboratorSetChanged($was, (string)$after['collaborator_name'])) {
                     cgResetCollabNotice($cid);
                 }
             } catch (\Throwable $e2) { /* nothing more to be done here */ }
@@ -411,7 +412,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'colla
          * sees, for ever, because somebody fixed their capitalisation. Only
          * restored when it was not already set and nobody was taken off: a
          * real change of person is a real material change. */
-        if (!empty($res['changed']) && !$dropped && !$wasFlagged) {
+        if (!empty($res['changed']) && !$changedWho && !$wasFlagged) {
             cgUnflagChangedAfterOk($cid);
         }
         if (!empty($res['failed'])) {
@@ -427,7 +428,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'colla
              * Smith" resets nothing and still reaches the right teacher, so
              * raising the alarm on it is noise of the kind that teaches you
              * to ignore the alarm. */
-            if ($dropped) {
+            if ($changedWho) {
                 if (!empty($app['collab_notified_at'])) {
                     $notice .= ' ' . $was . ' was emailed on '
                              . date('M j', strtotime((string)$app['collab_notified_at']))
