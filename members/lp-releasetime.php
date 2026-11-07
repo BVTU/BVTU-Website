@@ -93,9 +93,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     /* No "don't claim" any more. A day typed into this log is a day being
      * claimed — if it is not being claimed it does not belong here, and
      * deciding twice was work with nothing resting on it. Days recorded as
-     * not-claimed before now count like any other; the columns are still on
-     * the table, so what was set aside and why is not lost.
+     * not-claimed before are cleared by lpRtEnsureTables(); excluded_reason
+     * is left on the row, so what was set aside and why is not lost.
+     *
+     * Named here so a tab left open from before the deploy gets told, rather
+     * than a silent reload that looks like the button is broken.
      */
+    if ($action === 'exclude') {
+        $error = 'That button is gone — every day in this log is claimed now. '
+               . 'Delete the day if it should not be.';
+    }
 
     if ($action === 'delete') {
         $id  = (int)($_POST['entry_id'] ?? 0);
@@ -341,7 +348,6 @@ function rtMoney($v): string { return $v === null ? '' : '$' . number_format((fl
     .why { font-size:.78rem; color:var(--gray-500); }
     .pill { display:inline-block; font-size:.68rem; font-weight:700; border-radius:100px; padding:.1rem .5rem; white-space:nowrap; }
     .pill.none { background:var(--gray-100); color:var(--gray-500); }
-    .pill.no   { background:#fee2e2; color:#991b1b; }
     .acts { display:flex; gap:.35rem; flex-wrap:wrap; }
     .act-btn { background:none; border:1px solid var(--gray-200); border-radius:6px; padding:.25rem .55rem; font-size:.75rem; cursor:pointer; color:var(--gray-600); white-space:nowrap; }
     .act-btn:hover { background:var(--accent); border-color:var(--primary); color:var(--primary); }
@@ -518,8 +524,8 @@ function rtMoney($v): string { return $v === null ? '' : '$' . number_format((fl
       <?php
         /* What the claimed days cost, added up. Here rather than only on the
          * invoices below, because this is the table that gets checked against
-         * a district bill line by line. Days marked not-claimed are left out
-         * of both figures, the way everything else on this page treats them. */
+         * a district bill line by line. Every day in the log counts: a day
+         * that is not being claimed does not go in. */
         $fDays = 0.0; $fCost = 0.0; $fGaps = 0; $fAny = false;
         foreach ($entries as $fe) {
             $fDays += (float)$fe['days'];

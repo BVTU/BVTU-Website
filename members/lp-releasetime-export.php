@@ -58,11 +58,9 @@ foreach ($invoices as $inv) {
     else                             $costTotal += (float)$inv['total_cost'];
 
     /*
-     * The day count already leaves out days marked not-claimed, but the cost
-     * cannot: the district bills one figure for the whole invoice and there is
-     * no per-day rate to subtract. Pro-rating would be inventing a number to
-     * send the BCTF. So the cost is reported as invoiced and the mismatch is
-     * stated, loudly, for a human to settle before submitting.
+     * The cost is the invoice's own total, as the district billed it. There
+     * is no per-day rate to split it by, and pro-rating would be inventing a
+     * number to send the BCTF.
      */
     $rows[] = [
         'num'   => $num,

@@ -136,6 +136,23 @@ function lpRtEnsureTables(): void {
     } catch (Exception $e) {
         error_log('lp_rt_entries.cost: ' . $e->getMessage());
     }
+
+    /* Days set aside while the "don't claim" button existed.
+     *
+     * Nothing reads the flag any more, so a row still carrying it would be
+     * claimed by every total while reading as not-claimed in the table — and
+     * with the button gone there would be no way to resolve the two. Cleared
+     * once, here, rather than left to be discovered. excluded_reason is left
+     * alone, so why the day was set aside is still on the row for anyone who
+     * goes looking.
+     */
+    try {
+        $n = $db->exec("UPDATE lp_rt_entries SET excluded=0 WHERE excluded<>0");
+        if ($n) error_log("lp_rt_entries: {$n} day(s) marked not-claimed are now claimed; "
+                        . 'the "do not claim" button has been removed.');
+    } catch (Exception $e) {
+        error_log('lp_rt_entries.excluded: ' . $e->getMessage());
+    }
 }
 
 /**
@@ -343,9 +360,9 @@ function lpRtTotals(int $year): array {
  * per invoice — "Jan 14, Jan 19 | Tanya Davidson, Amanda FB, Kyle Tennant | 3 |
  * $1,362.25" — and that row is built here rather than counted by hand.
  *
- * Days marked not-claimed are left out of the totals but kept in the entry
- * list, so an invoice that covers a day BVTU chose not to claim still shows
- * the day while not billing the BCTF for it.
+ * Every day attached to an invoice counts towards it. Days used to be
+ * markable not-claimed and were left out here; that button is gone, and a
+ * day in the log is a day being claimed.
  */
 function lpRtInvoices(int $year): array {
     lpRtEnsureTables();
