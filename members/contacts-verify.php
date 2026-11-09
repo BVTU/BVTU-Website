@@ -17,6 +17,11 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/exec-db.php';
 require_once __DIR__ . '/contacts-db.php';
 require_once __DIR__ . '/mailchimp.php';
+/* For cgNameKey()/cgNearestPerson(): the same name matching the collaboration
+ * grant uses to catch "Mcyntire" for McIntyre. Borrowed rather than rewritten,
+ * because two sets of rules for comparing a teacher's name is how the two
+ * start disagreeing about who somebody is. */
+require_once __DIR__ . '/collab-grant-db.php';
 
 requireLogin();
 $member = getMember();
@@ -69,6 +74,44 @@ if ($ran && !$err) {
         fn($c) => (string)$c['status'] !== 'archived'));
 }
 
+/**
+ * Which portal contact an audience entry is probably the same person as.
+ *
+ * A SUGGESTION, never a match. Mailchimp's identity is the address itself —
+ * the subscriber key is md5 of it — so pairing two records by name would let
+ * "Apply statuses" write one person's consent onto another. This only offers
+ * the admin a name to look at, and the only thing the button does is add the
+ * address to that contact, which is the fix in every case it gets right.
+ *
+ * Exact name first, because that is the common case here: the same teacher,
+ * in the audience under an address the portal does not hold. cgNearestPerson()
+ * deliberately returns nothing on an exact match, it being a typo-catcher.
+ *
+ * Nothing is suggested for an ambiguous name, one belonging to somebody who
+ * has left, or a blank one — Mailchimp's FNAME/LNAME are often empty.
+ */
+function verifySuggestContact(string $audienceName): ?array {
+    $name = trim($audienceName);
+    if ($name === '') return null;
+
+    $byName = cgContactsByName();
+    $key    = cgNameKey($name);
+    $hit    = null;
+
+    if ($key !== '' && isset($byName[$key])) {
+        if (!empty($byName[$key]['ambiguous']) || !empty($byName[$key]['archived'])) return null;
+        $hit = $byName[$key] + ['exact' => true];
+    } else {
+        $near = cgNearestPerson($name);
+        if ($near) $hit = $near + ['exact' => false];
+    }
+    if (!$hit) return null;
+
+    $owner = contactEmailOwner((string)$hit['email']);
+    if (!$owner) return null;
+    return ['id' => $owner['id'], 'name' => $hit['name'], 'exact' => !empty($hit['exact'])];
+}
+
 // Three buckets: agreed, disagreed, and present on only one side.
 $agree = $differ = $portalOnly = [];
 $mcOnly = [];
@@ -111,6 +154,52 @@ if ($ran && !$err) {
     }
     foreach ($audience as $e => $m) {
         if (!isset($seen[$e])) $mcOnly[] = ['email' => $e] + $m;
+    }
+}
+
+/* Put an audience address onto the contact it belongs to.
+ *
+ * The other half of the suggestion. Importing would make a second record for
+ * somebody already on file; this adds the address to the contact they already
+ * are, which is what makes the comparison match them next time.
+ *
+ * The suggestion is worked out again here rather than trusted from the form:
+ * the posted id decides which contact gains an address, and an address is how
+ * union mail gets routed.
+ */
+if (($_POST['action'] ?? '') === 'link_mc_address' && !$err) {
+    /* id and address in one value: these buttons live inside the import form
+     * and target this one through form="…", and a button carries a single
+     * name/value pair. The id is only ever compared against the suggestion
+     * worked out again below, so nothing rests on what was posted. */
+    [$want, $addr] = array_pad(explode('|', (string)($_POST['mc_link'] ?? ''), 2), 2, '');
+    $want = (int)$want;
+    $addr = contactNormalizeEmail($addr);
+
+    if (!isset($audience[$addr])) {
+        $notice = 'That address is not in the audience we just read.';
+    } elseif ($owner = contactEmailOwner($addr)) {
+        $notice = $addr . ' is already on ' . $owner['name'] . "'s record.";
+    } else {
+        $sug = verifySuggestContact((string)($audience[$addr]['name'] ?? ''));
+        if (!$sug || $sug['id'] !== $want) {
+            $notice = 'That suggestion no longer matches. Reload and look again.';
+        } else {
+            $c   = contactGet($sug['id']);
+            $chk = $c ? contactEmailsCheck([$addr], $sug['id'], (string)$c['email'])
+                      : 'Could not find that contact.';
+            if ($chk !== '') {
+                $notice = $chk;
+            } else {
+                $r = contactEmailsSync($sug['id'],
+                                       array_merge(contactEmails($sug['id']), [$addr]),
+                                       $member['email']);
+                $notice = $r['added']
+                    ? $addr . ' added to ' . $sug['name'] . "'s contact. Run the comparison "
+                      . 'again and they will match.'
+                    : 'That address was not added — somebody claimed it just now.';
+            }
+        }
     }
 }
 
@@ -288,6 +377,13 @@ if ($apply && !$err) {
   </form>
 
   <?php if ($mcOnly): ?>
+  <?php // Targeted by the per-row buttons below, which sit inside the import
+        // form: a form cannot be nested in another, so they reach this one by
+        // id instead. ?>
+  <form method="POST" id="mclink">
+    <?= csrfField() ?>
+    <input type="hidden" name="action" value="link_mc_address">
+  </form>
   <h2 class="sec">In Mailchimp but not in the portal (<?= count($mcOnly) ?>)</h2>
   <p class="muted" style="margin:0 0 .6rem;">
     These are the difference between your two totals. Add anyone who belongs on the
@@ -304,10 +400,25 @@ if ($apply && !$err) {
       </tr></thead>
       <tbody>
         <?php foreach (array_slice($mcOnly, 0, 200) as $m): ?>
+        <?php $sug = verifySuggestContact((string)($m['name'] ?? '')); ?>
         <tr>
           <td><input type="checkbox" class="mcpick" name="emails[]"
                      value="<?= htmlspecialchars($m['email']) ?>"></td>
-          <td><?= htmlspecialchars($m['name'] ?: '—') ?></td>
+          <td><?= htmlspecialchars($m['name'] ?: '—') ?>
+            <?php // A name we already hold. Adding the address to that contact
+                  // is the fix; importing would make a second record of them. ?>
+            <?php if ($sug): ?>
+            <div style="font-size:.8rem;color:var(--gray-500);margin-top:.15rem;">
+              <?= $sug['exact'] ? 'Already on file as' : 'Possibly' ?>
+              <strong><?= htmlspecialchars($sug['name']) ?></strong>
+              <button type="submit" form="mclink" name="mc_link"
+                      value="<?= (int)$sug['id'] ?>|<?= htmlspecialchars($m['email']) ?>"
+                      style="background:none;border:0;padding:0 0 0 .3rem;font:inherit;
+                             font-size:.8rem;color:var(--primary);text-decoration:underline;
+                             cursor:pointer;">add this address to them</button>
+            </div>
+            <?php endif; ?>
+          </td>
           <td class="em"><?= htmlspecialchars($m['email']) ?></td>
           <td><?= htmlspecialchars(MC_STATUSES[$m['status']] ?? $m['status']) ?></td>
         </tr>
