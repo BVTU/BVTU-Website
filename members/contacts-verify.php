@@ -30,7 +30,7 @@ if (!execIsAdmin($member['email'])) { header('Location: dashboard.php'); exit; }
 sendPrivateHeaders();
 contactsEnsureTables();
 
-$notice = htmlspecialchars($_GET['notice'] ?? '');
+$notice = (string)($_GET['notice'] ?? '');
 $ran    = false;
 $err    = '';
 $audience = [];
@@ -248,14 +248,16 @@ if ($apply && !$err) {
     $n = 0;
     foreach ($differ as $c) {
         contactApplyMailchimpStatus((int)$c['id'], $c['_live'],
-                                    $audience[$c['email_normalized']]['id'] ?? null, $member['email']);
+                                    $audience[$c['_as'] ?? $c['email_normalized']]['id'] ?? null,
+                                    $member['email'], empty($c['_as']));
         $n++;
     }
     // Record that the ones that already agreed were checked just now, so the
     // list can say when it last verified them rather than implying never.
     foreach ($agree as $c) {
         contactApplyMailchimpStatus((int)$c['id'], $c['mailchimp_status'],
-                                    $audience[$c['email_normalized']]['id'] ?? null, $member['email']);
+                                    $audience[$c['_as'] ?? $c['email_normalized']]['id'] ?? null,
+                                    $member['email'], empty($c['_as']));
     }
     contactAudit(null, 'verify', $member['email'], '', "Applied {$n} status corrections from Mailchimp");
     header('Location: contacts-verify.php?run=1&notice=' . urlencode(
@@ -313,7 +315,7 @@ if ($apply && !$err) {
     <h1>Verify against Mailchimp</h1>
   </div>
 
-  <?php if ($notice): ?><div class="notice">&#x2713; <?= $notice ?></div><?php endif; ?>
+  <?php if ($notice): ?><div class="notice">&#x2713; <?= htmlspecialchars($notice, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>
   <?php if ($err): ?><div class="error-box">&#x26A0; <?= htmlspecialchars($err) ?></div><?php endif; ?>
 
   <?php if (!$ran): ?>

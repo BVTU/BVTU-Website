@@ -686,7 +686,8 @@ function contactArchive(int $id, string $actor, bool $archive = true): void {
  * here ever sends a status the other way. Marking someone Active locally must
  * not resubscribe them.
  */
-function contactApplyMailchimpStatus(int $id, string $status, ?string $mcId = null, string $source = 'sync'): void {
+function contactApplyMailchimpStatus(int $id, string $status, ?string $mcId = null,
+                                     string $source = 'sync', bool $primaryVerified = true): void {
     contactsEnsureTables();
     if (!isset(MC_STATUSES[$status])) $status = 'unknown';
 
@@ -706,15 +707,20 @@ function contactApplyMailchimpStatus(int $id, string $status, ?string $mcId = nu
     $firstCheck = empty($cur['mailchimp_last_synced_at']);
     $changed    = ($cur['mailchimp_status'] !== $status);
     $pin = $changed ? '' : ', updated_at=updated_at';
-    $sql = "UPDATE contacts SET mailchimp_status=?, mailchimp_last_synced_at=NOW(),
-                   mailchimp_sync_status='ok', mailchimp_sync_error=NULL{$pin}";
+    // An audience match on another address tells us their subscription state,
+    // but says nothing about a failed push of their primary address or fields.
+    // Preserve that failure and its retry until the primary is verified.
+    $sync = $primaryVerified ? ", mailchimp_sync_status='ok', mailchimp_sync_error=NULL" : '';
+    $sql = "UPDATE contacts SET mailchimp_status=?, mailchimp_last_synced_at=NOW(){$sync}{$pin}";
     $params = [$status];
     if ($mcId !== null) { $sql .= ", mailchimp_id=?"; $params[] = $mcId; }
     $sql .= " WHERE id=?";
     $params[] = $id;
     getDB()->prepare($sql)->execute($params);
 
-    getDB()->prepare("DELETE FROM contact_sync_queue WHERE contact_id=?")->execute([$id]);
+    if ($primaryVerified) {
+        getDB()->prepare("DELETE FROM contact_sync_queue WHERE contact_id=?")->execute([$id]);
+    }
 
     if ($cur['mailchimp_status'] !== $status) {
         contactAudit($id, 'mailchimp_status', $source, 'mailchimp_status',
