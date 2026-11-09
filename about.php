@@ -56,12 +56,13 @@ $member   = $loggedIn ? getMember() : null;
       <div class="content-block">
         <h2>Committees</h2>
         <p>BVTU operates several committees that members can join to participate in union governance and advocacy.</p>
-        <ul class="resource-list">
-          <li><a href="#">Bargaining Committee</a></li>
-          <li><a href="#">Health &amp; Safety Committee</a></li>
-          <li><a href="#">PRO-D Committee</a></li>
-          <li><a href="#">Status of Women Committee</a></li>
-          <li><a href="#">Social Justice Committee</a></li>
+        <?php // Plain names: these were links to "#", and there are no committee pages yet. ?>
+        <ul style="padding-left:1.25rem;line-height:1.9;">
+          <li>Bargaining Committee</li>
+          <li>Health &amp; Safety Committee</li>
+          <li>PRO-D Committee</li>
+          <li>Status of Women Committee</li>
+          <li>Social Justice Committee</li>
         </ul>
       </div>
 
@@ -79,13 +80,10 @@ $member   = $loggedIn ? getMember() : null;
         <h2>Governance Documents</h2>
         <p>BVTU bylaws and constitutional documents govern how the local operates.</p>
         <div class="doc-list">
-          <a href="mailto:lp54@bctf.ca?subject=BVTU Bylaws" class="doc-item">
+          <?php // The approved PDF is public; it used to say "request from president". ?>
+          <a href="documents/BVTU-Constitution-and-Bylaws-2026.pdf" target="_blank" rel="noopener" class="doc-item">
             <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            BVTU Bylaws <span style="font-size:.8rem;color:var(--gray-500);">(request from president)</span>
-          </a>
-          <a href="mailto:lp54@bctf.ca?subject=BVTU Constitution" class="doc-item">
-            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            BVTU Constitution <span style="font-size:.8rem;color:var(--gray-500);">(request from president)</span>
+            BVTU Constitution &amp; Bylaws <span style="font-size:.8rem;color:var(--gray-500);">(PDF, approved May 2026)</span>
           </a>
         </div>
       </div>

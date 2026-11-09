@@ -315,8 +315,10 @@ function buildUrl(array $overrides = []): string {
     <div class="container">
 
       <div class="lib-upload-cta">
-        <p>Have a resource to share? Upload it and help your colleagues.</p>
-        <a href="library-upload.php" class="btn btn-primary" style="white-space:nowrap;">+ Upload a resource</a>
+        <p>Have a resource to share? Upload it and help your colleagues.
+           Looking for outside material? Try <a href="curated.php">Curated Resources</a>.
+           <a href="library-saved.php">Your saved resources</a><?php if (!isLoggedIn()): ?> <span class="nav-access"><span class="sr-only">(needs a </span>Login<span class="sr-only"> to the BVTU portal)</span></span><?php endif; ?></p>
+        <a href="library-upload.php" class="btn btn-primary" style="white-space:nowrap;">+ Upload a resource<?php if (!isLoggedIn()): ?><span class="sr-only"> (union login)</span><?php endif; ?></a>
       </div>
 
       <div class="lib-layout">

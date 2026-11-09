@@ -179,41 +179,71 @@ ul { list-style: none; }
 .nav-toggle[aria-expanded="true"] span:nth-child(2) { opacity: 0; }
 .nav-toggle[aria-expanded="true"] span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
 
-/* --- Dropdown nav ---
+/* --- Section menus ---
+   Each section is a link (to its page) plus a separate button that opens its
+   menu. Closed menus carry the `hidden` attribute, and js/site.js is the only
+   thing that opens them — no :hover or :focus-within rule here, because a CSS
+   rule that opens a menu also stops the user closing it.
    RULE: Never use margin-top or top: calc(100% + Npx) on absolute dropdowns.
    Any gap between the trigger and the dropdown will cause hover to break mid-travel.
    Instead, set top: 100% and use border-top: Npx solid transparent on the dropdown
-   so the element extends upward invisibly, keeping :hover alive across the gap.
-   The mobile override (position: static) is exempt — no gap issue there.
+   so the element extends upward invisibly, keeping the pointer inside the item.
+   The collapsed override (position: static) is exempt — no gap issue there.
 --- */
-.has-dropdown { position: relative; }
-.has-dropdown > a::after {
-  content: ' ▾';
-  font-size: .65em;
-  opacity: .65;
-  vertical-align: middle;
+.sr-only {
+  position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
 }
+.has-dropdown { position: relative; display: flex; align-items: center; }
+.main-nav a.nav-parent { padding-right: .2rem; }
+.nav-sub-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.6rem; height: 2.1rem; padding: 0; margin: 0;
+  border: 0; background: none; color: rgba(255,255,255,.88);
+  border-radius: var(--radius-s); cursor: pointer; flex-shrink: 0;
+  transition: background .18s, color .18s;
+}
+.nav-sub-toggle:hover,
+.nav-sub-toggle[aria-expanded="true"] { background: rgba(255,255,255,.16); color: var(--white); }
+.nav-sub-toggle svg { transition: transform .18s; }
+.nav-sub-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.site-header.scrolled .nav-sub-toggle { color: var(--gray-700); }
+.site-header.scrolled .nav-sub-toggle:hover,
+.site-header.scrolled .nav-sub-toggle[aria-expanded="true"] { background: var(--gray-100); color: var(--primary); }
+.main-nav a:focus-visible,
+.nav-sub-toggle:focus-visible,
+.nav-toggle:focus-visible { outline: 2px solid var(--white); outline-offset: 2px; }
+.site-header.scrolled .main-nav a:focus-visible,
+.site-header.scrolled .nav-sub-toggle:focus-visible,
+.main-nav .dropdown a:focus-visible { outline-color: var(--primary); outline-offset: -2px; }
+
 .dropdown {
-  display: none;
+  display: block;
   position: absolute;
   top: 100%;
   left: 50%;
-  max-width: min(38rem, calc(100vw - 2rem));
-  transform: translateX(-50%);
+  /* --dd-shift is set by js/site.js to keep the menu inside the window. */
+  transform: translateX(calc(-50% + var(--dd-shift, 0px)));
+  width: max-content;
+  min-width: 13rem;
+  max-width: min(20rem, calc(100vw - 1rem));
+  /* A long menu scrolls inside itself rather than running off the screen. */
+  max-height: calc(100vh - var(--hdr-h) - 1rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   background: var(--white);
   border: 1px solid var(--border);
   border-radius: var(--radius-s);
   box-shadow: 0 4px 18px rgba(0,0,0,.15);
-  min-width: 195px;
   z-index: 300;
   padding: .5rem 0 .3rem;
-  list-style: none;
   margin: 0;
-  /* Invisible top padding bridges the gap so hover isn't lost mid-cursor-travel */
+  /* Invisible top border bridges the gap so the pointer stays inside the item */
   border-top: 6px solid transparent;
   background-clip: padding-box;
 }
-.has-dropdown:hover .dropdown { display: block; }
+.main-nav .dropdown[hidden] { display: none; }
+.dropdown ul { list-style: none; margin: 0; padding: 0; }
 .dropdown li a {
   display: block;
   padding: .55rem 1.1rem;
@@ -225,30 +255,34 @@ ul { list-style: none; }
   border-radius: 0;
   background: none;
 }
-.dropdown .nav-label { display: block; font-weight: 600; }
-.dropdown .nav-desc  { display: block; font-size: .76rem; font-weight: 400; line-height: 1.4;
-                       color: var(--gray-500); margin-top: .1rem; }
-.dropdown li a:hover .nav-desc,
-.dropdown li a.active .nav-desc { color: var(--primary); opacity: .85; }
-
-/* Opened by keyboard as well as by mouse: without this a Tab user can reach
-   the section link and never its children.
-   Desktop only — in the hamburger the submenu is toggled by tapping its
-   heading, and a focus-based rule outranks the JS one, so the heading that
-   opened it could never close it again. */
-@media (min-width: 1281px) {
-  .has-dropdown:focus-within .dropdown { display: block; }
-}
-
-/* Past six items a single column runs off the bottom of a laptop screen. */
-.dropdown-wide { min-width: 34rem; columns: 2; column-gap: 0; padding-bottom: .5rem; }
-.dropdown-wide li { break-inside: avoid; }
+/* Three priority links, then one way to everything else. */
+.dropdown li.dropdown-more { border-top: 1px solid var(--border); margin-top: .3rem; padding-top: .2rem; }
+.dropdown li.dropdown-more a { font-size: .82rem; font-weight: 700; color: var(--primary); }
 .dropdown li a:hover,
 .dropdown li a.active {
   background: var(--accent);
   color: var(--primary);
   text-decoration: none;
 }
+/* "Union login" / "District login" — said at the link, not discovered after it. */
+.nav-access {
+  display: inline-block; margin-left: .4rem; padding: .05rem .45rem;
+  font-size: .64rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  line-height: 1.5; vertical-align: .1em; white-space: nowrap;
+  color: var(--gray-600); background: var(--gray-100); border-radius: 100px;
+}
+
+/* My Dashboard — the one account entry, the same label signed in or out. */
+.main-nav a.nav-dashboard,
+.main-nav a.nav-dashboard.active {
+  padding: .4rem .9rem; font-size: .88rem; margin-left: .5rem;
+  background: var(--blue); border-color: var(--blue); color: var(--white);
+}
+.main-nav a.nav-dashboard:hover { background: var(--blue-lt); color: var(--white); }
+.main-nav a.nav-dashboard.is-signed-in,
+.main-nav a.nav-dashboard.is-signed-in.active { background: #1a6b35; border-color: #1a6b35; }
+.main-nav a.nav-dashboard.is-signed-in:hover { background: #155a2a; }
+.main-nav a.nav-dashboard.active { box-shadow: 0 0 0 2px rgba(255,255,255,.55); }
 
 /* --- Search button (nav) --- */
 .search-btn {
@@ -879,44 +913,74 @@ body.so-lock { overflow: hidden; }
     top: var(--hdr-h);
     left: 0;
     right: 0;
+    max-height: calc(100vh - var(--hdr-h));
+    overflow-y: auto;
+    overscroll-behavior: contain;
     background: var(--primary-dk);
     padding: .75rem 1.5rem 1.5rem;
     transform: translateY(-110%);
-    transition: transform .28s ease;
+    /* Hidden, not just moved: a closed menu off the top of the screen was
+       still in the Tab order. visibility waits for the slide to finish. */
+    visibility: hidden;
+    transition: transform .28s ease, visibility 0s linear .28s;
     box-shadow: var(--shadow-l);
     border-top: 1px solid rgba(255,255,255,.1);
   }
-  .main-nav.open { transform: translateY(0); }
-  .main-nav > ul { flex-direction: column; gap: .15rem; }
+  .main-nav.open { transform: translateY(0); visibility: visible; transition: transform .28s ease, visibility 0s; }
+  .main-nav > ul { flex-direction: column; align-items: stretch; gap: .15rem; }
   .main-nav a { padding: .8rem 1rem; font-size: .98rem; }
   /* Search button and hamburger on the right in mobile header */
   .search-btn { order: 2; margin-left: auto; }
   .nav-toggle { order: 3; margin-left: 0; }
   .main-nav   { order: 4; margin-left: 0; }
 
-  /* Dropdown: hidden by default, toggled by JS click */
-  .has-dropdown > a::after { content: ' ▾'; }
+  /* A row per section: the link fills it, the button sits at the end. */
+  .has-dropdown { flex-wrap: wrap; }
+  .main-nav a.nav-parent { flex: 1 1 auto; min-width: 0; padding-right: 1rem; }
+  .nav-sub-toggle { width: 2.75rem; height: 2.75rem; }
+  /* The panel is dark even on the white scrolled homepage header. */
+  .site-header.scrolled .nav-sub-toggle { color: rgba(255,255,255,.88); }
+  .site-header.scrolled .nav-sub-toggle:hover,
+  .site-header.scrolled .nav-sub-toggle[aria-expanded="true"] { background: rgba(255,255,255,.16); color: var(--white); }
+  .site-header.scrolled .main-nav a { color: rgba(255,255,255,.88); }
+  .site-header.scrolled .main-nav a:hover,
+  .site-header.scrolled .main-nav a.active { background: rgba(255,255,255,.16); color: var(--white); }
+  .site-header.scrolled .main-nav a:focus-visible,
+  .site-header.scrolled .nav-sub-toggle:focus-visible { outline-color: var(--white); }
+
   .dropdown {
     position: static;
+    flex-basis: 100%;
     transform: none;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    max-height: none;
+    overflow: visible;
     box-shadow: none;
     border: none;
     border-radius: 0;
     background: rgba(0,0,0,.18);
-    display: none;
-    padding: 0;
-    min-width: 0;
+    padding: 0 0 .35rem;
   }
-  .has-dropdown.open .dropdown { display: block; }
-  .dropdown li a {
-    padding: .6rem 1rem .6rem 2.1rem;
+  .main-nav .dropdown li a {
+    padding: .55rem 1rem;
     color: rgba(255,255,255,.78);
     font-size: .92rem;
   }
-  .dropdown li a:hover {
+  .main-nav .dropdown li a:hover,
+  .main-nav .dropdown li a.active {
     background: rgba(255,255,255,.12);
     color: var(--white);
   }
+  .main-nav .dropdown li.dropdown-more { border-top-color: rgba(255,255,255,.12); }
+  .main-nav .dropdown li.dropdown-more a { color: var(--white); }
+  .main-nav .nav-access { color: var(--white); background: rgba(255,255,255,.16); }
+  .main-nav .dropdown a:focus-visible { outline-color: var(--white); }
+
+  .nav-dashboard-item { margin-top: .6rem; }
+  .main-nav a.nav-dashboard,
+  .main-nav a.nav-dashboard.active { margin-left: 0; padding: .75rem 1rem; text-align: center; font-size: .98rem; }
 }
 
 @media (max-width: 680px) {
@@ -1135,17 +1199,53 @@ body.has-vote-bar .search-fab { bottom: calc(1.75rem + var(--vote-bar-h, 3rem));
 
 @media (prefers-reduced-motion: reduce) { .surt-list a:hover { transform: none; } }
 
-/* ── Menu descriptions in the collapsed (hamburger) menu ──────────────────────
-   Same markup as the desktop dropdown, so the one-line explanations come along;
-   they just need colours that work on the dark panel. */
-@media (max-width: 1280px) {
-  .dropdown-wide { min-width: 0; columns: 1; }
-  .main-nav .dropdown .nav-label { font-weight: 600; }
-  .main-nav .dropdown .nav-desc  { color: rgba(255,255,255,.62); font-size: .78rem; }
-  .main-nav .dropdown li a       { padding: .55rem 1rem; }
-  .main-nav .dropdown li a:hover .nav-desc,
-  .main-nav .dropdown li a.active .nav-desc { color: rgba(255,255,255,.8); }
+/* ── Section cards ─────────────────────────────────────────────────────────────
+   The section landing pages and Member Resources, drawn by bvtuSectionCards()
+   in inc/nav.php from the same definition as the menus. */
+.section-group { margin-bottom: 2rem; }
+.section-group-title {
+  font-size: .78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--gray-500); margin: 0 0 .7rem;
 }
+.nav-cards { list-style: none; margin: 0; padding: 0; display: grid;
+             grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: .85rem; }
+.nav-card { display: flex; flex-direction: column; gap: .3rem; height: 100%;
+            background: var(--white); border: 1.5px solid var(--border); border-radius: var(--radius);
+            padding: 1rem 1.1rem; color: var(--text); text-decoration: none;
+            transition: border-color .15s, box-shadow .15s; }
+.nav-card:hover { border-color: var(--primary); box-shadow: 0 4px 18px rgba(27,107,66,.1);
+                  color: var(--text); text-decoration: none; }
+.nav-card-title { font-size: .98rem; font-weight: 800; color: var(--primary); }
+.nav-card-desc  { font-size: .85rem; color: var(--gray-500); line-height: 1.5; }
+.section-more   { margin: .5rem 0 2rem; font-size: .92rem; color: var(--gray-600); }
+
+/* ── Subject directories ────────────────────────────────────────────────────
+   All destinations remain visible. Two steady columns become one on phones;
+   text links replace nested cards and expanding panels. */
+.topic-directory { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+                   column-gap: 3.5rem; row-gap: 2rem; margin-bottom: 2.5rem; }
+.topic-group { min-width: 0; border-top: 2px solid var(--accent); padding-top: 1rem; }
+.topic-heading { font-size: 1.1rem; font-weight: 800; color: var(--primary); margin: 0 0 .5rem; }
+.topic-links { list-style: none; margin: 0; padding: 0; }
+.topic-links li + li { border-top: 1px solid var(--border); }
+.topic-link { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem;
+              padding: .65rem 0; color: var(--primary); font-size: .96rem; font-weight: 500;
+              line-height: 1.45; text-decoration: none; }
+.topic-link:hover { color: var(--primary-dk); text-decoration: underline; text-underline-offset: .18em; }
+.topic-link:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: 2px; }
+.topic-arrow { color: var(--gray-400); flex-shrink: 0; }
+.topic-support-links { display: flex; flex-wrap: wrap; gap: .6rem 1.75rem;
+                       list-style: none; margin: 0 0 1.5rem; padding: 0; font-size: .88rem; }
+.topic-support-links a { text-decoration: underline; text-underline-offset: .15em; }
+@media (max-width: 680px) {
+  .topic-directory { grid-template-columns: minmax(0, 1fr); row-gap: 1.5rem; }
+}
+.archive-list   { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+.archive-list li { display: flex; flex-wrap: wrap; gap: .2rem .8rem; align-items: baseline;
+                   padding: .7rem 1rem; background: var(--white); border: 1px solid var(--border);
+                   border-radius: var(--radius-s); }
+.archive-list a { font-weight: 700; }
+.archive-date   { font-size: .82rem; color: var(--gray-500); }
 
 /* ── Home page: the lead card and the browse row ──────────────────────────────
    The collective agreement answers more member questions than anything else on

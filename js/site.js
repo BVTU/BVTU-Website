@@ -13,33 +13,181 @@
   onScroll();
 })();
 
-// ── Mobile nav toggle ───────────────────────────────────────────────────────
-const toggle = document.querySelector('.nav-toggle');
-const nav    = document.getElementById('main-nav');
+// ── Header menus ────────────────────────────────────────────────────────────
+// One controller for the hamburger and the section menus, at every width.
+//
+// Each section has a link (goes to the section page) and a separate button
+// (opens its menu). Closed menus carry `hidden`, so they are neither shown nor
+// reachable by Tab. The old version opened menus by CSS :hover/:focus-within
+// above 1280px and by tapping the link below 681px — and between the two
+// nothing at all could open them on a tablet.
+//
+// "Collapsed" (hamburger) mode is read from the page, not from a pixel width
+// written here: if the hamburger button is displayed, the header is collapsed.
+// So the CSS breakpoint is the only breakpoint.
+(function () {
+  const header = document.querySelector('.site-header');
+  const toggle = document.querySelector('.nav-toggle');
+  const nav    = document.getElementById('main-nav');
+  if (!header || !nav) return;
 
-if (toggle && nav) {
-  toggle.addEventListener('click', () => {
-    const open = nav.classList.toggle('open');
-    toggle.setAttribute('aria-expanded', open);
+  const items = Array.prototype.slice.call(nav.querySelectorAll('.has-dropdown'));
+  const HOVER_CLOSE_MS = 250;
+  let suppressHover = null;       // the item a user just closed while pointing at it
+
+  function collapsed() {
+    return !!toggle && getComputedStyle(toggle).display !== 'none';
+  }
+  function partsOf(li) {
+    return { btn: li.querySelector('.nav-sub-toggle'), menu: li.querySelector('.dropdown') };
+  }
+  function isOpen(li) {
+    const p = partsOf(li);
+    return !!p.menu && !p.menu.hidden;
+  }
+
+  // Keep a desktop menu on screen: centred under its section, then nudged in
+  // from whichever edge it would cross.
+  function fit(li) {
+    const menu = partsOf(li).menu;
+    if (!menu) return;
+    menu.style.setProperty('--dd-shift', '0px');
+    if (collapsed()) return;
+    const r = menu.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth || window.innerWidth;
+    let shift = 0;
+    if (r.right > vw - 8) shift = (vw - 8) - r.right;
+    if (r.left + shift < 8) shift = 8 - r.left;
+    if (shift) menu.style.setProperty('--dd-shift', Math.round(shift) + 'px');
+  }
+
+  function open(li, how) {
+    items.forEach(other => { if (other !== li) close(other); });
+    const p = partsOf(li);
+    if (!p.btn || !p.menu) return;
+    clearTimeout(li._navTimer);
+    p.menu.hidden = false;
+    p.btn.setAttribute('aria-expanded', 'true');
+    li.classList.add('open');
+    li._navHow = how;
+    fit(li);
+  }
+  function close(li) {
+    const p = partsOf(li);
+    clearTimeout(li._navTimer);
+    if (!p.btn || !p.menu) return;
+    p.menu.hidden = true;
+    p.btn.setAttribute('aria-expanded', 'false');
+    li.classList.remove('open');
+    li._navHow = '';
+  }
+  function closeAll() { items.forEach(close); }
+
+  function setNavOpen(on) {
+    if (!toggle) return;
+    nav.classList.toggle('open', on);
+    toggle.setAttribute('aria-expanded', on ? 'true' : 'false');
+    if (!on) closeAll();
+  }
+
+  if (toggle) {
+    toggle.addEventListener('click', () => setNavOpen(!nav.classList.contains('open')));
+  }
+
+  items.forEach(li => {
+    const p = partsOf(li);
+    if (!p.btn || !p.menu) return;
+
+    // A native button, so Enter and Space arrive here as clicks.
+    p.btn.addEventListener('click', e => {
+      e.preventDefault();
+      // Moving onto the button can open the menu by hover before the click
+      // arrives. That first click pins it open; a second click closes it.
+      if (isOpen(li) && li._navHow !== 'hover') {
+        close(li);
+        // Still under the pointer: do not let hover reopen what was just closed.
+        if (li.matches(':hover')) suppressHover = li;
+      } else {
+        open(li, 'click');
+      }
+    });
+
+    // Hover is a mouse convenience on the full-width bar only. It never
+    // overrides a menu the user opened or closed on purpose.
+    li.addEventListener('pointerenter', e => {
+      if (e.pointerType !== 'mouse' || collapsed()) return;
+      clearTimeout(li._navTimer);
+      if (suppressHover === li || isOpen(li)) return;
+      open(li, 'hover');
+    });
+    li.addEventListener('pointerleave', e => {
+      if (e.pointerType !== 'mouse' || collapsed()) return;
+      if (suppressHover === li) suppressHover = null;
+      if (li._navHow !== 'hover') return;
+      li._navTimer = setTimeout(() => close(li), HOVER_CLOSE_MS);
+    });
+
+    // Tabbing out of a desktop menu closes it. Only when focus has actually
+    // gone somewhere else: a click on the menu's own padding moves focus to
+    // nothing, and that is the click-outside handler's business, not this one.
+    li.addEventListener('focusout', e => {
+      const to = e.relatedTarget;
+      if (!to || li.contains(to) || collapsed()) return;
+      close(li);
+    });
   });
 
-  // Close nav when a non-dropdown link is clicked
-  nav.querySelectorAll('a').forEach(link => {
-    if (!link.closest('.has-dropdown')) {
-      link.addEventListener('click', () => {
-        nav.classList.remove('open');
-        toggle.setAttribute('aria-expanded', 'false');
-      });
-    }
+  // Choosing a link closes everything — it matters for in-page links, where
+  // the page does not change and the menu would otherwise stay open over it.
+  nav.addEventListener('click', e => {
+    const a = e.target.closest ? e.target.closest('a[href]') : null;
+    if (!a) return;
+    closeAll();
+    if (toggle && nav.classList.contains('open')) setNavOpen(false);
   });
 
   document.addEventListener('click', e => {
-    if (!nav.contains(e.target) && !toggle.contains(e.target)) {
-      nav.classList.remove('open');
-      toggle.setAttribute('aria-expanded', 'false');
+    const t = e.target;
+    items.forEach(li => { if (isOpen(li) && !li.contains(t)) close(li); });
+    if (toggle && nav.classList.contains('open') && !nav.contains(t) && !toggle.contains(t)) {
+      setNavOpen(false);
     }
   });
-}
+
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' && e.key !== 'Esc') return;
+    const openLi = items.filter(isOpen)[0];
+    if (openLi) {
+      const btn = partsOf(openLi).btn;
+      const hadFocus = openLi.contains(document.activeElement);
+      close(openLi);
+      if (openLi.matches(':hover')) suppressHover = openLi;
+      if (hadFocus && btn) btn.focus();
+      e.preventDefault();
+      return;
+    }
+    if (toggle && nav.classList.contains('open')) {
+      const hadFocus = nav.contains(document.activeElement);
+      setNavOpen(false);
+      if (hadFocus || document.activeElement === toggle) toggle.focus();
+      e.preventDefault();
+    }
+  });
+
+  // Crossing between the bar and the hamburger starts both from closed, so a
+  // menu opened in one layout is never left half-open in the other.
+  let wasCollapsed = collapsed();
+  window.addEventListener('resize', () => {
+    const now = collapsed();
+    if (now !== wasCollapsed) {
+      wasCollapsed = now;
+      closeAll();
+      setNavOpen(false);
+      return;
+    }
+    items.forEach(li => { if (isOpen(li)) fit(li); });
+  });
+})();
 
 // ── Floating search bubble (FAB) ────────────────────────────────────────────
 (function () {
@@ -50,21 +198,6 @@ if (toggle && nav) {
   fab.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="22" height="22"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>';
   document.body.appendChild(fab);
 })();
-
-// ── Mobile dropdown toggle ──────────────────────────────────────────────────
-document.querySelectorAll('.has-dropdown > a').forEach(link => {
-  link.addEventListener('click', e => {
-    if (window.innerWidth <= 680) {
-      e.preventDefault();
-      const li = link.closest('.has-dropdown');
-      // Close other open dropdowns
-      document.querySelectorAll('.has-dropdown.open').forEach(el => {
-        if (el !== li) el.classList.remove('open');
-      });
-      li.classList.toggle('open');
-    }
-  });
-});
 
 /* ── Trustee election strip ───────────────────────────────────────────────────
  * A slim bar under the header on every page that loads this file.
@@ -237,9 +370,9 @@ document.querySelectorAll('.has-dropdown > a').forEach(link => {
 
   document.addEventListener('click', function (ev) {
     // Bubble phase, after the page's own handlers, and only for clicks that
-    // were allowed to proceed. The mobile nav cancels taps on its dropdown
-    // parents; in capture phase those were counted as visits to pages nobody
-    // opened.
+    // were allowed to proceed. (The old mobile nav cancelled taps on its
+    // dropdown parents; in capture phase those were counted as visits to pages
+    // nobody opened. Any handler that cancels a click is still respected.)
     if (ev.defaultPrevented) return;
     if (ev.button !== undefined && ev.button !== 0) return;   // not a left click
 

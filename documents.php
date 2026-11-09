@@ -7,8 +7,8 @@ require_once __DIR__ . '/members/auth.php';   // so the nav can tell you are sig
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="site-root" content="">
-  <title>Documents — Bulkley Valley Teachers' Union</title>
-  <meta name="description" content="BVTU documents — collective agreements, settlements, provincial regulations, ethics codes, and professional standards.">
+  <title>Documents &amp; Forms — Bulkley Valley Teachers' Union</title>
+  <meta name="description" content="Every document the BVTU publishes — collective agreements, LOUs and settlements, salary grids, claim forms, leave policies, school calendars and governance.">
   <link rel="stylesheet" href="css/style.css?v=<?= @filemtime(__DIR__ . '/css/style.css') ?>">
   <link rel="icon" href="favicon.ico">
   <style>
@@ -68,8 +68,8 @@ require_once __DIR__ . '/members/auth.php';   // so the nav can tell you are sig
 
   <section class="page-hero">
     <div class="container">
-      <h1>Documents</h1>
-      <p>Collective agreements, regulations, and professional standards — plus members-only resources below.</p>
+      <h1>Documents &amp; Forms</h1>
+      <p>Every document we publish, by topic. No login needed.</p>
     </div>
   </section>
 
@@ -180,9 +180,9 @@ require_once __DIR__ . '/members/auth.php';   // so the nav can tell you are sig
           <div class="doc-page-card-icon">
             <svg viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
           </div>
-          <h3>Letters of Understanding</h3>
-          <p>All signed LOUs, settlements, and arbitration awards between BVTU and SD54.</p>
-          <div class="doc-page-card-arrow">Browse LOUs →</div>
+          <h3>LOUs &amp; Settlements</h3>
+          <p>Signed LOUs, settlements, arbitration awards and proposals between BVTU and SD54.</p>
+          <div class="doc-page-card-arrow">Browse LOUs &amp; settlements →</div>
         </a>
 
         <a href="ca-assistant.php" class="doc-page-card">
@@ -221,16 +221,53 @@ require_once __DIR__ . '/members/auth.php';   // so the nav can tell you are sig
           <div class="doc-page-card-arrow">How it works →</div>
         </a>
 
-        <a href="lous.php" class="doc-page-card">
-          <div class="doc-page-card-icon">
-            <svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-          </div>
-          <h3>Settlements</h3>
-          <p>Local settlements and remedies reached between BVTU and SD54, listed chronologically.</p>
-          <div class="doc-page-card-arrow">Browse settlements →</div>
-        </a>
-
       </div>
+
+      <?php
+      /*
+       * The index: every PDF under documents/, one row each, from the explicit
+       * list in inc/documents-index.php. A listed file that is not on disk is
+       * skipped rather than shown as a dead link.
+       */
+      require_once __DIR__ . '/inc/documents-index.php';
+      $docRows = [];
+      foreach (docIndexRecords() as $r) {
+          if (is_file(__DIR__ . '/' . $r['file'])) $docRows[$r['topic']][] = $r;
+      }
+      $hd = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); };
+      ?>
+      <style>
+        .doc-index { margin-bottom: 2.25rem; }
+        .doc-index h2 { font-size: .78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+                        color: var(--gray-500); margin: 0 0 .6rem; }
+        .doc-index ul { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border);
+                        border-radius: var(--radius-s); background: var(--white); }
+        .doc-index li { display: flex; flex-wrap: wrap; align-items: baseline; gap: .15rem 1rem;
+                        padding: .65rem 1rem; border-top: 1px solid var(--border); }
+        .doc-index li:first-child { border-top: 0; }
+        .doc-index-title { flex: 1 1 22rem; font-weight: 600; }
+        .doc-index-meta  { font-size: .8rem; color: var(--gray-500); }
+        .doc-index-guide { font-size: .8rem; white-space: nowrap; }
+        .doc-index-status { font-weight: 700; color: var(--gray-600); }
+      </style>
+      <?php foreach (docIndexTopics() as $topic => $heading): ?>
+        <?php if (empty($docRows[$topic])) continue; ?>
+      <section class="doc-index" aria-labelledby="docs-<?= $hd($topic) ?>">
+        <h2 id="docs-<?= $hd($topic) ?>"><?= $heading ?></h2>
+        <ul>
+          <?php foreach ($docRows[$topic] as $r): ?>
+          <li>
+            <a class="doc-index-title" href="<?= $hd($r['file']) ?>" target="_blank" rel="noopener"><?= $hd($r['title']) ?><span class="sr-only"> (PDF, opens in a new tab)</span></a>
+            <span class="doc-index-meta">
+              <?= $hd($r['type']) ?><?= $r['date'] !== '' ? ' · ' . $hd($r['date']) : '' ?>
+              <?php if (!empty($r['status'])): ?> · <span class="doc-index-status"><?= $hd($r['status']) ?></span><?php endif; ?>
+            </span>
+            <a class="doc-index-guide" href="<?= $hd($r['guide']) ?>"><?= $hd(docIndexGuideLabel($r['guide'])) ?></a>
+          </li>
+          <?php endforeach; ?>
+        </ul>
+      </section>
+      <?php endforeach; ?>
 
     </div>
   </main>

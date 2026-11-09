@@ -8,7 +8,7 @@
  * menu item meant editing eighty links across twenty-six files, and the ones
  * that got missed sat on the same page as the ones that did not.
  *
- * The Navigate list is built from bvtuNavItems() — the same source the header
+ * The Navigate list is built from bvtuNavSections() — the same source the header
  * uses — so the two can no longer disagree about what anything is called.
  */
 require_once __DIR__ . '/nav.php';
@@ -46,25 +46,30 @@ function bvtuFooter(array $o = []): void {
         <h3>Navigate</h3>
         <?php
         /*
-         * Flat, and only the sections.
-         *
-         * It used to mirror the header's dropdowns, which cannot be opened by
-         * touch — the CSS hides them up to 1280px and the script that opens
-         * them only runs below 681px, so between those widths a phone or
-         * tablet could reach none of the children. A footer is a safety net,
-         * not a second menu: the header carries the full tree with its
-         * explanations, and each section's own page carries the detail.
+         * Flat, and only the sections — from the same definition as the header.
+         * A footer is a safety net, not a second menu: each section's own page
+         * carries the detail.
          */
         ?>
         <ul class="footer-nav-list">
-          <?php foreach (bvtuNavItems() as $item): ?>
-          <li><a href="<?= $h($base . $item['url']) ?>"><?= $item['label'] ?></a></li>
+          <?php foreach (bvtuNavSections() as $sec): ?>
+          <li><a href="<?= $h(bvtuNavHref($sec['url'], $base)) ?>"><?= $sec['label'] ?></a></li>
           <?php endforeach; ?>
+          <li><a href="<?= $h($base) ?>members/dashboard.php">My Dashboard</a></li>
         </ul>
       </div>
       <div>
-        <h3>Connect</h3>
-        <a href="#" target="_blank" rel="noopener" class="btn btn-outline-white">Facebook Group</a>
+        <h3>Find</h3>
+        <?php // The broad pages people have bookmarked, kept findable now they are no
+              // longer top-level menu items. (The Facebook button that was here
+              // pointed at "#"; it comes back when there is a real group to link.) ?>
+        <ul class="footer-nav-list">
+          <li><a href="<?= $h($base) ?>documents.php">Documents &amp; Forms</a></li>
+          <li><a href="<?= $h($base) ?>members.php">Member Resources</a></li>
+          <li><a href="<?= $h($base) ?>about.php">About</a></li>
+          <li><a href="<?= $h($base) ?>bctf.php">BCTF</a></li>
+          <li><a href="<?= $h($base) ?>contact.php">Contact</a></li>
+        </ul>
       </div>
     </div>
 <?php endif; ?>

@@ -28,49 +28,15 @@ $member   = $loggedIn ? getMember() : null;
   <main class="page-content">
     <div class="container">
 
-      <!-- QUICK-ACCESS CARDS -->
-      <div class="member-page-grid">
-        <style>
-          .member-page-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1rem; margin-bottom: 2.5rem; }
-          .member-page-card { display: flex; flex-direction: column; background: var(--white); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 1.4rem 1.25rem 1.2rem; text-decoration: none; color: var(--text); transition: border-color .15s, box-shadow .15s, transform .12s; }
-          .member-page-card:hover { border-color: var(--primary); box-shadow: 0 4px 18px rgba(27,107,66,.1); transform: translateY(-2px); color: var(--text); }
-          .member-page-card-icon { width: 40px; height: 40px; background: var(--accent); border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-bottom: .9rem; flex-shrink: 0; }
-          .member-page-card-icon svg { width: 20px; height: 20px; stroke: var(--primary); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-          .member-page-card h3 { font-size: 1rem; font-weight: 800; color: var(--primary); margin: 0 0 .35rem; }
-          .member-page-card p { font-size: .85rem; color: var(--gray-500); margin: 0; line-height: 1.55; flex: 1; }
-          .member-page-card-arrow { font-size: .82rem; font-weight: 700; color: var(--primary); margin-top: .9rem; }
-        </style>
-
-        <!-- Pro-D Portal card hidden until the portal is ready to launch. -->
-
-        <a href="collab-grant.php" class="member-page-card">
-          <div class="member-page-card-icon">
-            <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          </div>
-          <h3>Collaboration Grant</h3>
-          <p>Apply for BVTU grants supporting teacher-led collaborative professional development projects.</p>
-          <div class="member-page-card-arrow">Apply now →</div>
-        </a>
-
-        <a href="https://www.bctf.ca/topics/services-information/professional-development" target="_blank" rel="noopener" class="member-page-card">
-          <div class="member-page-card-icon">
-            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
-          </div>
-          <h3>BCTF PRO-D Resources</h3>
-          <p>Provincial PRO-D policies, funding opportunities, and professional learning resources.</p>
-          <div class="member-page-card-arrow">Visit BCTF →</div>
-        </a>
-
-        <a href="https://bvsd54.sharepoint.com/:u:/r/sites/SD54ProDCalendar/SitePages/Home.aspx?csf=1&web=1&e=noZNN1" target="_blank" rel="noopener" class="member-page-card">
-          <div class="member-page-card-icon">
-            <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-          </div>
-          <h3>PRO-D Day Schedule</h3>
-          <p>District 54 Pro-D calendar on SharePoint. Requires your district login to access.</p>
-          <div class="member-page-card-arrow">Open SD54 calendar →</div>
-        </a>
-
-      </div>
+      <?php
+      // This section's pages, from the same definition as its menu
+      // (inc/nav.php), so the two always agree.
+      ?>
+      <!-- Pro-D Portal card hidden until the portal is ready to launch. -->
+      <?php bvtuSectionCards('prod'); ?>
+      <ul class="resource-list" style="margin-bottom:2.5rem;">
+        <li><a href="https://www.bctf.ca/topics/services-information/professional-development" target="_blank" rel="noopener">BCTF Pro-D resources — provincial policy, funding and learning</a></li>
+      </ul>
 
       <!-- OVERARCHING PRINCIPLES -->
       <style>

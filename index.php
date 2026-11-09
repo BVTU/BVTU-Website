@@ -317,12 +317,11 @@ $member   = $loggedIn ? getMember() : null;
             // competing with the six things people came for. ?>
       <p class="browse-row">
         Or browse:
-        <a href="documents.php">Documents</a>
+        <?php foreach (bvtuNavSections() as $sec): ?>
+        <a href="<?= htmlspecialchars($sec['url']) ?>"><?= $sec['label'] ?></a>
+        <?php endforeach; ?>
+        <a href="documents.php">Documents &amp; Forms</a>
         <a href="members.php">Member resources</a>
-        <a href="prod.php">Pro-D</a>
-        <a href="health-safety.php">Health &amp; Safety</a>
-        <a href="bctf.php">BCTF</a>
-        <a href="about.php">About the union</a>
       </p>
     </div>
   </section>

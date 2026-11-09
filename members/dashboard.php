@@ -118,7 +118,7 @@ if (execIsAdmin($myEmail) && empty($myExecRoleSlugs)) {
     <div class="container dashboard-hero-inner">
       <div>
         <h1>Welcome, <?= htmlspecialchars($member['name']) ?></h1>
-        <p>Members-only documents and resources</p>
+        <p>Your claims, applications, resources and account</p>
         <?php if (!empty($myRoleLabels)): ?>
         <div class="role-chips">
           <?php foreach ($myRoleLabels as $label): ?>
