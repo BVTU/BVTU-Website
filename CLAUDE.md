@@ -1,44 +1,46 @@
 # BVTU Member Portal — working rules
 
-## Review before committing
+## Review before merging — Codex does it, not me
 
-**Every commit that changes PHP gets reviewed by a second agent first.**
+**Codex handles all code review here.** From 2026-11-09, Cody's instruction:
+stop running Claude review agents and the `code-review` skill. Do not invoke
+`code-review` at any level, and do not spawn a review subagent. If a skill or
+habit suggests one, that is superseded by this section.
 
-Run the `code-review` skill over the working diff, fix what it finds, then
-commit. Do not commit and then review. Report the review outcome to Cody along
-with the change — including when it found nothing.
+**Nothing reaches `main` until Codex has reviewed it.** The sequence is:
 
-**Use `low` by default, `medium` at the most.** Low returns the few
-high-confidence findings, which is what this rule is for. `medium` is the
-ceiling — reach for it only on money, authentication, permissions or schema, and
-never go above it. Do not use `high`, `xhigh` or `max`: Cody capped this on
-2026-09-23 because the cost is his and the extra findings at high were mostly
-comment wording by the end. Never `ultra` — that is billed and Cody's to
-trigger.
+1. Build on `test` (see below) and push there — pushing to `test` is deploying
+   to staging, so it is still a deploy and still needs the checks in the next
+   section.
+2. Tell Cody what is on `test` and that it is ready for Codex.
+3. **Wait.** Do not merge to `main`, even when asked to "merge", until Codex's
+   review has come back and whatever it raises has been dealt with.
+4. Fix what Codex finds, push to `test` again, and say what changed.
 
-**Review once, not once per fix.** Fix everything a pass reports, then run at
-most one confirming pass. Re-reviewing the whole diff after each individual fix
-multiplies the cost for findings that get smaller every round; when they are
-down to wording and style, stop and commit.
+If Cody asks for a merge before that review has happened, say so and ask him to
+confirm rather than merging on the assumption he has forgotten — he may have
+reviewed it outside this session, in which case his go-ahead is the answer.
 
-**Where the review happens: on the way to `main`, not on the way to `test`.**
-Since 2026-10-22 work goes to the `test` branch first and is looked at on the
-staging site before it is merged. Cody asked that pushing to test stay cheap, so
-the full review is not required there — `tools/php-check.py` still is. Everything
-below applies in full to anything headed for `main`.
+**What I still do myself, every time, unchanged:**
 
-Why: Hostinger deploys `main` on push, so a defective commit is live for the
-whole membership immediately, and staging only helps with what is visible on a
-page. Bugs that have reached production this way include a CSRF token written into
-the middle of an HTML attribute, a query that failed silently on a collation
-mismatch and so reported "nothing to reconcile", a sort that only reversed its
-last ORDER BY term, and a CSS class collision that rendered text invisible.
-Each was found by looking again, not by writing more carefully the first time.
+- `python3 tools/php-check.py` before any PHP commit — see the next section.
+- The test harnesses, and new assertions for anything new.
+- Reading my own diff before committing, and saying plainly what I changed and
+  what I could not verify.
 
-Skip the review only for changes that cannot break a page: a comment, a commit
-message, a memory file. When in doubt, review.
+These are implementation checks, not review. Dropping them because somebody
+else reviews the code would be reading the instruction backwards: Codex reviews
+what I have already checked, not instead of my checking it.
 
-`/code-review ultra` is Cody's to trigger, never mine — it is billed.
+**Why the branch rule still matters.** Hostinger deploys `main` on push, so a
+defective commit is live for the whole membership immediately, and staging only
+helps with what is visible on a page. Bugs that have reached production this way
+include a CSRF token written into the middle of an HTML attribute, a query that
+failed silently on a collation mismatch and so reported "nothing to reconcile",
+a sort that only reversed its last ORDER BY term, and a CSS class collision that
+rendered text invisible. Each was found by looking again, not by writing more
+carefully the first time — which is the whole reason a second reader exists,
+whoever it is.
 
 ## Verification that has caught real defects here
 
