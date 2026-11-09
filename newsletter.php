@@ -121,7 +121,7 @@ $loggedIn = true;
 
   <?php require_once __DIR__ . '/inc/footer.php'; bvtuFooter(['spaced' => true]); ?>
 
-  <script src="js/site.js"></script>
+  <script src="js/site.js?v=<?= @filemtime(__DIR__ . '/js/site.js') ?>"></script>
   <script src="js/search.js"></script>
   <script>
     // Auto-resize the iframe to its content height (same-origin, so this works)

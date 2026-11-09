@@ -70,7 +70,7 @@ $forumDate = ($fs && $fs['event_date'] !== '' && strtotime($fs['event_date']))
 
   <?php require_once __DIR__ . '/inc/footer.php'; bvtuFooter(); ?>
 
-  <script src="js/site.js"></script>
+  <script src="js/site.js?v=<?= @filemtime(__DIR__ . '/js/site.js') ?>"></script>
   <script src="js/search.js"></script>
 </body>
 </html>

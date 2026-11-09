@@ -995,7 +995,7 @@ $loginUrl    = 'members/login.php?redirect=' . urlencode('../library-resource.ph
 
   <?php require_once __DIR__ . '/inc/footer.php'; bvtuFooter(['minimal' => true]); ?>
 
-  <script src="js/site.js"></script>
+  <script src="js/site.js?v=<?= @filemtime(__DIR__ . '/js/site.js') ?>"></script>
 
   <?php if (!isset($notFound) && $resource['file_ext'] === 'pdf'): ?>
   <!-- PDF.js paginated preview -->

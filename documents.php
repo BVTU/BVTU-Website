@@ -274,7 +274,7 @@ require_once __DIR__ . '/members/auth.php';   // so the nav can tell you are sig
 
   <?php require_once __DIR__ . '/inc/footer.php'; bvtuFooter(); ?>
 
-  <script src="js/site.js"></script>
+  <script src="js/site.js?v=<?= @filemtime(__DIR__ . '/js/site.js') ?>"></script>
   <script src="js/search.js"></script>
 </body>
 </html>

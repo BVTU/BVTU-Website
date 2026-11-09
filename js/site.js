@@ -33,6 +33,13 @@
 
   const items = Array.prototype.slice.call(nav.querySelectorAll('.has-dropdown'));
   const HOVER_CLOSE_MS = 250;
+  // Some WebKit views expose mouse events without the PointerEvent API.
+  // Use their standard mouse events, but only on hardware that can hover.
+  const hasPointerEvents = 'PointerEvent' in window;
+  function isMouseHover(e) {
+    return hasPointerEvents ? e.pointerType === 'mouse'
+      : window.matchMedia('(any-hover: hover)').matches;
+  }
   let suppressHover = null;       // the item a user just closed while pointing at it
 
   function collapsed() {
@@ -87,7 +94,10 @@
     if (!toggle) return;
     nav.classList.toggle('open', on);
     toggle.setAttribute('aria-expanded', on ? 'true' : 'false');
-    if (!on) closeAll();
+    if (!on) {
+      closeAll();
+      suppressHover = null;
+    }
   }
 
   if (toggle) {
@@ -112,16 +122,16 @@
       }
     });
 
-    // Hover is a mouse convenience on the full-width bar only. It never
-    // overrides a menu the user opened or closed on purpose.
-    li.addEventListener('pointerenter', e => {
-      if (e.pointerType !== 'mouse' || collapsed()) return;
+    // A physical mouse can hover in either layout once navigation is visible.
+    // Touch stays button-driven; hovering never overrides an explicit close.
+    li.addEventListener(hasPointerEvents ? 'pointerenter' : 'mouseenter', e => {
+      if (!isMouseHover(e) || (collapsed() && !nav.classList.contains('open'))) return;
       clearTimeout(li._navTimer);
       if (suppressHover === li || isOpen(li)) return;
       open(li, 'hover');
     });
-    li.addEventListener('pointerleave', e => {
-      if (e.pointerType !== 'mouse' || collapsed()) return;
+    li.addEventListener(hasPointerEvents ? 'pointerleave' : 'mouseleave', e => {
+      if (!isMouseHover(e) || (collapsed() && !nav.classList.contains('open'))) return;
       if (suppressHover === li) suppressHover = null;
       if (li._navHow !== 'hover') return;
       li._navTimer = setTimeout(() => close(li), HOVER_CLOSE_MS);

@@ -2335,7 +2335,7 @@ $totalDaysApproved = $personDays['approved'];
 
   </div>
 
-  <script src="../js/site.js"></script>
+  <script src="../js/site.js?v=<?= @filemtime(__DIR__ . '/../js/site.js') ?>"></script>
   <script>
     /* Opens the card a #app-N link points at — the Follow-through hint sends you to
  * All for a specific application, and it would otherwise arrive collapsed. */

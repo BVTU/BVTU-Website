@@ -390,7 +390,7 @@ function selOpt(string $val, string $current): string {
     <?php endif; ?>
   </div>
 
-  <script src="../js/site.js"></script>
+  <script src="../js/site.js?v=<?= @filemtime(__DIR__ . '/../js/site.js') ?>"></script>
   <script>
   (function () {
     var urlIn    = document.getElementById('curated-url');

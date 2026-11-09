@@ -167,7 +167,7 @@ $bookmarks = libGetBookmarks($member['email']);
 
   <?php require_once __DIR__ . '/inc/footer.php'; bvtuFooter(['minimal' => true]); ?>
 
-  <script src="js/site.js"></script>
+  <script src="js/site.js?v=<?= @filemtime(__DIR__ . '/js/site.js') ?>"></script>
   <script>
     // Bookmark toggle — removes card from view on unbookmark
     document.querySelectorAll('.bm-btn').forEach(btn => {

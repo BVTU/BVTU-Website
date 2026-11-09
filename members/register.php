@@ -197,7 +197,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
   </div>
 
-  <script src="../js/site.js"></script>
+  <script src="../js/site.js?v=<?= @filemtime(__DIR__ . '/../js/site.js') ?>"></script>
   <script src="../js/search.js"></script>
 </body>
 </html>
