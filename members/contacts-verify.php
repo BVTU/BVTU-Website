@@ -45,13 +45,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || ($_GET['run'] ?? '') === '1') {
     }
 }
 
-$contacts = [];
+/* Archived contacts are read too, and the extra addresses with them.
+ *
+ * Both were missing, and both made the comparison accuse itself of gaps that
+ * were not there:
+ *
+ *   - Only contacts.email was matched. A contact who is in the audience under
+ *     one of their OTHER addresses appeared twice over — once as "in Mailchimp
+ *     but not in the portal" under that address, and once as "in the portal but
+ *     not in Mailchimp" under their main one. One person, two false findings.
+ *   - Archived contacts were excluded from the portal side entirely, so anyone
+ *     who has left and is still in the audience read as missing from the
+ *     portal, where they are plainly on file.
+ */
+$contacts = $allContacts = [];
 if ($ran && !$err) {
-    $contacts = getDB()->query(
+    $allContacts = getDB()->query(
         "SELECT id, first_name, last_name, preferred_name, email, email_normalized,
                 status, mailchimp_status, mailchimp_last_synced_at
-         FROM contacts WHERE status <> 'archived' ORDER BY last_name, first_name"
+         FROM contacts ORDER BY last_name, first_name"
     )->fetchAll();
+    $contacts = array_values(array_filter($allContacts,
+        fn($c) => (string)$c['status'] !== 'archived'));
 }
 
 // Three buckets: agreed, disagreed, and present on only one side.
@@ -59,15 +74,37 @@ $agree = $differ = $portalOnly = [];
 $mcOnly = [];
 
 if ($ran && !$err) {
-    $seen = [];
-    foreach ($contacts as $c) {
-        $e = $c['email_normalized'];
-        $seen[$e] = true;
-        if (!isset($audience[$e])) {
-            $portalOnly[] = $c;
-            continue;
+    // Every address every contact holds, archived ones included, so an address
+    // in the audience is looked for against all of them rather than only the
+    // one that happens to be their main.
+    $extra = contactEmailsFor(array_map(fn($c) => (int)$c['id'], $allContacts));
+    $seen  = [];
+    $addrs = [];
+    foreach ($allContacts as $c) {
+        $list = [contactNormalizeEmail((string)$c['email'])];
+        foreach ($extra[(int)$c['id']] ?? [] as $x) $list[] = contactNormalizeEmail($x);
+        foreach (array_unique(array_filter($list)) as $a) {
+            $addrs[(int)$c['id']][] = $a;
+            $seen[$a] = true;
         }
-        $live   = $audience[$e]['status'];
+    }
+
+    foreach ($contacts as $c) {
+        // Whichever of their addresses the audience knows them by. Their main
+        // one first, so a contact who is in Mailchimp under both is compared
+        // against the address the portal would push to.
+        $hit = null;
+        foreach ($addrs[(int)$c['id']] ?? [] as $a) {
+            if (isset($audience[$a])) { $hit = $a; break; }
+        }
+        if ($hit === null) { $portalOnly[] = $c; continue; }
+
+        // Said on the row rather than left to be puzzled over: this contact is
+        // in the audience under an address that is not their main one, which
+        // is worth knowing before anybody edits either side.
+        if ($hit !== contactNormalizeEmail((string)$c['email'])) $c['_as'] = $hit;
+
+        $live   = $audience[$hit]['status'];
         $stored = $c['mailchimp_status'];
         if ($live === $stored) { $agree[] = $c; }
         else { $c['_live'] = $live; $differ[] = $c; }
@@ -224,7 +261,13 @@ if ($apply && !$err) {
       <tr>
         <td><a href="contact-edit.php?id=<?= (int)$c['id'] ?>" style="color:var(--primary);font-weight:600;">
           <?= htmlspecialchars(contactDisplayName($c)) ?></a></td>
-        <td class="em"><?= htmlspecialchars($c['email']) ?></td>
+        <td class="em"><?= htmlspecialchars($c['email']) ?>
+          <?php // Matched on one of their other addresses, which is worth
+                // knowing before anybody edits either side. ?>
+          <?php if (!empty($c['_as'])): ?>
+          <div style="color:var(--gray-500);">in Mailchimp as <?= htmlspecialchars($c['_as']) ?></div>
+          <?php endif; ?>
+        </td>
         <td style="color:#991b1b;"><?= htmlspecialchars(MC_STATUSES[$c['mailchimp_status']] ?? $c['mailchimp_status']) ?></td>
         <td style="color:#166534;font-weight:700;"><?= htmlspecialchars(MC_STATUSES[$c['_live']] ?? $c['_live']) ?></td>
       </tr>
