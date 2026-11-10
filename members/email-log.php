@@ -6,6 +6,7 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/exp-db.php';
 require_once __DIR__ . '/exec-db.php';   // execIsAdmin() for the gate below
 require_once __DIR__ . '/email-admin-nav.php';
+require_once __DIR__ . '/../inc/email-preview.php';
 
 requireLogin();
 $member = getMember();
@@ -122,6 +123,8 @@ $pages = max(1, (int)ceil($total / $perPage));
            font-size:.8rem;line-height:1.65;color:var(--gray-700);background:#fff;
            border:1px solid var(--gray-200);border-radius:8px;padding:.8rem 1rem;margin:0;
            max-height:26rem;overflow:auto; }
+    .msg-preview { display:block;width:100%;height:32rem;box-sizing:border-box;
+                   border:1px solid var(--gray-200);border-radius:8px;background:#fff; }
     .log-table td { padding: .55rem .85rem; vertical-align: top; }
     .ts { color: var(--gray-400); white-space: nowrap; font-size: .78rem; }
     .to-email { font-weight: 600; color: var(--gray-800); }
@@ -209,8 +212,10 @@ $pages = max(1, (int)ceil($total / $perPage));
           <?php // Stored already redacted, so there is no live link to print here
                 // even if one was in the email that went out. ?>
           <?php if (!empty($r['is_html'])): ?>
-          <div class="msg-note">An HTML email, shown as its text.</div>
-          <pre class="msg"><?= htmlspecialchars(trim(strip_tags(str_replace(['</p>','<br>','<br/>','<br />','</div>','</tr>'], "\n", (string)$r['body'])))) ?></pre>
+          <div class="msg-note">Formatted email preview. External images and links are disabled.</div>
+          <iframe class="msg-preview" sandbox="" referrerpolicy="no-referrer" loading="lazy"
+                  title="<?= htmlspecialchars('Email preview: ' . $r['subject'], ENT_QUOTES, 'UTF-8') ?>"
+                  srcdoc="<?= htmlspecialchars(emailLogPreviewDocument((string)$r['body']), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"></iframe>
           <?php else: ?>
           <pre class="msg"><?= htmlspecialchars((string)$r['body']) ?></pre>
           <?php endif; ?>
