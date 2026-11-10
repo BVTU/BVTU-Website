@@ -319,17 +319,34 @@ usort($quickActions, fn($a, $b) => $a['quick'] <=> $b['quick']);
     /* ── Grouped panels: one outer border, rows inside it ─────────────── */
     .dash-shell .dash-panel { border:1px solid #dbe7df; background:#fff; border-radius:14px;
                   box-shadow:0 2px 10px rgba(25,55,37,.03); overflow:hidden; margin-bottom:.9rem; }
-    .dash-shell .dash-panelhead { display:flex; align-items:center; gap:.8rem; padding:1.1rem 1.3rem; }
-    .dash-shell .dash-panelhead .heading-icon { width:36px; height:36px; border-radius:9px; background:#eef6ef;
+    .dash-shell .dash-panelhead { display:flex; align-items:center; gap:.7rem; padding:.7rem 1rem; }
+    .dash-shell .dash-panelhead .heading-icon { width:30px; height:30px; border-radius:8px; background:#eef6ef;
                                     display:grid; place-items:center; color:var(--primary); flex-shrink:0; }
-    .dash-shell .dash-panelhead .heading-icon svg { width:19px; height:19px; fill:none; stroke:currentColor;
+    .dash-shell .dash-panelhead .heading-icon svg { width:16px; height:16px; fill:none; stroke:currentColor;
                                         stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
-    .dash-shell .dash-panelhead h3 { font-size:.87rem; font-weight:700; margin:0 0 .22rem; color:var(--gray-800); }
-    .dash-shell .dash-panelhead p { font-size:.75rem; color:var(--gray-600); margin:0; }
+    .dash-shell .dash-panelhead h3 { font-size:.85rem; font-weight:700; margin:0 0 .12rem; color:var(--gray-800); }
+    .dash-shell .dash-panelhead p { font-size:.73rem; color:var(--gray-600); margin:0; }
+
+    /* Server-rendered so it can be tested, and carrying `hidden` until the
+       script takes it over: with scripting off there is no button to press
+       and nothing is collapsed, so every link stays reachable. */
+    .dash-shell .dash-toggle { margin-left:auto; display:flex; align-items:center; gap:.3rem;
+                   background:none; border:0; cursor:pointer; font:inherit;
+                   font-size:.73rem; font-weight:750; color:var(--primary);
+                   padding:.5rem .4rem; border-radius:7px; }
+    /* display:flex above overrides the browser's own [hidden]{display:none},
+       so without this the control would be visible on a page with no
+       scripting — where it does nothing at all. */
+    .dash-shell .dash-toggle[hidden] { display:none; }
+    .dash-shell .dash-toggle:hover { background:#eef6ef; }
+    .dash-shell .dash-toggle:focus-visible { outline:3px solid var(--primary); outline-offset:2px; }
+    .dash-shell .dash-toggle .chev { display:inline-block; transition:transform .15s; font-size:.9em; }
+    .dash-shell .dash-toggle[aria-expanded="false"] .chev { transform:rotate(-90deg); }
+    .dash-shell .dash-panelbody[hidden] { display:none; }
     .dash-shell .dash-linkgrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr));
-                     gap:0 .9rem; padding:0 1.3rem .95rem; }
-    .dash-shell .tool-link { min-height:48px; display:flex; align-items:center; gap:.65rem;
-                 padding:.6rem .75rem; border-radius:8px; color:#2d493a;
+                     gap:0 .8rem; padding:0 1rem .55rem; }
+    .dash-shell .tool-link { min-height:42px; display:flex; align-items:center; gap:.6rem;
+                 flex-wrap:wrap; padding:.45rem .65rem; border-radius:8px; color:#2d493a;
                  font-size:.82rem; font-weight:600; text-decoration:none; }
     .dash-shell .tool-link:hover { background:#f0f7f2; text-decoration:none; color:#2d493a; }
     .dash-shell .tool-link:focus-visible { outline:3px solid var(--primary); outline-offset:-2px; }
@@ -342,7 +359,7 @@ usort($quickActions, fn($a, $b) => $a['quick'] <=> $b['quick']);
                   white-space:nowrap; }
     .dash-shell .lock-badge + .end { margin-left:.4rem; }
 
-    .dash-shell .dash-standing { font-size:.8rem; color:var(--gray-600); margin:0; padding:0 1.3rem .9rem; line-height:1.6; }
+    .dash-shell .dash-standing { font-size:.8rem; color:var(--gray-600); margin:0; padding:0 1rem .5rem; line-height:1.55; }
     .dash-shell .dash-empty { display:none; text-align:center; padding:2.4rem; color:var(--gray-600); font-size:.88rem; }
     .dash-shell .dash-empty strong { display:block; color:var(--text); margin-bottom:.4rem; }
 
@@ -356,13 +373,17 @@ usort($quickActions, fn($a, $b) => $a['quick'] <=> $b['quick']);
       .dash-shell .q-desc { grid-column:2; font-size:.72rem; }
       .dash-shell .q-foot { grid-column:3; grid-row:1/span 3; width:auto; margin:0; }
       .dash-shell .q-foot .q-cta { display:none; }
-      .dash-shell .dash-linkgrid { grid-template-columns:1fr; padding:0 .8rem .8rem; }
-      .dash-shell .dash-panelhead { padding:1rem; }
+      .dash-shell .dash-linkgrid { grid-template-columns:1fr; padding:0 .7rem .6rem; }
+      .dash-shell .dash-panelhead { padding:.7rem .8rem; }
+      /* Comfortably tappable on a phone, where 42px is tight. */
+      .dash-shell .tool-link { min-height:46px; }
+      .dash-shell .dash-toggle { min-height:44px; padding:.5rem .55rem; }
       .dash-shell { padding-left:1rem; padding-right:1rem; }
     }
     @media (prefers-reduced-motion:reduce) {
       .dash-shell .quickcard { transition:none; }
       .dash-shell .quickcard:hover { transform:none; }
+      .dash-shell .dash-toggle .chev { transition:none; }
     }
   </style>
 </head>
@@ -445,7 +466,19 @@ usort($quickActions, fn($a, $b) => $a['quick'] <=> $b['quick']);
           <h3>My Collaboration Grant<?= count($myGrants) > 1 ? 's' : '' ?></h3>
           <p>What you have applied for this school year</p>
         </div>
+        <?php /* hidden until the script claims it — see the note on
+                 .dash-toggle. The accessible name carries the category, so a
+                 screen reader hears "Minimize My Collaboration Grants" rather
+                 than the fifth identical "Minimize" on the page. */
+              $gTitle = 'My Collaboration Grant' . (count($myGrants) > 1 ? 's' : ''); ?>
+        <button type="button" class="dash-toggle" hidden
+                aria-expanded="true" aria-controls="dashbody-grants"
+                data-label="<?= htmlspecialchars($gTitle) ?>"
+                aria-label="Minimize <?= htmlspecialchars($gTitle) ?>">
+          <span class="dash-toggle-text">Minimize</span><span class="chev" aria-hidden="true">&#9662;</span>
+        </button>
       </div>
+      <div class="dash-panelbody" id="dashbody-grants">
       <?php $cgStanding = cgPersonDays(cgCurrentYear(), $myEmail, $member['name']); ?>
       <p class="dash-standing">
         <?php if (empty($cgStanding['capped'])): ?>
@@ -485,6 +518,7 @@ usort($quickActions, fn($a, $b) => $a['quick'] <=> $b['quick']);
         </a>
         <?php endforeach; ?>
       </div>
+      </div>
     </div>
     <?php endif; ?>
 
@@ -498,7 +532,14 @@ usort($quickActions, fn($a, $b) => $a['quick'] <=> $b['quick']);
             <h3><?= htmlspecialchars($title) ?></h3>
             <p><?= htmlspecialchars($blurb) ?></p>
           </div>
+          <button type="button" class="dash-toggle" hidden
+                  aria-expanded="true" aria-controls="dashbody-<?= htmlspecialchars($key) ?>"
+                  data-label="<?= htmlspecialchars($title) ?>"
+                  aria-label="Minimize <?= htmlspecialchars($title) ?>">
+            <span class="dash-toggle-text">Minimize</span><span class="chev" aria-hidden="true">&#9662;</span>
+          </button>
         </div>
+        <div class="dash-panelbody" id="dashbody-<?= htmlspecialchars($key) ?>">
         <div class="dash-linkgrid">
           <?php foreach ($items as $a): ?>
           <a href="<?= htmlspecialchars($a['href']) ?>" class="tool-link"
@@ -510,6 +551,7 @@ usort($quickActions, fn($a, $b) => $a['quick'] <=> $b['quick']);
             <span class="end" aria-hidden="true">&rsaquo;</span>
           </a>
           <?php endforeach; ?>
+        </div>
         </div>
       </div>
     <?php endforeach; ?>
