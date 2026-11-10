@@ -241,128 +241,128 @@ usort($quickActions, fn($a, $b) => $a['quick'] <=> $b['quick']);
     .dash-shell { max-width:1060px; margin:0 auto; padding:calc(var(--hdr-h) + 2.25rem) 1.4rem 5rem; }
 
     /* ── Welcome: a header in the column, not a full-width band ───────── */
-    .dash-welcome { display:flex; align-items:flex-end; justify-content:space-between;
+    .dash-shell .dash-welcome { display:flex; align-items:flex-end; justify-content:space-between;
                     gap:1rem; flex-wrap:wrap; margin-bottom:1.3rem; }
     /* Every muted text colour below is var(--gray-600) (#44574c): 7.30:1 on
        this canvas and 7.74:1 on a white panel, where the greens they replaced
        measured between 2.81 and 4.35 and failed AA for normal text. Icons and
        arrows stay lighter — they are decoration and carry no words. */
-    .dash-eyebrow { font-size:.63rem; font-weight:800; letter-spacing:.14em;
+    .dash-shell .dash-eyebrow { font-size:.63rem; font-weight:800; letter-spacing:.14em;
                     color:var(--gray-600); text-transform:uppercase; margin-bottom:.45rem; }
-    .dash-welcome h1 { font-size:1.75rem; font-weight:800; letter-spacing:-.02em;
+    .dash-shell .dash-welcome h1 { font-size:1.75rem; font-weight:800; letter-spacing:-.02em;
                        color:var(--gray-800); margin:0 0 .3rem; }
-    .dash-welcome .subtitle { font-size:.86rem; color:var(--gray-600); margin:0; }
-    .role-chips { display:flex; flex-wrap:wrap; gap:.4rem; }
-    .role-chip { font-size:.68rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+    .dash-shell .dash-welcome .subtitle { font-size:.86rem; color:var(--gray-600); margin:0; }
+    .dash-shell .role-chips { display:flex; flex-wrap:wrap; gap:.4rem; }
+    .dash-shell .role-chip { font-size:.68rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
                  background:#eef6ef; color:#2d6a47; border:1px solid #d6e7dc;
                  border-radius:100px; padding:.28rem .7rem; }
 
-    .welcome-banner { background:#dcfce7; border:1px solid #86efac; color:#166534;
+    .dash-shell .welcome-banner { background:#dcfce7; border:1px solid #86efac; color:#166534;
                       border-radius:var(--radius-s); padding:.85rem 1.1rem;
                       margin-bottom:1.5rem; font-size:.93rem; font-weight:500; }
 
     /* ── Search ───────────────────────────────────────────────────────── */
-    .dash-find { display:flex; align-items:center; gap:.7rem; background:#fff;
+    .dash-shell .dash-find { display:flex; align-items:center; gap:.7rem; background:#fff;
                  border:1px solid #dbe7df; border-radius:11px; height:48px;
                  padding:0 .95rem; margin-bottom:.6rem;
                  box-shadow:0 2px 8px rgba(25,55,37,.02); }
-    .dash-find:focus-within { border-color:var(--primary);
+    .dash-shell .dash-find:focus-within { border-color:var(--primary);
                               outline:3px solid var(--primary); outline-offset:2px; }
-    .dash-find > svg { width:18px; height:18px; color:#769083; flex-shrink:0;
+    .dash-shell .dash-find > svg { width:18px; height:18px; color:#769083; flex-shrink:0;
                        fill:none; stroke:currentColor; stroke-width:2; }
     /* Room on the right for the browser's own clear button, which a
        type="search" field draws inside the input: without it the X and the
        shortcut hint sit on top of one another. */
-    .dash-find input { flex:1; min-width:0; border:0; outline:0; background:transparent;
+    .dash-shell .dash-find input { flex:1; min-width:0; border:0; outline:0; background:transparent;
                        font:inherit; font-size:.92rem; color:var(--text);
                        padding-right:.55rem; }
-    .dash-find input::-webkit-search-cancel-button { margin-left:.35rem; }
-    .dash-find kbd { font:inherit; font-size:.69rem; color:var(--gray-500); border:1px solid #e0e6e0;
+    .dash-shell .dash-find input::-webkit-search-cancel-button { margin-left:.35rem; }
+    .dash-shell .dash-find kbd { font:inherit; font-size:.69rem; color:var(--gray-500); border:1px solid #e0e6e0;
                      border-radius:5px; padding:.15rem .4rem; flex-shrink:0; }
-    .dash-count { font-size:.78rem; color:var(--gray-600); margin:0 0 1.6rem; min-height:1.1em; }
+    .dash-shell .dash-count { font-size:.78rem; color:var(--gray-600); margin:0 0 1.6rem; min-height:1.1em; }
 
     /* ── Section heads ────────────────────────────────────────────────── */
-    .dash-sechead { margin:0 0 1rem; }
-    .dash-sechead h2 { font-size:1.19rem; font-weight:800; letter-spacing:-.02em;
+    .dash-shell .dash-sechead { margin:0 0 1rem; }
+    .dash-shell .dash-sechead h2 { font-size:1.19rem; font-weight:800; letter-spacing:-.02em;
                        color:var(--gray-800); margin:0; }
-    .dash-sechead p  { font-size:.76rem; color:var(--gray-600); margin:.35rem 0 0; }
+    .dash-shell .dash-sechead p { font-size:.76rem; color:var(--gray-600); margin:.35rem 0 0; }
 
     /* ── Quick access ─────────────────────────────────────────────────── */
-    .dash-quick { display:grid; grid-template-columns:repeat(3,minmax(0,1fr));
+    .dash-shell .dash-quick { display:grid; grid-template-columns:repeat(3,minmax(0,1fr));
                   gap:.9rem; margin-bottom:2.3rem; }
-    .quickcard { background:#fff; border:1px solid #dbe7df; border-radius:14px; padding:1.3rem;
+    .dash-shell .quickcard { background:#fff; border:1px solid #dbe7df; border-radius:14px; padding:1.3rem;
                  display:flex; flex-direction:column; align-items:flex-start; min-height:192px;
                  color:var(--text); text-decoration:none;
                  box-shadow:0 2px 10px rgba(25,55,37,.03);
                  transition:transform .15s, border-color .15s, box-shadow .15s; }
-    .quickcard:hover { transform:translateY(-2px); border-color:#91bea0;
+    .dash-shell .quickcard:hover { transform:translateY(-2px); border-color:#91bea0;
                        box-shadow:0 12px 32px rgba(21,64,39,.1); text-decoration:none; color:var(--text); }
-    .quickcard:focus-visible { outline:3px solid var(--primary); outline-offset:3px; }
-    .quickcard.primary { background:var(--primary-dk); border-color:var(--primary-dk); color:#fff; }
-    .quickcard.primary:hover { color:#fff; }
-    .quickcard.primary .q-desc { color:#cce0d3; }
-    .quickcard.primary .q-arrow { color:#fff; }
-    .q-iconbox { height:39px; width:39px; border-radius:11px; background:#e7f3eb;
+    .dash-shell .quickcard:focus-visible { outline:3px solid var(--primary); outline-offset:3px; }
+    .dash-shell .quickcard.primary { background:var(--primary-dk); border-color:var(--primary-dk); color:#fff; }
+    .dash-shell .quickcard.primary:hover { color:#fff; }
+    .dash-shell .quickcard.primary .q-desc { color:#cce0d3; }
+    .dash-shell .quickcard.primary .q-arrow { color:#fff; }
+    .dash-shell .q-iconbox { height:39px; width:39px; border-radius:11px; background:#e7f3eb;
                  color:var(--primary); display:grid; place-items:center; margin-bottom:1.35rem; }
-    .quickcard.primary .q-iconbox { background:#2c7550; color:#fff; }
-    .q-iconbox svg { width:20px; height:20px; fill:none; stroke:currentColor;
+    .dash-shell .quickcard.primary .q-iconbox { background:#2c7550; color:#fff; }
+    .dash-shell .q-iconbox svg { width:20px; height:20px; fill:none; stroke:currentColor;
                      stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
-    .quickcard h3 { font-size:.94rem; font-weight:700; letter-spacing:-.01em; margin:0 0 .5rem; }
-    .q-desc { font-size:.76rem; line-height:1.6; color:var(--gray-600); margin:0; flex:1; }
-    .q-foot { margin-top:1rem; width:100%; display:flex; align-items:center;
+    .dash-shell .quickcard h3 { font-size:.94rem; font-weight:700; letter-spacing:-.01em; margin:0 0 .5rem; }
+    .dash-shell .q-desc { font-size:.76rem; line-height:1.6; color:var(--gray-600); margin:0; flex:1; }
+    .dash-shell .q-foot { margin-top:1rem; width:100%; display:flex; align-items:center;
               justify-content:space-between; font-size:.75rem; font-weight:750; }
-    .q-arrow { font-size:1.2rem; color:var(--primary); line-height:1; }
-    .q-badge { font-size:.7rem; font-weight:700; background:rgba(255,255,255,.22);
+    .dash-shell .q-arrow { font-size:1.2rem; color:var(--primary); line-height:1; }
+    .dash-shell .q-badge { font-size:.7rem; font-weight:700; background:rgba(255,255,255,.22);
                border-radius:100px; padding:.12rem .5rem; }
-    .quickcard:not(.primary) .q-badge { background:var(--gray-100); color:var(--gray-600); }
+    .dash-shell .quickcard:not(.primary) .q-badge { background:var(--gray-100); color:var(--gray-600); }
 
     /* ── Grouped panels: one outer border, rows inside it ─────────────── */
-    .dash-panel { border:1px solid #dbe7df; background:#fff; border-radius:14px;
+    .dash-shell .dash-panel { border:1px solid #dbe7df; background:#fff; border-radius:14px;
                   box-shadow:0 2px 10px rgba(25,55,37,.03); overflow:hidden; margin-bottom:.9rem; }
-    .dash-panelhead { display:flex; align-items:center; gap:.8rem; padding:1.1rem 1.3rem; }
-    .dash-panelhead .heading-icon { width:36px; height:36px; border-radius:9px; background:#eef6ef;
+    .dash-shell .dash-panelhead { display:flex; align-items:center; gap:.8rem; padding:1.1rem 1.3rem; }
+    .dash-shell .dash-panelhead .heading-icon { width:36px; height:36px; border-radius:9px; background:#eef6ef;
                                     display:grid; place-items:center; color:var(--primary); flex-shrink:0; }
-    .dash-panelhead .heading-icon svg { width:19px; height:19px; fill:none; stroke:currentColor;
+    .dash-shell .dash-panelhead .heading-icon svg { width:19px; height:19px; fill:none; stroke:currentColor;
                                         stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
-    .dash-panelhead h3 { font-size:.87rem; font-weight:700; margin:0 0 .22rem; color:var(--gray-800); }
-    .dash-panelhead p  { font-size:.75rem; color:var(--gray-600); margin:0; }
-    .dash-linkgrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr));
+    .dash-shell .dash-panelhead h3 { font-size:.87rem; font-weight:700; margin:0 0 .22rem; color:var(--gray-800); }
+    .dash-shell .dash-panelhead p { font-size:.75rem; color:var(--gray-600); margin:0; }
+    .dash-shell .dash-linkgrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr));
                      gap:0 .9rem; padding:0 1.3rem .95rem; }
-    .tool-link { min-height:48px; display:flex; align-items:center; gap:.65rem;
+    .dash-shell .tool-link { min-height:48px; display:flex; align-items:center; gap:.65rem;
                  padding:.6rem .75rem; border-radius:8px; color:#2d493a;
                  font-size:.82rem; font-weight:600; text-decoration:none; }
-    .tool-link:hover { background:#f0f7f2; text-decoration:none; color:#2d493a; }
-    .tool-link:focus-visible { outline:3px solid var(--primary); outline-offset:-2px; }
-    .tool-link > svg { width:17px; height:17px; color:#2c8760; flex-shrink:0;
+    .dash-shell .tool-link:hover { background:#f0f7f2; text-decoration:none; color:#2d493a; }
+    .dash-shell .tool-link:focus-visible { outline:3px solid var(--primary); outline-offset:-2px; }
+    .dash-shell .tool-link > svg { width:17px; height:17px; color:#2c8760; flex-shrink:0;
                        fill:none; stroke:currentColor; stroke-width:2;
                        stroke-linecap:round; stroke-linejoin:round; }
-    .tool-link .end { margin-left:auto; color:#abc3b1; font-size:1.05rem; line-height:1; }
-    .lock-badge { margin-left:auto; font-size:.7rem; font-weight:700; color:var(--gray-600);
+    .dash-shell .tool-link .end { margin-left:auto; color:#abc3b1; font-size:1.05rem; line-height:1; }
+    .dash-shell .lock-badge { margin-left:auto; font-size:.7rem; font-weight:700; color:var(--gray-600);
                   background:var(--gray-100); padding:.15rem .5rem; border-radius:100px;
                   white-space:nowrap; }
-    .lock-badge + .end { margin-left:.4rem; }
+    .dash-shell .lock-badge + .end { margin-left:.4rem; }
 
-    .dash-standing { font-size:.8rem; color:var(--gray-600); margin:0; padding:0 1.3rem .9rem; line-height:1.6; }
-    .dash-empty { display:none; text-align:center; padding:2.4rem; color:var(--gray-600); font-size:.88rem; }
-    .dash-empty strong { display:block; color:var(--text); margin-bottom:.4rem; }
+    .dash-shell .dash-standing { font-size:.8rem; color:var(--gray-600); margin:0; padding:0 1.3rem .9rem; line-height:1.6; }
+    .dash-shell .dash-empty { display:none; text-align:center; padding:2.4rem; color:var(--gray-600); font-size:.88rem; }
+    .dash-shell .dash-empty strong { display:block; color:var(--text); margin-bottom:.4rem; }
 
     @media (max-width:860px) {
-      .dash-quick { grid-template-columns:1fr; gap:.65rem; }
+      .dash-shell .dash-quick { grid-template-columns:1fr; gap:.65rem; }
       /* Compact rows on a phone: icon, text, arrow — not three tall cards. */
-      .quickcard { min-height:0; padding:1.05rem; display:grid;
+      .dash-shell .quickcard { min-height:0; padding:1.05rem; display:grid;
                    grid-template-columns:43px 1fr auto; column-gap:.75rem; align-items:center; }
-      .q-iconbox { margin:0; grid-row:span 3; }
-      .quickcard h3 { grid-column:2; margin:0 0 .25rem; }
-      .q-desc { grid-column:2; font-size:.72rem; }
-      .q-foot { grid-column:3; grid-row:1/span 3; width:auto; margin:0; }
-      .q-foot .q-cta { display:none; }
-      .dash-linkgrid { grid-template-columns:1fr; padding:0 .8rem .8rem; }
-      .dash-panelhead { padding:1rem; }
+      .dash-shell .q-iconbox { margin:0; grid-row:span 3; }
+      .dash-shell .quickcard h3 { grid-column:2; margin:0 0 .25rem; }
+      .dash-shell .q-desc { grid-column:2; font-size:.72rem; }
+      .dash-shell .q-foot { grid-column:3; grid-row:1/span 3; width:auto; margin:0; }
+      .dash-shell .q-foot .q-cta { display:none; }
+      .dash-shell .dash-linkgrid { grid-template-columns:1fr; padding:0 .8rem .8rem; }
+      .dash-shell .dash-panelhead { padding:1rem; }
       .dash-shell { padding-left:1rem; padding-right:1rem; }
     }
     @media (prefers-reduced-motion:reduce) {
-      .quickcard { transition:none; }
-      .quickcard:hover { transform:none; }
+      .dash-shell .quickcard { transition:none; }
+      .dash-shell .quickcard:hover { transform:none; }
     }
   </style>
 </head>
