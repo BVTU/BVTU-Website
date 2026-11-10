@@ -2,9 +2,9 @@
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/prod-db.php';
 require_once __DIR__ . '/lp-db.php';
-// expWouldSelfSign() is used below to ask the same question the mark-paid guard
-// throws on. lp-db.php only requires exp-db.php inside functions, so relying on
-// that would work until whichever call happened to pull it in stopped running.
+// expWouldSelfSign() is used below to ask the same question lpMarkPaid() throws
+// on. lp-db.php only requires exp-db.php inside functions, so relying on that
+// would work until whichever call happened to pull it in stopped running.
 require_once __DIR__ . '/exp-db.php';
 require_once __DIR__ . '/lp-share.php';
 require_once __DIR__ . '/lp-checks.php';
@@ -493,9 +493,14 @@ arsort($blSummary);
      * that nobody reaches for a voucher and pays it a second time.
      */
     $pay      = lpPayTo($voucher);
+    /* lpPayBlockedClaimant(), which is what lpMarkPaid() throws on. Asking the
+     * SIGNING question here hid the button from the submitter of a vendor
+     * payment — and since 2026-11-06 the submitter is barred from signing
+     * every voucher, which is right for a signature and wrong for sending the
+     * money. The person who must never pay is the one being paid. */
     $mayPay   = $voucher['status'] === 'vp_approved' && lpCanRecordPayment($voucher, $member['email'])
                 && !expWouldSelfSign($member['email'], $pay['email'] ?: null,
-                                     lpSignBlockedClaimant($voucher));
+                                     lpPayBlockedClaimant($voucher));
     /*
      * Who can actually record it, asked rather than assumed.
      *

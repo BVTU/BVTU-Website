@@ -208,11 +208,18 @@ if (execIsAdmin($myEmail) && empty($myExecRoleSlugs)) {
                   $waiting += count(array_filter(
                       lpGetVouchersByStatuses($wanted),
                       function ($v) use ($member) {
-                          // Same two questions the guard asks: barred if you are
-                          // the payee (or the claimant), and otherwise only if
-                          // this voucher's own rule admits you.
-                          if (expWouldSelfSign($member['email'], lpPayTo($v)['email'] ?: null,
-                                               lpSignBlockedClaimant($v))) return false;
+                          /* Same questions the guards ask, and which bar
+                           * applies depends on what is being waited for.
+                           * Signing bars the submitter; paying bars only the
+                           * payee, because sending the money is not a third
+                           * signature. One bar for both hid a voucher from the
+                           * very person it was waiting on to pay it. */
+                          $blocked = $v['status'] === 'vp_approved'
+                              ? lpPayBlockedClaimant($v)
+                              : lpSignBlockedClaimant($v);
+                          if (expWouldSelfSign($member['email'],
+                                               lpPayTo($v)['email'] ?: null,
+                                               $blocked)) return false;
                           if ($v['status'] === 'treasurer_approved') {
                               return lpCanSign2For($v, $member['email']);
                           }
