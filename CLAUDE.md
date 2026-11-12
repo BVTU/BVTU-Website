@@ -12,14 +12,27 @@ habit suggests one, that is superseded by this section.
 1. Build on `test` (see below) and push there — pushing to `test` is deploying
    to staging, so it is still a deploy and still needs the checks in the next
    section.
-2. Tell Cody what is on `test` and that it is ready for Codex.
-3. **Wait.** Do not merge to `main`, even when asked to "merge", until Codex's
-   review has come back and whatever it raises has been dealt with.
-4. Fix what Codex finds, push to `test` again, and say what changed.
+2. **Run the review. Do not wait to be told the result.** Codex is installed
+   locally as `codex` (codex-cli). From the repo root:
 
-If Cody asks for a merge before that review has happened, say so and ask him to
-confirm rather than merging on the assumption he has forgotten — he may have
-reviewed it outside this session, in which case his go-ahead is the answer.
+   ```
+   codex review --base main --title "<the commit subject>"
+   ```
+
+   `--base` and a prompt argument are mutually exclusive — pass one or the
+   other. `--commit <sha>` and `--uncommitted` are the other scopes. It runs
+   non-interactively and prints each finding with a priority and a `file:line`.
+3. Fix what it finds, push to `test`, and **run it again** until it reports no
+   actionable findings. Each pass reads the whole diff against `main`, so a fix
+   can expose something the previous pass could not reach.
+4. Tell Cody the review is clean, and what it caught on the way.
+
+**Cody is not the middleman.** 2026-11-12, after I pushed and reported that I
+was waiting on Codex: *"you need to connect with codex and let me know."*
+"Codex reviews the code" has never meant Cody goes and fetches the review.
+
+Do not merge to `main`, even when asked to "merge", until that review is clean.
+If Cody asks for a merge before it has run, run it then — it takes a minute.
 
 **What I still do myself, every time, unchanged:**
 
