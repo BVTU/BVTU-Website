@@ -46,14 +46,15 @@
                   + '<span>' + word.replace(/</g, '&lt;') + '</span>';
   }
 
-  function clearBusy(form) {
+  function clearForm(form) {
     form.classList.remove('is-pending');
     form.removeAttribute('aria-busy');
     delete form.dataset.pending;
-    [].slice.call(form.querySelectorAll('.is-busy')).forEach(function (btn) {
-      if (btn.dataset.pendingLabel !== undefined) btn.innerHTML = btn.dataset.pendingLabel;
-      btn.classList.remove('is-busy');
-    });
+  }
+
+  function clearButton(btn) {
+    if (btn.dataset.pendingLabel !== undefined) btn.innerHTML = btn.dataset.pendingLabel;
+    btn.classList.remove('is-busy');
   }
 
   document.addEventListener('submit', function (e) {
@@ -90,6 +91,12 @@
    * pending timer, which checks it before marking anything busy. */
   window.addEventListener('pageshow', function (e) {
     if (!e.persisted) return;
-    [].slice.call(document.querySelectorAll('form[data-pending]')).forEach(clearBusy);
+    // Forms and buttons are swept separately on purpose. A submit button can
+    // sit outside the form it belongs to, tied to it by form="id" — a form
+    // cannot be nested in another, so contacts-verify.php reaches its import
+    // form that way. Such a button is not a descendant of the form, so asking
+    // the form for its busy buttons left it spinning "Linking…" for good.
+    [].slice.call(document.querySelectorAll('form[data-pending]')).forEach(clearForm);
+    [].slice.call(document.querySelectorAll('.is-busy')).forEach(clearButton);
   });
 })();
