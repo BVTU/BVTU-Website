@@ -1176,5 +1176,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
       });
     });
   </script>
+<script src="js/pending.js?v=<?= @filemtime(__DIR__ . '/js/pending.js') ?>"></script>
 </body>
 </html>

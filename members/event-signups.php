@@ -473,5 +473,6 @@ $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
     </div>
 
   </div>
+<script src="../js/pending.js?v=<?= @filemtime(__DIR__ . '/../js/pending.js') ?>"></script>
 </body>
 </html>

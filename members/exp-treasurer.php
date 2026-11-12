@@ -310,5 +310,6 @@ function togglePaidForm(id) {
     f.classList.toggle('open');
 }
 </script>
+<script src="../js/pending.js?v=<?= @filemtime(__DIR__ . '/../js/pending.js') ?>"></script>
 </body>
 </html>

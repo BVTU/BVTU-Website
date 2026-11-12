@@ -413,7 +413,7 @@ if ($apply && !$err) {
             <div style="font-size:.8rem;color:var(--gray-500);margin-top:.15rem;">
               <?= $sug['exact'] ? 'Already on file as' : 'Possibly' ?>
               <strong><?= htmlspecialchars($sug['name']) ?></strong>
-              <button type="submit" form="mclink" name="mc_link"
+              <button type="submit" form="mclink" name="mc_link" data-busy="Linking…"
                       value="<?= (int)$sug['id'] ?>|<?= htmlspecialchars($m['email']) ?>"
                       style="background:none;border:0;padding:0 0 0 .3rem;font:inherit;
                              font-size:.8rem;color:var(--primary);text-decoration:underline;
@@ -479,5 +479,6 @@ if ($apply && !$err) {
   <?php endif; ?>
 
 </div>
+<script src="../js/pending.js?v=<?= @filemtime(__DIR__ . '/../js/pending.js') ?>"></script>
 </body>
 </html>

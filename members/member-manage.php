@@ -973,5 +973,6 @@ function switchTab(name) {
     history.replaceState(null, '', '?tab=' + name);
 }
 </script>
+<script src="../js/pending.js?v=<?= @filemtime(__DIR__ . '/../js/pending.js') ?>"></script>
 </body>
 </html>

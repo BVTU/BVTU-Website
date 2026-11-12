@@ -910,7 +910,9 @@ function stateBadge(string $s): string {
       <button class="act-btn">Send registration link</button>
     </form>
 
-    <form method="POST" action="contacts-export.php" style="display:inline;"
+    <?php // data-nopending: this one answers with a file download, so the page
+          // never navigates and a busy state would never clear. ?>
+    <form method="POST" action="contacts-export.php" style="display:inline;" data-nopending
           onsubmit="return bulkGo(this,'export');">
       <?= csrfField() ?>
       <input type="hidden" name="format" value="csv">
@@ -1256,5 +1258,6 @@ function stateBadge(string $s): string {
   </p>
 
 </div>
+<script src="../js/pending.js?v=<?= @filemtime(__DIR__ . '/../js/pending.js') ?>"></script>
 </body>
 </html>

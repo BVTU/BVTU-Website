@@ -335,5 +335,6 @@ function when($v, string $fmt = 'M j, Y'): string {
   </div>
 
 </div>
+<script src="../js/pending.js?v=<?= @filemtime(__DIR__ . '/../js/pending.js') ?>"></script>
 </body>
 </html>

@@ -244,5 +244,6 @@ function tplSample(string $key): array {
   <?php endforeach; ?>
 
 </div>
+<script src="../js/pending.js?v=<?= @filemtime(__DIR__ . '/../js/pending.js') ?>"></script>
 </body>
 </html>

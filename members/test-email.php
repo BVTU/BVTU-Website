@@ -143,5 +143,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $smtpConfigured) {
   <?php endif; ?>
 
 </div>
+<script src="../js/pending.js?v=<?= @filemtime(__DIR__ . '/../js/pending.js') ?>"></script>
 </body>
 </html>

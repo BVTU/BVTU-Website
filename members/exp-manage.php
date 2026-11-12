@@ -160,5 +160,6 @@ function togglePw() {
     input.type = input.type === 'password' ? 'text' : 'password';
 }
 </script>
+<script src="../js/pending.js?v=<?= @filemtime(__DIR__ . '/../js/pending.js') ?>"></script>
 </body>
 </html>

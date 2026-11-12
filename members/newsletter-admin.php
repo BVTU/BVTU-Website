@@ -160,9 +160,10 @@ $lastSync    = nlGetLastSync();
             <strong>Sync new</strong> pulls only campaigns not yet in the archive — fast, safe to run any time.<br>
             <strong>Force re-sync all</strong> re-fetches the HTML content of every campaign — use this if a newsletter looks broken or was edited in Mailchimp after sending.
           </p>
-          <form method="post">
+          <form method="post" data-busy="Syncing with Mailchimp…">
             <div class="sync-actions">
-              <button type="submit" name="action" value="sync" class="btn btn-primary">
+              <button type="submit" name="action" value="sync" class="btn btn-primary"
+                      data-busy="Syncing…">
                 ↓ Sync new newsletters
               </button>
               <button type="submit" name="action" value="sync_force" class="btn btn-outline"
@@ -261,5 +262,6 @@ $lastSync    = nlGetLastSync();
 
   <script src="../js/site.js?v=<?= @filemtime(__DIR__ . '/../js/site.js') ?>"></script>
   <script src="../js/search.js?v=<?= @filemtime(__DIR__ . '/../js/search.js') ?>"></script>
+<script src="../js/pending.js?v=<?= @filemtime(__DIR__ . '/../js/pending.js') ?>"></script>
 </body>
 </html>

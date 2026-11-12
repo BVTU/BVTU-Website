@@ -306,5 +306,6 @@ document.getElementById('overrideModal').addEventListener('click', function(e) {
     if (e.target === this) closeOverride();
 });
 </script>
+<script src="../js/pending.js?v=<?= @filemtime(__DIR__ . '/../js/pending.js') ?>"></script>
 </body>
 </html>

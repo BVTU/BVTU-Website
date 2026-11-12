@@ -942,5 +942,6 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbo
 </script>
 <?php endif; ?>
 
+<script src="../js/pending.js?v=<?= @filemtime(__DIR__ . '/../js/pending.js') ?>"></script>
 </body>
 </html>

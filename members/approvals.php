@@ -313,7 +313,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
           <input type="hidden" name="action" value="signer1_approve">
           <input type="hidden" name="batch_id" value="<?= (int)$b['id'] ?>">
           <input type="hidden" name="redirect" value="approvals.php">
-          <button type="submit" class="btn-go">&#x2713; Approve</button>
+          <button type="submit" data-busy="Approving…" class="btn-go">&#x2713; Approve</button>
         </form>
       <?php elseif ($b['status'] === 'signer1_approved' && $canSign2): ?>
         <form method="POST" action="exp-claim-action.php" style="display:inline;">
@@ -321,7 +321,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
           <input type="hidden" name="action" value="signer2_approve">
           <input type="hidden" name="batch_id" value="<?= (int)$b['id'] ?>">
           <input type="hidden" name="redirect" value="approvals.php">
-          <button type="submit" class="btn-go">&#x2713; Sign</button>
+          <button type="submit" data-busy="Signing…" class="btn-go">&#x2713; Sign</button>
         </form>
       <?php endif; ?>
       <span class="spacer"></span>
@@ -339,7 +339,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
         <input type="date" name="payment_date" value="<?= date('Y-m-d') ?>">
         <input type="text" name="payment_ref" placeholder="Reference">
         <textarea name="note" placeholder="Optional note"></textarea>
-        <button type="submit" class="btn-pay">Mark paid</button>
+        <button type="submit" data-busy="Marking paid…" class="btn-pay">Mark paid</button>
       </form>
     </details>
     <?php endif; ?>
@@ -353,7 +353,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
         <input type="hidden" name="batch_id" value="<?= (int)$b['id'] ?>">
         <input type="hidden" name="redirect" value="approvals.php">
         <textarea name="note" placeholder="Reason (required)" required></textarea>
-        <button type="submit" class="btn-go" style="background:#dc2626;">Reject</button>
+        <button type="submit" data-busy="Rejecting…" class="btn-go" style="background:#dc2626;">Reject</button>
       </form>
     </details>
     <?php endif; ?>
@@ -438,7 +438,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
           <input type="hidden" name="action" value="treasurer_approve">
           <input type="hidden" name="voucher_id" value="<?= (int)$v['id'] ?>">
           <input type="hidden" name="redirect" value="approvals.php">
-          <button type="submit" class="btn-go">&#x2713; Approve</button>
+          <button type="submit" data-busy="Approving…" class="btn-go">&#x2713; Approve</button>
         </form>
       <?php elseif ($v['status'] === 'treasurer_approved' && lpCanSign2For($v, $email)): ?>
         <form method="POST" action="lp-action.php" style="display:inline;">
@@ -446,7 +446,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
           <input type="hidden" name="action" value="vp_approve">
           <input type="hidden" name="voucher_id" value="<?= (int)$v['id'] ?>">
           <input type="hidden" name="redirect" value="approvals.php">
-          <button type="submit" class="btn-go">&#x2713; Sign</button>
+          <button type="submit" data-busy="Signing…" class="btn-go">&#x2713; Sign</button>
         </form>
       <?php endif; ?>
       <span class="spacer"></span>
@@ -466,7 +466,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
         <input type="date" name="payment_date" value="<?= date('Y-m-d') ?>">
         <input type="text" name="payment_ref" placeholder="Reference">
         <textarea name="note" placeholder="Optional note"></textarea>
-        <button type="submit" class="btn-pay">Mark paid</button>
+        <button type="submit" data-busy="Marking paid…" class="btn-pay">Mark paid</button>
       </form>
     </details>
     <?php endif; ?>
@@ -480,7 +480,7 @@ function _signedLine(array $r, string $role1, string $role2): string {
         <input type="hidden" name="voucher_id" value="<?= (int)$v['id'] ?>">
         <input type="hidden" name="redirect" value="approvals.php">
         <textarea name="note" placeholder="Reason (required)" required></textarea>
-        <button type="submit" class="btn-go" style="background:#dc2626;">Reject</button>
+        <button type="submit" data-busy="Rejecting…" class="btn-go" style="background:#dc2626;">Reject</button>
       </form>
     </details>
     <?php endif; ?>
@@ -520,5 +520,6 @@ function _signedLine(array $r, string $role1, string $role2): string {
   <p class="ledger-note">Payment ledger paused while these tools are reorganised.</p>
 
 </div>
+<script src="../js/pending.js?v=<?= @filemtime(__DIR__ . '/../js/pending.js') ?>"></script>
 </body>
 </html>

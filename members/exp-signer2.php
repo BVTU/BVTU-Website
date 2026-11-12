@@ -213,5 +213,6 @@ $catLabels = [
 function showNote2Approve(id) { document.getElementById('s2approve-note-' + id).style.display = 'block'; }
 function showNote2Reject(id)  { document.getElementById('s2reject-note-'  + id).style.display = 'block'; }
 </script>
+<script src="../js/pending.js?v=<?= @filemtime(__DIR__ . '/../js/pending.js') ?>"></script>
 </body>
 </html>

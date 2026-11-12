@@ -1266,3 +1266,36 @@ body.has-vote-bar .search-fab { bottom: calc(1.75rem + var(--vote-bar-h, 3rem));
               display: flex; gap: .2rem 1.1rem; flex-wrap: wrap; align-items: baseline; }
 .browse-row a { color: var(--gray-700); text-decoration: none; border-bottom: 1px solid var(--border); }
 .browse-row a:hover { color: var(--primary); border-bottom-color: var(--primary); text-decoration: none; }
+
+/* ---- Busy buttons (js/pending.js) -------------------------------------
+   A button that has been pressed and is waiting on the server. The button
+   is deliberately not disabled — see the note at the top of js/pending.js;
+   several forms carry their action in the button's own name and value, and
+   a disabled button is left out of the POST. */
+.is-busy {
+  display: inline-flex !important;
+  align-items: center;
+  gap: .45rem;
+  cursor: progress;
+}
+.pending-spin {
+  flex: none;
+  width: .85em;
+  height: .85em;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  opacity: .8;
+  animation: pendingSpin .7s linear infinite;
+}
+@keyframes pendingSpin { to { transform: rotate(360deg); } }
+
+/* Other submit buttons on a form that is already working: still clickable
+   so nothing traps the keyboard, but visibly not the thing to press. */
+form.is-pending button[type="submit"]:not(.is-busy),
+form.is-pending input[type="submit"]:not(.is-busy),
+form.is-pending button:not([type]):not(.is-busy) { opacity: .5; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pending-spin { animation: none; border-top-color: currentColor; opacity: .45; }
+}
