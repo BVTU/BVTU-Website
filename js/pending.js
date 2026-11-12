@@ -81,9 +81,15 @@
 
   /* Coming back with the back button hands you the page exactly as it was —
    * including a button still saying "Sending…" for a send that finished long
-   * ago, on a form that now refuses to submit. */
+   * ago, on a form that now refuses to submit.
+   *
+   * This looks for the flag, not the spinner. A post that got away inside the
+   * DELAY above is flagged but was never marked up, and matching on the class
+   * would walk straight past it and leave that form refusing every submit for
+   * as long as the page stayed open. Clearing the flag also defuses the
+   * pending timer, which checks it before marking anything busy. */
   window.addEventListener('pageshow', function (e) {
     if (!e.persisted) return;
-    [].slice.call(document.querySelectorAll('form.is-pending')).forEach(clearBusy);
+    [].slice.call(document.querySelectorAll('form[data-pending]')).forEach(clearBusy);
   });
 })();
