@@ -1337,6 +1337,10 @@ $totalDaysApproved = $personDays['approved'];
       .cg-caret { flex:0 0 auto; color:var(--gray-500); transition:transform .12s ease; }
       .cg-row-btn[aria-expanded="true"] .cg-caret { transform:rotate(90deg); }
       .cg-rowdetail > td { border-top:0; }
+      .cg-sort { background:none; border:0; padding:0; margin:0; font:inherit; color:inherit;
+                 text-transform:inherit; letter-spacing:inherit; cursor:pointer; }
+      .cg-sort:hover { color:var(--gray-700); }
+      .cg-sort:focus-visible { outline:2px solid var(--primary); outline-offset:2px; border-radius:4px; }
 
       /* A qualifier on a summary card: enough to reconcile the number, with
          the sentence behind the hover rather than printed under it. */
@@ -1379,6 +1383,32 @@ $totalDaysApproved = $personDays['approved'];
         }
         btn.setAttribute('data-open', opening ? '1' : '0');
         btn.textContent = opening ? 'collapse all' : 'expand all';
+      }
+
+      /* Teacher sorts A–Z, then Z–A on a second click. Used restores the
+         server's order (most days first), which is the order data-pos holds. */
+      function cgSort(by) {
+        var box = document.getElementById('cg-days');
+        if (!box) return;
+        var table = box.querySelector('table');
+        var heads = table.querySelectorAll('.cg-sort');
+        var cur = table.getAttribute('data-sort') || 'used';
+        var dir = (by === 'name' && cur === 'name-asc') ? 'desc' : 'asc';
+        var bodies = Array.prototype.slice.call(table.querySelectorAll('tbody.cg-person'));
+        bodies.sort(function (a, b) {
+          if (by === 'used') return a.getAttribute('data-pos') - b.getAttribute('data-pos');
+          var c = a.getAttribute('data-name').localeCompare(b.getAttribute('data-name'), undefined, { sensitivity: 'base' });
+          return dir === 'desc' ? -c : c;
+        });
+        for (var i = 0; i < bodies.length; i++) table.appendChild(bodies[i]);
+        table.setAttribute('data-sort', by === 'name' ? 'name-' + dir : 'used');
+        for (var j = 0; j < heads.length; j++) {
+          var h = heads[j], on = h.getAttribute('data-sort') === by;
+          var arrow = !on ? '' : (by === 'used' ? ' ↓' : (dir === 'asc' ? ' ↑' : ' ↓'));
+          h.querySelector('.cg-sort-ind').textContent = arrow;
+          h.parentNode.setAttribute('aria-sort',
+            !on ? 'none' : (by === 'used' || dir === 'desc' ? 'descending' : 'ascending'));
+        }
       }
 
     </script>
@@ -1552,15 +1582,21 @@ $totalDaysApproved = $personDays['approved'];
           <thead>
             <tr style="text-align:left;color:var(--gray-500);font-size:.78rem;
                        text-transform:uppercase;letter-spacing:.04em;">
-              <th style="padding:.4rem .5rem;">Teacher</th>
+              <th style="padding:.4rem .5rem;" aria-sort="none">
+                <button type="button" class="cg-sort" data-sort="name" onclick="cgSort('name')">Teacher<span class="cg-sort-ind"></span></button>
+              </th>
               <th style="padding:.4rem .5rem;">Approved</th>
               <th style="padding:.4rem .5rem;">Pending</th>
-              <th style="padding:.4rem .5rem;">Used</th>
+              <th style="padding:.4rem .5rem;" aria-sort="descending">
+                <button type="button" class="cg-sort" data-sort="used" onclick="cgSort('used')">Used<span class="cg-sort-ind"> ↓</span></button>
+              </th>
               <th style="padding:.4rem .5rem;">Left</th>
             </tr>
           </thead>
-          <tbody>
-            <?php foreach ($ledger as $lp): ?>
+          <?php // One tbody per teacher, so a row and its detail move together when sorted. ?>
+          <?php $cgPos = 0; foreach ($ledger as $lp): ?>
+          <tbody class="cg-person" data-name="<?= htmlspecialchars((string)$lp['name']) ?>"
+                 data-pos="<?= $cgPos++ ?>">
               <?php
                 /*
                  * One line per teacher, and one control that opens that teacher.
@@ -1714,8 +1750,8 @@ $totalDaysApproved = $personDays['approved'];
                   <?php endif; ?>
                 </td>
               </tr>
-            <?php endforeach; ?>
           </tbody>
+          <?php endforeach; ?>
         </table>
         <?php
           /*
