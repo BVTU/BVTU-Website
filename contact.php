@@ -13,6 +13,10 @@ $configPath = __DIR__ . '/members/config.php';
 if (file_exists($configPath)) require_once $configPath;
 $contactEmail = defined('CONTACT_EMAIL') ? CONTACT_EMAIL : 'president@bvtu.ca';
 
+// Does nothing until the Turnstile keys are in config.php — see inc/turnstile.php.
+require_once __DIR__ . '/inc/turnstile.php';
+$tsNote = '';   // set when a message is let through unverified
+
 $success = false;
 $errors  = [];
 $fields  = ['name' => '', 'email' => '', 'subject' => '', 'message' => ''];
@@ -65,6 +69,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         goto render;
     }
 
+    // Turnstile, after the free local checks and before anything is sent.
+    switch (turnstileCheck($_POST['cf-turnstile-response'] ?? '', turnstileClientIp())) {
+        case 'failed':
+            // Said plainly, because a person with scripts blocked lands here
+            // too and needs to know why the button did nothing.
+            $errors[] = 'The spam check did not pass. Reload the page and try again — '
+                      . 'if it keeps happening, email the office directly.';
+            break;
+        case 'unverified':
+            // Cloudflare unreachable. The message goes; the email says so.
+            $tsNote = "\n[Spam check could not be run — Cloudflare was unreachable.]";
+            break;
+    }
+
     // Validate
     if (!$fields['name'])                          $errors[] = 'Please enter your name.';
     if (!filter_var($fields['email'], FILTER_VALIDATE_EMAIL)) $errors[] = 'Please enter a valid email address.';
@@ -81,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $headers .= "Reply-To: {$email}\r\n";
         $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
 
-        $body = "Name: {$name}\nEmail: {$email}\n\nMessage:\n{$message}\n\n---\nSent via bvtu.ca contact form";
+        $body = "Name: {$name}\nEmail: {$email}\n\nMessage:\n{$message}\n\n---\nSent via bvtu.ca contact form" . $tsNote;
 
         // Diverted on the test site like everything else; sent as written on
         // live. Without this the staging copy mailed the office for real.
@@ -264,8 +282,15 @@ render:
                           required><?= htmlspecialchars($fields['message']) ?></textarea>
               </div>
 
+              <?php // Nothing renders here until the keys are set. ?>
+              <?php if (turnstileConfigured()): ?>
+              <div class="form-group" style="margin-bottom:1rem;">
+                <?= turnstileWidget() ?>
+              </div>
+              <?php endif; ?>
+
               <div>
-                <button type="submit" class="btn btn-primary">Send Message</button>
+                <button type="submit" class="btn btn-primary" data-busy="Sending…">Send Message</button>
               </div>
             </form>
 
@@ -314,6 +339,7 @@ render:
 
   <?php require_once __DIR__ . '/inc/footer.php'; bvtuFooter(); ?>
 
+  <?= turnstileScript() ?>
   <script src="js/site.js?v=<?= @filemtime(__DIR__ . '/js/site.js') ?>"></script>
   <script src="js/search.js"></script>
 <script src="js/pending.js?v=<?= @filemtime(__DIR__ . '/js/pending.js') ?>"></script>

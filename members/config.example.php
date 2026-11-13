@@ -77,3 +77,18 @@ define('SESSION_SECRET', 'change-this-to-a-long-random-string-xyz');
 // define('MC_API_KEY',        'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-us21');
 // define('MC_LIST_ID',        'xxxxxxxxxx');
 // define('MC_WEBHOOK_SECRET', 'a-long-random-string');
+
+// ── Turnstile — the contact form's spam check (optional) ──────────────────────
+// Cloudflare's alternative to a CAPTCHA. Most people never see a puzzle: it
+// scores the browser in the background and passes them straight through.
+//
+// Setup, about two minutes:
+//   1. dash.cloudflare.com → Turnstile → Add site (a free account is enough).
+//   2. Domain: bvtu.ca. Widget mode: Managed.
+//   3. Copy the two keys it gives you into the lines below.
+//
+// With these left commented out the contact form works exactly as it did, on
+// the honeypot and keyword filter alone — so the form is never down waiting for
+// a Cloudflare account. See inc/turnstile.php.
+// define('TURNSTILE_SITE_KEY',   '0x4AAAAAAA...');  // public, appears in the page
+// define('TURNSTILE_SECRET_KEY', '0x4AAAAAAA...');  // secret, never leaves the server
