@@ -2583,6 +2583,9 @@ function cgAddManualGrant(array $d, string $actor): array {
         if ($raw === '') continue;
         $t = strtotime($raw);
         if (!$t || date('Y-m-d', $t) !== $raw) return ['error' => '"' . $raw . '" is not a date.'];
+        if ((int)date('N', $t) > 5) {
+            return ['error' => date('D M j', $t) . ' is a ' . date('l', $t) . ' — release days fall on weekdays.'];
+        }
         if (!in_array($raw, $dates, true)) $dates[] = $raw;
     }
     sort($dates);

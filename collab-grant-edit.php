@@ -82,7 +82,8 @@ if (!$denied && $canEdit && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POS
                        . ' is a ' . date('l', strtotime($d)) . '.';
                 break;
             }
-            if ($d < $today && !in_array($d, $was, true)) {
+            // The LP records grants after the fact; only applicants are held to the future.
+            if (!$isAdmin && $d < $today && !in_array($d, $was, true)) {
                 $error = 'New dates need to be in the future — ' . date('D M j, Y', strtotime($d))
                        . ' has already passed.';
                 break;
@@ -98,10 +99,14 @@ if (!$denied && $canEdit && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POS
         if (!$error && !$dates)      $error = 'Please keep at least one release day.';
         if (!$error && count($dates) > 3) $error = 'The grant covers up to three release days.';
         if (!$error && !$f('name'))  $error = 'Please enter your name.';
-        if (!$error && !$f('school')) $error = 'Please enter your school.';
-        if (!$error && !$f('position')) $error = 'Please enter your current position.';
-        if (!$error && !$f('collaboration_desc')) $error = 'Please describe your collaboration.';
-        if (!$error && !$f('goals')) $error = 'Please describe your goals.';
+        // A grant the LP added by hand has none of these, and correcting its
+        // dates must not mean inventing them.
+        if (!$isAdmin) {
+            if (!$error && !$f('school')) $error = 'Please enter your school.';
+            if (!$error && !$f('position')) $error = 'Please enter your current position.';
+            if (!$error && !$f('collaboration_desc')) $error = 'Please describe your collaboration.';
+            if (!$error && !$f('goals')) $error = 'Please describe your goals.';
+        }
 
         if (!$error) {
             $values = [
