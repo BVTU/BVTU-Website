@@ -2522,3 +2522,110 @@ function cgApplyCap(array $p, int $year): array {
     $p['over'] = $ex === null ? $used > CG_DAY_CAP : false;
     return $p;
 }
+
+/** The school year a date falls in — Sep 1 starts a new one, as cgCurrentYear(). */
+function cgYearOfDate(string $iso): int {
+    $t = strtotime($iso);
+    $y = (int)date('Y', $t);
+    return (int)date('n', $t) >= 9 ? $y : $y - 1;
+}
+
+/**
+ * Record a grant that never went through the form — one arranged by phone or
+ * at a meeting, usually after the fact.
+ *
+ * It goes in already approved and filed under the school year its dates fall
+ * in, not the year it is typed, so a grant from last spring counts against
+ * last year's three days. Nobody is emailed: the approval and the
+ * collaborator's notice are for grants still to happen, and this one has been
+ * arranged already. The collaborator's notice is marked waived rather than
+ * sent, so the record never claims an email went out.
+ *
+ * $d: applicant_name, applicant_email (optional when the name is one contact),
+ * collaborator_name, collaborator_email, dates (Y-m-d list), notes.
+ * Returns ['id' => int, 'year' => int] or ['error' => string].
+ */
+function cgAddManualGrant(array $d, string $actor): array {
+    cgEnsureTable();
+    cgEnsureEditSupport();
+
+    // A contact's address wins over one typed beside it only when nothing was
+    // typed: a typed address is someone saying which teacher they mean.
+    $who = function (string $name, string $email): array {
+        $name  = trim(preg_replace('/\s+/', ' ', $name) ?? '');
+        $email = strtolower(trim($email));
+        if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return ['error' => '"' . $email . '" is not an email address.'];
+        }
+        if ($email === '' && $name !== '') {
+            $hit = cgContactsByName()[cgNameKey($name)] ?? null;
+            if ($hit && empty($hit['ambiguous'])) $email = strtolower((string)$hit['email']);
+        }
+        return ['name' => $name, 'email' => $email];
+    };
+
+    $app = $who((string)($d['applicant_name'] ?? ''), (string)($d['applicant_email'] ?? ''));
+    if (isset($app['error'])) return $app;
+    if ($app['name'] === '') return ['error' => 'Who was the grant for?'];
+    if ($app['email'] === '') {
+        return ['error' => 'No single contact is called ' . $app['name'] . ' — add their email.'];
+    }
+
+    $col = $who((string)($d['collaborator_name'] ?? ''), (string)($d['collaborator_email'] ?? ''));
+    if (isset($col['error'])) return $col;
+    if ($col['name'] === '' && $col['email'] !== '') {
+        return ['error' => 'Give the collaborator a name as well as an email.'];
+    }
+
+    $dates = [];
+    foreach ((array)($d['dates'] ?? []) as $raw) {
+        $raw = trim((string)$raw);
+        if ($raw === '') continue;
+        $t = strtotime($raw);
+        if (!$t || date('Y-m-d', $t) !== $raw) return ['error' => '"' . $raw . '" is not a date.'];
+        if (!in_array($raw, $dates, true)) $dates[] = $raw;
+    }
+    sort($dates);
+    if (!$dates) return ['error' => 'Add the day or days they were released.'];
+    if (count($dates) > CG_DAY_CAP) {
+        return ['error' => 'One grant carries at most ' . CG_DAY_CAP . ' days. Add the rest as another grant.'];
+    }
+    $year = cgYearOfDate($dates[0]);
+    if (cgYearOfDate(end($dates)) !== $year) {
+        return ['error' => 'Those dates span two school years. Add each year as its own grant.'];
+    }
+
+    $note = trim('Added by hand by ' . $actor . ' on ' . date('M j, Y') . '.'
+          . "\n" . trim((string)($d['notes'] ?? '')));
+    $days = count($dates);
+    $hasCol = $col['name'] !== '';
+
+    $cols = ['applicant_name', 'applicant_email', 'school', 'position',
+             'has_collaborator', 'collaborator_name', 'needs_partner',
+             'proposed_dates', 'days_requested', 'days_approved', 'status',
+             'admin_notes', 'school_year', 'reviewed_at', 'reviewed_by'];
+    $vals = [$app['name'], $app['email'], '', '',
+             $hasCol ? 1 : 0, $hasCol ? $col['name'] : null, 0,
+             json_encode($dates), $days, $days, 'approved',
+             $note, $year, date('Y-m-d H:i:s'), $actor];
+    if ($hasCol && cgHasCollabEmail()) {
+        $cols[] = 'collaborator_email'; $vals[] = $col['email'];
+    }
+    if ($hasCol && cgHasCollabColumn('collab_waived_at') && cgHasCollabColumn('collab_waived_by')) {
+        $cols[] = 'collab_waived_at'; $vals[] = date('Y-m-d H:i:s');
+        $cols[] = 'collab_waived_by'; $vals[] = $actor;
+    }
+
+    try {
+        $db = getDB();
+        $db->prepare("INSERT INTO collab_grant_applications (" . implode(', ', $cols) . ")
+                      VALUES (" . implode(', ', array_fill(0, count($cols), '?')) . ")")
+           ->execute($vals);
+        $id = (int)$db->lastInsertId();
+    } catch (\Throwable $e) {
+        error_log('cgAddManualGrant: ' . $e->getMessage());
+        return ['error' => 'Could not save it. The problem has been logged.'];
+    }
+    cgCachesReset();
+    return ['id' => $id, 'year' => $year];
+}

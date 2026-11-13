@@ -594,6 +594,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'fulfi
     $apps   = cgGetApplications($year);
 }
 
+// ── A grant that never came through the form ──────────────────────────────
+// Filed under the year of its dates and approved as it goes in, so a past
+// grant counts against that year's days. Sent to that year's list after, so
+// it can be seen where it landed.
+$cgAddForm = null;   // what was typed, kept when it is refused
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add-grant') {
+    csrfCheck();
+    $cgAddForm = [
+        'applicant_name'     => (string)($_POST['applicant_name'] ?? ''),
+        'applicant_email'    => (string)($_POST['applicant_email'] ?? ''),
+        'collaborator_name'  => (string)($_POST['collaborator_name'] ?? ''),
+        'collaborator_email' => (string)($_POST['collaborator_email'] ?? ''),
+        'dates'              => array_values((array)($_POST['dates'] ?? [])),
+        'notes'              => (string)($_POST['notes'] ?? ''),
+    ];
+    $res = cgAddManualGrant($cgAddForm, $member['email']);
+    if (isset($res['id'])) {
+        header('Location: collab-grant-admin.php?view=all&year=' . (int)$res['year']
+             . '&added=' . (int)$res['id'] . '#app-' . (int)$res['id']);
+        exit;
+    }
+    $notice = $res['error'];
+}
+if (!$notice && isset($_GET['added'])) {
+    $added = cgGetApplication((int)$_GET['added']);
+    if ($added) {
+        $notice = 'Added ' . $added['applicant_name'] . "'s grant to "
+                . (int)$added['school_year'] . '–' . ((int)$added['school_year'] + 1) . '.';
+    }
+}
+
 /*
  * Reviewing applications and chasing paperwork are different jobs on different
  * days, and they used to be stacked in one list. 'review' is pending only —
@@ -1005,6 +1036,22 @@ $totalDaysApproved = $personDays['approved'];
       white-space: pre-wrap;
     }
 
+    .cg-add { margin-bottom: 1.25rem; }
+    .cg-add summary { cursor: pointer; font-weight: 700; color: var(--primary); font-size: .95rem; padding: .4rem 0; }
+    .cg-add form { background: var(--white); border: 1.5px solid var(--border); border-radius: 10px;
+                   padding: 1rem; margin-top: .5rem; }
+    .cg-add label { display: block; font-size: .82rem; font-weight: 600; color: var(--gray-600); }
+    .cg-add input { display: block; width: 100%; box-sizing: border-box; margin-top: .25rem;
+                    border: 1px solid var(--border); border-radius: 6px; padding: .4rem .5rem; font: inherit; }
+    .cg-add-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem 1rem; }
+    .cg-add-opt { font-weight: 400; color: var(--gray-400); }
+    .cg-add-dates { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: .9rem 0;
+                    font-size: .82rem; font-weight: 600; color: var(--gray-600); }
+    .cg-add-dates span { flex-basis: 100%; }
+    .cg-add-dates input { width: auto; margin-top: 0; }
+    .cg-add-notes { margin-bottom: .9rem; }
+    @media (max-width: 600px) { .cg-add-grid { grid-template-columns: 1fr; } }
+
     .empty-state {
       text-align: center;
       padding: 3rem 1rem;
@@ -1014,7 +1061,7 @@ $totalDaysApproved = $personDays['approved'];
 
     @media print {
       .site-header, .admin-toolbar, .summary-row, .app-action-form,
-      .cg-rename, .cg-cap, .cg-linkform { display: none !important; }
+      .cg-rename, .cg-cap, .cg-linkform, .cg-add { display: none !important; }
       .read-card { break-inside: avoid; }
     }
   </style>
@@ -1113,6 +1160,46 @@ $totalDaysApproved = $personDays['approved'];
 
     <?php if ($notice): ?>
       <div class="notice"><?= htmlspecialchars($notice) ?></div>
+    <?php endif; ?>
+
+    <?php if (!$cgReadOnly):
+      $af = $cgAddForm ?? [];
+      $afv = function (string $k) use ($af) { return htmlspecialchars((string)($af[$k] ?? '')); };
+      $afDates = array_pad(array_slice((array)($af['dates'] ?? []), 0, CG_DAY_CAP), CG_DAY_CAP, ''); ?>
+    <details class="cg-add"<?= $cgAddForm !== null ? ' open' : '' ?>>
+      <summary>+ Add a grant</summary>
+      <form method="post" action="collab-grant-admin.php?view=all&amp;year=<?= $year ?>">
+        <?= csrfField() ?>
+        <input type="hidden" name="action" value="add-grant">
+        <div class="cg-add-grid">
+          <label>Teacher
+            <input type="text" name="applicant_name" list="cg-contact-names" autocomplete="off"
+                   maxlength="255" required value="<?= $afv('applicant_name') ?>">
+          </label>
+          <label>Email <span class="cg-add-opt">if not in Contacts</span>
+            <input type="email" name="applicant_email" maxlength="255" value="<?= $afv('applicant_email') ?>">
+          </label>
+          <label>Collaborator <span class="cg-add-opt">optional</span>
+            <input type="text" name="collaborator_name" list="cg-contact-names" autocomplete="off"
+                   maxlength="255" value="<?= $afv('collaborator_name') ?>">
+          </label>
+          <label>Email <span class="cg-add-opt">if not in Contacts</span>
+            <input type="email" name="collaborator_email" maxlength="255" value="<?= $afv('collaborator_email') ?>">
+          </label>
+        </div>
+        <div class="cg-add-dates">
+          <span>Days released</span>
+          <?php foreach ($afDates as $i => $dv): ?>
+            <input type="date" name="dates[]" aria-label="Day <?= $i + 1 ?>"
+                   <?= $i === 0 ? 'required' : '' ?> value="<?= htmlspecialchars((string)$dv) ?>">
+          <?php endforeach; ?>
+        </div>
+        <label class="cg-add-notes">Notes <span class="cg-add-opt">optional</span>
+          <input type="text" name="notes" maxlength="1000" value="<?= $afv('notes') ?>">
+        </label>
+        <button type="submit" class="btn btn-approve">Add as approved</button>
+      </form>
+    </details>
     <?php endif; ?>
 
     <?php
