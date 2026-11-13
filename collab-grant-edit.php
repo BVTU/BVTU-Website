@@ -88,6 +88,15 @@ if (!$denied && $canEdit && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POS
                        . ' has already passed.';
                 break;
             }
+            // The year decides whose three days these are. A date moved into
+            // another year would still be counted in this one.
+            if ($isAdmin && !in_array($d, $was, true)
+                && cgYearOfDate($d) !== (int)$app['school_year']) {
+                $error = date('M j, Y', strtotime($d)) . ' is outside '
+                       . (int)$app['school_year'] . '–' . ((int)$app['school_year'] + 1)
+                       . '. Add it as its own grant in that year.';
+                break;
+            }
             if (in_array($d, $dates, true)) {
                 $error = 'The same date is listed twice.';
                 break;
