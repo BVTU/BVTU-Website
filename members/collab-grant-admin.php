@@ -731,22 +731,31 @@ $totalDaysApproved = $personDays['approved'];
     }
 
     /* ── Top toolbar ── */
+    /* Every control in the bar is the same height, border and type, so tabs,
+       the year picker and the buttons read as one row. */
     .admin-toolbar {
+      --tb-h: 38px;
       display: flex;
       align-items: center;
-      gap: .75rem;
+      gap: .6rem;
       flex-wrap: wrap;
-      margin-bottom: 1.75rem;
+      margin-bottom: 1.5rem;
     }
+    .tb-actions { display: flex; gap: .6rem; flex-wrap: wrap; margin-left: auto; }
     .view-toggle {
       display: flex;
+      height: var(--tb-h);
+      box-sizing: border-box;
       border: 1.5px solid var(--border);
       border-radius: 8px;
       overflow: hidden;
       background: var(--white);
     }
     .view-toggle a {
-      padding: .45rem 1rem;
+      display: flex;
+      white-space: nowrap;
+      align-items: center;
+      padding: 0 1rem;
       font-size: .83rem;
       font-weight: 600;
       color: var(--gray-500);
@@ -759,10 +768,15 @@ $totalDaysApproved = $personDays['approved'];
     .view-toggle a:not(.active):hover { background: var(--off-white); color: var(--primary); }
 
     .export-btn {
-      display: flex;
+      display: inline-flex;
       align-items: center;
       gap: .4rem;
-      padding: .45rem 1rem;
+      height: var(--tb-h);
+      box-sizing: border-box;
+      padding: 0 1rem;
+      font-family: inherit;
+      cursor: pointer;
+      white-space: nowrap;
       background: var(--white);
       border: 1.5px solid var(--border);
       border-radius: 8px;
@@ -774,13 +788,16 @@ $totalDaysApproved = $personDays['approved'];
     }
     .export-btn:hover { border-color: var(--primary); color: var(--primary); }
     .export-btn svg { width: 14px; height: 14px; }
+    .export-btn.is-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+    .export-btn.is-primary:hover, .export-btn.is-primary:focus { filter: brightness(1.12);
+        border-color: var(--primary); color: #fff; opacity: 1; }
 
     /* ── Summary cards ── */
     .summary-row {
-      display: flex;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       gap: 1rem;
-      flex-wrap: wrap;
-      margin-bottom: 2rem;
+      margin-bottom: 1.5rem;
     }
     .summary-card {
       background: var(--white);
@@ -955,8 +972,10 @@ $totalDaysApproved = $personDays['approved'];
     .cg-year-pick { display: flex; align-items: center; gap: .4rem; margin: 0; }
     .cg-year-pick label { font-size: .74rem; font-weight: 700; text-transform: uppercase;
         letter-spacing: .04em; color: var(--gray-500); }
-    .cg-year-pick select { font: inherit; font-size: .84rem; padding: .3rem .5rem;
-        border: 1px solid var(--border); border-radius: 7px; background: #fff; cursor: pointer; }
+    .cg-year-pick select { font: inherit; font-size: .83rem; font-weight: 600; color: var(--gray-600);
+        height: var(--tb-h); box-sizing: border-box; padding: 0 .75rem;
+        border: 1.5px solid var(--border); border-radius: 8px; background: var(--white); cursor: pointer; }
+    .cg-year-pick select:hover { border-color: var(--primary); }
     .cg-edit-link { font-size: .74rem; font-weight: 700; color: var(--primary);
         text-decoration: none; margin-left: .45rem; border-bottom: 1px solid transparent; }
     .cg-edit-link:hover { border-bottom-color: var(--primary); }
@@ -1036,10 +1055,22 @@ $totalDaysApproved = $personDays['approved'];
       white-space: pre-wrap;
     }
 
-    .cg-add { margin-bottom: 1.25rem; }
-    .cg-add summary { cursor: pointer; font-weight: 700; color: var(--primary); font-size: .95rem; padding: .4rem 0; }
-    .cg-add form { background: var(--white); border: 1.5px solid var(--border); border-radius: 10px;
-                   padding: 1rem; margin-top: .5rem; }
+    .cg-add { background: var(--white); border: 1.5px solid var(--border); border-radius: var(--radius);
+              padding: 1.1rem 1.4rem; margin-bottom: 1.5rem; }
+    .cg-add[hidden] { display: none; }
+    .cg-add-title { font-weight: 700; color: var(--primary); margin-bottom: .8rem; }
+    .cg-section { background: var(--white); border: 1.5px solid var(--border); border-radius: var(--radius);
+                  margin-bottom: 1.5rem; }
+    .cg-section > summary { cursor: pointer; list-style: none; display: flex; align-items: center;
+                  justify-content: space-between; padding: .9rem 1.4rem; font-weight: 700;
+                  color: var(--primary); font-size: .95rem; }
+    .cg-section > summary::-webkit-details-marker { display: none; }
+    .cg-section > summary::after { content: ''; width: 8px; height: 8px; border-right: 2px solid currentColor;
+                  border-bottom: 2px solid currentColor; transform: rotate(45deg); margin: -4px .2rem 0 1rem;
+                  transition: transform .15s; }
+    .cg-section[open] > summary::after { transform: rotate(-135deg); margin-top: 4px; }
+    .cg-section > summary:hover { background: var(--off-white); border-radius: var(--radius); }
+    .cg-section-body { padding: 0 1.4rem 1.2rem; overflow-x: auto; }
     .cg-add label { display: block; font-size: .82rem; font-weight: 600; color: var(--gray-600); }
     .cg-add input { display: block; width: 100%; box-sizing: border-box; margin-top: .25rem;
                     border: 1px solid var(--border); border-radius: 6px; padding: .4rem .5rem; font: inherit; }
@@ -1050,7 +1081,11 @@ $totalDaysApproved = $personDays['approved'];
     .cg-add-dates span { flex-basis: 100%; }
     .cg-add-dates input { width: auto; margin-top: 0; }
     .cg-add-notes { margin-bottom: .9rem; }
-    @media (max-width: 600px) { .cg-add-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 600px) {
+      .cg-add-grid { grid-template-columns: 1fr; }
+      .tb-actions { margin-left: 0; }
+      .view-toggle { max-width: 100%; overflow-x: auto; }
+    }
 
     .empty-state {
       text-align: center;
@@ -1132,6 +1167,7 @@ $totalDaysApproved = $personDays['approved'];
       <?php // Both copies are in the file, with a column naming the one that
             // carries the cost — a spreadsheet that quietly dropped an approved
             // application would be worse than one that needs a filter. ?>
+      <div class="tb-actions">
       <a href="?export=csv&year=<?= $year ?>" class="export-btn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Export CSV
@@ -1146,6 +1182,14 @@ $totalDaysApproved = $personDays['approved'];
         Print
       </button>
       <?php endif; ?>
+      <?php if (!$cgReadOnly): ?>
+      <button type="button" class="export-btn is-primary" aria-controls="cg-add"
+              aria-expanded="<?= $cgAddForm !== null ? 'true' : 'false' ?>"
+              onclick="var p=document.getElementById('cg-add'),o=p.hidden;p.hidden=!o;this.setAttribute('aria-expanded',o);if(o)p.querySelector('input:not([type=hidden])').focus();">
+        + Add a grant
+      </button>
+      <?php endif; ?>
+      </div>
     </div>
 
     <?php /* One list for the page, shared by every rename box. Behind the
@@ -1166,8 +1210,8 @@ $totalDaysApproved = $personDays['approved'];
       $af = $cgAddForm ?? [];
       $afv = function (string $k) use ($af) { return htmlspecialchars((string)($af[$k] ?? '')); };
       $afDates = array_pad(array_slice((array)($af['dates'] ?? []), 0, CG_DAY_CAP), CG_DAY_CAP, ''); ?>
-    <details class="cg-add"<?= $cgAddForm !== null ? ' open' : '' ?>>
-      <summary>+ Add a grant</summary>
+    <div class="cg-add" id="cg-add"<?= $cgAddForm !== null ? '' : ' hidden' ?>>
+      <div class="cg-add-title">Add a grant</div>
       <form method="post" action="collab-grant-admin.php?view=all&amp;year=<?= $year ?>">
         <?= csrfField() ?>
         <input type="hidden" name="action" value="add-grant">
@@ -1199,7 +1243,7 @@ $totalDaysApproved = $personDays['approved'];
         </label>
         <button type="submit" class="btn btn-approve">Add as approved</button>
       </form>
-    </details>
+    </div>
     <?php endif; ?>
 
     <?php
@@ -1649,15 +1693,12 @@ $totalDaysApproved = $personDays['approved'];
     <?php endif; ?>
 
     <?php if ($ledger): ?>
-    <details style="margin-bottom:1.75rem;" <?= $cgReadOnly ? 'open' : '' ?>>
-      <summary style="cursor:pointer;font-weight:700;color:var(--primary);font-size:.95rem;
-                      padding:.6rem 0;">
-        Days used by person — <?= count($ledger) ?> <?= count($ledger) === 1 ? 'teacher' : 'teachers' ?>
-        this year
+    <details class="cg-section" <?= $cgReadOnly ? 'open' : '' ?>>
+      <summary>
+        <span>Days used by person — <?= count($ledger) ?> <?= count($ledger) === 1 ? 'teacher' : 'teachers' ?>
+        this year</span>
       </summary>
-      <div id="cg-days"
-           style="background:var(--white);border:1.5px solid var(--border);border-radius:10px;
-                  padding:1rem;margin-top:.5rem;overflow-x:auto;">
+      <div id="cg-days" class="cg-section-body">
         <?php // Compact by default. The notes matter, but all of them at once
               // turned a table into three lines of prose per teacher, and a
               // table nobody can scan is a table nobody reads. ?>
