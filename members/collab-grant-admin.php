@@ -1196,11 +1196,25 @@ $totalDaysApproved = $personDays['approved'];
              login, and never on the public application form: an autocomplete
              over this list would hand the staff directory to anyone who
              opened that page. */ ?>
-    <datalist id="cg-contact-names">
-      <?php foreach (cgContactNameList() as $cn): ?>
-        <option value="<?= htmlspecialchars($cn) ?>"></option>
-      <?php endforeach; ?>
-    </datalist>
+    <datalist id="cg-contact-names"></datalist>
+    <script>
+    // Filled from what has been typed, two letters on. Holding every name in
+    // the list opened the whole staff on a click into an empty box.
+    (function () {
+      var names = <?= json_encode(array_values(cgContactNameList()), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+      var list = document.getElementById('cg-contact-names');
+      document.addEventListener('input', function (e) {
+        var el = e.target;
+        if (el.getAttribute('list') !== 'cg-contact-names') return;
+        var q = el.value.trim().toLowerCase();
+        list.innerHTML = '';
+        if (q.length < 2) return;
+        names.filter(function (n) { return n.toLowerCase().indexOf(q) !== -1; })
+             .slice(0, 12)
+             .forEach(function (n) { var o = document.createElement('option'); o.value = n; list.appendChild(o); });
+      });
+    })();
+    </script>
 
     <?php if ($notice): ?>
       <div class="notice"><?= htmlspecialchars($notice) ?></div>
@@ -1946,8 +1960,9 @@ $totalDaysApproved = $personDays['approved'];
             <div>
               <h3><?= htmlspecialchars($app['applicant_name']) ?></h3>
               <div class="rc-meta">
-                <?= htmlspecialchars($app['school']) ?> · <?= htmlspecialchars($app['position']) ?>
-                · submitted <?= date('M j, Y', strtotime($app['submitted_at'])) ?>
+                <?= htmlspecialchars(implode(' · ', array_filter([trim((string)$app['school']),
+                      trim((string)$app['position']),
+                      'submitted ' . date('M j, Y', strtotime($app['submitted_at']))], 'strlen'))) ?>
               </div>
             </div>
             <span class="app-status-badge" style="background:<?= $sc['bg'] ?>;border-color:<?= $sc['border'] ?>;color:<?= $sc['text'] ?>;">
@@ -2030,9 +2045,10 @@ $totalDaysApproved = $personDays['approved'];
             <div style="flex:1;min-width:0;">
               <div class="app-name"><?= htmlspecialchars($app['applicant_name']) ?></div>
               <div class="app-meta">
-                <?= htmlspecialchars($app['school']) ?> · <?= htmlspecialchars($app['position']) ?>
-                · <?= $days ?> day<?= $days !== 1 ? 's' : '' ?>
-                · <?= date('M j', strtotime($app['submitted_at'])) ?>
+                <?= htmlspecialchars(implode(' · ', array_filter([trim((string)$app['school']),
+                      trim((string)$app['position']),
+                      $days . ' day' . ($days !== 1 ? 's' : ''),
+                      date('M j', strtotime($app['submitted_at']))], 'strlen'))) ?>
               </div>
             </div>
             <span class="app-status-badge" style="background:<?= $sc['bg'] ?>;border-color:<?= $sc['border'] ?>;color:<?= $sc['text'] ?>;">
