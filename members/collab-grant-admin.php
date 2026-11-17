@@ -903,6 +903,7 @@ $totalDaysApproved = $personDays['approved'];
     .cg-grid-name { all: unset; cursor: pointer; font-weight: 700; color: var(--text); }
     .cg-grid-name:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
     .cg-grid-none { color: var(--gray-400); }
+    .cg-grid-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
     .cg-grid-detail > td { padding: .75rem; background: var(--off-white); }
     /* The line above already says who and what; the card is opened, not toggled. */
     .cg-grid .app-card-head { display: none; }
@@ -2152,7 +2153,8 @@ $totalDaysApproved = $personDays['approved'];
       <table class="cg-grid" id="cg-grid" data-sort="pos" data-dir="asc">
         <thead><tr>
           <?php foreach (['applicant' => 'Applicant', 'collab' => 'Collaborator', 'date' => 'Dates',
-                          'status' => 'Status', 'costed' => 'Costed', 'invoice' => 'Invoice'] as $ck => $cl): ?>
+                          'status' => 'Status', 'costed' => 'Costed', 'cost' => 'Cost',
+                          'invoice' => 'Invoice'] as $ck => $cl): ?>
             <th scope="col" aria-sort="none"><button type="button" class="cg-grid-sort"
                 data-key="<?= $ck ?>" onclick="cgGridSort('<?= $ck ?>')"><?= $cl ?><span class="cg-grid-ind"></span></button></th>
           <?php endforeach; ?>
@@ -2186,6 +2188,7 @@ $totalDaysApproved = $personDays['approved'];
                data-date="<?= htmlspecialchars($gDates[0] ?? '') ?>"
                data-status="<?= $statusRank[$app['status']] ?? 9 ?>"
                data-costed="<?= $gCostKey ?>"
+               data-cost="<?= ($app['release_cost'] ?? null) !== null ? sprintf('%012.2f', (float)$app['release_cost']) : '' ?>"
                data-invoice="<?= htmlspecialchars($gInvKey) ?>">
           <tr class="cg-grid-line" onclick="cgGridOpen(<?= (int)$app['id'] ?>)">
             <td><button type="button" class="cg-grid-name" aria-expanded="false"
@@ -2198,10 +2201,16 @@ $totalDaysApproved = $personDays['approved'];
             <td><span class="app-status-badge" style="background:<?= $sc['bg'] ?>;border-color:<?= $sc['border'] ?>;color:<?= $sc['text'] ?>;"><?= $sc['label'] ?></span></td>
             <td><?php if ($gCost !== null): ?><span class="cg-costed<?= $gCost[0] >= $gCost[1] ? ' done' : '' ?>"><?= $gCost[0] ?>/<?= $gCost[1] ?></span><?php
                 else: ?><span class="cg-grid-none">—</span><?php endif; ?></td>
+            <?php /* What the grant cost, all its people together. Only an approved
+                     grant is in the year's figure above, so a cost left on one
+                     declined since is shown greyed: still visible, not counted. */ ?>
+            <td class="cg-grid-num"><?php if (($app['release_cost'] ?? null) === null): ?><span class="cg-grid-none">—</span><?php
+                elseif ($app['status'] === 'approved'): ?>$<?= number_format((float)$app['release_cost'], 2) ?><?php
+                else: ?><span class="cg-grid-none" title="Not in the year's cost — this grant is <?= htmlspecialchars($app['status']) ?>.">$<?= number_format((float)$app['release_cost'], 2) ?></span><?php endif; ?></td>
             <td><?= $gInv !== '' ? htmlspecialchars($gInv) : '<span class="cg-grid-none">—</span>' ?></td>
           </tr>
           <tr class="cg-grid-detail" id="cg-detail-<?= (int)$app['id'] ?>" hidden>
-            <td colspan="6">
+            <td colspan="7">
         <?php endif; ?>
         <?php // Open where the card is the job: pending in Review, paperwork in
               // Follow-through. In All it opens from its table line. ?>
