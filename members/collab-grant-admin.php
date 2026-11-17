@@ -620,12 +620,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_id'])
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'fulfilment') {
     csrfCheck();
     $id = (int)($_POST['app_id'] ?? 0);
-    // The box is always submitted, so its contents are always applied: a figure
-    // records one, an emptied box clears it back to "not recorded".
-    $ok = cgSetFulfilment($id, !empty($_POST['atrieve']),
-                          (string)($_POST['invoice_number'] ?? ''), $member['email'],
-                          (string)($_POST['release_cost'] ?? ''));
-    $notice = $ok ? 'Saved.' : 'Could not save. The problem has been logged.';
+    // Every line is always submitted, so the set is always applied: a figure
+    // records one, an emptied box clears it back to "not recorded", and a line
+    // with both boxes emptied is removed.
+    $nums   = array_values((array)($_POST['invoice_number'] ?? []));
+    $costs  = array_values((array)($_POST['release_cost'] ?? []));
+    $people = array_values((array)($_POST['inv_person'] ?? []));
+    $lines  = [];
+    foreach ($nums as $i => $n) {
+        $lines[] = ['person' => (string)($people[$i] ?? ''), 'invoice_number' => (string)$n,
+                    'amount' => (string)($costs[$i] ?? '')];
+    }
+    $err = cgSetFulfilment($id, !empty($_POST['atrieve']), $lines, $member['email']);
+    $notice = $err === '' ? 'Saved.' : $err;
     $apps   = cgGetApplications($year);
 }
 
@@ -692,12 +699,18 @@ foreach ($apps as $a) {
 $allApps = $apps;   // including the folded ones; the CSV exports from this
 $apps = array_values(array_filter($apps, fn($a) => empty($a['duplicate_of'])));
 
-/** Approved, but the district paperwork is not finished. */
-$cgNeedsFollowUp = function (array $a): bool {
+// Each application's invoice lines, read once for the page.
+$invLines = cgInvoiceLinesFor($allApps);
+
+/** Approved, but the district paperwork is not finished — including a
+ *  half-filled invoice line, or someone on the grant with none. */
+$cgNeedsFollowUp = function (array $a) use ($invLines, $foldedUnder): bool {
     return $a['status'] === 'approved'
         && (empty($a['atrieve_confirmed'])
             || trim((string)($a['invoice_number'] ?? '')) === ''
-            || ($a['release_cost'] ?? null) === null);
+            || ($a['release_cost'] ?? null) === null
+            || cgInvoicingOpen($invLines[(int)$a['id']] ?? [],
+                               cgGrantPeople($a, $foldedUnder[(int)$a['id']] ?? [])));
 };
 /*
  * Built from every application, folded or not.
@@ -712,6 +725,46 @@ $pendingApps  = array_values(array_filter($allApps, fn($a) => $a['status'] === '
 $followUpApps = array_values(array_filter($apps, $cgNeedsFollowUp));
 $shownApps    = $view === 'review' ? $pendingApps
               : ($view === 'followup' ? $followUpApps : $apps);
+/*
+ * How All is ordered. Applied (newest first) is the order the list has always
+ * had; the others are for reconciling: an invoice against the grants on it,
+ * a release date against the district's absences, a teacher by name.
+ * Whatever has nothing to sort on — no invoice, no dates, no collaborator —
+ * goes last, so it does not bury the rows that do.
+ */
+$cgSorts = ['applied' => 'Applied', 'date' => 'Release date', 'invoice' => 'Invoice',
+            'applicant' => 'Applicant', 'collaborator' => 'Collaborator'];
+$sort = $_GET['sort'] ?? 'applied';
+if (!isset($cgSorts[$sort])) $sort = 'applied';
+if ($view === 'all' && $sort !== 'applied') {
+    $sortKey = function (array $a) use ($sort, $invLines) {
+        switch ($sort) {
+            case 'date':
+                $d = cgAppDatesLoose($a);
+                sort($d);
+                return $d[0] ?? '';
+            case 'invoice':
+                $n = [];
+                foreach ($invLines[(int)$a['id']] ?? [] as $l) {
+                    if (trim((string)$l['invoice_number']) !== '') $n[] = trim((string)$l['invoice_number']);
+                }
+                natcasesort($n);
+                return (string)(array_values($n)[0] ?? '');
+            case 'applicant':
+                return (string)$a['applicant_name'];
+            default:   // collaborator
+                return !empty($a['has_collaborator']) ? trim((string)$a['collaborator_name']) : '';
+        }
+    };
+    usort($shownApps, function ($x, $y) use ($sortKey) {
+        $kx = $sortKey($x); $ky = $sortKey($y);
+        if (($kx === '') !== ($ky === '')) return $kx === '' ? 1 : -1;
+        return strnatcasecmp($kx, $ky)
+            ?: strnatcasecmp((string)$x['applicant_name'], (string)$y['applicant_name'])
+            ?: (int)$x['id'] <=> (int)$y['id'];
+    });
+}
+
 // 'print' is the plain read-through for a meeting; everything else is workable.
 $cgReadOnly   = ($view === 'print');
 
@@ -1167,6 +1220,14 @@ $totalDaysApproved = $personDays['approved'];
         <a href="?view=print&year=<?= $year ?>" class="<?= $cgReadOnly ? 'active' : '' ?>"
            title="A plain read-through, for printing or reading at a meeting">Print view</a>
       </div>
+      <?php if ($view === 'all'): ?>
+        <div class="view-toggle cg-sortbar" aria-label="Sort">
+          <?php foreach ($cgSorts as $sk => $sl): ?>
+            <a href="?view=all&year=<?= $year ?><?= $sk === 'applied' ? '' : '&sort=' . $sk ?>"
+               class="<?= $sort === $sk ? 'active' : '' ?>"><?= $sl ?></a>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
 
       <?php
         /*
@@ -1516,6 +1577,12 @@ $totalDaysApproved = $personDays['approved'];
               color:var(--gray-500); }
       .ft-f input { border:1px solid var(--border); border-radius:6px; padding:.25rem .45rem;
                     font-size:.86rem; font-family:inherit; }
+      .ft-lines { display:flex; flex-direction:column; gap:.35rem; }
+      .ft-line { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem .85rem; }
+      .ft-who { border:1px solid var(--border); border-radius:6px; padding:.25rem .4rem;
+                font-size:.84rem; font-family:inherit; min-width:9.5rem; background:#fff; }
+      .ft-extra { opacity:.75; }
+      .ft-total { font-size:.8rem; font-weight:700; color:var(--gray-600); }
       .ft-save { border:1px solid var(--border); background:#fff; color:var(--gray-700);
                  font-size:.8rem; padding:.3rem .7rem; }
       .ft-when { font-size:.76rem; color:var(--gray-400); }
@@ -2102,10 +2169,24 @@ $totalDaysApproved = $personDays['approved'];
             <div style="flex:1;min-width:0;">
               <div class="app-name"><?= htmlspecialchars($app['applicant_name']) ?></div>
               <div class="app-meta">
+                <?php
+                  // The field the list is sorted on, so the order can be read.
+                  $sortShow = '';
+                  if ($view === 'all' && $sort === 'date') {
+                      $sd = cgAppDatesLoose($app); sort($sd);
+                      $sortShow = $sd ? implode(', ', array_map(fn($d) => date('M j', strtotime($d)), $sd)) : 'no dates';
+                  } elseif ($view === 'all' && $sort === 'invoice') {
+                      $sortShow = trim((string)($app['invoice_number'] ?? '')) !== ''
+                          ? 'Inv ' . $app['invoice_number'] : 'no invoice';
+                  } elseif ($view === 'all' && $sort === 'collaborator') {
+                      $sortShow = !empty($app['has_collaborator']) && trim((string)$app['collaborator_name']) !== ''
+                          ? 'with ' . trim((string)$app['collaborator_name']) : 'no collaborator';
+                  }
+                ?>
                 <?= htmlspecialchars(implode(' · ', array_filter([trim((string)$app['school']),
                       trim((string)$app['position']),
                       cgDaysWord(cgEffectiveDays($app)),
-                      date('M j', strtotime($app['submitted_at']))], 'strlen'))) ?>
+                      $sortShow !== '' ? $sortShow : date('M j', strtotime($app['submitted_at']))], 'strlen'))) ?>
               </div>
             </div>
             <span class="app-status-badge" style="background:<?= $sc['bg'] ?>;border-color:<?= $sc['border'] ?>;color:<?= $sc['text'] ?>;">
@@ -2581,17 +2662,48 @@ $totalDaysApproved = $personDays['approved'];
                          <?= !empty($app['atrieve_confirmed']) ? 'checked' : '' ?>>
                   Atrieve
                 </label>
-                <label class="ft-f">Invoice
-                  <input type="text" name="invoice_number" maxlength="100"
-                         placeholder="45219" style="width:7.5rem;"
-                         value="<?= htmlspecialchars($app['invoice_number'] ?? '') ?>">
-                </label>
-                <label class="ft-f">Cost
-                  <input type="number" name="release_cost" step="0.01" min="0"
-                         placeholder="—" style="width:6.5rem;"
-                         value="<?= ($app['release_cost'] ?? null) !== null
-                                    ? number_format((float)$app['release_cost'], 2, '.', '') : '' ?>">
-                </label>
+                <?php /* A row per person released — each is a TTOC of their
+                         own, not always on the same invoice — and one more
+                         to add a second invoice for someone. */
+                      $myLines  = $invLines[(int)$app['id']] ?? [];
+                      $myPeople = cgGrantPeople($app, $foldedUnder[(int)$app['id']] ?? []);
+                      $shownLines = $myLines;
+                      $hasLine = [];
+                      foreach ($myLines as $ln) $hasLine[cgNameKey((string)$ln['person'])] = true;
+                      foreach ($myPeople as $pn) {
+                          if (empty($hasLine[cgNameKey($pn)])) {
+                              $shownLines[] = ['person' => $pn, 'invoice_number' => '', 'amount' => null];
+                          }
+                      }
+                      $shownLines[] = ['person' => $myPeople[0] ?? '', 'invoice_number' => '', 'amount' => null, 'extra' => true]; ?>
+                <span class="ft-lines">
+                  <?php foreach ($shownLines as $li => $ln):
+                      $lp = (string)$ln['person'];
+                      $opts = $myPeople;
+                      if ($lp !== '' && !in_array($lp, $opts, true)) $opts[] = $lp; ?>
+                    <span class="ft-line<?= !empty($ln['extra']) ? ' ft-extra' : '' ?>">
+                      <select name="inv_person[]" class="ft-who" aria-label="Who this invoice is for">
+                        <?php foreach ($opts as $on): ?>
+                          <option value="<?= htmlspecialchars($on) ?>"<?= $on === $lp ? ' selected' : '' ?>><?= htmlspecialchars($on) ?></option>
+                        <?php endforeach; ?>
+                        <option value=""<?= $lp === '' ? ' selected' : '' ?>>Whole grant</option>
+                      </select>
+                      <label class="ft-f">Invoice
+                        <input type="text" name="invoice_number[]" maxlength="100"
+                               placeholder="<?= !empty($ln['extra']) ? 'another' : '' ?>" style="width:7.5rem;"
+                               value="<?= htmlspecialchars((string)$ln['invoice_number']) ?>">
+                      </label>
+                      <label class="ft-f">Cost
+                        <input type="number" name="release_cost[]" step="0.01" min="0"
+                               placeholder="—" style="width:6.5rem;"
+                               value="<?= $ln['amount'] !== null ? number_format((float)$ln['amount'], 2, '.', '') : '' ?>">
+                      </label>
+                    </span>
+                  <?php endforeach; ?>
+                  <?php if (($app['release_cost'] ?? null) !== null): ?>
+                    <span class="ft-total">Total $<?= number_format((float)$app['release_cost'], 2) ?></span>
+                  <?php endif; ?>
+                </span>
                 <button type="submit" class="btn ft-save">Save</button>
                 <?php if (!empty($app['atrieve_confirmed']) && !empty($app['atrieve_confirmed_at'])): ?>
                   <span class="ft-when">Atrieve confirmed

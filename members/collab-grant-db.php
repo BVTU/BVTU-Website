@@ -1009,51 +1009,207 @@ function cgSendSubmissionConfirmation(array $app): void {
 }
 
 /**
+ * Invoice lines: one grant can be billed across several district invoices.
+ *
+ * Each teacher a grant releases is a TTOC of their own, billed on its own —
+ * and not always on the same invoice as the others. So a grant holds any
+ * number of lines, each for one person on it (or the grant as a whole, for
+ * what was recorded before lines had a person): the invoice number and what
+ * it charged. The grant's cost is the sum.
+ *
+ * invoice_number and release_cost on the application stay, as the summary of
+ * the lines ("556, 571" and their sum), so everything that already reads them
+ * — the year's cost, the Follow-through queue, the lock on the applicant's
+ * edit, the fold refusal, the CSVs — keeps working unchanged. Only
+ * cgSetFulfilment() writes them, and always from the lines.
+ */
+function cgEnsureInvoiceLines(): bool {
+    static $ok = null;
+    if ($ok !== null) return $ok;
+    $db = getDB();
+    try {
+        $db->query("SELECT 1 FROM collab_grant_invoices LIMIT 1");
+        return $ok = true;
+    } catch (\PDOException $e) { /* not there yet */ }
+    try {
+        $db->exec("CREATE TABLE IF NOT EXISTS collab_grant_invoices (
+            id             INT AUTO_INCREMENT PRIMARY KEY,
+            app_id         INT NOT NULL,
+            person         VARCHAR(255) NOT NULL DEFAULT '',
+            invoice_number VARCHAR(100) NOT NULL DEFAULT '',
+            amount         DECIMAL(10,2) DEFAULT NULL,
+            created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+            created_by     VARCHAR(255) NOT NULL DEFAULT '',
+            INDEX idx_app (app_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        // The single invoice and cost every grant had until now become its
+        // first line. NOT EXISTS so a second request racing this one cannot
+        // copy them twice.
+        $db->exec("INSERT INTO collab_grant_invoices (app_id, invoice_number, amount, created_by)
+                   SELECT a.id, a.invoice_number, a.release_cost, 'carried over'
+                   FROM collab_grant_applications a
+                   WHERE (a.invoice_number <> '' OR a.release_cost IS NOT NULL)
+                     AND NOT EXISTS (SELECT 1 FROM collab_grant_invoices i WHERE i.app_id = a.id)");
+        return $ok = true;
+    } catch (\Exception $e) {
+        error_log('cgEnsureInvoiceLines: ' . $e->getMessage());
+        return $ok = false;
+    }
+}
+
+/**
+ * Every application's invoice lines, app_id => [['person', 'invoice_number', 'amount'], …],
+ * in the order entered. $apps supplies the fallback: where the table could not
+ * be made, an application's own invoice and cost are its one line.
+ */
+function cgInvoiceLinesFor(array $apps): array {
+    $out = [];
+    $ids = array_values(array_filter(array_map(function ($a) { return (int)$a['id']; }, $apps)));
+    if ($ids && cgEnsureInvoiceLines()) {
+        try {
+            $in = implode(',', array_fill(0, count($ids), '?'));
+            $st = getDB()->prepare("SELECT app_id, person, invoice_number, amount FROM collab_grant_invoices
+                                    WHERE app_id IN ($in) ORDER BY id");
+            $st->execute($ids);
+            foreach ($st->fetchAll() as $r) {
+                $out[(int)$r['app_id']][] = ['person' => (string)$r['person'],
+                                             'invoice_number' => (string)$r['invoice_number'],
+                                             'amount' => $r['amount'] === null ? null : (float)$r['amount']];
+            }
+            return $out;
+        } catch (\Exception $e) {
+            error_log('cgInvoiceLinesFor: ' . $e->getMessage());
+        }
+    }
+    foreach ($apps as $a) {
+        if (trim((string)($a['invoice_number'] ?? '')) !== '' || ($a['release_cost'] ?? null) !== null) {
+            $out[(int)$a['id']][] = ['person' => '', 'invoice_number' => (string)($a['invoice_number'] ?? ''),
+                                     'amount' => ($a['release_cost'] ?? null) === null ? null : (float)$a['release_cost']];
+        }
+    }
+    return $out;
+}
+
+/**
+ * The teachers a grant releases, by name: the applicant, everyone named as a
+ * collaborator, and the applicants of any copies folded under it (usually
+ * the same collaborators, applying themselves). Each is a TTOC to pay for.
+ */
+function cgGrantPeople(array $app, array $folded = []): array {
+    $out = [];
+    $add = function (string $n) use (&$out) {
+        $n = trim($n);
+        $k = cgNameKey($n);
+        if ($k !== '' && !isset($out[$k])) $out[$k] = $n;
+    };
+    $add((string)$app['applicant_name']);
+    if (!empty($app['has_collaborator'])) {
+        foreach (cgSplitNames((string)($app['collaborator_name'] ?? '')) as $n) $add($n);
+    }
+    foreach ($folded as $f) $add((string)$f['applicant_name']);
+    return array_values($out);
+}
+
+/** A line with a number and no amount, or an amount and no number, is not finished. */
+function cgInvoiceLinesOpen(array $lines): bool {
+    foreach ($lines as $l) {
+        if (trim((string)$l['invoice_number']) === '' || $l['amount'] === null) return true;
+    }
+    return false;
+}
+
+/**
+ * Is the grant's invoicing unfinished? A half-filled line is, and so is
+ * anyone on the grant with no complete line of their own — each teacher is
+ * a TTOC that gets billed. 0 is a complete amount, for someone whose release
+ * cost the local nothing. A complete line for the whole grant, which is what
+ * every grant recorded before lines had a person holds, covers everyone.
+ */
+function cgInvoicingOpen(array $lines, array $people): bool {
+    if (cgInvoiceLinesOpen($lines)) return true;
+    $done = [];
+    foreach ($lines as $l) {
+        if (trim((string)$l['person']) === '') return false;
+        $done[cgNameKey((string)$l['person'])] = true;
+    }
+    foreach ($people as $p) {
+        if (empty($done[cgNameKey($p)])) return true;
+    }
+    return false;
+}
+
+/**
  * Record the follow-through on an approved grant: whether the absence has been
- * logged in Atrieve, and the district's invoice number.
+ * logged in Atrieve, and the district's invoices for it.
  *
  * The confirmation stamps who and when, because "somebody said it was done" is
  * not much of a record a year later when the district queries an invoice.
  * Unticking clears the stamp, so the two can never disagree.
  *
- * $cost is the district's charge for the release time: a number to record one,
- * '' to clear it back to "not recorded", or null to leave it untouched.
+ * $lines is every invoice line as the form holds it, [['person' =>,
+ * 'invoice_number' =>, 'amount' =>], …]; a line with both boxes empty is dropped, and the set
+ * replaces what was there. An amount left empty is "not recorded", not $0.
+ * Returns '' on success or the reason it was refused.
  */
-function cgSetFulfilment(int $id, bool $atrieve, string $invoice, string $actor, $cost = null): bool {
+function cgSetFulfilment(int $id, bool $atrieve, array $lines, string $actor): string {
     cgEnsureTable();
+    $clean = [];
+    foreach ($lines as $l) {
+        $num = mb_substr(trim((string)($l['invoice_number'] ?? '')), 0, 100);
+        $raw = str_replace([',', '$', ' '], '', trim((string)($l['amount'] ?? '')));
+        if ($num === '' && $raw === '') continue;
+        if ($raw !== '' && (!is_numeric($raw) || (float)$raw < 0)) {
+            return '"' . trim((string)$l['amount']) . '" is not a dollar amount.';
+        }
+        $clean[] = ['person' => mb_substr(trim((string)($l['person'] ?? '')), 0, 255),
+                    'invoice_number' => $num, 'amount' => $raw === '' ? null : round((float)$raw, 2)];
+    }
+
+    // The summary everything else reads: the numbers, and what is known of the cost.
+    $nums = [];
+    $sum  = null;
+    foreach ($clean as $l) {
+        if ($l['invoice_number'] !== '' && !in_array($l['invoice_number'], $nums, true)) $nums[] = $l['invoice_number'];
+        if ($l['amount'] !== null) $sum = round(($sum ?? 0) + $l['amount'], 2);
+    }
+    $summary = implode(', ', $nums);
+    if (mb_strlen($summary) > 100) $summary = mb_substr($summary, 0, 99) . '…';
+
+    $db = getDB();
     try {
         $cur = cgGetApplication($id);
-        if (!$cur) return false;
+        if (!$cur) return 'That application could not be found.';
+        $hasLines = cgEnsureInvoiceLines();
+        if (!$hasLines && count($clean) > 1) {
+            return 'Only one invoice can be recorded on this server just now. The problem has been logged.';
+        }
+        $db->beginTransaction();
 
         $was = !empty($cur['atrieve_confirmed']);
         if ($atrieve && !$was) {
-            $sql = "UPDATE collab_grant_applications
-                    SET atrieve_confirmed=1, atrieve_confirmed_at=NOW(), atrieve_confirmed_by=?,
-                        invoice_number=? WHERE id=?";
-            $args = [$actor, mb_substr(trim($invoice), 0, 100), $id];
+            $db->prepare("UPDATE collab_grant_applications
+                          SET atrieve_confirmed=1, atrieve_confirmed_at=NOW(), atrieve_confirmed_by=? WHERE id=?")
+               ->execute([$actor, $id]);
         } elseif (!$atrieve) {
-            $sql = "UPDATE collab_grant_applications
-                    SET atrieve_confirmed=0, atrieve_confirmed_at=NULL, atrieve_confirmed_by='',
-                        invoice_number=? WHERE id=?";
-            $args = [mb_substr(trim($invoice), 0, 100), $id];
-        } else {
-            // Already confirmed: keep the original stamp, just update the invoice.
-            $sql  = "UPDATE collab_grant_applications SET invoice_number=? WHERE id=?";
-            $args = [mb_substr(trim($invoice), 0, 100), $id];
-        }
-        getDB()->prepare($sql)->execute($args);
+            $db->prepare("UPDATE collab_grant_applications
+                          SET atrieve_confirmed=0, atrieve_confirmed_at=NULL, atrieve_confirmed_by='' WHERE id=?")
+               ->execute([$id]);
+        }   // already confirmed and still ticked: keep the original stamp
+        $db->prepare("UPDATE collab_grant_applications SET invoice_number=?, release_cost=? WHERE id=?")
+           ->execute([$summary, $sum, $id]);
 
-        if ($cost !== null) {
-            // '' stores NULL — an emptied box means the figure is unknown
-            // again, not that the release was free.
-            $val = (trim((string)$cost) === '') ? null : round((float)$cost, 2);
-            getDB()->prepare("UPDATE collab_grant_applications SET release_cost=? WHERE id=?")
-                   ->execute([$val, $id]);
+        if ($hasLines) {
+            $db->prepare("DELETE FROM collab_grant_invoices WHERE app_id=?")->execute([$id]);
+            $ins = $db->prepare("INSERT INTO collab_grant_invoices (app_id, person, invoice_number, amount, created_by)
+                                 VALUES (?,?,?,?,?)");
+            foreach ($clean as $l) $ins->execute([$id, $l['person'], $l['invoice_number'], $l['amount'], $actor]);
         }
-        return true;
-    } catch (Exception $e) {
+        $db->commit();
+        return '';
+    } catch (\Exception $e) {
+        if ($db->inTransaction()) $db->rollBack();
         error_log('cgSetFulfilment: ' . $e->getMessage());
-        return false;
+        return 'Could not save. The problem has been logged.';
     }
 }
 
