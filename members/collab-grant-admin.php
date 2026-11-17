@@ -727,13 +727,6 @@ $pendingApps  = array_values(array_filter($allApps, fn($a) => $a['status'] === '
 $followUpApps = array_values(array_filter($apps, $cgNeedsFollowUp));
 $shownApps    = $view === 'review' ? $pendingApps
               : ($view === 'followup' ? $followUpApps : $apps);
-/*
- * How All is ordered. Applied (newest first) is the order the list has always
- * had; the others are for reconciling: an invoice against the grants on it,
- * a release date against the district's absences, a teacher by name.
- * Whatever has nothing to sort on — no invoice, no dates, no collaborator —
- * goes last, so it does not bury the rows that do.
- */
 /** The dates a grant releases someone: the granted ones once approved (a
  *  date turned down is not a release), otherwise the ones asked for. */
 function cgReleaseDates(array $a): array {
@@ -742,45 +735,6 @@ function cgReleaseDates(array $a): array {
     sort($d);
     return $d;
 }
-$cgSorts = ['applied' => 'Applied', 'date' => 'Release date', 'invoice' => 'Invoice',
-            'applicant' => 'Applicant', 'collaborator' => 'Collaborator', 'costed' => 'Costed'];
-$sort = $_GET['sort'] ?? 'applied';
-if (!isset($cgSorts[$sort])) $sort = 'applied';
-if ($view === 'all' && $sort !== 'applied') {
-    $sortKey = function (array $a) use ($sort, $invLines, $foldedUnder) {
-        switch ($sort) {
-            case 'costed':
-                // Least costed first — what still needs entering — then the
-                // finished ones. Not approved: nothing to cost, so last ('').
-                if ($a['status'] !== 'approved') return '';
-                [$c, $n] = cgCostedCount($invLines[(int)$a['id']] ?? [],
-                                         cgGrantPeople($a, $foldedUnder[(int)$a['id']] ?? []));
-                return sprintf('%d-%06.3f', $c >= $n ? 1 : 0, $n ? $c / $n : 1);
-            case 'date':
-                $d = cgReleaseDates($a);
-                return $d[0] ?? '';
-            case 'invoice':
-                $n = [];
-                foreach ($invLines[(int)$a['id']] ?? [] as $l) {
-                    if (trim((string)$l['invoice_number']) !== '') $n[] = trim((string)$l['invoice_number']);
-                }
-                natcasesort($n);
-                return (string)(array_values($n)[0] ?? '');
-            case 'applicant':
-                return (string)$a['applicant_name'];
-            default:   // collaborator
-                return !empty($a['has_collaborator']) ? trim((string)$a['collaborator_name']) : '';
-        }
-    };
-    usort($shownApps, function ($x, $y) use ($sortKey) {
-        $kx = $sortKey($x); $ky = $sortKey($y);
-        if (($kx === '') !== ($ky === '')) return $kx === '' ? 1 : -1;
-        return strnatcasecmp($kx, $ky)
-            ?: strnatcasecmp((string)$x['applicant_name'], (string)$y['applicant_name'])
-            ?: (int)$x['id'] <=> (int)$y['id'];
-    });
-}
-
 // 'print' is the plain read-through for a meeting; everything else is workable.
 $cgReadOnly   = ($view === 'print');
 
@@ -932,6 +886,26 @@ $totalDaysApproved = $personDays['approved'];
       color: #1a5c2e;
       margin-bottom: 1.5rem;
     }
+
+    /* ══ ALL — one line a grant ══════════════════════════════ */
+    .cg-grid-wrap { overflow-x: auto; border: 1.5px solid var(--border); border-radius: var(--radius);
+                    background: var(--white); }
+    .cg-grid { width: 100%; border-collapse: collapse; font-size: .88rem; }
+    .cg-grid th { text-align: left; padding: 0; border-bottom: 1.5px solid var(--border);
+                  background: var(--off-white); white-space: nowrap; }
+    .cg-grid-sort { all: unset; box-sizing: border-box; display: block; width: 100%; cursor: pointer;
+                    padding: .6rem .75rem; font-size: .74rem; font-weight: 800; letter-spacing: .05em;
+                    text-transform: uppercase; color: var(--gray-500); }
+    .cg-grid-sort:hover, .cg-grid-sort:focus-visible { color: var(--primary); }
+    .cg-grid td { padding: .55rem .75rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .cg-grid-line { cursor: pointer; }
+    .cg-grid-line:hover td, .cg-grid-item.is-open .cg-grid-line td { background: var(--off-white); }
+    .cg-grid-name { all: unset; cursor: pointer; font-weight: 700; color: var(--text); }
+    .cg-grid-name:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .cg-grid-none { color: var(--gray-400); }
+    .cg-grid-detail > td { padding: .75rem; background: var(--off-white); }
+    /* The line above already says who and what; the card is opened, not toggled. */
+    .cg-grid .app-card-head { display: none; }
 
     /* ══ REVIEW VIEW — accordion cards ══════════════════════ */
     .app-list { display: flex; flex-direction: column; gap: 1rem; }
@@ -1236,14 +1210,6 @@ $totalDaysApproved = $personDays['approved'];
         <a href="?view=print&year=<?= $year ?>" class="<?= $cgReadOnly ? 'active' : '' ?>"
            title="A plain read-through, for printing or reading at a meeting">Print view</a>
       </div>
-      <?php if ($view === 'all'): ?>
-        <div class="view-toggle cg-sortbar" aria-label="Sort">
-          <?php foreach ($cgSorts as $sk => $sl): ?>
-            <a href="?view=all&year=<?= $year ?><?= $sk === 'applied' ? '' : '&sort=' . $sk ?>"
-               class="<?= $sort === $sk ? 'active' : '' ?>"><?= $sl ?></a>
-          <?php endforeach; ?>
-        </div>
-      <?php endif; ?>
 
       <?php
         /*
@@ -2172,38 +2138,83 @@ $totalDaysApproved = $personDays['approved'];
       </div>
 
     <?php else: ?>
+      <?php
+        /* All is a list to find something in, so it is a table: one line a
+         * grant, sorted by clicking a heading, and the whole application —
+         * every detail and action — opening underneath the line clicked.
+         * Review and Follow-through stay as open cards: there the card is the
+         * job. */
+        $asTable = ($view === 'all');
+        $statusRank = ['approved' => 0, 'pending' => 1, 'waitlisted' => 2, 'declined' => 3];
+      ?>
+      <?php if ($asTable): ?>
+      <div class="cg-grid-wrap">
+      <table class="cg-grid" id="cg-grid" data-sort="pos" data-dir="asc">
+        <thead><tr>
+          <?php foreach (['applicant' => 'Applicant', 'collab' => 'Collaborator', 'date' => 'Dates',
+                          'status' => 'Status', 'costed' => 'Costed', 'invoice' => 'Invoice'] as $ck => $cl): ?>
+            <th scope="col" aria-sort="none"><button type="button" class="cg-grid-sort"
+                data-key="<?= $ck ?>" onclick="cgGridSort('<?= $ck ?>')"><?= $cl ?><span class="cg-grid-ind"></span></button></th>
+          <?php endforeach; ?>
+        </tr></thead>
+      <?php else: ?>
       <!-- ══ REVIEW VIEW — accordion ══════════════════════════════ -->
       <div class="app-list">
-        <?php foreach ($shownApps as $app):
+      <?php endif; ?>
+        <?php foreach ($shownApps as $gi => $app):
           $sc   = $statusColour[$app['status']] ?? $statusColour['pending'];
           $days = (int)$app['days_requested'];
         ?>
+        <?php if ($asTable):
+            $gPeople = cgGrantPeople($app, $foldedUnder[(int)$app['id']] ?? []);
+            $gCollab = !empty($app['has_collaborator']) ? trim((string)$app['collaborator_name']) : '';
+            $gDates  = cgReleaseDates($app);
+            $gInv    = trim((string)($app['invoice_number'] ?? ''));
+            $gCost   = $app['status'] === 'approved'
+                     ? cgCostedCount($invLines[(int)$app['id']] ?? [], $gPeople) : null;
+            // Least costed first, then finished; nothing to cost sorts last ('').
+            $gCostKey = $gCost === null ? ''
+                      : sprintf('%d-%06.3f', $gCost[0] >= $gCost[1] ? 1 : 0, $gCost[1] ? $gCost[0] / $gCost[1] : 1);
+            $gInvKey = '';
+            foreach ($invLines[(int)$app['id']] ?? [] as $l) {
+                $n = trim((string)$l['invoice_number']);
+                if ($n !== '' && ($gInvKey === '' || strnatcasecmp($n, $gInvKey) < 0)) $gInvKey = $n;
+            } ?>
+        <tbody class="cg-grid-item" data-pos="<?= $gi ?>"
+               data-applicant="<?= htmlspecialchars((string)$app['applicant_name']) ?>"
+               data-collab="<?= htmlspecialchars($gCollab) ?>"
+               data-date="<?= htmlspecialchars($gDates[0] ?? '') ?>"
+               data-status="<?= $statusRank[$app['status']] ?? 9 ?>"
+               data-costed="<?= $gCostKey ?>"
+               data-invoice="<?= htmlspecialchars($gInvKey) ?>">
+          <tr class="cg-grid-line" onclick="cgGridOpen(<?= (int)$app['id'] ?>)">
+            <td><button type="button" class="cg-grid-name" aria-expanded="false"
+                        aria-controls="cg-detail-<?= (int)$app['id'] ?>"
+                        onclick="event.stopPropagation();cgGridOpen(<?= (int)$app['id'] ?>)"><?=
+                htmlspecialchars((string)$app['applicant_name']) ?></button></td>
+            <td><?= $gCollab !== '' ? htmlspecialchars($gCollab) : '<span class="cg-grid-none">—</span>' ?></td>
+            <td><?= $gDates ? htmlspecialchars(implode(', ', array_map(fn($d) => date('M j', strtotime($d)), $gDates)))
+                            : '<span class="cg-grid-none">—</span>' ?></td>
+            <td><span class="app-status-badge" style="background:<?= $sc['bg'] ?>;border-color:<?= $sc['border'] ?>;color:<?= $sc['text'] ?>;"><?= $sc['label'] ?></span></td>
+            <td><?php if ($gCost !== null): ?><span class="cg-costed<?= $gCost[0] >= $gCost[1] ? ' done' : '' ?>"><?= $gCost[0] ?>/<?= $gCost[1] ?></span><?php
+                else: ?><span class="cg-grid-none">—</span><?php endif; ?></td>
+            <td><?= $gInv !== '' ? htmlspecialchars($gInv) : '<span class="cg-grid-none">—</span>' ?></td>
+          </tr>
+          <tr class="cg-grid-detail" id="cg-detail-<?= (int)$app['id'] ?>" hidden>
+            <td colspan="6">
+        <?php endif; ?>
         <?php // Open where the card is the job: pending in Review, paperwork in
-              // Follow-through. In All it is a list to find something in. ?>
-        <div class="app-card <?= ($view !== 'all' ) ? 'open' : '' ?>" id="app-<?= $app['id'] ?>">
+              // Follow-through. In All it opens from its table line. ?>
+        <div class="app-card open" id="app-<?= $app['id'] ?>">
 
           <div class="app-card-head" onclick="toggleCard(<?= $app['id'] ?>)">
             <div style="flex:1;min-width:0;">
               <div class="app-name"><?= htmlspecialchars($app['applicant_name']) ?></div>
               <div class="app-meta">
-                <?php
-                  // The field the list is sorted on, so the order can be read.
-                  $sortShow = '';
-                  if ($view === 'all' && $sort === 'date') {
-                      $sd = cgReleaseDates($app);
-                      $sortShow = $sd ? implode(', ', array_map(fn($d) => date('M j', strtotime($d)), $sd)) : 'no dates';
-                  } elseif ($view === 'all' && $sort === 'invoice') {
-                      $sortShow = trim((string)($app['invoice_number'] ?? '')) !== ''
-                          ? 'Inv ' . $app['invoice_number'] : 'no invoice';
-                  } elseif ($view === 'all' && $sort === 'collaborator') {
-                      $sortShow = !empty($app['has_collaborator']) && trim((string)$app['collaborator_name']) !== ''
-                          ? 'with ' . trim((string)$app['collaborator_name']) : 'no collaborator';
-                  }
-                ?>
                 <?= htmlspecialchars(implode(' · ', array_filter([trim((string)$app['school']),
                       trim((string)$app['position']),
                       cgDaysWord(cgEffectiveDays($app)),
-                      $sortShow !== '' ? $sortShow : date('M j', strtotime($app['submitted_at']))], 'strlen'))) ?>
+                      date('M j', strtotime($app['submitted_at']))], 'strlen'))) ?>
               </div>
             </div>
             <?php if ($app['status'] === 'approved'):
@@ -2726,8 +2737,18 @@ $totalDaysApproved = $personDays['approved'];
             <?php endif; ?>
           </div>
         </div>
+        <?php if ($asTable): ?>
+            </td>
+          </tr>
+        </tbody>
+        <?php endif; ?>
         <?php endforeach; ?>
+      <?php if ($asTable): ?>
+      </table>
       </div>
+      <?php else: ?>
+      </div>
+      <?php endif; ?>
 
     <?php endif; ?>
 
@@ -2743,11 +2764,54 @@ $totalDaysApproved = $personDays['approved'];
     var el = document.querySelector(location.hash);
     if (!el) return;
     el.classList.add('open');
+    // In All the card sits in its table line's hidden detail row.
+    var tr = el.closest('tr.cg-grid-detail');
+    if (tr) cgGridOpen(parseInt(location.hash.slice(5), 10), true);
     el.scrollIntoView({ block: 'center' });
   }
   window.addEventListener('hashchange', openHashCard);
   openHashCard();
 })();
+
+/* All: open a grant's details under its line. */
+function cgGridOpen(id, only) {
+  var tr = document.getElementById('cg-detail-' + id);
+  if (!tr) return;
+  var show = only ? true : tr.hidden;
+  tr.hidden = !show;
+  var item = tr.closest('tbody');
+  item.classList.toggle('is-open', show);
+  var b = item.querySelector('.cg-grid-name');
+  if (b) b.setAttribute('aria-expanded', show ? 'true' : 'false');
+}
+
+/* All: sort by a column. A second click on the same one reverses it. Empty
+ * values — no invoice, no dates, nothing to cost — stay at the bottom either
+ * way, so they never bury the lines that have something to sort on. */
+function cgGridSort(key) {
+  var t = document.getElementById('cg-grid');
+  if (!t) return;
+  var dir = (t.getAttribute('data-sort') === key && t.getAttribute('data-dir') === 'asc') ? 'desc' : 'asc';
+  var items = Array.prototype.slice.call(t.querySelectorAll('tbody.cg-grid-item'));
+  var cmp = function (a, b) {
+    return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+  };
+  items.sort(function (x, y) {
+    var a = x.getAttribute('data-' + key) || '', b = y.getAttribute('data-' + key) || '';
+    if ((a === '') !== (b === '')) return a === '' ? 1 : -1;
+    var c = cmp(a, b);
+    if (dir === 'desc') c = -c;
+    return c || (x.getAttribute('data-pos') - y.getAttribute('data-pos'));
+  });
+  items.forEach(function (it) { t.appendChild(it); });
+  t.setAttribute('data-sort', key);
+  t.setAttribute('data-dir', dir);
+  t.querySelectorAll('.cg-grid-sort').forEach(function (b) {
+    var on = b.getAttribute('data-key') === key;
+    b.querySelector('.cg-grid-ind').textContent = on ? (dir === 'asc' ? ' ↑' : ' ↓') : '';
+    b.parentNode.setAttribute('aria-sort', on ? (dir === 'asc' ? 'ascending' : 'descending') : 'none');
+  });
+}
 
 function toggleCard(id) {
       document.getElementById('app-' + id).classList.toggle('open');

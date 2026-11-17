@@ -1118,6 +1118,9 @@ function cgGrantPeople(array $app, array $folded = []): array {
         foreach (cgSplitNames((string)($app['collaborator_name'] ?? '')) as $n) $add($n);
     }
     foreach ($folded as $f) {
+        // Only copies that release anyone — the same approved-or-pending test
+        // the days ledger uses. A declined copy put nobody in a classroom.
+        if (!in_array($f['status'] ?? '', ['approved', 'pending'], true)) continue;
         $add((string)$f['applicant_name']);
         // A folded copy may name someone the primary does not; the days
         // ledger still charges them, so they are a TTOC to bill here too.
