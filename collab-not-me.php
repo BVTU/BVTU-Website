@@ -97,8 +97,9 @@ $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
           <?php if (trim((string)$app['collaboration_desc']) !== ''): ?>
           <li><?= $h(mb_substr($app['collaboration_desc'], 0, 300)) ?></li>
           <?php endif; ?>
-          <li><?= (int)cgEffectiveDays($app) ?> release
-              <?= cgEffectiveDays($app) === 1 ? 'day' : 'days' ?> each</li>
+          <li><?= htmlspecialchars(cgDaysWord(cgEffectiveDays($app))) ?> of release each<?php
+                $nmDates = cgAppDateWeights($app);
+                if ($nmDates): ?>: <?= htmlspecialchars(cgPartsList($nmDates)) ?><?php endif; ?></li>
         </ul>
 
         <p>If that is not you, or it is not something you agreed to, tell us here and we will

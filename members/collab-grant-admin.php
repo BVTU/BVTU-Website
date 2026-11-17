@@ -68,7 +68,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
             // sheet to contradict it. A release day reconciled against a
             // teacher the application does not name is the worst kind of wrong.
             !empty($a['has_collaborator']) ? $a['collaborator_name'] : '',
-            $a['days_requested'],
+            cgFmtDays($a['days_requested']),
             ($a['days_approved'] ?? null) !== null ? cgFmtDays($a['days_approved']) : '',
             $pdStr,
             $a['reviewed_at'] ? date('Y-m-d', strtotime($a['reviewed_at'])) : '',
@@ -502,29 +502,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_id'])
     // without touching the box.
     $grantDays = null;
     $refused   = '';
-    $newParts  = null;   // date_parts to store, when the Executive changed one
+    $grantMap  = null;   // date => part granted, 0 for a date not granted
     if ($action === 'approved') {
         $asked = cgGetApplication($id);
         $listed = $asked ? cgAppDayParts($asked) : [];
         if (!empty($_POST['grant_by_date']) && $listed) {
             /* One choice per date, so the part granted is tied to the day it
-             * falls on. A date marked not granted keeps what was asked for it;
-             * the ledger then sees fewer days granted than listed, and treats
-             * the dates as unsettled exactly as it always has. */
-            $granted = [];
-            $keep    = cgPartsOf($asked);
+             * falls on. Every date's decision is kept, "not granted" included,
+             * apart from what the applicant asked: reopening the application
+             * has to show what was decided, and re-approving it unchanged must
+             * not quietly grant the date that was turned down. */
+            $grantMap = [];
             foreach ($listed as $d => $askedPart) {
                 $raw = (string)($_POST['grant'][$d] ?? cgFmtDays($askedPart));
-                if ($raw === '0') continue;
+                if ($raw === '0') { $grantMap[$d] = 0.0; continue; }
                 $v = cgPartValue($raw);
                 if ($v === null) { $refused = 'Choose how much of ' . date('D M j', strtotime($d)) . ' to grant.'; break; }
-                $granted[$d] = $v;
-                if ($v < 1) $keep[$d] = $v; else unset($keep[$d]);
+                $grantMap[$d] = $v;
             }
-            if (!$refused && !$granted) $refused = 'No date is granted. Decline it instead, or grant at least one.';
-            $grantDays = cgSumParts($granted);
-            ksort($keep);
-            if ($keep !== cgPartsOf($asked)) $newParts = $keep;
+            $grantDays = cgSumParts($grantMap);
+            if (!$refused && $grantDays <= 0) $refused = 'No date is granted. Decline it instead, or grant at least one.';
         } else {
             // An application with no dates: a number is all there is.
             $raw       = trim((string)($_POST['days_approved'] ?? ''));
@@ -542,17 +539,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_id'])
     if ($refused !== '') {
         $notice = $refused;
     } else {
-    if ($newParts !== null) {
-        // Recorded as an edit, so the history says who changed a morning to a
-        // full day. Not a change after approval: it is the approval.
-        $wasFlagged = !empty($asked['changed_after_ok']);
-        $all = [];
-        foreach (array_keys($listed) as $d) $all[$d] = $newParts[$d] ?? 1.0;
-        cgApplyEdit($id, ['date_parts' => $newParts, 'days_requested' => cgSumParts($all)],
-                    $member['email'], true);
-        if (!$wasFlagged) cgUnflagChangedAfterOk($id);
-    }
-    cgUpdateStatus($id, $action, $member['email'], $notes, $grantDays);
+    cgUpdateStatus($id, $action, $member['email'], $notes, $grantDays, $grantMap);
 
     if ($action === 'approved') {
         $target = cgGetApplication($id);
@@ -2433,8 +2420,9 @@ $totalDaysApproved = $personDays['approved'];
               <?php endif; ?>
 
               <?php $grantList = cgAppDayParts($app);
-                    // What was granted per date, when the record can say; else what was asked.
-                    $grantWas  = (($app['days_approved'] ?? null) !== null) ? cgAppDateWeights($app) : [];
+                    // What was decided per date, "not granted" included, when it
+                    // still matches the dates listed; else what was asked.
+                    $grantWas  = cgGrantedParts($app);
                     $fieldCss  = 'border:1px solid var(--border);border-radius:7px;padding:.4rem .5rem;'
                                . 'font-size:.88rem;font-family:inherit;background:var(--white);'; ?>
               <?php if ($grantList): ?>
@@ -2442,7 +2430,7 @@ $totalDaysApproved = $personDays['approved'];
                   <legend>Days to grant</legend>
                   <input type="hidden" name="grant_by_date" value="1">
                   <?php foreach ($grantList as $gd => $gp):
-                      $gv = cgFmtDays($grantWas[$gd] ?? $gp); ?>
+                      $gv = array_key_exists($gd, $grantWas) ? cgFmtDays($grantWas[$gd]) : cgFmtDays($gp); ?>
                     <label>
                       <span><?= date('D M j', strtotime($gd)) ?></span>
                       <select name="grant[<?= htmlspecialchars($gd) ?>]" style="<?= $fieldCss ?>">

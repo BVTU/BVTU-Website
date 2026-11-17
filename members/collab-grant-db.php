@@ -185,17 +185,25 @@ function cgGetApplication(int $id): ?array {
 }
 
 function cgUpdateStatus(int $id, string $status, string $reviewedBy, string $notes = '',
-                        ?float $daysApproved = null): void {
+                        ?float $daysApproved = null, ?array $grantMap = null): void {
     cgEnsureEditSupport();
     // Only an approval carries a day count. Anything else clears it, so a grant
     // reset to pending does not keep counting against the applicant's three days.
-    if ($status !== 'approved') $daysApproved = null;
+    if ($status !== 'approved') { $daysApproved = null; $grantMap = null; }
+    $hasGp = cgHasCollabColumn('granted_parts');
     $s = getDB()->prepare(
         "UPDATE collab_grant_applications
-         SET status=?, admin_notes=?, reviewed_at=NOW(), reviewed_by=?, days_approved=?
+         SET status=?, admin_notes=?, reviewed_at=NOW(), reviewed_by=?, days_approved=?"
+        . ($hasGp ? ", granted_parts=?" : "") . "
          WHERE id=?"
     );
-    $s->execute([$status, $notes, $reviewedBy, $daysApproved, $id]);
+    $args = [$status, $notes, $reviewedBy, $daysApproved];
+    if ($hasGp) {
+        if ($grantMap !== null) ksort($grantMap);
+        $args[] = $grantMap ? json_encode(array_map(function ($v) { return round((float)$v, 2); }, $grantMap)) : null;
+    }
+    $args[] = $id;
+    $s->execute($args);
 }
 
 // Sent to applicant when their application is approved
@@ -800,10 +808,10 @@ function cgSendCollaboratorEmail(array $app, bool $force = false): array {
      * the raw column, an application proposing three dates with one day
      * approved told the collaborator to book three days in a letter whose
      * next paragraph said one. */
-    $bookDates = cgAppDates($app);
+    $bookDates = cgAppDateWeights($app);
     if ($bookDates) {
         $dateLine = 'The ' . (count($bookDates) === 1 ? 'day' : 'days') . ' to book: '
-                  . cgDateList($bookDates, $app['date_parts'] ?? null) . "\n\n";
+                  . cgPartsList($bookDates) . "\n\n";
     } elseif (cgDateList($app['proposed_dates'] ?? '') !== 'none') {
         /* Dates are on the application, but not as many as the days granted,
          * so which of them this release covers is genuinely unknown. Saying
@@ -1128,6 +1136,10 @@ function cgEnsureEditSupport(): void {
         // The dates that are less than a full day, as {"Y-m-d": 0.6}. NULL
         // or {} means every listed date is a whole day.
         'date_parts'       => 'TEXT DEFAULT NULL',
+        // What the Executive decided for each listed date, {"Y-m-d": 0.6},
+        // with 0 for a date not granted. Kept apart from date_parts, which is
+        // what was asked. NULL until an approval decides it date by date.
+        'granted_parts'    => 'TEXT DEFAULT NULL',
     ] as $col => $type) {
         try {
             $db->query("SELECT `$col` FROM collab_grant_applications LIMIT 1");
@@ -1540,6 +1552,28 @@ function cgAppDayParts(array $app): array {
     return $out;
 }
 
+/**
+ * What the Executive decided for each listed date, 0 meaning not granted — or
+ * [] when nothing was decided date by date, or the dates have changed since.
+ * An applicant who moves a date after approval makes the decision about the
+ * old one meaningless, and applying it to the new one would be a guess.
+ */
+function cgGrantedParts(array $app): array {
+    $raw = json_decode((string)($app['granted_parts'] ?? ''), true);
+    if (!is_array($raw) || !$raw) return [];
+    $out = [];
+    foreach ($raw as $d => $v) {
+        $t = strtotime((string)$d);
+        $v = round((float)$v, 2);
+        if (!$t || $v < 0 || $v > 1) return [];
+        $out[date('Y-m-d', $t)] = $v;
+    }
+    ksort($out);
+    $listed = cgAppDatesLoose($app);
+    sort($listed);
+    return array_keys($out) === $listed ? $out : [];
+}
+
 /** The sum of a date => value map, to hundredths. */
 function cgSumParts(array $parts): float {
     $n = 0.0;
@@ -1834,6 +1868,13 @@ function cgAppDates(array $app): array {
 function cgAppDateWeights(array $app): array {
     $raw = json_decode((string)($app['proposed_dates'] ?? ''), true);
     if (!is_array($raw) || !$raw) return [];
+    // Decided date by date: the dates granted, at the part granted.
+    if (($app['status'] ?? '') === 'approved' && ($app['days_approved'] ?? null) !== null) {
+        $g = cgGrantedParts($app);
+        if ($g && abs(cgSumParts($g) - cgEffectiveDays($app)) < 0.001) {
+            return array_filter($g, function ($v) { return $v > 0; });
+        }
+    }
     $parts = cgPartsOf($app);
     $out = [];
     foreach ($raw as $d) {
@@ -2076,19 +2117,24 @@ function cgDaysLedger(int $year, bool $fresh = false): array {
         }
         if ($dates) {
             foreach ($dates as $d => $w) {
+                $ap = $status === 'approved';
                 if (!isset($people[$key]['days'][$d])) {
-                    $people[$key]['days'][$d] = ['status' => $status, 'apps' => [$appId], 'w' => $w];
+                    // wa / wp: the largest approved and pending share of the day.
+                    $people[$key]['days'][$d] = ['status' => $status, 'apps' => [$appId],
+                                                 'w' => $w, 'wa' => $ap ? $w : 0.0, 'wp' => $ap ? 0.0 : $w];
                     continue;
                 }
-                if (!in_array($appId, $people[$key]['days'][$d]['apps'], true)) {
-                    $people[$key]['days'][$d]['apps'][] = $appId;
-                }
+                $day =& $people[$key]['days'][$d];
+                if (!in_array($appId, $day['apps'], true)) $day['apps'][] = $appId;
                 // Two claims on one date are still one day away at most: the
-                // larger share stands, not the sum.
-                $people[$key]['days'][$d]['w'] = max($people[$key]['days'][$d]['w'], $w);
-                // Approved outranks pending: the day is spoken for either way,
-                // and counting it as pending would understate what is committed.
-                if ($status === 'approved') $people[$key]['days'][$d]['status'] = 'approved';
+                // larger share stands, not the sum. Approved and pending are
+                // held apart, so a pending full day on top of an approved
+                // afternoon is 0.4 approved and 0.6 awaiting a decision — not a
+                // whole day approved that nobody approved.
+                if ($ap) $day['wa'] = max($day['wa'], $w); else $day['wp'] = max($day['wp'], $w);
+                $day['w'] = max($day['w'], $w);
+                if ($ap) $day['status'] = 'approved';
+                unset($day);
             }
         } elseif ($status === 'approved') {
             $people[$key]['undated_approved'] += $days;
@@ -2117,6 +2163,7 @@ function cgDaysLedger(int $year, bool $fresh = false): array {
                     " . ($hasCe ? "collaborator_email," : "'' AS collaborator_email,") . "
                     " . ($hasPd ? "proposed_dates," : "NULL AS proposed_dates,") . "
                     " . (cgHasCollabColumn('date_parts') ? "date_parts," : "NULL AS date_parts,") . "
+                    " . (cgHasCollabColumn('granted_parts') ? "granted_parts," : "NULL AS granted_parts,") . "
                     has_collaborator, status, days_requested, days_approved
              FROM collab_grant_applications
              WHERE school_year=? AND status IN ('approved','pending')");
@@ -2222,7 +2269,8 @@ function cgDaysLedger(int $year, bool $fresh = false): array {
          */
         $appr = $pend = 0.0;
         foreach ($p['days'] as $info) {
-            if ($info['status'] === 'approved') $appr += $info['w']; else $pend += $info['w'];
+            $appr = round($appr + $info['wa'], 2);
+            $pend = round($pend + max(0.0, $info['wp'] - $info['wa']), 2);
         }
         $p['approved'] = round($appr + (float)$p['undated_approved'], 2);
         $p['pending']  = round($pend + (float)$p['undated_pending'], 2);
