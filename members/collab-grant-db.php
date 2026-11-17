@@ -1239,8 +1239,11 @@ function cgSetFulfilment(int $id, array $lines, string $actor, bool $builtBlind 
                 return 'The invoices could not be read when this page loaded, so nothing was saved. Reload the page and try again.';
             }
         }
-        if (!$hasLines && count($clean) > 1) {
-            return 'Only one invoice can be recorded on this server just now. The problem has been logged.';
+        // The lines are the record and the summary is worked out from them.
+        // Saving one without the other would leave them disagreeing once the
+        // table is back, so nothing is saved at all.
+        if (!$hasLines) {
+            return 'The invoices cannot be saved just now, so nothing was changed. The problem has been logged.';
         }
         $db->beginTransaction();
 
