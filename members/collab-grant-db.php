@@ -1091,7 +1091,10 @@ function cgInvoiceLinesFor(array $apps): array {
     foreach ($apps as $a) {
         if (isset($out[(int)$a['id']])) continue;
         if (trim((string)($a['invoice_number'] ?? '')) !== '' || ($a['release_cost'] ?? null) !== null) {
-            $out[(int)$a['id']][] = ['person' => '', 'invoice_number' => (string)($a['invoice_number'] ?? ''),
+            // 'unread': the real lines exist but could not be read, so this
+            // summary says nothing about who has been billed.
+            $out[(int)$a['id']][] = ['person' => '', 'unread' => cgInvoiceReadFailed(),
+                                     'invoice_number' => (string)($a['invoice_number'] ?? ''),
                                      'amount' => ($a['release_cost'] ?? null) === null ? null : (float)$a['release_cost']];
         }
     }
@@ -1114,7 +1117,14 @@ function cgGrantPeople(array $app, array $folded = []): array {
     if (!empty($app['has_collaborator'])) {
         foreach (cgSplitNames((string)($app['collaborator_name'] ?? '')) as $n) $add($n);
     }
-    foreach ($folded as $f) $add((string)$f['applicant_name']);
+    foreach ($folded as $f) {
+        $add((string)$f['applicant_name']);
+        // A folded copy may name someone the primary does not; the days
+        // ledger still charges them, so they are a TTOC to bill here too.
+        if (!empty($f['has_collaborator'])) {
+            foreach (cgSplitNames((string)($f['collaborator_name'] ?? '')) as $n) $add($n);
+        }
+    }
     return array_values($out);
 }
 
@@ -1136,6 +1146,7 @@ function cgInvoiceReadFailed(?bool $set = null): bool {
  */
 function cgCostedCount(array $lines, array $people): array {
     $n = count($people);
+    foreach ($lines as $l) if (!empty($l['unread'])) return [0, $n];   // not known
     $done = [];
     foreach ($lines as $l) {
         if ($l['amount'] === null) continue;
@@ -1164,6 +1175,8 @@ function cgInvoiceLinesOpen(array $lines): bool {
  */
 function cgInvoicingOpen(array $lines, array $people): bool {
     if (cgInvoiceLinesOpen($lines)) return true;
+    // Lines that could not be read prove nothing finished; keep it open.
+    foreach ($lines as $l) if (!empty($l['unread'])) return true;
     $done = [];
     foreach ($lines as $l) {
         if (trim((string)$l['person']) === '') return false;

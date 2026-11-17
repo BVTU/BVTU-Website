@@ -743,12 +743,19 @@ function cgReleaseDates(array $a): array {
     return $d;
 }
 $cgSorts = ['applied' => 'Applied', 'date' => 'Release date', 'invoice' => 'Invoice',
-            'applicant' => 'Applicant', 'collaborator' => 'Collaborator'];
+            'applicant' => 'Applicant', 'collaborator' => 'Collaborator', 'costed' => 'Costed'];
 $sort = $_GET['sort'] ?? 'applied';
 if (!isset($cgSorts[$sort])) $sort = 'applied';
 if ($view === 'all' && $sort !== 'applied') {
-    $sortKey = function (array $a) use ($sort, $invLines) {
+    $sortKey = function (array $a) use ($sort, $invLines, $foldedUnder) {
         switch ($sort) {
+            case 'costed':
+                // Least costed first — what still needs entering — then the
+                // finished ones. Not approved: nothing to cost, so last ('').
+                if ($a['status'] !== 'approved') return '';
+                [$c, $n] = cgCostedCount($invLines[(int)$a['id']] ?? [],
+                                         cgGrantPeople($a, $foldedUnder[(int)$a['id']] ?? []));
+                return sprintf('%d-%06.3f', $c >= $n ? 1 : 0, $n ? $c / $n : 1);
             case 'date':
                 $d = cgReleaseDates($a);
                 return $d[0] ?? '';
