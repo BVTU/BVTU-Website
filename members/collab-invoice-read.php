@@ -446,8 +446,12 @@ function cgApplyInvoiceMatches(array $picks, string $actor): array {
                 'amount' => $l['amount'] === null ? '' : (string)$l['amount']], $lines);
         };
         $record = function (\PDO $db) use ($id, &$toRecord, $actor) {
+            // A record left behind after its cost was cleared by hand is
+            // stale — the status check under the lock already said this
+            // absence is not on the grant — so it is replaced, not tripped over.
             $ins = $db->prepare("INSERT INTO collab_grant_invoice_imports
-                                 (app_id, person_key, invoice_number, absence_date, cost, created_by) VALUES (?,?,?,?,?,?)");
+                                 (app_id, person_key, invoice_number, absence_date, cost, created_by) VALUES (?,?,?,?,?,?)
+                                 ON DUPLICATE KEY UPDATE cost=VALUES(cost), created_by=VALUES(created_by), created_at=CURRENT_TIMESTAMP");
             foreach ($toRecord as $a) $ins->execute([(int)$id, cgNameKey($a['person']), $a['inv'], $a['date'], $a['cost'], $actor]);
         };
         $err = cgSetFulfilment((int)$id, $build, $actor, false, $record);

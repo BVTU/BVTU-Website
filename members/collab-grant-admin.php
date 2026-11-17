@@ -498,6 +498,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_id'])
     $id     = (int)$_POST['app_id'];
     $action = $_POST['action'];
     $notes  = trim($_POST['admin_notes'] ?? '');
+    $lockedApp = cgGetApplication($id);
 
     // Blank or absent falls back to what was asked for, so the button still works
     // without touching the box.
@@ -536,6 +537,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_id'])
         if (!$refused && $grantDays > CG_DAY_CAP + 0.001) {
             $refused = 'One grant carries at most ' . CG_DAY_CAP . ' days.';
         }
+    }
+    if ($lockedApp && cgDecisionLocked($lockedApp)) {
+        $refused = 'The release days on that grant have passed, so its decision is closed.';
     }
     if ($refused !== '') {
         $notice = $refused;
@@ -801,11 +805,14 @@ $invBlind = cgInvoiceReadFailed();
 $cgNeedsFollowUp = function (array $a) use ($invLines, $foldedUnder): bool {
     // No Atrieve tick of its own: an invoice for the release means it was
     // booked. cgSetFulfilment() stamps it from the lines.
-    return $a['status'] === 'approved'
-        && (trim((string)($a['invoice_number'] ?? '')) === ''
-            || ($a['release_cost'] ?? null) === null
-            || cgInvoicingOpen($invLines[(int)$a['id']] ?? [],
-                               cgGrantPeople($a, $foldedUnder[(int)$a['id']] ?? [])));
+    if ($a['status'] !== 'approved') return false;
+    $billable = cgGrantPeople($a, $foldedUnder[(int)$a['id']] ?? []);
+    $lines    = $invLines[(int)$a['id']] ?? [];
+    // Everyone on it uncapped: there is nothing to bill.
+    if (!$billable) return cgInvoicingOpen($lines, []);
+    return trim((string)($a['invoice_number'] ?? '')) === ''
+        || ($a['release_cost'] ?? null) === null
+        || cgInvoicingOpen($lines, $billable);
 };
 /*
  * Built from every application, folded or not.
@@ -820,6 +827,18 @@ $pendingApps  = array_values(array_filter($allApps, fn($a) => $a['status'] === '
 $followUpApps = array_values(array_filter($apps, $cgNeedsFollowUp));
 $shownApps    = $view === 'review' ? $pendingApps
               : ($view === 'followup' ? $followUpApps : $apps);
+/**
+ * A decision that can no longer be changed: made, and every release date it
+ * covers is past. Approving, declining or waitlisting then would rewrite what
+ * already happened in a classroom. A pending application stays open whatever
+ * its dates — deciding one late is still deciding it.
+ */
+function cgDecisionLocked(array $a): bool {
+    if (($a['status'] ?? 'pending') === 'pending') return false;
+    $d = cgReleaseDates($a);
+    return $d && end($d) < date('Y-m-d');
+}
+
 /** The dates a grant releases someone: the granted ones once approved (a
  *  date turned down is not a release), otherwise the ones asked for. */
 function cgReleaseDates(array $a): array {
@@ -1015,6 +1034,15 @@ $totalDaysApproved = $personDays['approved'];
     .cg-grid-none { color: var(--gray-400); }
     .cg-grid-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
     .cg-grid-detail > td { padding: .75rem; background: var(--off-white); }
+    /* Costs first in an opened line; the application and decision fold. */
+    .cg-grid .app-card-body { display: flex; flex-direction: column; }
+    .cg-grid .app-action-form.fulfil { order: -1; margin-top: 0 !important; border-top: 0; padding-top: 0; }
+    .cg-fold { border-top: 1px solid var(--border); padding: .55rem 0; }
+    .cg-fold > summary { cursor: pointer; font-size: .82rem; font-weight: 700; color: var(--gray-600);
+                         list-style-position: inside; }
+    .cg-fold > summary:hover { color: var(--primary); }
+    .cg-fold-body { padding-top: .6rem; }
+    .cg-closed { margin: .5rem 0; font-size: .86rem; color: var(--gray-600); }
     /* The line above already says who, the status and the costing; the card
        keeps only its school · position · days · applied line, and is opened
        from the table line rather than toggled. */
@@ -2409,6 +2437,8 @@ $totalDaysApproved = $personDays['approved'];
           <tr class="cg-grid-detail" id="cg-detail-<?= (int)$app['id'] ?>" hidden>
             <td colspan="7">
         <?php endif; ?>
+        <?php $cardLocked = cgDecisionLocked($app);
+              $cardRel    = cgReleaseDates($app); ?>
         <?php // Open where the card is the job: pending in Review, paperwork in
               // Follow-through. In All it opens from its table line. ?>
         <div class="app-card open" id="app-<?= $app['id'] ?>">
@@ -2435,6 +2465,10 @@ $totalDaysApproved = $personDays['approved'];
           </div>
 
           <div class="app-card-body">
+            <?php /* In All, the opened line leads with the costs and folds
+                     the rest: the application as submitted, and the
+                     decision. Everything is still there, a click away. */ ?>
+            <?php if ($asTable): ?><details class="cg-fold"><summary>Application</summary><div class="cg-fold-body"><?php endif; ?>
             <?php if (!empty($app['duplicate_of'])): ?>
             <?php /* It is here because it still needs deciding, not because it
                    * is an ordinary application. Unmarked it read as a second
@@ -2618,10 +2652,23 @@ $totalDaysApproved = $personDays['approved'];
             <div class="app-text-label">Goals</div>
             <div class="app-text-block"><?= htmlspecialchars($app['goals']) ?></div>
             <?php endif; ?>
+            <?php if ($asTable): ?></div></details><?php endif; ?>
 
 
 
-            <?php if ($view !== 'followup'): ?>
+            <?php if ($asTable): ?><details class="cg-fold"><summary>Decision<?=
+                $cardLocked ? ' <span class="cg-grid-none">· ' . htmlspecialchars(ucfirst((string)$app['status'])) . ', closed</span>' : '' ?></summary><div class="cg-fold-body"><?php endif; ?>
+            <?php if ($cardLocked): ?>
+              <p class="cg-closed"><?= htmlspecialchars(ucfirst((string)$app['status'])) ?><?=
+                ($app['status'] === 'approved' && ($app['days_approved'] ?? null) !== null) ? ' for ' . htmlspecialchars(cgDaysWord($app['days_approved'])) : '' ?>.
+                The release <?= count($cardRel) === 1 ? 'day was' : 'days were' ?>
+                <?= htmlspecialchars(implode(', ', array_map(fn($d) => date('M j', strtotime($d)), $cardRel))) ?>,
+                so the decision is closed.</p>
+              <?php if (trim((string)$app['admin_notes']) !== ''): ?>
+                <div class="app-text-label">Internal notes</div>
+                <div class="app-text-block" style="font-style:italic;"><?= htmlspecialchars($app['admin_notes']) ?></div>
+              <?php endif; ?>
+            <?php elseif ($view !== 'followup'): ?>
             <div class="cg-decision">
               <?php
                 // Both people on an application spend days, so the lead's standing
@@ -2826,6 +2873,7 @@ $totalDaysApproved = $personDays['approved'];
               <p class="cg-followup-hint"><a href="?view=all&amp;year=<?= $year ?>#app-<?= (int)$app['id'] ?>">Change the decision or the days →</a></p>
             <?php endif; ?>
 
+            <?php if (!$cardLocked): ?>
             <?php /*
              * Kept out of the decision path on purpose — these are wanted
              * perhaps twice a term, and they used to sit between the goals and
@@ -2882,6 +2930,8 @@ $totalDaysApproved = $personDays['approved'];
                 </form>
               </div>
             </details>
+            <?php endif; ?>
+            <?php if ($asTable): ?></div></details><?php endif; ?>
 
             <?php // Only once approved: before that there is no absence to log
                   // and no invoice to record, and an empty box invites guessing. ?>

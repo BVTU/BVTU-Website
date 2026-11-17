@@ -1181,6 +1181,46 @@ function cgGrantPeopleDetail(array $app, array $folded = []): array {
 }
 
 /**
+ * A name on a grant was corrected: the invoice lines and the invoice
+ * reader's records under the old spelling follow it, on this application and
+ * on the one it is folded under (whose rows hold its people). Otherwise the
+ * next read of the same invoice would not recognise the absence as saved and
+ * add it again.
+ */
+function cgRenameInvoicePerson(int $appId, string $old, string $new): void {
+    $ok = cgNameKey($old); $nk = cgNameKey($new);
+    if ($ok === '' || $nk === '' || $ok === $nk) return;
+    $db  = getDB();
+    $ids = [$appId];
+    try {
+        $st = $db->prepare("SELECT duplicate_of FROM collab_grant_applications WHERE id=?");
+        $st->execute([$appId]);
+        $dup = (int)$st->fetchColumn();
+        if ($dup) $ids[] = $dup;
+    } catch (\Exception $e) {}
+    foreach ($ids as $id) {
+        if (cgEnsureInvoiceLines()) {
+            try {
+                $st = $db->prepare("SELECT id, person FROM collab_grant_invoices WHERE app_id=?");
+                $st->execute([$id]);
+                $up = $db->prepare("UPDATE collab_grant_invoices SET person=? WHERE id=?");
+                foreach ($st->fetchAll() as $l) {
+                    if (cgNameKey((string)$l['person']) === $ok) $up->execute([trim($new), (int)$l['id']]);
+                }
+            } catch (\Exception $e) { error_log('cgRenameInvoicePerson lines: ' . $e->getMessage()); }
+        }
+        if (function_exists('cgEnsureInvoiceImports') && cgEnsureInvoiceImports()) {
+            try {
+                $db->prepare("UPDATE IGNORE collab_grant_invoice_imports SET person_key=? WHERE app_id=? AND person_key=?")
+                   ->execute([$nk, $id, $ok]);
+                $db->prepare("DELETE FROM collab_grant_invoice_imports WHERE app_id=? AND person_key=?")
+                   ->execute([$id, $ok]);
+            } catch (\Exception $e) { error_log('cgRenameInvoicePerson imports: ' . $e->getMessage()); }
+        }
+    }
+}
+
+/**
  * Two names on one grant are one teacher, one of them misspelled: correct the
  * spelling where it was typed, and move any invoice line across.
  *
@@ -1448,8 +1488,12 @@ function cgYearReleaseCost(int $year): array {
          * amount. A grant with one teacher's TTOC recorded and another's still
          * to come has a subtotal in the total, but is not counted as costed —
          * or the panel would drop its "so far" for a figure that is not final. */
-        if (($g['release_cost'] ?? null) !== null
-            && !cgInvoicingOpen($lines[(int)$g['id']] ?? [], cgGrantPeople($g, $folded[(int)$g['id']] ?? []))) {
+        $billable = cgGrantPeople($g, $folded[(int)$g['id']] ?? []);
+        $gLines   = $lines[(int)$g['id']] ?? [];
+        // Everyone on it uncapped: nothing to bill, so finished once no
+        // half-filled line is left over.
+        if (!$billable ? !cgInvoicingOpen($gLines, [])
+                       : (($g['release_cost'] ?? null) !== null && !cgInvoicingOpen($gLines, $billable))) {
             $out['costed']++;
         }
     }
@@ -1657,6 +1701,20 @@ function cgApplyEdit(int $id, array $values, string $actor, bool $isAdmin): arra
 
     getDB()->prepare("INSERT INTO collab_grant_edits (app_id, changed_by, by_admin, changes) VALUES (?,?,?,?)")
            ->execute([$id, $actor, $isAdmin ? 1 : 0, json_encode($changed, JSON_UNESCAPED_UNICODE)]);
+
+    // A corrected name carries its invoice rows with it. For the collaborator
+    // field that is only safe to tell when exactly one name went and one
+    // came: anything more is a change of people, not of spelling.
+    if (isset($changed['applicant_name'])) {
+        cgRenameInvoicePerson($id, (string)$changed['applicant_name'][0], (string)$changed['applicant_name'][1]);
+    }
+    if (isset($changed['collaborator_name'])) {
+        $was = cgSplitNames((string)$changed['collaborator_name'][0]);
+        $now = cgSplitNames((string)$changed['collaborator_name'][1]);
+        $gone = array_values(array_filter($was, fn($n) => !in_array(cgNameKey($n), array_map('cgNameKey', $now), true)));
+        $came = array_values(array_filter($now, fn($n) => !in_array(cgNameKey($n), array_map('cgNameKey', $was), true)));
+        if (count($gone) === 1 && count($came) === 1) cgRenameInvoicePerson($id, $gone[0], $came[0]);
+    }
 
     // Naming a different collaborator makes every record of the telling wrong:
     // the new person has not been emailed, no send to them has failed, and
