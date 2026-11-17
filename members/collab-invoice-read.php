@@ -384,12 +384,16 @@ function cgApplyInvoiceMatches(array $picks, string $actor): array {
     foreach ($byApp as $id => $absences) {
         $app = cgGetApplication((int)$id);
         if (!$app) { $errors[] = 'Grant #' . $id . ' could not be found.'; continue; }
-        $toRecord = []; $skip = 0; $blind = false;
+        $toRecord = []; $skip = 0; $blind = false; $stale = false;
         /* Worked out inside cgSetFulfilment()'s lock, from the lines and
          * records as they are now — not as they were when the page was drawn
          * — so two people saving onto one grant cannot overwrite each other. */
-        $build = function (array $cur) use ($absences, &$toRecord, &$skip, &$blind) {
+        $build = function (array $cur) use ($absences, &$toRecord, &$skip, &$blind, &$stale) {
             $toRecord = []; $skip = 0;
+            // Checked again under the lock: folded away or no longer approved
+            // since the invoice was read, and the costs would land where the
+            // year's figures never look.
+            if (($cur['status'] ?? '') !== 'approved' || !empty($cur['duplicate_of'])) { $stale = true; return null; }
             $lines = cgInvoiceLinesFor([$cur])[(int)$cur['id']] ?? [];
             if (cgInvoiceReadFailed()) { $blind = true; return null; }
             $imports = cgInvoiceImportsFor((int)$cur['id']);
@@ -442,6 +446,7 @@ function cgApplyInvoiceMatches(array $picks, string $actor): array {
         };
         $err = cgSetFulfilment((int)$id, $build, $actor, false, $record);
         if ($blind) { $errors[] = $app['applicant_name'] . ': its invoices could not be read, so it was left alone.'; continue; }
+        if ($stale) { $errors[] = $app['applicant_name'] . ': that grant changed since the invoice was read (folded or no longer approved), so nothing was saved to it. Read the invoice again.'; continue; }
         // Failed before the lines were worked out (no table, no lock): say why.
         if (!$toRecord && $err !== '' && $err !== 'Nothing was saved.') { $errors[] = $app['applicant_name'] . ': ' . $err; continue; }
         if (!$toRecord) { $skipped += $skip; continue; }
