@@ -1107,22 +1107,35 @@ function cgInvoiceLinesFor(array $apps): array {
  * the same collaborators, applying themselves). Each is a TTOC to pay for.
  */
 function cgGrantPeople(array $app, array $folded = []): array {
+    return array_column(cgGrantPeopleDetail($app, $folded), 'name');
+}
+
+/**
+ * cgGrantPeople(), with what is known about each person: 'known' when an
+ * address identifies them, and 'from' — the applications whose collaborator
+ * field names them — so a misspelled name can be corrected where it was typed.
+ */
+function cgGrantPeopleDetail(array $app, array $folded = []): array {
     $year   = (int)($app['school_year'] ?? 0);
     $out    = [];
     $seenId = [];
-    $seenNm = [];
+    $seenNm = [];   // name key => index in $out
     /* Who someone is, then what to call them: an email address settles that
      * a preferred name on one form and a full name on another are one
      * teacher, the same way the days ledger decides it. A name is all there
      * is to go on only where no address is known. */
-    $add = function (string $id, string $name) use (&$out, &$seenId, &$seenNm) {
+    $add = function (string $id, string $name, int $fromApp = 0) use (&$out, &$seenId, &$seenNm) {
         $name = trim($name);
         $nk   = cgNameKey($name);
         if ($nk === '') return;
-        if (($id !== '' && isset($seenId[$id])) || isset($seenNm[$nk])) return;
-        if ($id !== '') $seenId[$id] = true;
-        $seenNm[$nk] = true;
-        $out[] = $name;
+        $at = $id !== '' && isset($seenId[$id]) ? $seenId[$id] : ($seenNm[$nk] ?? null);
+        if ($at === null) {
+            $at = count($out);
+            $out[] = ['name' => $name, 'known' => $id !== '', 'from' => []];
+        }
+        if ($id !== '') { $seenId[$id] = $at; $out[$at]['known'] = true; }
+        $seenNm[$nk] = $at;
+        if ($fromApp && !in_array($fromApp, $out[$at]['from'], true)) $out[$at]['from'][] = $fromApp;
     };
     $copies = [$app];
     foreach ($folded as $f) {
@@ -1141,15 +1154,66 @@ function cgGrantPeople(array $app, array $folded = []): array {
         $named = cgSplitNames((string)($r['collaborator_name'] ?? ''));
         $typed = cgCanonEmail((string)($r['collaborator_email'] ?? ''));
         if (count($named) === 1 && $typed !== '' && filter_var($typed, FILTER_VALIDATE_EMAIL)) {
-            $add('e:' . $typed, $named[0]);
+            $add('e:' . $typed, $named[0], (int)$r['id']);
             continue;
         }
         foreach ($named as $n) {
             $hit = cgResolveCollaborator($n, cgContactsByName(), cgApplicantsByName($year));
-            $add(strpos($hit['key'], 'e:') === 0 ? $hit['key'] : '', $n);
+            $add(strpos($hit['key'], 'e:') === 0 ? $hit['key'] : '', $n, (int)$r['id']);
         }
     }
     return $out;
+}
+
+/**
+ * Two names on one grant are one teacher, one of them misspelled: correct the
+ * spelling where it was typed, and move any invoice line across.
+ *
+ * $from is the name as it appears on the grant's rows, $to the right one.
+ * Every application in $appIds whose collaborator field names $from has that
+ * name replaced. A spelling fix, not a change of person, so the record of
+ * telling the collaborator is left alone (cgApplyEdit() would reset it, as it
+ * should for a different teacher) and the "changed after approval" stamp is
+ * not set. Written to the edit history like any other change.
+ * Returns how many applications were corrected.
+ */
+function cgMergeGrantPerson(int $primaryId, array $appIds, string $from, string $to, string $actor): int {
+    cgEnsureEditSupport();
+    $fk = cgNameKey($from);
+    $to = trim(preg_replace('/\s+/', ' ', $to) ?? '');
+    if ($fk === '' || $to === '' || $fk === cgNameKey($to)) return 0;
+    $db = getDB();
+    $n  = 0;
+    foreach (array_unique(array_map('intval', $appIds)) as $id) {
+        $app = cgGetApplication($id);
+        if (!$app) continue;
+        $was   = (string)($app['collaborator_name'] ?? '');
+        $parts = cgSplitNames($was);
+        $hit   = false;
+        $new   = [];
+        foreach ($parts as $p) {
+            if (cgNameKey($p) === $fk) { $p = $to; $hit = true; }
+            if (!in_array(cgNameKey($p), array_map('cgNameKey', $new), true)) $new[] = $p;
+        }
+        if (!$hit) continue;
+        $now = implode(', ', $new);
+        if (mb_strlen($now) > 255) continue;
+        $db->prepare("UPDATE collab_grant_applications SET collaborator_name=?, edited_at=NOW(), edited_by=? WHERE id=?")
+           ->execute([$now, $actor, $id]);
+        $db->prepare("INSERT INTO collab_grant_edits (app_id, changed_by, by_admin, changes) VALUES (?,?,1,?)")
+           ->execute([$id, $actor, json_encode(['collaborator_name' => [$was, $now]], JSON_UNESCAPED_UNICODE)]);
+        $n++;
+    }
+    if (cgEnsureInvoiceLines()) {
+        $st = $db->prepare("SELECT id, person FROM collab_grant_invoices WHERE app_id=?");
+        $st->execute([$primaryId]);
+        $up = $db->prepare("UPDATE collab_grant_invoices SET person=? WHERE id=?");
+        foreach ($st->fetchAll() as $l) {
+            if (cgNameKey((string)$l['person']) === $fk) $up->execute([$to, (int)$l['id']]);
+        }
+    }
+    cgCachesReset();
+    return $n;
 }
 
 /**

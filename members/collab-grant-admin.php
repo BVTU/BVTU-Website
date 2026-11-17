@@ -633,6 +633,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'fulfi
     }
     $err = cgSetFulfilment($id, $lines, $member['email'], !empty($_POST['inv_blind']));
     $notice = $err === '' ? 'Saved.' : $err;
+
+    /* "Same person as …": a misspelled name on the grant is the teacher next
+     * to it. After the figures, so a cost typed on the misspelled row in the
+     * same save moves across with it. */
+    $merges = array_values((array)($_POST['inv_merge'] ?? []));
+    if ($err === '' && array_filter($merges, 'strlen')) {
+        $mApp    = cgGetApplication($id);
+        $mFolded = $mApp ? array_values(array_filter(cgGetApplications((int)$mApp['school_year']),
+                       fn($x) => (int)($x['duplicate_of'] ?? 0) === $id)) : [];
+        $mPeople = $mApp ? cgGrantPeopleDetail($mApp, $mFolded) : [];
+        $done = [];
+        foreach ($merges as $i => $to) {
+            $to   = trim((string)$to);
+            $from = trim((string)($people[$i] ?? ''));
+            if ($to === '' || $from === '') continue;
+            $src = null;
+            $tgt = false;
+            foreach ($mPeople as $mp) {
+                if (cgNameKey($mp['name']) === cgNameKey($from)) $src = $mp;
+                if (cgNameKey($mp['name']) === cgNameKey($to))   $tgt = true;
+            }
+            // Only a name nobody can identify, merged into someone on this grant.
+            if (!$src || $src['known'] || !$src['from'] || !$tgt) continue;
+            if (cgMergeGrantPerson($id, $src['from'], $from, $to, $member['email']) > 0) {
+                $done[] = $from . ' is ' . $to;
+            }
+        }
+        if ($done) $notice = 'Saved. Merged: ' . implode('; ', $done) . '.';
+    }
     $apps   = cgGetApplications($year);
 }
 
@@ -1568,6 +1597,8 @@ $totalDaysApproved = $personDays['approved'];
       .ft-lines { display:flex; flex-direction:column; gap:.35rem; }
       .ft-line { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem .85rem; }
       .ft-who { font-size:.86rem; font-weight:600; color:var(--gray-700); min-width:9.5rem; }
+      .ft-merge { border:1px solid #fde68a; background:#fffbeb; color:#92400e; border-radius:6px;
+                  padding:.2rem .35rem; font-size:.8rem; font-family:inherit; }
       .cg-costed { font-size:.74rem; font-weight:700; padding:.15rem .5rem; border-radius:999px;
                    white-space:nowrap; background:#fffbeb; color:#92400e; border:1px solid #fde68a; }
       .cg-costed.done { background:#f0f9f3; color:#1a5c2e; border-color:#b3d9bf; }
@@ -2711,7 +2742,8 @@ $totalDaysApproved = $personDays['approved'];
                          was recorded before lines had a person), stays shown
                          below them, so saving never drops a figure unseen. */
                       $myLines  = $invLines[(int)$app['id']] ?? [];
-                      $myPeople = cgGrantPeople($app, $foldedUnder[(int)$app['id']] ?? []);
+                      $myDetail = cgGrantPeopleDetail($app, $foldedUnder[(int)$app['id']] ?? []);
+                      $myPeople = array_column($myDetail, 'name');
                       $shownLines = [];
                       $used = [];
                       foreach ($myPeople as $pn) {
@@ -2731,6 +2763,25 @@ $totalDaysApproved = $personDays['approved'];
                     <span class="ft-line">
                       <input type="hidden" name="inv_person[]" value="<?= htmlspecialchars($lp) ?>">
                       <span class="ft-who"><?= $lp !== '' ? htmlspecialchars($lp) : 'Whole grant' ?></span>
+                      <?php /* A name nobody can identify — no address, no contact
+                               of that spelling — is usually someone else on the
+                               grant, misspelled. Offered nowhere else, and never
+                               for a field holding several names it could not
+                               split, which a merge would cut down to one. */
+                            $mDet = null;
+                            foreach ($myDetail as $md) if (cgNameKey($md['name']) === cgNameKey($lp)) $mDet = $md;
+                            $mOffer = $lp !== '' && $mDet && !$mDet['known'] && $mDet['from']
+                                   && count($myPeople) > 1 && !preg_match('/,|&|\/|\band\b/i', $lp); ?>
+                      <?php if ($mOffer): ?>
+                        <select name="inv_merge[]" class="ft-merge" aria-label="Same person as">
+                          <option value="">Same person as…</option>
+                          <?php foreach ($myPeople as $op): if (cgNameKey($op) === cgNameKey($lp)) continue; ?>
+                            <option value="<?= htmlspecialchars($op) ?>"><?= htmlspecialchars($op) ?></option>
+                          <?php endforeach; ?>
+                        </select>
+                      <?php else: ?>
+                        <input type="hidden" name="inv_merge[]" value="">
+                      <?php endif; ?>
                       <label class="ft-f">Invoice
                         <input type="text" name="invoice_number[]" maxlength="100" style="width:7.5rem;"
                                value="<?= htmlspecialchars((string)$ln['invoice_number']) ?>">
