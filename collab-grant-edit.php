@@ -522,8 +522,12 @@ function cgOld(string $key, $fallback) {
           <dd><?= htmlspecialchars($app['collaborator_name']) ?><?= $app['collaborator_school'] ? ' — ' . htmlspecialchars($app['collaborator_school']) : '' ?></dd>
         <?php endif; ?>
         <dt>Release days</dt>
-        <dd><?= $dates ? htmlspecialchars(implode(' · ', array_map(fn($d) => date('D M j, Y', strtotime($d))
-                . (isset($storedParts[$d]) ? ' (' . cgPartLabel($storedParts[$d]) . ')' : ''), $dates))) : '—' ?></dd>
+        <?php // Approved: what was granted, which can differ from what was asked.
+              $roGrant = ($app['status'] ?? '') === 'approved' ? cgAppDateWeights($app) : []; ?>
+        <dd><?php if ($roGrant): ?><?= htmlspecialchars(implode(' · ', array_map(fn($d, $v) => date('D M j, Y', strtotime($d))
+                . ($v < 1 ? ' (' . cgPartLabel($v) . ')' : ''), array_keys($roGrant), $roGrant))) ?><?php
+              else: ?><?= $dates ? htmlspecialchars(implode(' · ', array_map(fn($d) => date('D M j, Y', strtotime($d))
+                . (isset($storedParts[$d]) ? ' (' . cgPartLabel($storedParts[$d]) . ')' : ''), $dates))) : '—' ?><?php endif; ?></dd>
         <dt>Your collaboration</dt><dd><?= htmlspecialchars($app['collaboration_desc']) ?></dd>
         <dt>Your goals</dt><dd><?= htmlspecialchars($app['goals']) ?></dd>
       </dl>

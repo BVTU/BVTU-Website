@@ -502,9 +502,17 @@ usort($quickActions, fn($a, $b) => $a['quick'] <=> $b['quick']);
           $gDates = is_array($gDates) ? $gDates : [];
           $gYear  = (int)$g['school_year'] . '–' . (((int)$g['school_year'] + 1) % 100);
           $gDays  = cgDaysWord(cgEffectiveDays($g));
-          $gPart  = cgPartsOf($g);
-          $gWhen  = $gDates ? implode(', ', array_map(fn($d) => date('M j', strtotime($d))
-                      . (isset($gPart[$d]) ? ' (' . cgPartLabel($gPart[$d]) . ')' : ''), $gDates)) : '';
+          // Approved: what was granted, date by date, when the record can say
+          // it — a morning asked for may have been granted as a full day.
+          $gGrant = $g['status'] === 'approved' ? cgAppDateWeights($g) : [];
+          if ($gGrant) {
+              $gWhen = implode(', ', array_map(fn($d, $v) => date('M j', strtotime($d))
+                          . ($v < 1 ? ' (' . cgPartLabel($v) . ')' : ''), array_keys($gGrant), $gGrant));
+          } else {
+              $gPart = cgPartsOf($g);
+              $gWhen = $gDates ? implode(', ', array_map(fn($d) => date('M j', strtotime($d))
+                          . (isset($gPart[$d]) ? ' (' . cgPartLabel($gPart[$d]) . ')' : ''), $gDates)) : '';
+          }
           // Searchable by what is actually printed on the row: the year, the
           // decision, the day count and the dates.
           $gFind  = strtolower(trim('my collaboration grant application '
