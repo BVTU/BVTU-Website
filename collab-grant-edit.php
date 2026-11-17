@@ -68,9 +68,11 @@ if (!$denied && $canEdit && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POS
         $was = is_array($was) ? $was : [];
         $today = date('Y-m-d');
         $dates = [];
+        $partOf = [];   // date => the part chosen in the box beside it
         foreach ([0, 1, 2] as $i) {
             $d = trim($_POST['date' . $i] ?? '');
             if ($d === '') continue;
+            $partOf[$d] = (string)($_POST['part' . $i] ?? '1');
             if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $d, $m)
                 || !checkdate((int)$m[2], (int)$m[3], (int)$m[1])) {
                 $error = 'Please enter each date as a real calendar date.';
@@ -106,6 +108,11 @@ if (!$denied && $canEdit && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POS
         sort($dates);
 
         if (!$error && !$dates)      $error = 'Please keep at least one release day.';
+        $pr = $error ? ['parts' => []] : cgCleanParts($dates, $partOf, true);
+        if (!$error && isset($pr['error'])) $error = $pr['error'];
+        $newParts = $pr['parts'] ?? [];
+        $dayMap = [];
+        foreach ($dates as $d) $dayMap[$d] = $newParts[$d] ?? 1.0;
         if (!$error && count($dates) > 3) $error = 'The grant covers up to three release days.';
         if (!$error && !$f('name'))  $error = 'Please enter your name.';
         // A grant the LP added by hand has none of these, and correcting its
@@ -130,7 +137,8 @@ if (!$denied && $canEdit && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POS
                 'collaboration_desc'  => $f('collaboration_desc'),
                 'goals'               => $f('goals'),
                 'proposed_dates'      => json_encode($dates),
-                'days_requested'      => count($dates),
+                'date_parts'          => $newParts,
+                'days_requested'      => cgSumParts($dayMap),
             ];
             // proposed_dates is JSON rather than prose, so it is compared and
             // recorded on its own terms by cgApplyEdit like any other column.
@@ -184,6 +192,7 @@ if ($app) {
     $d = json_decode($app['proposed_dates'] ?? '[]', true);
     $dates = is_array($d) ? array_values($d) : [];
 }
+$storedParts = $app ? cgPartsOf($app) : [];
 $history = $app ? cgEditHistory((int)$app['id']) : [];
 
 // Their standing for the year, so "can I add a day?" has an answer on the page
@@ -474,8 +483,15 @@ function cgOld(string $key, $fallback) {
           <?php foreach ([0, 1, 2] as $i): ?>
             <div>
               <div class="n">Day <?= $i + 1 ?></div>
-              <input type="date" name="date<?= $i ?>"
+              <input type="date" name="date<?= $i ?>" aria-label="Day <?= $i + 1 ?>"
                      value="<?= htmlspecialchars((string)cgOld('date' . $i, $dates[$i] ?? '')) ?>">
+              <?php $pv = (string)cgOld('part' . $i,
+                          cgFmtDays($storedParts[$dates[$i] ?? ''] ?? 1)); ?>
+              <select name="part<?= $i ?>" aria-label="How much of day <?= $i + 1 ?>" style="margin-top:.35rem;">
+                <?php foreach (CG_DAY_PARTS as $pk => $pl): ?>
+                  <option value="<?= (string)$pk ?>"<?= (string)$pk === $pv ? ' selected' : '' ?>><?= htmlspecialchars($pl) ?></option>
+                <?php endforeach; ?>
+              </select>
             </div>
           <?php endforeach; ?>
         </div>
@@ -506,7 +522,8 @@ function cgOld(string $key, $fallback) {
           <dd><?= htmlspecialchars($app['collaborator_name']) ?><?= $app['collaborator_school'] ? ' — ' . htmlspecialchars($app['collaborator_school']) : '' ?></dd>
         <?php endif; ?>
         <dt>Release days</dt>
-        <dd><?= $dates ? htmlspecialchars(implode(' · ', array_map(fn($d) => date('D M j, Y', strtotime($d)), $dates))) : '—' ?></dd>
+        <dd><?= $dates ? htmlspecialchars(implode(' · ', array_map(fn($d) => date('D M j, Y', strtotime($d))
+                . (isset($storedParts[$d]) ? ' (' . cgPartLabel($storedParts[$d]) . ')' : ''), $dates))) : '—' ?></dd>
         <dt>Your collaboration</dt><dd><?= htmlspecialchars($app['collaboration_desc']) ?></dd>
         <dt>Your goals</dt><dd><?= htmlspecialchars($app['goals']) ?></dd>
       </dl>

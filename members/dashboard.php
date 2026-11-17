@@ -502,7 +502,9 @@ usort($quickActions, fn($a, $b) => $a['quick'] <=> $b['quick']);
           $gDates = is_array($gDates) ? $gDates : [];
           $gYear  = (int)$g['school_year'] . '–' . (((int)$g['school_year'] + 1) % 100);
           $gDays  = cgDaysWord(cgEffectiveDays($g));
-          $gWhen  = $gDates ? implode(', ', array_map(fn($d) => date('M j', strtotime($d)), $gDates)) : '';
+          $gPart  = cgPartsOf($g);
+          $gWhen  = $gDates ? implode(', ', array_map(fn($d) => date('M j', strtotime($d))
+                      . (isset($gPart[$d]) ? ' (' . cgPartLabel($gPart[$d]) . ')' : ''), $gDates)) : '';
           // Searchable by what is actually printed on the row: the year, the
           // decision, the day count and the dates.
           $gFind  = strtolower(trim('my collaboration grant application '

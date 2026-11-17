@@ -35,7 +35,7 @@ function cgEnsureTable(): void {
         collaboration_desc  TEXT,
         goals               TEXT,
         proposed_dates      TEXT,
-        days_requested      TINYINT NOT NULL DEFAULT 1,
+        days_requested      DECIMAL(4,2) NOT NULL DEFAULT 1,
         status              VARCHAR(20) DEFAULT 'pending',
         admin_notes         TEXT,
         school_year         INT NOT NULL,
@@ -137,12 +137,15 @@ function cgSubmitApplication(array $d): int {
     cgEnsureTable();
     cgEnsureEditSupport();
     $db = getDB();
+    $hasParts = cgHasCollabColumn('date_parts');
     $s  = $db->prepare("INSERT INTO collab_grant_applications
         (applicant_name, applicant_email, school, position, years_in_role,
          has_collaborator, collaborator_name, collaborator_school,"
         . (cgHasCollabEmail() ? " collaborator_email," : "") . "
-         needs_partner, collaboration_desc, goals, proposed_dates, days_requested, school_year)
-        VALUES (?,?,?,?,?,?,?,?," . (cgHasCollabEmail() ? "?," : "") . "?,?,?,?,?,?)");
+         needs_partner, collaboration_desc, goals, proposed_dates, days_requested, school_year"
+        . ($hasParts ? ", date_parts" : "") . ")
+        VALUES (?,?,?,?,?,?,?,?," . (cgHasCollabEmail() ? "?," : "") . "?,?,?,?,?,?"
+        . ($hasParts ? ",?" : "") . ")");
     $args = [
         $d['name'], $d['email'], $d['school'], $d['position'], $d['years_in_role'],
         $d['has_collaborator'] ? 1 : 0,
@@ -154,9 +157,10 @@ function cgSubmitApplication(array $d): int {
         $d['needs_partner'] ? 1 : 0,
         $d['collaboration_desc'], $d['goals'],
         $d['proposed_dates'] ?? null,
-        (int)$d['days_requested'],
+        round((float)$d['days_requested'], 2),
         cgCurrentYear(),
     ]);
+    if ($hasParts) $args[] = !empty($d['date_parts']) ? json_encode($d['date_parts']) : null;
     $s->execute($args);
     return (int)$db->lastInsertId();
 }
@@ -799,13 +803,13 @@ function cgSendCollaboratorEmail(array $app, bool $force = false): array {
     $bookDates = cgAppDates($app);
     if ($bookDates) {
         $dateLine = 'The ' . (count($bookDates) === 1 ? 'day' : 'days') . ' to book: '
-                  . cgDateList($bookDates) . "\n\n";
+                  . cgDateList($bookDates, $app['date_parts'] ?? null) . "\n\n";
     } elseif (cgDateList($app['proposed_dates'] ?? '') !== 'none') {
         /* Dates are on the application, but not as many as the days granted,
          * so which of them this release covers is genuinely unknown. Saying
          * "still to be settled" would contradict the applicant's own letter,
          * which lists them. */
-        $dateLine = 'The application lists ' . cgDateList($app['proposed_dates'] ?? '')
+        $dateLine = 'The application lists ' . cgDateList($app['proposed_dates'] ?? '', $app['date_parts'] ?? null)
                   . ', which does not match the ' . cgFmtDays($days) . ' ' . $dayWord
                   . ' approved — ' . (string)$app['applicant_name']
                   . " will confirm which with you.\n\n";
@@ -939,7 +943,7 @@ function cgEditFooter(int $id): string {
 function cgSendNewApplicationNotification(array $app): void {
     $name      = $app['applicant_name'];
     $email     = $app['applicant_email'];
-    $days      = (int)$app['days_requested'];
+    $days      = cgFmtDays($app['days_requested']);
     $collab    = !empty($app['collaborator_name'])
         ? $app['collaborator_name'] . ' (' . ($app['collaborator_school'] ?? '') . ')'
         : ($app['needs_partner'] ? 'None — needs help finding partner' : 'None identified');
@@ -948,8 +952,7 @@ function cgSendNewApplicationNotification(array $app): void {
     if (!empty($app['proposed_dates'])) {
         $dates = json_decode($app['proposed_dates'], true);
         if (is_array($dates) && count($dates)) {
-            $formatted = array_map(fn($d) => date('D, M j Y', strtotime($d)), $dates);
-            $datesLine = "\nProposed dates:   " . implode(', ', $formatted);
+            $datesLine = "\nProposed dates:   " . cgDateList($dates, $app['date_parts'] ?? null);
         }
     }
 
@@ -1099,11 +1102,12 @@ const CG_EDITABLE = [
     'collaboration_desc'  => 'What the collaboration involves',
     'goals'               => 'Goals',
     'proposed_dates'      => 'Proposed dates',
+    'date_parts'          => 'Part days',
     'days_requested'      => 'Days requested',
 ];
 
 /** Changes that alter what was approved, as opposed to fixing a typo. */
-const CG_MATERIAL = ['days_requested', 'proposed_dates', 'collaborator_name'];
+const CG_MATERIAL = ['days_requested', 'proposed_dates', 'date_parts', 'collaborator_name'];
 
 function cgEnsureEditSupport(): void {
     static $done = false;
@@ -1121,6 +1125,9 @@ function cgEnsureEditSupport(): void {
         // What the Executive actually granted, which need not be what was asked
         // for. NULL means nobody has decided yet, which is not the same as zero.
         'days_approved'    => 'DECIMAL(4,2) DEFAULT NULL',
+        // The dates that are less than a full day, as {"Y-m-d": 0.6}. NULL
+        // or {} means every listed date is a whole day.
+        'date_parts'       => 'TEXT DEFAULT NULL',
     ] as $col => $type) {
         try {
             $db->query("SELECT `$col` FROM collab_grant_applications LIMIT 1");
@@ -1133,16 +1140,19 @@ function cgEnsureEditSupport(): void {
         }
     }
 
-    // days_approved began as INT; a part day (0.75) needs a decimal. MODIFY
+    // days_approved began as INT; a part day (0.6) needs a decimal. MODIFY
     // keeps every whole number already there. Best effort, like the columns
     // above: a host that cannot ALTER keeps whole days and loses nothing.
-    try {
-        $col = $db->query("SHOW COLUMNS FROM collab_grant_applications LIKE 'days_approved'")->fetch();
-        if ($col && stripos((string)$col['Type'], 'decimal') !== 0) {
-            $db->exec("ALTER TABLE collab_grant_applications
-                       MODIFY COLUMN days_approved DECIMAL(4,2) DEFAULT NULL");
-        }
-    } catch (\Exception $e) {}
+    // days_requested too, now that it is the sum of the dates' parts.
+    foreach (['days_approved'  => 'DECIMAL(4,2) DEFAULT NULL',
+              'days_requested' => 'DECIMAL(4,2) NOT NULL DEFAULT 1'] as $c => $type) {
+        try {
+            $col = $db->query("SHOW COLUMNS FROM collab_grant_applications LIKE '$c'")->fetch();
+            if ($col && stripos((string)$col['Type'], 'decimal') !== 0) {
+                $db->exec("ALTER TABLE collab_grant_applications MODIFY COLUMN `$c` $type");
+            }
+        } catch (\Exception $e) {}
+    }
 
     // One row per edit, holding what actually changed. A grant that quietly
     // moved between approval and invoicing is near impossible to reconstruct a
@@ -1225,12 +1235,24 @@ function cgApplyEdit(int $id, array $values, string $actor, bool $isAdmin): arra
     $changed = [];
     foreach (CG_EDITABLE as $col => $label) {
         if (!array_key_exists($col, $values)) continue;
+        // Best-effort column: a host that could not add it keeps whole days.
+        if ($col === 'date_parts' && !cgHasCollabColumn('date_parts')) continue;
         $new = $values[$col];
-        $new = in_array($col, ['has_collaborator', 'needs_partner'], true) ? (int)(bool)$new
-             : ($col === 'days_requested' ? (int)$new : trim((string)$new));
-        $old = $app[$col];
-        $oldCmp = in_array($col, ['has_collaborator', 'needs_partner'], true) ? (int)$old
-                : ($col === 'days_requested' ? (int)$old : trim((string)$old));
+        $old = $app[$col] ?? null;
+        if ($col === 'date_parts') {
+            // Compared as what they mean, so {} and NULL are the same nothing.
+            $norm = function ($v) {
+                $m = cgPartsOf(['date_parts' => is_array($v) ? json_encode($v) : (string)$v]);
+                return $m ? json_encode($m) : '';
+            };
+            $new = $norm($new);
+            $oldCmp = $norm($old);
+        } else {
+            $new = in_array($col, ['has_collaborator', 'needs_partner'], true) ? (int)(bool)$new
+                 : ($col === 'days_requested' ? round((float)$new, 2) : trim((string)$new));
+            $oldCmp = in_array($col, ['has_collaborator', 'needs_partner'], true) ? (int)$old
+                    : ($col === 'days_requested' ? round((float)$old, 2) : trim((string)$old));
+        }
         if ($oldCmp === $new) continue;
         $changed[$col] = [$oldCmp, $new];
     }
@@ -1306,6 +1328,14 @@ function cgDescribeChanges(array $changed): string {
         $label = CG_EDITABLE[$col] ?? $col;
         if ($col === 'proposed_dates') {
             $parts[] = 'Dates: ' . cgDateList($pair[0]) . ' → ' . cgDateList($pair[1]);
+        } elseif ($col === 'date_parts') {
+            $pl = function ($v) {
+                $m = cgPartsOf(['date_parts' => (string)$v]);
+                return $m ? cgPartsList($m) : 'all full days';
+            };
+            $parts[] = 'Part days: ' . $pl($pair[0]) . ' → ' . $pl($pair[1]);
+        } elseif ($col === 'days_requested') {
+            $parts[] = $label . ': ' . cgFmtDays($pair[0]) . ' → ' . cgFmtDays($pair[1]);
         } elseif (in_array($col, ['has_collaborator', 'needs_partner'], true)) {
             $parts[] = $label . ': ' . ($pair[1] ? 'yes' : 'no');
         } elseif (in_array($col, ['collaboration_desc', 'goals'], true)) {
@@ -1321,11 +1351,17 @@ function cgDescribeChanges(array $changed): string {
     return implode('; ', $parts);
 }
 
-/** A stored proposed_dates JSON value as readable dates. */
-function cgDateList($json): string {
+/** A stored proposed_dates JSON value as readable dates. With the
+ *  application's date_parts, a short day is named: "Thu Nov 5 (morning)". */
+function cgDateList($json, $partsJson = null): string {
     $a = is_array($json) ? $json : json_decode((string)$json, true);
     if (!is_array($a) || !$a) return 'none';
-    return implode(', ', array_map(function ($d) { return date('D M j', strtotime($d)); }, $a));
+    $parts = cgPartsOf(['date_parts' => (string)$partsJson]);
+    return implode(', ', array_map(function ($d) use ($parts) {
+        $iso = date('Y-m-d', strtotime((string)$d));
+        return date('D M j', strtotime((string)$d))
+             . (isset($parts[$iso]) ? ' (' . cgPartLabel($parts[$iso]) . ')' : '');
+    }, $a));
 }
 
 /**
@@ -1340,7 +1376,7 @@ function cgSendApplicantEditNotice(array $app, array $changed): void {
     $body = 'Hi ' . $app['applicant_name'] . ",\n\n"
           . "The BVTU has updated your Collaboration Grant application.\n\n"
           . "What changed:\n  " . str_replace('; ', "\n  ", cgDescribeChanges($changed)) . "\n\n"
-          . 'Your release days are now: ' . cgDateList($app['proposed_dates'])
+          . 'Your release days are now: ' . cgDateList($app['proposed_dates'], $app['date_parts'] ?? null)
           . ' (' . cgDaysLine($app) . ").\n\n"
           . "If that isn't what you expected, reply to this email or write to\n"
           . "lp54@bctf.ca and we'll put it right.\n\n"
@@ -1357,7 +1393,7 @@ function cgSendEditNotification(array $app, array $changed, string $actor): void
           . "What changed:\n  " . str_replace('; ', "\n  ", cgDescribeChanges($changed)) . "\n\n"
           . 'Status: ' . ucfirst((string)$app['status']) . "\n"
           . 'Release days: ' . cgDaysLine($app) . "\n"
-          . 'Dates now: ' . cgDateList($app['proposed_dates']) . "\n\n"
+          . 'Dates now: ' . cgDateList($app['proposed_dates'], $app['date_parts'] ?? null) . "\n\n"
           . 'Review it: ' . (defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca')
           . '/members/collab-grant-admin.php' . "\n";
     siteMail('lp54@bctf.ca', $subject, $body);
@@ -1403,19 +1439,32 @@ function cgSendEditLink(array $app, string $actor): bool {
 const CG_DAY_CAP = 3;
 
 /*
- * Days come in hundredths.
+ * Release days, whole and part.
  *
  * A teacher can be released for part of a day, and what a part is depends on
  * the school: a secondary block is a quarter (0.75 is three of four blocks),
- * an elementary morning is 0.6 and an afternoon 0.4. So the days granted are a
- * decimal to two places — what DECIMAL(4,2) holds. Tenths are not exact in
- * binary, so every total is rounded to hundredths as it is made and the cap is
- * tested with a margin: 0.6 + 0.4 + 2 is 3, never a hair over.
- * days_requested stays whole because it is the number of dates listed.
+ * an elementary morning is 0.6 and an afternoon 0.4. Each date carries its own
+ * part, chosen from CG_DAY_PARTS, so the ledger knows which day was the short
+ * one. date_parts holds only the dates that are not a full day; a date missing
+ * from it is a whole day, which is every application from before parts existed.
+ *
+ * days_requested is the sum of the dates' parts and days_approved what the
+ * Executive granted, both DECIMAL(4,2). Tenths are not exact in binary, so
+ * every total is rounded to hundredths as it is made and the cap is tested with
+ * a margin: 0.6 + 0.4 + 2 is 3, never a hair over.
  */
-const CG_DAY_STEP = 0.01;
 
-/** The part days people actually use, offered as suggestions in the inputs. */
+/** What a date can be, in the order offered. Keys are the day value as text. */
+const CG_DAY_PARTS = [
+    '1'    => 'Full day',
+    '0.6'  => 'Morning',
+    '0.4'  => 'Afternoon',
+    '0.75' => '3 blocks',
+    '0.5'  => '2 blocks',
+    '0.25' => '1 block',
+];
+
+/** Suggestions for the one box left that takes a typed number: a grant with no dates. */
 const CG_PART_DAYS = [0.25, 0.4, 0.5, 0.6, 0.75];
 
 /** A typed day count as a number of days, or null when it is not an amount
@@ -1438,28 +1487,81 @@ function cgDaysWord($n): string {
     return cgFmtDays($n) . ' ' . (abs((float)$n - 1) < 0.001 ? 'day' : 'days');
 }
 
+/** A submitted part as a day value, or null when it is not one on offer. */
+function cgPartValue($raw): ?float {
+    $k = cgFmtDays((float)str_replace(',', '.', trim((string)$raw)));
+    return array_key_exists($k, CG_DAY_PARTS) && trim((string)$raw) !== '' ? (float)$k : null;
+}
+
+/** "morning", "3 blocks" — or the number, for a part no longer on the list. */
+function cgPartLabel(float $part): string {
+    $k = cgFmtDays($part);
+    return isset(CG_DAY_PARTS[$k]) ? strtolower(CG_DAY_PARTS[$k]) : cgDaysWord($part);
+}
+
+/**
+ * The part of each listed date, as stored: date => value for the short ones.
+ *
+ * $parts runs alongside $dates (the edit and hand-add forms send one select per
+ * date box) or is keyed by date (the approval form). Full days are left out,
+ * so an application that never used a part day stores nothing.
+ * Returns ['parts' => [...]] or ['error' => string].
+ */
+function cgCleanParts(array $dates, array $parts, bool $byDate = false): array {
+    $out = [];
+    foreach (array_values($dates) as $i => $d) {
+        $raw = $byDate ? ($parts[$d] ?? '1') : ($parts[$i] ?? '1');
+        $v = cgPartValue($raw);
+        if ($v === null) return ['error' => 'Choose how much of ' . date('D M j', strtotime($d)) . ' is used.'];
+        if ($v < 1) $out[$d] = $v;
+    }
+    ksort($out);
+    return ['parts' => $out];
+}
+
+/** Stored date_parts as date => value. Anything unreadable counts as a full day. */
+function cgPartsOf(array $app): array {
+    $raw = json_decode((string)($app['date_parts'] ?? ''), true);
+    if (!is_array($raw)) return [];
+    $out = [];
+    foreach ($raw as $d => $v) {
+        $t = strtotime((string)$d);
+        $v = round((float)$v, 2);
+        if ($t && $v > 0 && $v < 1) $out[date('Y-m-d', $t)] = $v;
+    }
+    return $out;
+}
+
+/** The day value of every listed date, with no check against the days granted. */
+function cgAppDayParts(array $app): array {
+    $parts = cgPartsOf($app);
+    $out   = [];
+    foreach (cgAppDatesLoose($app) as $d) $out[$d] = $parts[$d] ?? 1.0;
+    return $out;
+}
+
+/** The sum of a date => value map, to hundredths. */
+function cgSumParts(array $parts): float {
+    $n = 0.0;
+    foreach ($parts as $v) $n = round($n + (float)$v, 2);
+    return $n;
+}
+
+/** "Tue Nov 3, Thu Nov 5 (morning)" from a date => value map. */
+function cgPartsList(array $parts): string {
+    if (!$parts) return 'none';
+    $bits = [];
+    foreach ($parts as $d => $v) {
+        $bits[] = date('D M j', strtotime((string)$d)) . ($v < 1 ? ' (' . cgPartLabel((float)$v) . ')' : '');
+    }
+    return implode(', ', $bits);
+}
+
 /** The days a grant actually spends: what was granted, or what was asked when
  *  nobody has decided yet. */
 function cgEffectiveDays(array $app): float {
     $a = $app['days_approved'] ?? null;
     return round($a === null ? (float)$app['days_requested'] : (float)$a, 2);
-}
-
-/**
- * How much of each date an application spends.
- *
- * Whole days on every date but the last, which takes what is left: one date
- * granted 0.75 is 0.75 of that day; two dates granted 1.5 are a day and a half.
- * Nobody records which day was the short one, and it does not matter — the
- * person's total is the same whichever it is.
- */
-function cgDateWeights(array $dates, float $days): array {
-    $out = [];
-    $n   = count($dates);
-    foreach (array_values($dates) as $i => $d) {
-        $out[$d] = $i < $n - 1 ? 1.0 : round($days - ($n - 1), 2);
-    }
-    return $out;
 }
 
 /** A name reduced to something comparable: case, punctuation and spacing gone. */
@@ -1721,19 +1823,27 @@ function cgCanonEmail(string $email): string {
  * caller is told to fall back to summing.
  */
 function cgAppDates(array $app): array {
+    return array_keys(cgAppDateWeights($app));
+}
+
+/**
+ * The release dates an application charges, each with its part of a day, or
+ * [] when they cannot be trusted — the same test as cgAppDates(): the parts of
+ * the listed dates have to add up to the days granted.
+ */
+function cgAppDateWeights(array $app): array {
     $raw = json_decode((string)($app['proposed_dates'] ?? ''), true);
     if (!is_array($raw) || !$raw) return [];
+    $parts = cgPartsOf($app);
     $out = [];
     foreach ($raw as $d) {
         $t = strtotime((string)$d);
         if (!$t) return [];   // one unreadable date and none of them are trusted
         $iso = date('Y-m-d', $t);
-        if (!in_array($iso, $out, true)) $out[] = $iso;
+        if (!isset($out[$iso])) $out[$iso] = $parts[$iso] ?? 1.0;
     }
-    // A part day still needs a date of its own, so 0.75 days is one date and
-    // 1.5 is two.
-    $days = cgEffectiveDays($app);
-    return $days > 0 && count($out) === (int)ceil($days - 0.001) ? $out : [];
+    ksort($out);
+    return abs(cgSumParts($out) - cgEffectiveDays($app)) < 0.001 ? $out : [];
 }
 
 /**
@@ -1965,7 +2075,7 @@ function cgDaysLedger(int $year, bool $fresh = false): array {
             }
         }
         if ($dates) {
-            foreach (cgDateWeights($dates, $days) as $d => $w) {
+            foreach ($dates as $d => $w) {
                 if (!isset($people[$key]['days'][$d])) {
                     $people[$key]['days'][$d] = ['status' => $status, 'apps' => [$appId], 'w' => $w];
                     continue;
@@ -2006,6 +2116,7 @@ function cgDaysLedger(int $year, bool $fresh = false): array {
             "SELECT id, applicant_name, applicant_email, collaborator_name,
                     " . ($hasCe ? "collaborator_email," : "'' AS collaborator_email,") . "
                     " . ($hasPd ? "proposed_dates," : "NULL AS proposed_dates,") . "
+                    " . (cgHasCollabColumn('date_parts') ? "date_parts," : "NULL AS date_parts,") . "
                     has_collaborator, status, days_requested, days_approved
              FROM collab_grant_applications
              WHERE school_year=? AND status IN ('approved','pending')");
@@ -2040,7 +2151,7 @@ function cgDaysLedger(int $year, bool $fresh = false): array {
         $lName    = trim((string)$r['applicant_name']);
         $add($email !== '' ? 'e:' . $email : 'n:' . cgNameKey($lName),
              $lName, $email, $r['status'], $days, (int)$r['id'], 'lead', true, $rawEmail,
-             $datesOf[(int)$r['id']] = cgAppDates($r));
+             $datesOf[(int)$r['id']] = cgAppDateWeights($r));
 
         $ak = cgNameKey($lName);
         if ($ak === '' || $email === '') continue;
@@ -2072,7 +2183,7 @@ function cgDaysLedger(int $year, bool $fresh = false): array {
         // The collaborator is released on the same days as the lead — that is
         // what the approval email tells them to book, and the lead pass has
         // already parsed them.
-        $cDates   = $datesOf[(int)$r['id']] ?? cgAppDates($r);
+        $cDates   = $datesOf[(int)$r['id']] ?? cgAppDateWeights($r);
         $named    = cgSplitNames($cName);
         $rawTyped = $hasCe ? strtolower(trim((string)($r['collaborator_email'] ?? ''))) : '';
         $typed    = cgCanonEmail($rawTyped);
@@ -2614,8 +2725,8 @@ function cgYearOfDate(string $iso): int {
  * sent, so the record never claims an email went out.
  *
  * $d: applicant_name, applicant_email (optional when the name is one contact),
- * collaborator_name, collaborator_email, dates (Y-m-d list), days (optional,
- * for a part day), notes.
+ * collaborator_name, collaborator_email, dates (Y-m-d list), parts (one
+ * CG_DAY_PARTS value per date box, in the same order), notes.
  * Returns ['id' => int, 'year' => int] or ['error' => string].
  */
 function cgAddManualGrant(array $d, string $actor): array {
@@ -2673,18 +2784,20 @@ function cgAddManualGrant(array $d, string $actor): array {
 
     $note = trim('Added by hand by ' . $actor . ' on ' . date('M j, Y') . '.'
           . "\n" . trim((string)($d['notes'] ?? '')));
-    // The dates say how many days, unless someone was released for part of
-    // one: 0.75 is one date, 1.5 is two.
-    $days = (float)count($dates);
-    $rawDays = trim((string)($d['days'] ?? ''));
-    if ($rawDays !== '') {
-        $days = cgParseDays($rawDays);
-        if ($days === null) return ['error' => '"' . $rawDays . '" is not a number of days — try 0.75, or 0.6 for a morning.'];
-        if ((int)ceil($days - 0.001) !== count($dates)) {
-            return ['error' => cgDaysWord($days) . ' does not fit ' . count($dates) . ' '
-                             . (count($dates) === 1 ? 'date' : 'dates') . '. Each day, or part of one, needs its own date.'];
-        }
+    // Each date with the part chosen beside it; dates and parts arrive as two
+    // lists in box order, so they are paired before the dates were sorted.
+    $partOf = [];
+    $rawDates = array_values((array)($d['dates'] ?? []));
+    foreach ($rawDates as $i => $rd) {
+        $rd = trim((string)$rd);
+        if ($rd !== '' && !isset($partOf[$rd])) $partOf[$rd] = (string)(($d['parts'] ?? [])[$i] ?? '1');
     }
+    $pr = cgCleanParts($dates, $partOf, true);
+    if (isset($pr['error'])) return $pr;
+    $parts  = $pr['parts'];
+    $dayMap = [];
+    foreach ($dates as $dd) $dayMap[$dd] = $parts[$dd] ?? 1.0;
+    $days = cgSumParts($dayMap);
     $hasCol = $col['name'] !== '';
 
     $cols = ['applicant_name', 'applicant_email', 'school', 'position',
@@ -2693,10 +2806,13 @@ function cgAddManualGrant(array $d, string $actor): array {
              'admin_notes', 'school_year', 'reviewed_at', 'reviewed_by'];
     $vals = [$app['name'], $app['email'], '', '',
              $hasCol ? 1 : 0, $hasCol ? $col['name'] : null, 0,
-             json_encode($dates), count($dates), $days, 'approved',
+             json_encode($dates), $days, $days, 'approved',
              $note, $year, date('Y-m-d H:i:s'), $actor];
     if ($hasCol && cgHasCollabEmail()) {
         $cols[] = 'collaborator_email'; $vals[] = $col['email'];
+    }
+    if ($parts && cgHasCollabColumn('date_parts')) {
+        $cols[] = 'date_parts'; $vals[] = json_encode($parts);
     }
     if ($hasCol && cgHasCollabColumn('collab_waived_at') && cgHasCollabColumn('collab_waived_by')) {
         $cols[] = 'collab_waived_at'; $vals[] = date('Y-m-d H:i:s');

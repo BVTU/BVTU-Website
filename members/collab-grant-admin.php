@@ -49,8 +49,10 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     ]);
     foreach ($apps as $a) {
         $pdArr = json_decode($a['proposed_dates'] ?? '[]', true);
+        $pdPart = cgPartsOf($a);
         $pdStr = is_array($pdArr)
-            ? implode(', ', array_map(fn($d) => date('D M j Y', strtotime($d)), $pdArr))
+            ? implode(', ', array_map(fn($d) => date('D M j Y', strtotime($d))
+                  . (isset($pdPart[$d]) ? ' (' . cgPartLabel($pdPart[$d]) . ')' : ''), $pdArr))
             : '';
         fputcsv($out, array_map('csvSafeText', [
             $a['id'],
@@ -499,17 +501,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_id'])
     // Blank or absent falls back to what was asked for, so the button still works
     // without touching the box.
     $grantDays = null;
+    $refused   = '';
+    $newParts  = null;   // date_parts to store, when the Executive changed one
     if ($action === 'approved') {
-        $raw       = trim((string)($_POST['days_approved'] ?? ''));
-        $asked     = cgGetApplication($id);
-        $grantDays = $raw === '' ? (float)($asked['days_requested'] ?? 1) : cgParseDays($raw);
+        $asked = cgGetApplication($id);
+        $listed = $asked ? cgAppDayParts($asked) : [];
+        if (!empty($_POST['grant_by_date']) && $listed) {
+            /* One choice per date, so the part granted is tied to the day it
+             * falls on. A date marked not granted keeps what was asked for it;
+             * the ledger then sees fewer days granted than listed, and treats
+             * the dates as unsettled exactly as it always has. */
+            $granted = [];
+            $keep    = cgPartsOf($asked);
+            foreach ($listed as $d => $askedPart) {
+                $raw = (string)($_POST['grant'][$d] ?? cgFmtDays($askedPart));
+                if ($raw === '0') continue;
+                $v = cgPartValue($raw);
+                if ($v === null) { $refused = 'Choose how much of ' . date('D M j', strtotime($d)) . ' to grant.'; break; }
+                $granted[$d] = $v;
+                if ($v < 1) $keep[$d] = $v; else unset($keep[$d]);
+            }
+            if (!$refused && !$granted) $refused = 'No date is granted. Decline it instead, or grant at least one.';
+            $grantDays = cgSumParts($granted);
+            ksort($keep);
+            if ($keep !== cgPartsOf($asked)) $newParts = $keep;
+        } else {
+            // An application with no dates: a number is all there is.
+            $raw       = trim((string)($_POST['days_approved'] ?? ''));
+            $grantDays = $raw === '' ? (float)($asked['days_requested'] ?? 1) : cgParseDays($raw);
+            if ($grantDays === null) {
+                // Refused rather than rounded: quietly turning 0.666 into 0.67
+                // or 1 changes what somebody is charged without telling them.
+                $refused = '"' . $raw . '" is not a number of days to grant — e.g. 0.75, or 0.6 for a morning.';
+            }
+        }
+        if (!$refused && $grantDays > CG_DAY_CAP + 0.001) {
+            $refused = 'One grant carries at most ' . CG_DAY_CAP . ' days.';
+        }
     }
-    if ($action === 'approved' && ($grantDays === null || $grantDays > CG_DAY_CAP)) {
-        // Refused rather than rounded: quietly turning 0.666 into 0.67 or 1
-        // changes what somebody is charged without telling them.
-        $notice = '"' . $raw . '" is not a number of days to grant — up to ' . CG_DAY_CAP
-                . ', e.g. 0.75, or 0.6 for a morning.';
+    if ($refused !== '') {
+        $notice = $refused;
     } else {
+    if ($newParts !== null) {
+        // Recorded as an edit, so the history says who changed a morning to a
+        // full day. Not a change after approval: it is the approval.
+        $wasFlagged = !empty($asked['changed_after_ok']);
+        $all = [];
+        foreach (array_keys($listed) as $d) $all[$d] = $newParts[$d] ?? 1.0;
+        cgApplyEdit($id, ['date_parts' => $newParts, 'days_requested' => cgSumParts($all)],
+                    $member['email'], true);
+        if (!$wasFlagged) cgUnflagChangedAfterOk($id);
+    }
     cgUpdateStatus($id, $action, $member['email'], $notes, $grantDays);
 
     if ($action === 'approved') {
@@ -613,7 +655,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add-g
         'collaborator_name'  => (string)($_POST['collaborator_name'] ?? ''),
         'collaborator_email' => (string)($_POST['collaborator_email'] ?? ''),
         'dates'              => array_values((array)($_POST['dates'] ?? [])),
-        'days'               => (string)($_POST['days'] ?? ''),
+        'parts'              => array_values((array)($_POST['parts'] ?? [])),
         'notes'              => (string)($_POST['notes'] ?? ''),
     ];
     $res = cgAddManualGrant($cgAddForm, $member['email']);
@@ -917,6 +959,11 @@ $totalDaysApproved = $personDays['approved'];
                   cursor: pointer; margin-left: .15rem; }
 
     /* ── The things you need twice a term ─────────────────────── */
+    .cg-grant-dates { border: 0; padding: 0; margin: 0 0 .6rem; max-width: 320px; }
+    .cg-grant-dates legend { font-size: .85rem; font-weight: 600; color: var(--gray-600); padding: 0;
+                             margin-bottom: .3rem; }
+    .cg-grant-dates label { display: flex; align-items: center; justify-content: space-between;
+                            gap: .6rem; font-size: .86rem; margin: .25rem 0; }
     .cg-field-note { display: block; font-weight: 400; font-size: .76rem;
       color: var(--gray-500); margin-top: .25rem; }
     .cg-followup-hint { font-size: .82rem; color: var(--gray-500); margin: .9rem 0 0; }
@@ -1085,7 +1132,9 @@ $totalDaysApproved = $personDays['approved'];
     .cg-add-opt { font-weight: 400; color: var(--gray-400); }
     .cg-add-dates { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: .9rem 0;
                     font-size: .82rem; font-weight: 600; color: var(--gray-600); }
-    .cg-add-dates span { flex-basis: 100%; }
+    .cg-add-dates > span:first-child { flex-basis: 100%; }
+    .cg-add-day { display: inline-flex; gap: .3rem; align-items: center; }
+    .cg-add-day select { width: auto; margin-top: 0; }
     .cg-add-dates input { width: auto; margin-top: 0; }
     .cg-add-notes { margin-bottom: .9rem; }
     @media (max-width: 600px) {
@@ -1259,15 +1308,19 @@ $totalDaysApproved = $personDays['approved'];
         </div>
         <div class="cg-add-dates">
           <span>Days released</span>
-          <?php foreach ($afDates as $i => $dv): ?>
-            <input type="date" name="dates[]" aria-label="Day <?= $i + 1 ?>"
-                   <?= $i === 0 ? 'required' : '' ?> value="<?= htmlspecialchars((string)$dv) ?>">
+          <?php $afParts = (array)($af['parts'] ?? []);
+                foreach ($afDates as $i => $dv):
+                  $apv = (string)($afParts[$i] ?? '1'); ?>
+            <span class="cg-add-day">
+              <input type="date" name="dates[]" aria-label="Day <?= $i + 1 ?>"
+                     <?= $i === 0 ? 'required' : '' ?> value="<?= htmlspecialchars((string)$dv) ?>">
+              <select name="parts[]" aria-label="How much of day <?= $i + 1 ?>">
+                <?php foreach (CG_DAY_PARTS as $pk => $pl): ?>
+                  <option value="<?= (string)$pk ?>"<?= (string)$pk === $apv ? ' selected' : '' ?>><?= htmlspecialchars($pl) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </span>
           <?php endforeach; ?>
-          <label class="cg-add-opt">Part day?
-            <input type="number" name="days" min="0.01" max="<?= CG_DAY_CAP ?>" step="0.01" list="cg-part-days"
-                   inputmode="decimal" placeholder="e.g. 0.75" aria-label="Days, if less than the dates"
-                   style="width:7rem;" value="<?= $afv('days') ?>">
-          </label>
         </div>
         <label class="cg-add-notes">Notes <span class="cg-add-opt">optional</span>
           <input type="text" name="notes" maxlength="1000" value="<?= $afv('notes') ?>">
@@ -1669,7 +1722,7 @@ $totalDaysApproved = $personDays['approved'];
                 <span style="color:var(--gray-500);">with <?= htmlspecialchars($a['collaborator_name']) ?></span>
               <?php endif; ?>
               <span style="color:var(--gray-500);">
-                · <?= htmlspecialchars(cgDateList($a['proposed_dates'])) ?>
+                · <?= htmlspecialchars(cgDateList($a['proposed_dates'], $a['date_parts'] ?? null)) ?>
                 · <?= htmlspecialchars(ucfirst((string)$a['status'])) ?>
                 <?php if ($i === 0): ?>· first in<?php endif; ?>
               </span>
@@ -1847,7 +1900,7 @@ $totalDaysApproved = $personDays['approved'];
                                   . ' — #' . implode(', #', $info['apps'])
                                   . (count($info['apps']) > 1 ? ', which both claim this day' : '')) ?>">
                           <?= date('D M j', strtotime((string)$d)) ?><?=
-                              isset($info['w']) && $info['w'] < 1 ? ' · ' . cgFmtDays($info['w']) : '' ?>
+                              isset($info['w']) && $info['w'] < 1 ? ' · ' . htmlspecialchars(cgPartLabel($info['w'])) : '' ?>
                         </span>
                       <?php endforeach; ?>
                     </div>
@@ -2015,7 +2068,7 @@ $totalDaysApproved = $personDays['approved'];
               <?php if ($pdDatesR): ?>
               <div class="read-fact" style="width:100%;">
                 <strong>Proposed dates:</strong>
-                <?= implode(', ', array_map(fn($d) => date('D, M j Y', strtotime($d)), $pdDatesR)) ?>
+                <?= htmlspecialchars(cgDateList($pdDatesR, $app['date_parts'] ?? null)) ?>
               </div>
               <?php endif; ?>
               <div class="read-fact">
@@ -2140,7 +2193,7 @@ $totalDaysApproved = $personDays['approved'];
               <div class="app-detail-item">
                 <div class="dl">Days requested</div>
                 <div class="dd">
-                  <?= $days ?>
+                  <?= cgFmtDays($app['days_requested']) ?>
                   <?php /*
                    * The editor has always taken an id for a signed-in admin and
                    * has always let one edit a locked or declined application —
@@ -2171,9 +2224,10 @@ $totalDaysApproved = $personDays['approved'];
               <div class="app-detail-item">
                 <div class="dl">Proposed dates</div>
                 <div class="dd">
-                  <?php foreach ($pdDates as $pd): ?>
+                  <?php $pdPart = cgPartsOf($app);
+                        foreach ($pdDates as $pd): ?>
                     <span style="display:inline-block;background:#e8f5ed;border:1px solid #b3d9bf;border-radius:20px;padding:.15rem .65rem;font-size:.82rem;font-weight:600;color:#1a5c2e;margin:.1rem .2rem .1rem 0;">
-                      <?= date('D, M j Y', strtotime($pd)) ?>
+                      <?= date('D, M j Y', strtotime($pd)) ?><?= isset($pdPart[$pd]) ? ' · ' . htmlspecialchars(cgPartLabel($pdPart[$pd])) : '' ?>
                     </span>
                   <?php endforeach; ?>
                 </div>
@@ -2378,6 +2432,31 @@ $totalDaysApproved = $personDays['approved'];
                 </div>
               <?php endif; ?>
 
+              <?php $grantList = cgAppDayParts($app);
+                    // What was granted per date, when the record can say; else what was asked.
+                    $grantWas  = (($app['days_approved'] ?? null) !== null) ? cgAppDateWeights($app) : [];
+                    $fieldCss  = 'border:1px solid var(--border);border-radius:7px;padding:.4rem .5rem;'
+                               . 'font-size:.88rem;font-family:inherit;background:var(--white);'; ?>
+              <?php if ($grantList): ?>
+                <fieldset class="cg-grant-dates">
+                  <legend>Days to grant</legend>
+                  <input type="hidden" name="grant_by_date" value="1">
+                  <?php foreach ($grantList as $gd => $gp):
+                      $gv = cgFmtDays($grantWas[$gd] ?? $gp); ?>
+                    <label>
+                      <span><?= date('D M j', strtotime($gd)) ?></span>
+                      <select name="grant[<?= htmlspecialchars($gd) ?>]" style="<?= $fieldCss ?>">
+                        <?php foreach (CG_DAY_PARTS as $pk => $pl): ?>
+                          <option value="<?= (string)$pk ?>"<?= (string)$pk === $gv ? ' selected' : '' ?>><?=
+                            htmlspecialchars($pl) ?><?= abs((float)$pk - $gp) < 0.001 && $gp < 1 ? ' — asked' : '' ?></option>
+                        <?php endforeach; ?>
+                        <option value="0">Not granted</option>
+                      </select>
+                    </label>
+                  <?php endforeach; ?>
+                  <span class="cg-field-note">Charged to both teachers on this application.</span>
+                </fieldset>
+              <?php else: ?>
               <label style="font-size:.85rem;font-weight:600;color:var(--gray-600);
                             display:block;margin-bottom:.6rem;max-width:230px;">
                 Days to grant
@@ -2390,6 +2469,7 @@ $totalDaysApproved = $personDays['approved'];
                               box-sizing:border-box;margin-top:.25rem;">
                 <span class="cg-field-note">Charged to both teachers on this application.</span>
               </label>
+              <?php endif; ?>
 
               <?php /*
                * Edit takes the place Waitlist had.

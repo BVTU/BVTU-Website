@@ -39,8 +39,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
         'collaboration_desc'=> $f('collaboration_desc'),
         'goals'             => $f('goals'),
         'proposed_dates'    => $f('proposed_dates'),
-        'days_requested'    => max(1, min(3, (int)$f('days_requested'))),
+        'days_requested'    => 0,
     ];
+    $postedParts = json_decode((string)($_POST['date_parts'] ?? ''), true);
+    $postedParts = is_array($postedParts) ? $postedParts : [];
 
     // Validate and sanitise proposed_dates JSON
     $decodedDates = json_decode($formData['proposed_dates'], true);
@@ -59,18 +61,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
         }
         sort($clean);
         $formData['proposed_dates'] = json_encode($clean);
-        $formData['days_requested'] = count($clean);
+        // Each date is a full day unless the applicant chose a part of one.
+        $pr = cgCleanParts($clean, $postedParts, true);
+        if (isset($pr['error'])) $formError = $pr['error'];
+        $formData['date_parts']     = $pr['parts'] ?? [];
+        $dayMap = [];
+        foreach ($clean as $d) $dayMap[$d] = $formData['date_parts'][$d] ?? 1.0;
+        $formData['days_requested'] = cgSumParts($dayMap);
     }
 
     // Validation
-    if (!$formData['name'])              $formError = 'Please enter your name.';
+    if ($formError !== '') { /* a part-day choice the server does not offer */ }
+    elseif (!$formData['name'])          $formError = 'Please enter your name.';
     elseif (!filter_var($formData['email'], FILTER_VALIDATE_EMAIL))
                                          $formError = 'Please enter a valid email address.';
     elseif (!$formData['school'])        $formError = 'Please enter your school.';
     elseif (!$formData['position'])      $formError = 'Please enter your current position.';
     elseif (!$formData['collaboration_desc']) $formError = 'Please describe your collaboration.';
     elseif (!$formData['goals'])         $formError = 'Please describe your goals.';
-    elseif ($formData['days_requested'] < 1) $formError = 'Please select at least one preferred date.';
+    elseif ($formData['days_requested'] <= 0) $formError = 'Please select at least one preferred date.';
 
     if (!$formError) {
         try {
@@ -594,6 +603,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
       transition: opacity .15s;
     }
     .cg-chip button:hover { opacity: 1; }
+    .cg-chip select {
+      border: 1px solid #b3d9bf; border-radius: 12px; background: #fff;
+      color: var(--primary); font: inherit; font-weight: 500; padding: .05rem .3rem;
+    }
     .cg-cal-hint {
       font-size: .78rem;
       color: var(--gray-400);
@@ -808,7 +821,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
               <div class="cg-selected-summary" id="cg-chips"></div>
               <p class="cg-cal-hint" id="cg-hint">No dates selected yet. Select up to 3 preferred days.</p>
               <input type="hidden" name="proposed_dates" id="cg-proposed-dates" value="[]">
-              <input type="hidden" name="days_requested"  id="cg-days-count"     value="0">
+              <input type="hidden" name="date_parts"      id="cg-date-parts"     value="{}">
             </div>
 
             <div class="grant-form-submit">
@@ -977,7 +990,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
     const chipsEl  = document.getElementById('cg-chips');
     const hintEl   = document.getElementById('cg-hint');
     const datesIn  = document.getElementById('cg-proposed-dates');
-    const countIn  = document.getElementById('cg-days-count');
+    const partsIn  = document.getElementById('cg-date-parts');
+    // Value => label, from CG_DAY_PARTS so the form offers what the server accepts.
+    const PARTS    = <?= json_encode(array_map(null, array_map('strval', array_keys(CG_DAY_PARTS)), array_values(CG_DAY_PARTS))) ?>;
     const submitBtn= document.getElementById('cg-submit');
 
     const MAX = 3;
@@ -986,6 +1001,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
     const DAYS  = ['Su','Mo','Tu','We','Th','Fr','Sa'];
 
     let selected = []; // sorted array of 'YYYY-MM-DD'
+    let parts    = {}; // 'YYYY-MM-DD' => '0.6', only for dates that are not a full day
     let viewYear, viewMonth;
 
     // Start on current month; don't allow navigating to past months
@@ -1020,6 +1036,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
       const idx = selected.indexOf(dateStr);
       if (idx >= 0) {
         selected.splice(idx, 1);
+        delete parts[dateStr];
       } else {
         if (selected.length >= MAX) return;
         selected.push(dateStr);
@@ -1032,15 +1049,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
 
     function syncInputs() {
       datesIn.value  = JSON.stringify(selected);
-      countIn.value  = selected.length;
+      partsIn.value  = JSON.stringify(parts);
       submitBtn.disabled = selected.length === 0;
+      // Hundredths, as the server totals it: 0.6 + 0.4 is 1, not 0.9999.
+      let total = 0;
+      selected.forEach(function (d) { total = Math.round((total + parseFloat(parts[d] || '1')) * 100) / 100; });
+      const totalTxt = total === 1 ? '1 day' : String(total) + ' days';
       if (hintEl) {
         if (selected.length === 0) {
           hintEl.textContent = 'No dates selected yet. Select up to 3 preferred days.';
         } else if (selected.length < MAX) {
-          hintEl.textContent = selected.length + ' day' + (selected.length > 1 ? 's' : '') + ' selected. You can add ' + (MAX - selected.length) + ' more.';
+          hintEl.textContent = totalTxt + ' selected. You can add ' + (MAX - selected.length) + ' more date' + (MAX - selected.length > 1 ? 's' : '') + '.';
         } else {
-          hintEl.textContent = '3 days selected (maximum reached).';
+          hintEl.textContent = totalTxt + ' selected (3 dates is the most).';
         }
       }
     }
@@ -1051,7 +1072,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cg_submit'])) {
         const chip = document.createElement('div');
         chip.className = 'cg-chip';
         chip.innerHTML = formatDisplay(d) +
+          '<select aria-label="How much of ' + formatDisplay(d) + '"></select>' +
           '<button type="button" title="Remove" aria-label="Remove ' + formatDisplay(d) + '">×</button>';
+        const sel = chip.querySelector('select');
+        PARTS.forEach(function (p) {
+          const o = document.createElement('option');
+          o.value = p[0]; o.textContent = p[1];
+          if ((parts[d] || '1') === p[0]) o.selected = true;
+          sel.appendChild(o);
+        });
+        sel.addEventListener('change', function () {
+          if (sel.value === '1') delete parts[d]; else parts[d] = sel.value;
+          syncInputs();
+        });
         chip.querySelector('button').addEventListener('click', function () { toggleDate(d); });
         chipsEl.appendChild(chip);
       });
