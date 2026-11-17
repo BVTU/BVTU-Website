@@ -391,8 +391,11 @@ function cgApplyInvoiceMatches(array $picks, string $actor): array {
         $person = trim((string)($p['person'] ?? ''));
         $cost = round((float)($p['cost'] ?? 0), 2);
         $t = strtotime((string)($p['date'] ?? ''));
-        if (!$id || $person === '' || $cost < 0 || !$t) continue;
-        $byApp[$id][] = ['person' => $person, 'inv' => trim((string)($p['invoice_number'] ?? '')),
+        $inv = trim((string)($p['invoice_number'] ?? ''));
+        // Without an invoice number an absence could not be told apart from
+        // itself next time, and would be added again.
+        if (!$id || $person === '' || $cost < 0 || !$t || $inv === '') continue;
+        $byApp[$id][] = ['person' => $person, 'inv' => $inv,
                          'date' => date('Y-m-d', $t), 'cost' => $cost];
     }
 
@@ -400,51 +403,59 @@ function cgApplyInvoiceMatches(array $picks, string $actor): array {
     if ($byApp && !cgEnsureInvoiceImports()) {
         return ['saved' => 0, 'skipped' => 0, 'errors' => ['The invoice record could not be set up, so nothing was saved.']];
     }
-    $db = getDB();
     foreach ($byApp as $id => $absences) {
         $app = cgGetApplication((int)$id);
         if (!$app) { $errors[] = 'Grant #' . $id . ' could not be found.'; continue; }
-        $lines = cgInvoiceLinesFor([$app])[(int)$id] ?? [];
-        if (cgInvoiceReadFailed()) { $errors[] = $app['applicant_name'] . ': its invoices could not be read, so it was left alone.'; continue; }
-        $imports = cgInvoiceImportsFor((int)$id);
-
-        $added = [];
-        foreach ($absences as $a) {
-            $key = cgNameKey($a['person']) . '|' . $a['inv'] . '|' . $a['date'];
-            if (isset($added[$key]) || cgAbsenceStatus($lines, $imports, $a['person'], $a['inv'], $a['date']) !== '') {
-                $skipped++; continue;
+        $toRecord = []; $skip = 0; $blind = false;
+        /* Worked out inside cgSetFulfilment()'s lock, from the lines and
+         * records as they are now — not as they were when the page was drawn
+         * — so two people saving onto one grant cannot overwrite each other. */
+        $build = function (array $cur) use ($absences, &$toRecord, &$skip, &$blind) {
+            $toRecord = []; $skip = 0;
+            $lines = cgInvoiceLinesFor([$cur])[(int)$cur['id']] ?? [];
+            if (cgInvoiceReadFailed()) { $blind = true; return null; }
+            $imports = cgInvoiceImportsFor((int)$cur['id']);
+            foreach ($absences as $a) {
+                $key = cgNameKey($a['person']) . '|' . $a['inv'] . '|' . $a['date'];
+                if (isset($toRecord[$key]) || cgAbsenceStatus($lines, $imports, $a['person'], $a['inv'], $a['date']) !== '') {
+                    $skip++; continue;
+                }
+                $found = false;
+                foreach ($lines as &$l) {
+                    if (trim((string)$l['person']) === '' || cgNameKey((string)$l['person']) !== cgNameKey($a['person'])) continue;
+                    $found = true;
+                    $nums = cgLineInvoices($l);
+                    if (!in_array($a['inv'], $nums, true)) $nums[] = $a['inv'];
+                    $l['invoice_number'] = implode(', ', $nums);
+                    $l['amount'] = round((float)($l['amount'] ?? 0) + $a['cost'], 2);
+                    break;
+                }
+                unset($l);
+                if (!$found) {
+                    $lines[] = ['person' => $a['person'], 'invoice_number' => $a['inv'], 'amount' => $a['cost']];
+                }
+                // Counted as saved for the rest of this batch, so a second
+                // date on the same new invoice is not mistaken for one typed
+                // in by hand.
+                $imports[$key] = true;
+                $toRecord[$key] = $a;
             }
-            $added[$key] = true;
-            $found = false;
-            foreach ($lines as &$l) {
-                if (trim((string)$l['person']) === '' || cgNameKey((string)$l['person']) !== cgNameKey($a['person'])) continue;
-                $found = true;
-                $nums = cgLineInvoices($l);
-                if ($a['inv'] !== '' && !in_array($a['inv'], $nums, true)) $nums[] = $a['inv'];
-                $l['invoice_number'] = implode(', ', $nums);
-                $l['amount'] = round((float)($l['amount'] ?? 0) + $a['cost'], 2);
-                break;
-            }
-            unset($l);
-            if (!$found) {
-                $lines[] = ['person' => $a['person'], 'invoice_number' => $a['inv'], 'amount' => $a['cost']];
-            }
-            $added[$key] = $a;
-        }
-        $toRecord = array_filter($added, 'is_array');
-        if (!$toRecord) continue;
-
-        $err = cgSetFulfilment((int)$id, array_map(fn($l) => [
-            'person' => (string)$l['person'], 'invoice_number' => (string)$l['invoice_number'],
-            'amount' => $l['amount'] === null ? '' : (string)$l['amount']], $lines), $actor);
+            if (!$toRecord) return null;
+            return array_map(fn($l) => [
+                'person' => (string)$l['person'], 'invoice_number' => (string)$l['invoice_number'],
+                'amount' => $l['amount'] === null ? '' : (string)$l['amount']], $lines);
+        };
+        $record = function (\PDO $db) use ($id, &$toRecord, $actor) {
+            $ins = $db->prepare("INSERT INTO collab_grant_invoice_imports
+                                 (app_id, person_key, invoice_number, absence_date, cost, created_by) VALUES (?,?,?,?,?,?)");
+            foreach ($toRecord as $a) $ins->execute([(int)$id, cgNameKey($a['person']), $a['inv'], $a['date'], $a['cost'], $actor]);
+        };
+        $err = cgSetFulfilment((int)$id, $build, $actor, false, $record);
+        if ($blind) { $errors[] = $app['applicant_name'] . ': its invoices could not be read, so it was left alone.'; continue; }
+        if (!$toRecord) { $skipped += $skip; continue; }
         if ($err !== '') { $errors[] = $app['applicant_name'] . ': ' . $err; continue; }
-        $ins = $db->prepare("INSERT IGNORE INTO collab_grant_invoice_imports
-                             (app_id, person_key, invoice_number, absence_date, cost, created_by) VALUES (?,?,?,?,?,?)");
-        foreach ($toRecord as $a) {
-            try { $ins->execute([(int)$id, cgNameKey($a['person']), $a['inv'], $a['date'], $a['cost'], $actor]); }
-            catch (\Exception $e) { error_log('invoice import record: ' . $e->getMessage()); }
-            $saved++;
-        }
+        $saved += count($toRecord);
+        $skipped += $skip;
     }
     return ['saved' => $saved, 'skipped' => $skipped, 'errors' => $errors];
 }

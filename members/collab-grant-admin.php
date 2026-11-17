@@ -1678,6 +1678,8 @@ $totalDaysApproved = $personDays['approved'];
       .ft-lines { display:flex; flex-direction:column; gap:.35rem; }
       .ft-line { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem .85rem; }
       .ft-who { font-size:.86rem; font-weight:600; color:var(--gray-700); min-width:9.5rem; }
+      .ft-free { font-size:.8rem; color:var(--gray-400); }
+      .ft-free .ft-who { color:var(--gray-400); }
       .ft-merge { border:1px solid #fde68a; background:#fffbeb; color:#92400e; border-radius:6px;
                   padding:.2rem .35rem; font-size:.8rem; font-family:inherit; }
       .cg-costed { font-size:.74rem; font-weight:700; padding:.15rem .5rem; border-radius:999px;
@@ -2200,8 +2202,8 @@ $totalDaysApproved = $personDays['approved'];
           <?php foreach ($rvHit as $i => $r): $m = $r['match']; ?>
             <tr>
               <td><input type="checkbox" name="pick[]" value="<?= $i ?>" aria-label="Save this one"
-                         <?= ($m['label'] === 'match' && $m['already'] === '') ? 'checked' : '' ?>
-                         <?= $m['already'] !== '' && empty($m['choices']) ? 'disabled' : '' ?>>
+                         <?= ($m['label'] === 'match' && $m['already'] === '' && $r['invoice_number'] !== '') ? 'checked' : '' ?>
+                         <?= ($m['already'] !== '' && empty($m['choices'])) || $r['invoice_number'] === '' ? 'disabled' : '' ?>>
                 <input type="hidden" name="pick_date[<?= $i ?>]" value="<?= htmlspecialchars($r['date']) ?>">
                 <input type="hidden" name="pick_app[<?= $i ?>]" value="<?= (int)$m['app_id'] ?>">
                 <input type="hidden" name="pick_person[<?= $i ?>]" value="<?= htmlspecialchars($m['person']) ?>">
@@ -2223,6 +2225,7 @@ $totalDaysApproved = $personDays['approved'];
                 <?php endif; ?></td>
               <td><span class="cg-costed<?= $m['label'] === 'match' || $m['already'] !== '' ? ' done' : '' ?>"><?=
                   $m['already'] === 'saved' ? 'already saved' : ($m['already'] === 'by hand' ? 'entered by hand' : ($m['label'] === 'match' ? 'match' : 'check')) ?></span>
+                <?php if ($r['invoice_number'] === '') $m['why'][] = 'no invoice number could be read — enter this one by hand'; ?>
                 <?php if ($m['why']): ?><span class="cg-inv-why"><?= htmlspecialchars(implode('; ', $m['why'])) ?></span><?php endif; ?></td>
             </tr>
           <?php endforeach; ?>
@@ -2901,7 +2904,8 @@ $totalDaysApproved = $personDays['approved'];
                          below them, so saving never drops a figure unseen. */
                       $myLines  = $invLines[(int)$app['id']] ?? [];
                       $myDetail = cgGrantPeopleDetail($app, $foldedUnder[(int)$app['id']] ?? []);
-                      $myPeople = array_column($myDetail, 'name');
+                      $myPeople = array_column(array_filter($myDetail, fn($d) => !$d['exempt']), 'name');
+                      $myFree   = array_values(array_filter($myDetail, fn($d) => (bool)$d['exempt']));
                       $shownLines = [];
                       $used = [];
                       foreach ($myPeople as $pn) {
@@ -2950,6 +2954,10 @@ $totalDaysApproved = $personDays['approved'];
                                value="<?= $ln['amount'] !== null ? number_format((float)$ln['amount'], 2, '.', '') : '' ?>">
                       </label>
                     </span>
+                  <?php endforeach; ?>
+                  <?php foreach ($myFree as $fr): ?>
+                    <span class="ft-line ft-free"><span class="ft-who"><?= htmlspecialchars($fr['name']) ?></span>
+                      not capped, no cost<?= $fr['exempt'] !== 'not capped' ? ' — ' . htmlspecialchars($fr['exempt']) : '' ?></span>
                   <?php endforeach; ?>
                   <span class="ft-total"><?= $costedN ?> of <?= $peopleN ?> costed<?php
                     if (($app['release_cost'] ?? null) !== null): ?> · Total $<?= number_format((float)$app['release_cost'], 2) ?><?php endif; ?></span>

@@ -1107,13 +1107,18 @@ function cgInvoiceLinesFor(array $apps): array {
  * the same collaborators, applying themselves). Each is a TTOC to pay for.
  */
 function cgGrantPeople(array $app, array $folded = []): array {
-    return array_column(cgGrantPeopleDetail($app, $folded), 'name');
+    // Only the people a release costs: a teacher the cap does not apply to is
+    // released at no cost to the local, so there is nothing to invoice or count.
+    return array_column(array_filter(cgGrantPeopleDetail($app, $folded),
+                                     fn($p) => !$p['exempt']), 'name');
 }
 
 /**
- * cgGrantPeople(), with what is known about each person: 'known' when an
- * address identifies them, and 'from' — the applications whose collaborator
- * field names them — so a misspelled name can be corrected where it was typed.
+ * Everyone a grant releases, with what is known about each: 'known' when an
+ * address identifies them, 'from' — the applications whose collaborator field
+ * names them, so a misspelled name can be corrected where it was typed — and
+ * 'exempt', the reason when the cap does not apply to them, '' otherwise.
+ * cgGrantPeople() is the same list without the exempt, who cost nothing.
  */
 function cgGrantPeopleDetail(array $app, array $folded = []): array {
     $year   = (int)($app['school_year'] ?? 0);
@@ -1131,9 +1136,12 @@ function cgGrantPeopleDetail(array $app, array $folded = []): array {
         $at = $id !== '' && isset($seenId[$id]) ? $seenId[$id] : ($seenNm[$nk] ?? null);
         if ($at === null) {
             $at = count($out);
-            $out[] = ['name' => $name, 'known' => $id !== '', 'from' => []];
+            $out[] = ['name' => $name, 'known' => $id !== '', 'from' => [], 'id' => $id];
         }
-        if ($id !== '') { $seenId[$id] = $at; $out[$at]['known'] = true; }
+        if ($id !== '') {
+            $seenId[$id] = $at; $out[$at]['known'] = true;
+            if ($out[$at]['id'] === '') $out[$at]['id'] = $id;
+        }
         $seenNm[$nk] = $at;
         if ($fromApp && !in_array($fromApp, $out[$at]['from'], true)) $out[$at]['from'][] = $fromApp;
     };
@@ -1162,6 +1170,13 @@ function cgGrantPeopleDetail(array $app, array $folded = []): array {
             $add(strpos($hit['key'], 'e:') === 0 ? $hit['key'] : '', $n, (int)$r['id']);
         }
     }
+    foreach ($out as &$p) {
+        $email = strpos($p['id'], 'e:') === 0 ? substr($p['id'], 2) : '';
+        $ex = cgExemptFor(['key' => $p['id'] !== '' ? $p['id'] : 'n:' . cgNameKey($p['name']),
+                           'email' => $email, 'name' => $p['name']], $year);
+        $p['exempt'] = $ex === null ? '' : ((string)($ex['reason'] ?? '') !== '' ? (string)$ex['reason'] : 'not capped');
+    }
+    unset($p);
     return $out;
 }
 
@@ -1203,6 +1218,17 @@ function cgMergeGrantPerson(int $primaryId, array $appIds, string $from, string 
         $db->prepare("INSERT INTO collab_grant_edits (app_id, changed_by, by_admin, changes) VALUES (?,?,1,?)")
            ->execute([$id, $actor, json_encode(['collaborator_name' => [$was, $now]], JSON_UNESCAPED_UNICODE)]);
         $n++;
+    }
+    // The invoice reader's record of saved absences moves with the name, or
+    // the corrected name would read as typed in by hand. Where both names
+    // already hold the same absence, the one on the right name stays.
+    if (function_exists('cgEnsureInvoiceImports') && cgEnsureInvoiceImports()) {
+        try {
+            $db->prepare("UPDATE IGNORE collab_grant_invoice_imports SET person_key=? WHERE app_id=? AND person_key=?")
+               ->execute([cgNameKey($to), $primaryId, $fk]);
+            $db->prepare("DELETE FROM collab_grant_invoice_imports WHERE app_id=? AND person_key=?")
+               ->execute([$primaryId, $fk]);
+        } catch (\Exception $e) { error_log('cgMergeGrantPerson imports: ' . $e->getMessage()); }
     }
     if (cgEnsureInvoiceLines()) {
         $st = $db->prepare("SELECT id, person FROM collab_grant_invoices WHERE app_id=?");
@@ -1285,38 +1311,16 @@ function cgInvoicingOpen(array $lines, array $people): bool {
  * Clearing every line clears the stamp, so the two can never disagree.
  *
  * $lines is every invoice line as the form holds it, [['person' =>,
- * 'invoice_number' =>, 'amount' =>], …]; a line with both boxes empty is dropped, and the set
+ * 'invoice_number' =>, 'amount' =>], …] — or a function given the locked
+ * application row that returns them, for a caller building on the current lines; a line with both boxes empty is dropped, and the set
  * replaces what was there. An amount left empty is "not recorded", not $0.
  * Returns '' on success or the reason it was refused.
  */
-function cgSetFulfilment(int $id, array $lines, string $actor, bool $builtBlind = false): string {
+function cgSetFulfilment(int $id, $lines, string $actor, bool $builtBlind = false,
+                         ?callable $alsoInside = null): string {
     cgEnsureTable();
-    $clean = [];
-    foreach ($lines as $l) {
-        $num = mb_substr(trim((string)($l['invoice_number'] ?? '')), 0, 100);
-        $raw = str_replace([',', '$', ' '], '', trim((string)($l['amount'] ?? '')));
-        if ($num === '' && $raw === '') continue;
-        if ($raw !== '' && (!is_numeric($raw) || (float)$raw < 0)) {
-            return '"' . trim((string)$l['amount']) . '" is not a dollar amount.';
-        }
-        $clean[] = ['person' => mb_substr(trim((string)($l['person'] ?? '')), 0, 255),
-                    'invoice_number' => $num, 'amount' => $raw === '' ? null : round((float)$raw, 2)];
-    }
-
-    // The summary everything else reads: the numbers, and what is known of the cost.
-    $nums = [];
-    $sum  = null;
-    foreach ($clean as $l) {
-        if ($l['invoice_number'] !== '' && !in_array($l['invoice_number'], $nums, true)) $nums[] = $l['invoice_number'];
-        if ($l['amount'] !== null) $sum = round(($sum ?? 0) + $l['amount'], 2);
-    }
-    $summary = implode(', ', $nums);
-    if (mb_strlen($summary) > 100) $summary = mb_substr($summary, 0, 99) . '…';
-
     $db = getDB();
     try {
-        $cur = cgGetApplication($id);
-        if (!$cur) return 'That application could not be found.';
         $hasLines = cgEnsureInvoiceLines();
         // The form was built when the lines could not be read. If there are
         // lines now, saving the summary it showed would erase them.
@@ -1334,6 +1338,39 @@ function cgSetFulfilment(int $id, array $lines, string $actor, bool $builtBlind 
             return 'The invoices cannot be saved just now, so nothing was changed. The problem has been logged.';
         }
         $db->beginTransaction();
+        /* One save at a time per grant. The row lock is held to the commit, so
+         * a caller that works out new lines from the current ones — the
+         * invoice reader adding absences — reads them only once any other
+         * save has finished, and cannot overwrite it with a stale total. */
+        $lk = $db->prepare("SELECT * FROM collab_grant_applications WHERE id=? FOR UPDATE");
+        $lk->execute([$id]);
+        $cur = $lk->fetch();
+        if (!$cur) { $db->rollBack(); return 'That application could not be found.'; }
+        if (is_callable($lines)) $lines = $lines($cur);
+        if (!is_array($lines)) { $db->rollBack(); return 'Nothing was saved.'; }
+
+        $clean = [];
+        foreach ($lines as $l) {
+            $num = mb_substr(trim((string)($l['invoice_number'] ?? '')), 0, 100);
+            $raw = str_replace([',', '$', ' '], '', trim((string)($l['amount'] ?? '')));
+            if ($num === '' && $raw === '') continue;
+            if ($raw !== '' && (!is_numeric($raw) || (float)$raw < 0)) {
+                $db->rollBack();
+                return '"' . trim((string)$l['amount']) . '" is not a dollar amount.';
+            }
+            $clean[] = ['person' => mb_substr(trim((string)($l['person'] ?? '')), 0, 255),
+                        'invoice_number' => $num, 'amount' => $raw === '' ? null : round((float)$raw, 2)];
+        }
+
+        // The summary everything else reads: the numbers, and what is known of the cost.
+        $nums = [];
+        $sum  = null;
+        foreach ($clean as $l) {
+            if ($l['invoice_number'] !== '' && !in_array($l['invoice_number'], $nums, true)) $nums[] = $l['invoice_number'];
+            if ($l['amount'] !== null) $sum = round(($sum ?? 0) + $l['amount'], 2);
+        }
+        $summary = implode(', ', $nums);
+        if (mb_strlen($summary) > 100) $summary = mb_substr($summary, 0, 99) . '…';
 
         // Entering the district's invoice or cost is the confirmation that the
         // release is in Atrieve, so there is no separate tick: the stamp
@@ -1352,15 +1389,18 @@ function cgSetFulfilment(int $id, array $lines, string $actor, bool $builtBlind 
         $db->prepare("UPDATE collab_grant_applications SET invoice_number=?, release_cost=? WHERE id=?")
            ->execute([$summary, $sum, $id]);
 
-        if ($hasLines) {
-            $db->prepare("DELETE FROM collab_grant_invoices WHERE app_id=?")->execute([$id]);
-            $ins = $db->prepare("INSERT INTO collab_grant_invoices (app_id, person, invoice_number, amount, created_by)
-                                 VALUES (?,?,?,?,?)");
-            foreach ($clean as $l) $ins->execute([$id, $l['person'], $l['invoice_number'], $l['amount'], $actor]);
-        }
+        $db->prepare("DELETE FROM collab_grant_invoices WHERE app_id=?")->execute([$id]);
+        $ins = $db->prepare("INSERT INTO collab_grant_invoices (app_id, person, invoice_number, amount, created_by)
+                             VALUES (?,?,?,?,?)");
+        foreach ($clean as $l) $ins->execute([$id, $l['person'], $l['invoice_number'], $l['amount'], $actor]);
+
+        // Anything that must stand or fall with these lines — the reader's
+        // record of which absences it saved — is written in the same
+        // transaction, so a cost is never saved without its record.
+        if ($alsoInside) $alsoInside($db);
         $db->commit();
         return '';
-    } catch (\Exception $e) {
+    } catch (\Throwable $e) {
         if ($db->inTransaction()) $db->rollBack();
         error_log('cgSetFulfilment: ' . $e->getMessage());
         return 'Could not save. The problem has been logged.';
