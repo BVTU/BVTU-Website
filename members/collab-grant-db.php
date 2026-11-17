@@ -1403,25 +1403,28 @@ function cgSendEditLink(array $app, string $actor): bool {
 const CG_DAY_CAP = 3;
 
 /*
- * Days come in quarters.
+ * Days come in hundredths.
  *
- * A teacher can be released for part of a day — asked for one, took 0.75 — so
- * the days granted are a decimal. Quarters only, and that is not just tidiness:
- * a quarter is exact in binary, so any total of them adds up exactly and a cap
- * test of 3.0 against 2.25 + 0.75 cannot come out a hair over.
+ * A teacher can be released for part of a day, and what a part is depends on
+ * the school: a secondary block is a quarter (0.75 is three of four blocks),
+ * an elementary morning is 0.6 and an afternoon 0.4. So the days granted are a
+ * decimal to two places — what DECIMAL(4,2) holds. Tenths are not exact in
+ * binary, so every total is rounded to hundredths as it is made and the cap is
+ * tested with a margin: 0.6 + 0.4 + 2 is 3, never a hair over.
  * days_requested stays whole because it is the number of dates listed.
  */
-const CG_DAY_STEP = 0.25;
+const CG_DAY_STEP = 0.01;
 
-/** A typed day count as a number of days, or null when it is not a quarter-day
- *  amount above zero. Accepts "0.75", ".75" and "1,5". */
+/** The part days people actually use, offered as suggestions in the inputs. */
+const CG_PART_DAYS = [0.25, 0.4, 0.5, 0.6, 0.75];
+
+/** A typed day count as a number of days, or null when it is not an amount
+ *  above zero with at most two decimal places. Accepts "0.6", ".75", "1,5". */
 function cgParseDays($raw): ?float {
     $s = str_replace(',', '.', trim((string)$raw));
-    if ($s === '' || !preg_match('/^\d*(\.\d+)?$/', $s) || $s === '.') return null;
-    $n = (float)$s;
-    $q = round($n / CG_DAY_STEP);
-    if ($q < 1 || abs($q * CG_DAY_STEP - $n) > 0.0001) return null;
-    return $q * CG_DAY_STEP;
+    if (!preg_match('/^(\d+(\.\d{0,2})?|\.\d{1,2})$/', $s)) return null;
+    $n = round((float)$s, 2);
+    return $n > 0 ? $n : null;
 }
 
 /** A day count as people write it: 2, 1.5, 0.75 — never 2.00. */
@@ -2179,6 +2182,9 @@ function cgYearPersonDays(int $year): array {
         $out[$free ? 'exempt_pending'  : 'pending']  += (float)$p['pending'];
         $out[$free ? 'exempt_people'   : 'people']++;
     }
+    foreach (['approved', 'pending', 'exempt_approved', 'exempt_pending'] as $k) {
+        $out[$k] = round($out[$k], 2);
+    }
     return $out;
 }
 
@@ -2673,7 +2679,7 @@ function cgAddManualGrant(array $d, string $actor): array {
     $rawDays = trim((string)($d['days'] ?? ''));
     if ($rawDays !== '') {
         $days = cgParseDays($rawDays);
-        if ($days === null) return ['error' => '"' . $rawDays . '" is not a number of days. Use quarters: 0.25, 0.5, 0.75, 1…'];
+        if ($days === null) return ['error' => '"' . $rawDays . '" is not a number of days — try 0.75, or 0.6 for a morning.'];
         if ((int)ceil($days - 0.001) !== count($dates)) {
             return ['error' => cgDaysWord($days) . ' does not fit ' . count($dates) . ' '
                              . (count($dates) === 1 ? 'date' : 'dates') . '. Each day, or part of one, needs its own date.'];

@@ -505,10 +505,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_id'])
         $grantDays = $raw === '' ? (float)($asked['days_requested'] ?? 1) : cgParseDays($raw);
     }
     if ($action === 'approved' && ($grantDays === null || $grantDays > CG_DAY_CAP)) {
-        // Refused rather than rounded: quietly turning 0.7 into 0.75 or 1
+        // Refused rather than rounded: quietly turning 0.666 into 0.67 or 1
         // changes what somebody is charged without telling them.
-        $notice = '"' . $raw . '" is not a number of days to grant. Use quarters from 0.25 to '
-                . CG_DAY_CAP . ' — 0.25, 0.5, 0.75, 1, 1.25…';
+        $notice = '"' . $raw . '" is not a number of days to grant — up to ' . CG_DAY_CAP
+                . ', e.g. 0.75, or 0.6 for a morning.';
     } else {
     cgUpdateStatus($id, $action, $member['email'], $notes, $grantDays);
 
@@ -1204,6 +1204,11 @@ $totalDaysApproved = $personDays['approved'];
              over this list would hand the staff directory to anyone who
              opened that page. */ ?>
     <datalist id="cg-contact-names"></datalist>
+    <datalist id="cg-part-days">
+      <?php foreach (array_merge(CG_PART_DAYS, range(1, CG_DAY_CAP)) as $pd): ?>
+        <option value="<?= cgFmtDays($pd) ?>">
+      <?php endforeach; ?>
+    </datalist>
     <script>
     // Filled from what has been typed, two letters on. Holding every name in
     // the list opened the whole staff on a click into an empty box.
@@ -1259,7 +1264,7 @@ $totalDaysApproved = $personDays['approved'];
                    <?= $i === 0 ? 'required' : '' ?> value="<?= htmlspecialchars((string)$dv) ?>">
           <?php endforeach; ?>
           <label class="cg-add-opt">Part day?
-            <input type="number" name="days" min="0.25" max="<?= CG_DAY_CAP ?>" step="0.25"
+            <input type="number" name="days" min="0.01" max="<?= CG_DAY_CAP ?>" step="0.01" list="cg-part-days"
                    inputmode="decimal" placeholder="e.g. 0.75" aria-label="Days, if less than the dates"
                    style="width:7rem;" value="<?= $afv('days') ?>">
           </label>
@@ -2376,7 +2381,7 @@ $totalDaysApproved = $personDays['approved'];
               <label style="font-size:.85rem;font-weight:600;color:var(--gray-600);
                             display:block;margin-bottom:.6rem;max-width:230px;">
                 Days to grant
-                <input type="number" name="days_approved" min="0.25" max="<?= CG_DAY_CAP ?>" step="0.25"
+                <input type="number" name="days_approved" min="0.01" max="<?= CG_DAY_CAP ?>" step="0.01" list="cg-part-days"
                        inputmode="decimal"
                        value="<?= cgFmtDays(($app['days_approved'] ?? null) !== null
                                         ? $app['days_approved'] : $app['days_requested']) ?>"
