@@ -1187,6 +1187,20 @@ function cgGrantPeopleDetail(array $app, array $folded = []): array {
  * next read of the same invoice would not recognise the absence as saved and
  * add it again.
  */
+/** Two spellings of one name: a typo or two apart, or the same surname and
+ *  first initial. "Kathy Mcintire" and "Kathy McIntyre", not "Kathy McIntyre"
+ *  and "Tanya Davidson". */
+function cgNamesLikelySame(string $a, string $b): bool {
+    $ka = str_replace(' ', '', cgNameKey($a));
+    $kb = str_replace(' ', '', cgNameKey($b));
+    if ($ka === '' || $kb === '') return false;
+    if ($ka === $kb) return true;
+    if (strlen($ka) > 5 && strlen($ka) < 255 && strlen($kb) < 255 && levenshtein($ka, $kb) <= 2) return true;
+    $pa = preg_split('/\s+/', cgNameKey($a)) ?: [];
+    $pb = preg_split('/\s+/', cgNameKey($b)) ?: [];
+    return end($pa) === end($pb) && ($pa[0][0] ?? '') !== '' && ($pa[0][0] ?? '') === ($pb[0][0] ?? '');
+}
+
 function cgRenameInvoicePerson(int $appId, string $old, string $new): void {
     $ok = cgNameKey($old); $nk = cgNameKey($new);
     if ($ok === '' || $nk === '' || $ok === $nk) return;
@@ -1377,6 +1391,8 @@ function cgSetFulfilment(int $id, $lines, string $actor, bool $builtBlind = fals
         if (!$hasLines) {
             return 'The invoices cannot be saved just now, so nothing was changed. The problem has been logged.';
         }
+        // Made before the transaction: creating a table would commit it.
+        $hasImports = function_exists('cgEnsureInvoiceImports') && cgEnsureInvoiceImports();
         $db->beginTransaction();
         /* One save at a time per grant. The row lock is held to the commit, so
          * a caller that works out new lines from the current ones — the
@@ -1433,6 +1449,25 @@ function cgSetFulfilment(int $id, $lines, string $actor, bool $builtBlind = fals
         $ins = $db->prepare("INSERT INTO collab_grant_invoices (app_id, person, invoice_number, amount, created_by)
                              VALUES (?,?,?,?,?)");
         foreach ($clean as $l) $ins->execute([$id, $l['person'], $l['invoice_number'], $l['amount'], $actor]);
+
+        /* The invoice reader's records of saved absences follow the lines: one
+         * whose invoice is no longer on that person's row was cleared by hand,
+         * and kept it would mark the absence saved when its cost is gone, the
+         * next time that invoice is read. */
+        if ($hasImports) {
+            $onRow = [];
+            foreach ($clean as $l) {
+                foreach (array_filter(array_map('trim', explode(',', $l['invoice_number'])), 'strlen') as $n) {
+                    $onRow[cgNameKey($l['person']) . '|' . $n] = true;
+                }
+            }
+            $st = $db->prepare("SELECT id, person_key, invoice_number FROM collab_grant_invoice_imports WHERE app_id=?");
+            $st->execute([$id]);
+            $del = $db->prepare("DELETE FROM collab_grant_invoice_imports WHERE id=?");
+            foreach ($st->fetchAll() as $r) {
+                if (!isset($onRow[$r['person_key'] . '|' . $r['invoice_number']])) $del->execute([(int)$r['id']]);
+            }
+        }
 
         // Anything that must stand or fall with these lines — the reader's
         // record of which absences it saved — is written in the same
@@ -1713,7 +1748,11 @@ function cgApplyEdit(int $id, array $values, string $actor, bool $isAdmin): arra
         $now = cgSplitNames((string)$changed['collaborator_name'][1]);
         $gone = array_values(array_filter($was, fn($n) => !in_array(cgNameKey($n), array_map('cgNameKey', $now), true)));
         $came = array_values(array_filter($now, fn($n) => !in_array(cgNameKey($n), array_map('cgNameKey', $was), true)));
-        if (count($gone) === 1 && count($came) === 1) cgRenameInvoicePerson($id, $gone[0], $came[0]);
+        // And only when the two read as one name misspelled — a different
+        // teacher put in someone's place must not inherit their costs.
+        if (count($gone) === 1 && count($came) === 1 && cgNamesLikelySame($gone[0], $came[0])) {
+            cgRenameInvoicePerson($id, $gone[0], $came[0]);
+        }
     }
 
     // Naming a different collaborator makes every record of the telling wrong:
