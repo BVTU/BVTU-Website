@@ -1581,6 +1581,21 @@ function cgGrantedParts(array $app): array {
     return array_keys($out) === $listed ? $out : [];
 }
 
+/**
+ * Which part of the day a share covers, so the ledger can tell the same
+ * morning claimed twice (counted once) from a morning and an afternoon
+ * (a whole day). Blocks carry no position — two blocks on one grant and one
+ * on another may be the same blocks — so they are one period and the larger
+ * stands. A full day is all of them.
+ */
+function cgDayPeriod(float $w): string {
+    $k = cgFmtDays($w);
+    if ($k === '1')   return 'full';
+    if ($k === '0.6') return 'am';
+    if ($k === '0.4') return 'pm';
+    return 'blocks';
+}
+
 /** The sum of a date => value map, to hundredths. */
 function cgSumParts(array $parts): float {
     $n = 0.0;
@@ -2126,20 +2141,21 @@ function cgDaysLedger(int $year, bool $fresh = false): array {
             foreach ($dates as $d => $w) {
                 $ap = $status === 'approved';
                 if (!isset($people[$key]['days'][$d])) {
-                    // wa / wp: the largest approved and pending share of the day.
-                    $people[$key]['days'][$d] = ['status' => $status, 'apps' => [$appId],
-                                                 'w' => $w, 'wa' => $ap ? $w : 0.0, 'wp' => $ap ? 0.0 : $w];
-                    continue;
+                    // a / p: the largest approved and pending share of each
+                    // period of the day (see cgDayPeriod()).
+                    $people[$key]['days'][$d] = ['status' => $status, 'apps' => [], 'a' => [], 'p' => []];
                 }
                 $day =& $people[$key]['days'][$d];
                 if (!in_array($appId, $day['apps'], true)) $day['apps'][] = $appId;
-                // Two claims on one date are still one day away at most: the
-                // larger share stands, not the sum. Approved and pending are
-                // held apart, so a pending full day on top of an approved
-                // afternoon is 0.4 approved and 0.6 awaiting a decision — not a
-                // whole day approved that nobody approved.
-                if ($ap) $day['wa'] = max($day['wa'], $w); else $day['wp'] = max($day['wp'], $w);
-                $day['w'] = max($day['w'], $w);
+                /* A teacher is away once per period, however many applications
+                 * claim it. The same morning entered twice is one morning; a
+                 * morning on one grant and the afternoon on another is the
+                 * whole day. Approved and pending are held apart, so a pending
+                 * full day on top of an approved afternoon is 0.4 approved and
+                 * 0.6 awaiting a decision. */
+                $per = cgDayPeriod($w);
+                $bin = $ap ? 'a' : 'p';
+                $day[$bin][$per] = max($day[$bin][$per] ?? 0.0, $w);
                 if ($ap) $day['status'] = 'approved';
                 unset($day);
             }
@@ -2275,9 +2291,15 @@ function cgDaysLedger(int $year, bool $fresh = false): array {
          * dropping them would understate a real total.
          */
         $appr = $pend = 0.0;
-        foreach ($p['days'] as $info) {
-            $appr = round($appr + $info['wa'], 2);
-            $pend = round($pend + max(0.0, $info['wp'] - $info['wa']), 2);
+        foreach ($p['days'] as $d => $info) {
+            $both = $info['a'];
+            foreach ($info['p'] as $per => $v) $both[$per] = max($both[$per] ?? 0.0, $v);
+            $wa = min(1.0, cgSumParts($info['a']));
+            $wb = min(1.0, cgSumParts($both));
+            $appr = round($appr + $wa, 2);
+            $pend = round($pend + max(0.0, $wb - $wa), 2);
+            // What the date costs in all, for the page's date chips.
+            $p['days'][$d]['w'] = $wb;
         }
         $p['approved'] = round($appr + (float)$p['undated_approved'], 2);
         $p['pending']  = round($pend + (float)$p['undated_pending'], 2);

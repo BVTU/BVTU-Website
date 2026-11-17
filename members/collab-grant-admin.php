@@ -2486,9 +2486,9 @@ $totalDaysApproved = $personDays['approved'];
               <div class="app-action-btns">
                 <button type="submit" name="action" value="approved"   class="btn btn-approve">✓ Approve &amp; notify applicant</button>
                 <a href="../collab-grant-edit.php?id=<?= (int)$app['id'] ?>" class="btn btn-edit">Edit application</a>
-                <button type="submit" name="action" value="declined"   class="btn btn-decline">Decline</button>
+                <button type="submit" name="action" value="declined"   class="btn btn-decline" formnovalidate>Decline</button>
                 <?php if ($app['status'] !== 'pending'): ?>
-                  <button type="submit" name="action" value="pending" class="btn" style="border:1px solid var(--border);background:#fff;color:var(--gray-500);">Reset to pending</button>
+                  <button type="submit" name="action" value="pending" formnovalidate class="btn" style="border:1px solid var(--border);background:#fff;color:var(--gray-500);">Reset to pending</button>
                 <?php endif; ?>
               </div>
 
@@ -2536,7 +2536,7 @@ $totalDaysApproved = $personDays['approved'];
                 <?php if ($view !== 'followup'): ?>
                 <p style="margin:0 0 .6rem;">
                   <button type="submit" form="decide-<?= (int)$app['id'] ?>"
-                          name="action" value="waitlisted" class="btn app-more-btn">
+                          name="action" value="waitlisted" class="btn app-more-btn" formnovalidate>
                     Waitlist this application
                   </button>
                   <span class="app-more-note">Holds it without deciding; the days are not counted.</span>
