@@ -1076,12 +1076,16 @@ function cgInvoiceLinesFor(array $apps): array {
                                              'invoice_number' => (string)$r['invoice_number'],
                                              'amount' => $r['amount'] === null ? null : (float)$r['amount']];
             }
-            return $out;
         } catch (\Exception $e) {
             error_log('cgInvoiceLinesFor: ' . $e->getMessage());
         }
     }
+    /* An application with figures of its own and no lines was never carried
+     * over — the copy failed, or the table could not be made. Its figures are
+     * its one line, so the form shows them and saving it keeps them rather
+     * than writing an empty set over a real invoice. */
     foreach ($apps as $a) {
+        if (isset($out[(int)$a['id']])) continue;
         if (trim((string)($a['invoice_number'] ?? '')) !== '' || ($a['release_cost'] ?? null) !== null) {
             $out[(int)$a['id']][] = ['person' => '', 'invoice_number' => (string)($a['invoice_number'] ?? ''),
                                      'amount' => ($a['release_cost'] ?? null) === null ? null : (float)$a['release_cost']];
@@ -1226,27 +1230,40 @@ function cgYearReleaseCost(int $year): array {
     $out = ['total' => 0.0, 'costed' => 0, 'approved' => 0, 'error' => false];
     try {
         $s = getDB()->prepare(
-            // duplicate_of IS NULL: a collaboration entered twice is costed
-            // once. Counting the folded one as approved-but-not-costed left
-            // "1 not yet costed" showing for ever against an invoice that was
-            // never going to exist.
-            "SELECT COALESCE(SUM(release_cost),0) AS total,
-                    SUM(CASE WHEN release_cost IS NOT NULL THEN 1 ELSE 0 END) AS costed,
-                    COUNT(*) AS approved
-             FROM collab_grant_applications
-             WHERE school_year=? AND status='approved' AND duplicate_of IS NULL"
-        );
+            "SELECT * FROM collab_grant_applications WHERE school_year=? AND status IN ('approved','pending')");
         $s->execute([$year]);
-        $r = $s->fetch() ?: [];
-        $out['total']    = (float)($r['total'] ?? 0);
-        $out['costed']   = (int)($r['costed'] ?? 0);
-        $out['approved'] = (int)($r['approved'] ?? 0);
+        $rows = $s->fetchAll();
     } catch (Exception $e) {
         // Flagged, not swallowed: zeros here would render a confident "$0.00"
         // that is indistinguishable from a year in which nothing was spent.
         error_log('cgYearReleaseCost: ' . $e->getMessage());
         $out['error'] = true;
+        return $out;
     }
+    $folded = [];
+    foreach ($rows as $r) {
+        if (!empty($r['duplicate_of'])) $folded[(int)$r['duplicate_of']][] = $r;
+    }
+    // duplicate_of IS NULL: a collaboration entered twice is costed once.
+    // Counting the folded one as approved-but-not-costed left "1 not yet
+    // costed" showing for ever against an invoice that was never going to exist.
+    $grants = array_values(array_filter($rows, function ($r) {
+        return $r['status'] === 'approved' && empty($r['duplicate_of']);
+    }));
+    $lines = cgInvoiceLinesFor($grants);
+    foreach ($grants as $g) {
+        $out['approved']++;
+        if (($g['release_cost'] ?? null) !== null) $out['total'] += (float)$g['release_cost'];
+        /* Costed means finished: every person on it billed, every line with its
+         * amount. A grant with one teacher's TTOC recorded and another's still
+         * to come has a subtotal in the total, but is not counted as costed —
+         * or the panel would drop its "so far" for a figure that is not final. */
+        if (($g['release_cost'] ?? null) !== null
+            && !cgInvoicingOpen($lines[(int)$g['id']] ?? [], cgGrantPeople($g, $folded[(int)$g['id']] ?? []))) {
+            $out['costed']++;
+        }
+    }
+    $out['total'] = round($out['total'], 2);
     return $out;
 }
 
