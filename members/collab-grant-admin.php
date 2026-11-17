@@ -9,6 +9,7 @@ require_once __DIR__ . '/collab-grant-db.php';
 // contact record, and cgEmailAliases()'s own require only fires when something
 // has already asked for the alias map.
 require_once __DIR__ . '/contacts-db.php';
+require_once __DIR__ . '/collab-invoice-read.php';
 requireLogin();
 
 $member = getMember();
@@ -665,6 +666,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'fulfi
     $apps   = cgGetApplications($year);
 }
 
+// ── Reading a district invoice ────────────────────────────────────────────
+// The upload is read and deleted in the same request: Cody keeps the
+// original, and the invoice names every teacher released that month, not
+// only the grant ones. What is shown back is the reading and its matches;
+// nothing is written until the matches are confirmed below.
+$cgInvReview = null;
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'invoice-read') {
+    csrfCheck();
+    $f   = $_FILES['invoice'] ?? null;
+    $err = (int)($f['error'] ?? UPLOAD_ERR_NO_FILE);
+    if (!$f || $err !== UPLOAD_ERR_OK) {
+        $notice = $err === UPLOAD_ERR_INI_SIZE || $err === UPLOAD_ERR_FORM_SIZE
+            ? 'That file is larger than the server accepts.' : 'No invoice was received.';
+    } elseif ($f['size'] > 20 * 1024 * 1024) {
+        $notice = 'That file is too large — 20 MB at most.';
+    } else {
+        $mime = (string)@mime_content_type($f['tmp_name']);
+        $ok = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+        if (!in_array($mime, $ok, true)) {
+            $notice = 'Upload the invoice as a PDF or a photo.';
+            @unlink($f['tmp_name']);
+        } else {
+            try {
+                $read = cgReadInvoiceFile($f['tmp_name'], $mime);
+            } finally {
+                @unlink($f['tmp_name']);   // read once, never kept
+            }
+            if (isset($read['error'])) $notice = $read['error'];
+            else $cgInvReview = cgMatchInvoice($read);
+        }
+    }
+}
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'invoice-apply') {
+    csrfCheck();
+    $picks = [];
+    foreach ((array)($_POST['pick'] ?? []) as $i) {
+        $i = (int)$i;
+        $picks[] = ['app_id' => (int)($_POST['pick_app'][$i] ?? 0),
+                    'person' => (string)($_POST['pick_person'][$i] ?? ''),
+                    'invoice_number' => (string)($_POST['pick_inv'][$i] ?? ''),
+                    'cost' => (string)($_POST['pick_cost'][$i] ?? '')];
+    }
+    if (!$picks) {
+        $notice = 'Nothing was ticked, so nothing was saved.';
+    } else {
+        $res = cgApplyInvoiceMatches($picks, $member['email']);
+        $notice = $res['saved'] ? 'Saved ' . $res['saved'] . ' cost' . ($res['saved'] === 1 ? '' : 's') . ' from the invoice.' : 'Nothing was saved.';
+        if ($res['errors']) $notice .= ' ' . implode(' ', $res['errors']);
+    }
+    $apps = cgGetApplications($year);
+}
+
 // ── A grant that never came through the form ──────────────────────────────
 // Filed under the year of its dates and approved as it goes in, so a past
 // grant counts against that year's days. Sent to that year's list after, so
@@ -915,6 +968,23 @@ $totalDaysApproved = $personDays['approved'];
       color: #1a5c2e;
       margin-bottom: 1.5rem;
     }
+
+    /* ══ Reading a district invoice ══════════════════════════ */
+    .cg-inv-upload { display:flex; flex-wrap:wrap; align-items:center; gap:.6rem; margin:0 0 1rem;
+                     font-size:.86rem; color:var(--gray-600); }
+    .cg-inv-upload label { display:flex; align-items:center; gap:.5rem; font-weight:600; }
+    .cg-inv-review { border:1.5px solid var(--border); border-radius:var(--radius); background:var(--white);
+                     padding:1rem 1.1rem; margin-bottom:1.25rem; }
+    .cg-inv-head { font-size:.86rem; color:var(--gray-600); display:grid; gap:.25rem; margin-bottom:.75rem; }
+    .cg-inv-adj { display:inline-block; margin-left:.4rem; color:#92400e; }
+    .cg-inv-none { margin:0; font-size:.88rem; color:var(--gray-500); }
+    .cg-inv-table { width:100%; border-collapse:collapse; font-size:.86rem; }
+    .cg-inv-table th { text-align:left; font-size:.72rem; text-transform:uppercase; letter-spacing:.05em;
+                       color:var(--gray-500); padding:.35rem .5rem; border-bottom:1px solid var(--border); }
+    .cg-inv-table td { padding:.45rem .5rem; border-bottom:1px solid var(--border); vertical-align:middle; }
+    .cg-inv-why { display:block; font-size:.76rem; color:#92400e; margin-top:.15rem; }
+    .cg-inv-foot { display:flex; flex-wrap:wrap; align-items:center; gap:.75rem; margin-top:.8rem; font-size:.82rem; }
+    @media (max-width: 640px) { .cg-inv-review { overflow-x:auto; } }
 
     /* ══ ALL — one line a grant ══════════════════════════════ */
     .cg-grid-wrap { overflow-x: auto; border: 1.5px solid var(--border); border-radius: var(--radius);
@@ -2077,6 +2147,70 @@ $totalDaysApproved = $personDays['approved'];
         </details>
       </div>
     </details>
+    <?php endif; ?>
+
+    <?php if (!$cgReadOnly && in_array($view, ['followup', 'all'], true)): ?>
+    <form class="cg-inv-upload" method="post" enctype="multipart/form-data">
+      <?= csrfField() ?>
+      <input type="hidden" name="action" value="invoice-read">
+      <label>District invoice
+        <input type="file" name="invoice" accept="application/pdf,image/*" required>
+      </label>
+      <button type="submit" class="btn ft-save" data-busy="Reading…">Read it</button>
+    </form>
+    <?php endif; ?>
+
+    <?php if ($cgInvReview !== null):
+      $rvRows = $cgInvReview['rows'];
+      $rvHit  = array_values(array_filter($rvRows, fn($r) => $r['match'] !== null));
+      $rvMiss = count($rvRows) - count($rvHit); ?>
+    <div class="cg-inv-review">
+      <div class="cg-inv-head">
+        <?php foreach ($cgInvReview['invoices'] as $iv): ?>
+          <div><strong>Invoice <?= htmlspecialchars($iv['invoice_number'] ?: '?') ?></strong>
+            <?= $iv['invoice_date'] ? '· ' . htmlspecialchars(date('M j, Y', strtotime($iv['invoice_date']) ?: time())) : '' ?>
+            · <?= htmlspecialchars($iv['description']) ?>
+            · $<?= number_format($iv['total'], 2) ?>
+            <?php foreach ($iv['adjustments'] as $adj): ?>
+              <span class="cg-inv-adj">less $<?= number_format((float)$adj['amount'], 2) ?> for <?= htmlspecialchars((string)$adj['label']) ?> — not applied</span>
+            <?php endforeach; ?>
+          </div>
+        <?php endforeach; ?>
+      </div>
+      <?php if (!$rvHit): ?>
+        <p class="cg-inv-none">Nobody on this invoice matches a grant<?= $rvMiss ? ' (' . $rvMiss . ' released ' . ($rvMiss === 1 ? 'teacher' : 'teachers') . ', none on a grant)' : '' ?>.</p>
+      <?php else: ?>
+      <form method="post">
+        <?= csrfField() ?>
+        <input type="hidden" name="action" value="invoice-apply">
+        <table class="cg-inv-table">
+          <thead><tr><th></th><th>On the invoice</th><th>Date</th><th>Cost</th><th>Grant</th><th></th></tr></thead>
+          <tbody>
+          <?php foreach ($rvHit as $i => $r): $m = $r['match']; ?>
+            <tr>
+              <td><input type="checkbox" name="pick[]" value="<?= $i ?>" aria-label="Save this one"
+                         <?= ($m['label'] === 'match' && !$m['already']) ? 'checked' : '' ?>>
+                <input type="hidden" name="pick_app[<?= $i ?>]" value="<?= (int)$m['app_id'] ?>">
+                <input type="hidden" name="pick_person[<?= $i ?>]" value="<?= htmlspecialchars($m['person']) ?>">
+                <input type="hidden" name="pick_inv[<?= $i ?>]" value="<?= htmlspecialchars($r['invoice_number']) ?>">
+                <input type="hidden" name="pick_cost[<?= $i ?>]" value="<?= htmlspecialchars((string)$r['cost']) ?>"></td>
+              <td><?= htmlspecialchars($r['name']) ?></td>
+              <td><?= $r['date'] ? date('M j', strtotime($r['date'])) : '—' ?></td>
+              <td class="cg-grid-num">$<?= number_format($r['cost'], 2) ?></td>
+              <td><?= htmlspecialchars($m['person']) ?> <span class="cg-grid-none">on <?= htmlspecialchars($m['applicant']) ?>'s grant</span></td>
+              <td><span class="cg-costed<?= $m['label'] === 'match' ? ' done' : '' ?>"><?= $m['already'] ? 'already saved' : ($m['label'] === 'match' ? 'match' : 'check') ?></span>
+                <?php if ($m['why']): ?><span class="cg-inv-why"><?= htmlspecialchars(implode('; ', $m['why'])) ?></span><?php endif; ?></td>
+            </tr>
+          <?php endforeach; ?>
+          </tbody>
+        </table>
+        <div class="cg-inv-foot">
+          <button type="submit" class="btn btn-approve">Save ticked costs</button>
+          <?php if ($rvMiss): ?><span class="cg-grid-none"><?= $rvMiss ?> other released <?= $rvMiss === 1 ? 'teacher' : 'teachers' ?> on the invoice, not on a grant — not saved.</span><?php endif; ?>
+        </div>
+      </form>
+      <?php endif; ?>
+    </div>
     <?php endif; ?>
 
     <?php if (empty($shownApps)): ?>
