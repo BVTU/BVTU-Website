@@ -276,7 +276,7 @@ function cgMatchInvoice(array $read): array {
             $dates = $w ? $w : array_fill_keys(cgAppDatesLoose($g), 1.0);
             $imports = cgInvoiceImportsFor((int)$g['id']);
             foreach (cgGrantPeople($g, $folded[(int)$g['id']] ?? []) as $p) {
-                $cands[] = ['app' => $g, 'person' => $p, 'dates' => $dates,
+                $cands[] = ['app' => $g, 'person' => $p, 'dates' => $dates, 'settled' => (bool)$w,
                             'lines' => $lines[(int)$g['id']] ?? [], 'imports' => $imports];
             }
         }
@@ -325,6 +325,7 @@ function cgMatchInvoice(array $read): array {
                 $why = [];
                 if ($nWhy !== '') $why[] = $nWhy . ' (' . $c['person'] . ')';
                 if ($gap === null) $why[] = 'the grant has no dates';
+                elseif (!$c['settled']) $why[] = 'the granted dates aren\'t settled';
                 elseif ($gap > 0) $why[] = 'date ' . $gap . ' day' . ($gap === 1 ? '' : 's') . ' from the grant\'s';
                 // Part days are not settled yet: say so rather than guess.
                 if ($row['hours'] > 0 && $row['hours'] < 1) $why[] = 'invoice shows part of a day';
@@ -332,7 +333,8 @@ function cgMatchInvoice(array $read): array {
                 $status = cgAbsenceStatus($c['lines'], $c['imports'], $c['person'], $num, $iso);
                 $top[] = ['app_id' => (int)$c['app']['id'], 'person' => $c['person'],
                           'applicant' => (string)$c['app']['applicant_name'],
-                          'label' => ($ns === 3 && $ds === 3) ? 'match' : 'likely',
+                          // Only dates known to be the granted ones can match outright.
+                          'label' => ($ns === 3 && $ds === 3 && $c['settled']) ? 'match' : 'likely',
                           'why' => $why, 'already' => $status];
             }
             if ($top) {
