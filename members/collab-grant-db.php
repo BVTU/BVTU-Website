@@ -924,6 +924,13 @@ function cgSendApprovalEmail(array $app): void {
     $subject = emailTplSubject('collab_approved', $tv);
     $body = emailTplBlock('collab_approved', 'intro', $tv) . "\n\n"
           . "─── NEXT STEP: BOOKING YOUR ABSENCE IN ATRIEVE ────────────────────\n\n"
+          // What was granted, date by date. The Executive may have granted a
+          // morning where a full day was asked, or turned one date down, and
+          // the edit page shows what was asked, not what was decided.
+          . (($granted = cgAppDateWeights($app))
+                ? 'The ' . (count($granted) === 1 ? 'day' : 'days') . ' to book: '
+                  . cgPartsList($granted) . "\n\n"
+                : '')
           . emailTplBlock('collab_approved', 'booking', $tv) . "\n\n"
           . "─────────────────────────────────────────────────────────────────────\n\n"
           . emailTplBlock('collab_approved', 'signoff', $tv) . "\n"

@@ -2423,6 +2423,15 @@ $totalDaysApproved = $personDays['approved'];
                     // What was decided per date, "not granted" included, when it
                     // still matches the dates listed; else what was asked.
                     $grantWas  = cgGrantedParts($app);
+                    $isGranted = ($app['status'] ?? '') === 'approved' && ($app['days_approved'] ?? null) !== null;
+                    // Approved before decisions were kept per date: the dates
+                    // still say it when they add up to what was granted.
+                    if (!$grantWas && $isGranted) $grantWas = cgAppDateWeights($app);
+                    /* Granted, but the total cannot be put on particular dates
+                     * (fewer granted than listed, or the dates moved since).
+                     * Defaulting to what was asked would re-grant the lot on
+                     * an unchanged re-approval, so each date has to be chosen. */
+                    $mustChoose = $isGranted && !$grantWas;
                     $fieldCss  = 'border:1px solid var(--border);border-radius:7px;padding:.4rem .5rem;'
                                . 'font-size:.88rem;font-family:inherit;background:var(--white);'; ?>
               <?php if ($grantList): ?>
@@ -2430,15 +2439,16 @@ $totalDaysApproved = $personDays['approved'];
                   <legend>Days to grant</legend>
                   <input type="hidden" name="grant_by_date" value="1">
                   <?php foreach ($grantList as $gd => $gp):
-                      $gv = array_key_exists($gd, $grantWas) ? cgFmtDays($grantWas[$gd]) : cgFmtDays($gp); ?>
+                      $gv = $mustChoose ? '' : (array_key_exists($gd, $grantWas) ? cgFmtDays($grantWas[$gd]) : cgFmtDays($gp)); ?>
                     <label>
                       <span><?= date('D M j', strtotime($gd)) ?></span>
-                      <select name="grant[<?= htmlspecialchars($gd) ?>]" style="<?= $fieldCss ?>">
+                      <select name="grant[<?= htmlspecialchars($gd) ?>]" style="<?= $fieldCss ?>"<?= $mustChoose ? ' required' : '' ?>>
+                        <?php if ($mustChoose): ?><option value="" selected>Choose…</option><?php endif; ?>
                         <?php foreach (CG_DAY_PARTS as $pk => $pl): ?>
                           <option value="<?= (string)$pk ?>"<?= (string)$pk === $gv ? ' selected' : '' ?>><?=
                             htmlspecialchars($pl) ?><?= abs((float)$pk - $gp) < 0.001 && $gp < 1 ? ' — asked' : '' ?></option>
                         <?php endforeach; ?>
-                        <option value="0">Not granted</option>
+                        <option value="0"<?= $gv === '0' ? ' selected' : '' ?>>Not granted</option>
                       </select>
                     </label>
                   <?php endforeach; ?>
