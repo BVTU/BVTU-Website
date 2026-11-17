@@ -67,7 +67,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
             // teacher the application does not name is the worst kind of wrong.
             !empty($a['has_collaborator']) ? $a['collaborator_name'] : '',
             $a['days_requested'],
-            ($a['days_approved'] ?? null) !== null ? (int)$a['days_approved'] : '',
+            ($a['days_approved'] ?? null) !== null ? cgFmtDays($a['days_approved']) : '',
             $pdStr,
             $a['reviewed_at'] ? date('Y-m-d', strtotime($a['reviewed_at'])) : '',
             !empty($a['atrieve_confirmed']) ? 'Yes' : 'No',
@@ -97,11 +97,11 @@ if (isset($_GET['export']) && $_GET['export'] === 'days') {
         fputcsv($out, array_map('csvSafeText', [
             $lp['name'],
             $lp['email'],
-            $lp['approved'],
-            $lp['pending'],
-            $lp['used'],
-            empty($lp['capped']) ? 'n/a' : ($lp['over'] ? 0 : $lp['left']),
-            empty($lp['capped']) ? 'n/a' : ($lp['over'] ? 'Yes, by ' . ($lp['used'] - CG_DAY_CAP) : 'No'),
+            cgFmtDays($lp['approved']),
+            cgFmtDays($lp['pending']),
+            cgFmtDays($lp['used']),
+            empty($lp['capped']) ? 'n/a' : ($lp['over'] ? 0 : cgFmtDays($lp['left'])),
+            empty($lp['capped']) ? 'n/a' : ($lp['over'] ? 'Yes, by ' . cgFmtDays($lp['used'] - CG_DAY_CAP) : 'No'),
             implode(' + ', $roles),
             // The same note the row carries. Someone adding the applications up
             // against this export needs to know why the total is lower.
@@ -502,9 +502,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_id'])
     if ($action === 'approved') {
         $raw       = trim((string)($_POST['days_approved'] ?? ''));
         $asked     = cgGetApplication($id);
-        $grantDays = $raw === '' ? (int)($asked['days_requested'] ?? 1) : (int)$raw;
-        $grantDays = max(1, min(CG_DAY_CAP, $grantDays));
+        $grantDays = $raw === '' ? (float)($asked['days_requested'] ?? 1) : cgParseDays($raw);
     }
+    if ($action === 'approved' && ($grantDays === null || $grantDays > CG_DAY_CAP)) {
+        // Refused rather than rounded: quietly turning 0.7 into 0.75 or 1
+        // changes what somebody is charged without telling them.
+        $notice = '"' . $raw . '" is not a number of days to grant. Use quarters from 0.25 to '
+                . CG_DAY_CAP . ' — 0.25, 0.5, 0.75, 1, 1.25…';
+    } else {
     cgUpdateStatus($id, $action, $member['email'], $notes, $grantDays);
 
     if ($action === 'approved') {
@@ -577,6 +582,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_id'])
     } else {
         $notice = 'Status updated to ' . ucfirst($action) . '.';
     }
+    }
     // Refresh apps after update
     $apps = cgGetApplications($year);
 }
@@ -607,6 +613,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add-g
         'collaborator_name'  => (string)($_POST['collaborator_name'] ?? ''),
         'collaborator_email' => (string)($_POST['collaborator_email'] ?? ''),
         'dates'              => array_values((array)($_POST['dates'] ?? [])),
+        'days'               => (string)($_POST['days'] ?? ''),
         'notes'              => (string)($_POST['notes'] ?? ''),
     ];
     $res = cgAddManualGrant($cgAddForm, $member['email']);
@@ -1251,6 +1258,11 @@ $totalDaysApproved = $personDays['approved'];
             <input type="date" name="dates[]" aria-label="Day <?= $i + 1 ?>"
                    <?= $i === 0 ? 'required' : '' ?> value="<?= htmlspecialchars((string)$dv) ?>">
           <?php endforeach; ?>
+          <label class="cg-add-opt">Part day?
+            <input type="number" name="days" min="0.25" max="<?= CG_DAY_CAP ?>" step="0.25"
+                   inputmode="decimal" placeholder="e.g. 0.75" aria-label="Days, if less than the dates"
+                   style="width:7rem;" value="<?= $afv('days') ?>">
+          </label>
         </div>
         <label class="cg-add-notes">Notes <span class="cg-add-opt">optional</span>
           <input type="text" name="notes" maxlength="1000" value="<?= $afv('notes') ?>">
@@ -1575,23 +1587,23 @@ $totalDaysApproved = $personDays['approved'];
             · <?= count($allApps) ?> in the CSV</span><?php endif; ?></div>
       </div>
       <div class="summary-card">
-        <div class="val"><?= $totalDaysApproved ?></div>
+        <div class="val"><?= cgFmtDays($totalDaysApproved) ?></div>
         <?php
           // Two qualifiers that genuinely change the number, in the fewest
           // words that still reconcile it; the rest is under "How these
           // figures are worked out" below the table.
           $capBits = [];
           if ($personDays['pending'] > 0) {
-              $capBits[] = (int)$personDays['pending'] . ' pending';
+              $capBits[] = cgFmtDays($personDays['pending']) . ' pending';
           }
           if ($personDays['exempt_approved'] > 0) {
-              $capBits[] = '+' . (int)$personDays['exempt_approved'] . ' uncapped';
+              $capBits[] = '+' . cgFmtDays($personDays['exempt_approved']) . ' uncapped';
           }
         ?>
         <div class="lbl">Release days approved<?php if ($capBits): ?><span class="cg-sub"
             title="Counts every teacher the local pays to release.<?php
-              if ($personDays['pending'] > 0): ?> <?= (int)$personDays['pending'] ?> further day<?= $personDays['pending'] !== 1 ? 's are' : ' is' ?> awaiting a decision.<?php endif;
-              if ($personDays['exempt_approved'] > 0): ?> A further <?= (int)$personDays['exempt_approved'] ?> day<?= $personDays['exempt_approved'] !== 1 ? 's' : '' ?> for <?= (int)$personDays['exempt_people'] ?> teacher<?= $personDays['exempt_people'] !== 1 ? 's' : '' ?> marked not capped, whose release costs the local nothing, are not counted here.<?php endif; ?>">
+              if ($personDays['pending'] > 0): ?> <?= cgFmtDays($personDays['pending']) ?> further day<?= abs($personDays['pending'] - 1) > 0.001 ? 's are' : ' is' ?> awaiting a decision.<?php endif;
+              if ($personDays['exempt_approved'] > 0): ?> A further <?= cgDaysWord($personDays['exempt_approved']) ?> for <?= (int)$personDays['exempt_people'] ?> teacher<?= $personDays['exempt_people'] !== 1 ? 's' : '' ?> marked not capped, whose release costs the local nothing, are not counted here.<?php endif; ?>">
             · <?= htmlspecialchars(implode(' · ', $capBits)) ?></span><?php endif; ?></div>
       </div>
       <div class="summary-card">
@@ -1698,7 +1710,7 @@ $totalDaysApproved = $personDays['approved'];
                   $addrLine = $ad ? implode(', ', $ad) . ' and ' . $last : $last; ?>
             — <?= htmlspecialchars($addrLine) ?>
             <span style="color:var(--gray-500);">
-              (<?= (int)$d['used'] ?> <?= (int)$d['used'] === 1 ? 'day' : 'days' ?> between them)</span>
+              (<?= cgDaysWord($d['used']) ?> between them)</span>
             <a href="people.php?q=<?= urlencode($d['name']) ?>" style="margin-left:.35rem;">Open contact</a>
           </li>
         <?php endforeach; ?>
@@ -1791,14 +1803,14 @@ $totalDaysApproved = $personDays['approved'];
                     <?php endforeach; ?>
                   </button>
                 </td>
-                <td style="padding:.45rem .5rem;"><?= (int)$lp['approved'] ?></td>
-                <td style="padding:.45rem .5rem;"><?= (int)$lp['pending'] ?: '—' ?></td>
-                <td style="padding:.45rem .5rem;font-weight:700;"><?= (int)$lp['used'] ?></td>
+                <td style="padding:.45rem .5rem;"><?= cgFmtDays($lp['approved']) ?></td>
+                <td style="padding:.45rem .5rem;"><?= $lp['pending'] > 0 ? cgFmtDays($lp['pending']) : '—' ?></td>
+                <td style="padding:.45rem .5rem;font-weight:700;"><?= cgFmtDays($lp['used']) ?></td>
                 <td style="padding:.45rem .5rem;<?= $lp['over'] ? 'color:#991b1b;font-weight:700;' : '' ?>">
                   <?php if (empty($lp['capped'])): ?>
                     <span style="color:var(--gray-500);">not capped</span>
                   <?php else: ?>
-                    <?= $lp['over'] ? 'over by ' . ($lp['used'] - CG_DAY_CAP) : (int)$lp['left'] ?>
+                    <?= $lp['over'] ? 'over by ' . cgFmtDays($lp['used'] - CG_DAY_CAP) : cgFmtDays($lp['left']) ?>
                   <?php endif; ?>
                 </td>
               </tr>
@@ -1829,7 +1841,8 @@ $totalDaysApproved = $personDays['approved'];
                                   ($info['status'] === 'approved' ? 'Approved' : 'Awaiting a decision')
                                   . ' — #' . implode(', #', $info['apps'])
                                   . (count($info['apps']) > 1 ? ', which both claim this day' : '')) ?>">
-                          <?= date('D M j', strtotime((string)$d)) ?>
+                          <?= date('D M j', strtotime((string)$d)) ?><?=
+                              isset($info['w']) && $info['w'] < 1 ? ' · ' . cgFmtDays($info['w']) : '' ?>
                         </span>
                       <?php endforeach; ?>
                     </div>
@@ -1874,8 +1887,7 @@ $totalDaysApproved = $personDays['approved'];
                                     }, $ad)))
                                   : '<span title="No usable dates on this application, so these '
                                     . 'days could not be checked against the others.">'
-                                    . (int)$ap['days'] . ' day'
-                                    . ((int)$ap['days'] !== 1 ? 's' : '') . ', no dates</span>';
+                                    . cgDaysWord($ap['days']) . ', no dates</span>';
                             ?>
                           <?php if (empty($ap['exact'])): ?>
                             <?php /* Two words on the lines where it is true,
@@ -1987,7 +1999,7 @@ $totalDaysApproved = $personDays['approved'];
             <div class="read-facts">
               <div class="read-fact"><strong>Email:</strong> <a href="mailto:<?= htmlspecialchars($app['applicant_email']) ?>"><?= htmlspecialchars($app['applicant_email']) ?></a></div>
               <div class="read-fact"><strong>Time in role:</strong> <?= htmlspecialchars($app['years_in_role'] ?: '—') ?></div>
-              <div class="read-fact"><strong>Days requested:</strong> <?= $days ?></div>
+              <div class="read-fact"><strong>Days:</strong> <?= htmlspecialchars(cgDaysLine($app)) ?></div>
               <?php
                 $pdDatesR = [];
                 if (!empty($app['proposed_dates'])) {
@@ -2047,7 +2059,7 @@ $totalDaysApproved = $personDays['approved'];
               <div class="app-meta">
                 <?= htmlspecialchars(implode(' · ', array_filter([trim((string)$app['school']),
                       trim((string)$app['position']),
-                      $days . ' day' . ($days !== 1 ? 's' : ''),
+                      cgDaysWord(cgEffectiveDays($app)),
                       date('M j', strtotime($app['submitted_at']))], 'strlen'))) ?>
               </div>
             </div>
@@ -2289,17 +2301,17 @@ $totalDaysApproved = $personDays['approved'];
                     <span class="cg-standing-who"><?= htmlspecialchars($who) ?></span>
                     <span class="cg-standing-role"><?= $role ?></span>
                     <?php if (empty($p['capped'])): ?>
-                      <span class="cg-standing-days"><?= (int)$p['used'] ?> days<?php
-                        ?><?= $p['pending'] ? ' (' . (int)$p['pending'] . ' awaiting)' : '' ?></span>
+                      <span class="cg-standing-days"><?= cgDaysWord($p['used']) ?><?php
+                        ?><?= $p['pending'] > 0 ? ' (' . cgFmtDays($p['pending']) . ' awaiting)' : '' ?></span>
                       <span class="cg-tag" title="<?= htmlspecialchars($p['exempt_reason']) ?>">not capped</span>
                     <?php else: ?>
                       <span class="cg-standing-days<?= $p['over'] ? ' over' : '' ?>">
-                        <?= (int)$p['used'] ?> of <?= CG_DAY_CAP ?> days<?php
-                          ?><?= $p['pending'] ? ' (' . (int)$p['pending'] . ' awaiting)' : '' ?>
+                        <?= cgFmtDays($p['used']) ?> of <?= CG_DAY_CAP ?> days<?php
+                          ?><?= $p['pending'] > 0 ? ' (' . cgFmtDays($p['pending']) . ' awaiting)' : '' ?>
                       </span>
                       <?php if ($p['over']): ?>
                         <span class="cg-tag over">over the limit</span>
-                      <?php elseif ($p['used'] === 0): ?>
+                      <?php elseif ($p['used'] <= 0): ?>
                         <span class="cg-tag good">hasn't used the fund</span>
                       <?php endif; ?>
                     <?php endif; ?>
@@ -2353,19 +2365,20 @@ $totalDaysApproved = $personDays['approved'];
               <input type="hidden" name="app_id" value="<?= $app['id'] ?>">
 
               <?php if ($app['status'] === 'approved' && ($app['days_approved'] ?? null) !== null
-                        && (int)$app['days_approved'] !== (int)$app['days_requested']): ?>
+                        && abs((float)$app['days_approved'] - (float)$app['days_requested']) > 0.001): ?>
                 <div style="font-size:.84rem;color:#92400e;background:#fffbeb;border:1px solid #fde68a;
                             border-radius:8px;padding:.5rem .7rem;margin-bottom:.6rem;">
-                  <?= (int)$app['days_approved'] ?> <?= (int)$app['days_approved'] === 1 ? 'day' : 'days' ?>
-                  granted, <?= (int)$app['days_requested'] ?> now requested.
+                  <?= cgDaysWord($app['days_approved']) ?>
+                  granted, <?= cgFmtDays($app['days_requested']) ?> now requested.
                 </div>
               <?php endif; ?>
 
               <label style="font-size:.85rem;font-weight:600;color:var(--gray-600);
                             display:block;margin-bottom:.6rem;max-width:230px;">
                 Days to grant
-                <input type="number" name="days_approved" min="1" max="<?= CG_DAY_CAP ?>" step="1"
-                       value="<?= (int)(($app['days_approved'] ?? null) !== null
+                <input type="number" name="days_approved" min="0.25" max="<?= CG_DAY_CAP ?>" step="0.25"
+                       inputmode="decimal"
+                       value="<?= cgFmtDays(($app['days_approved'] ?? null) !== null
                                         ? $app['days_approved'] : $app['days_requested']) ?>"
                        style="width:100%;border:1px solid var(--border);border-radius:7px;
                               padding:.45rem .6rem;font-size:.9rem;font-family:inherit;

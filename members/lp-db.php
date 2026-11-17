@@ -1755,7 +1755,9 @@ function archiveSection(string $key, array $grants, array $lines, array $voucher
             $rows = [];
             foreach ($collab as $a) {
                 $rows[] = [$a['applicant_name'], $a['applicant_email'], $a['school'],
-                           (string)(int)$a['days_requested'], $a['status'],
+                           // Granted where decided, asked otherwise; 0.75, not 0.75000.
+                           rtrim(rtrim(number_format((float)($a['days_approved'] ?? $a['days_requested']),
+                                                     2, '.', ''), '0'), '.'), $a['status'],
                            $a['submitted_at'] ? date('Y-m-d', strtotime($a['submitted_at'])) : '',
                            // The follow-through, so a year's record can be
                            // reconciled against the district without going back

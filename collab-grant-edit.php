@@ -443,16 +443,15 @@ function cgOld(string $key, $fallback) {
                   border:1px solid var(--border);border-radius:8px;padding:.7rem .85rem;
                   margin:0 0 1rem;line-height:1.7;">
           <?php if (empty($standing['capped'])): ?>
-            You've taken part in <strong><?= (int)$standing['used'] ?>
-            <?= (int)$standing['used'] === 1 ? 'day' : 'days' ?></strong> of collaboration this
-            school year<?= $standing['pending'] ? ', counting ' . (int)$standing['pending'] . ' still awaiting a decision' : '' ?>.
+            You've taken part in <strong><?= cgDaysWord($standing['used']) ?></strong> of collaboration this
+            school year<?= $standing['pending'] > 0 ? ', counting ' . cgFmtDays($standing['pending']) . ' still awaiting a decision' : '' ?>.
             The <?= CG_DAY_CAP ?>-day yearly limit doesn't apply to you — though any one
             application still covers up to <?= CG_DAY_CAP ?> days.
           <?php else: ?>
-            You've used <strong><?= (int)$standing['used'] ?> of your <?= CG_DAY_CAP ?> days</strong>
-            this school year<?= $standing['pending'] ? ', counting ' . (int)$standing['pending'] . ' still awaiting a decision' : '' ?>.
+            You've used <strong><?= cgFmtDays($standing['used']) ?> of your <?= CG_DAY_CAP ?> days</strong>
+            this school year<?= $standing['pending'] > 0 ? ', counting ' . cgFmtDays($standing['pending']) . ' still awaiting a decision' : '' ?>.
             <?php if ($standing['left'] > 0): ?>
-              You have <?= (int)$standing['left'] ?> <?= (int)$standing['left'] === 1 ? 'day' : 'days' ?> left.
+              You have <?= cgDaysWord($standing['left']) ?> left.
             <?php else: ?>
               Adding another day would put you over the limit — you can still ask, and
               the BVTU Executive will decide.

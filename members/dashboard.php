@@ -482,15 +482,15 @@ usort($quickActions, fn($a, $b) => $a['quick'] <=> $b['quick']);
       <?php $cgStanding = cgPersonDays(cgCurrentYear(), $myEmail, $member['name']); ?>
       <p class="dash-standing">
         <?php if (empty($cgStanding['capped'])): ?>
-          <?= (int)$cgStanding['used'] ?> <?= (int)$cgStanding['used'] === 1 ? 'day' : 'days' ?>
+          <?= cgDaysWord($cgStanding['used']) ?>
           of collaboration this school year<?php
-            ?><?= $cgStanding['pending'] ? ', including ' . (int)$cgStanding['pending'] . ' awaiting a decision' : '' ?>
+            ?><?= $cgStanding['pending'] > 0 ? ', including ' . cgFmtDays($cgStanding['pending']) . ' awaiting a decision' : '' ?>
           — the <?= CG_DAY_CAP ?>-day yearly limit doesn't apply to you.
         <?php else: ?>
-          <?= (int)$cgStanding['used'] ?> of <?= CG_DAY_CAP ?> release days used this school year<?php
-            ?><?= $cgStanding['pending'] ? ', including ' . (int)$cgStanding['pending'] . ' awaiting a decision' : '' ?>.
+          <?= cgFmtDays($cgStanding['used']) ?> of <?= CG_DAY_CAP ?> release days used this school year<?php
+            ?><?= $cgStanding['pending'] > 0 ? ', including ' . cgFmtDays($cgStanding['pending']) . ' awaiting a decision' : '' ?>.
           <?php if ($cgStanding['left'] > 0): ?>
-            <?= (int)$cgStanding['left'] ?> left.
+            <?= cgFmtDays($cgStanding['left']) ?> left.
           <?php endif; ?>
         <?php endif; ?>
       </p>
@@ -501,7 +501,7 @@ usort($quickActions, fn($a, $b) => $a['quick'] <=> $b['quick']);
           $gDates = json_decode($g['proposed_dates'] ?? '[]', true);
           $gDates = is_array($gDates) ? $gDates : [];
           $gYear  = (int)$g['school_year'] . '–' . (((int)$g['school_year'] + 1) % 100);
-          $gDays  = (int)$g['days_requested'] . ' ' . ((int)$g['days_requested'] === 1 ? 'day' : 'days');
+          $gDays  = cgDaysWord(cgEffectiveDays($g));
           $gWhen  = $gDates ? implode(', ', array_map(fn($d) => date('M j', strtotime($d)), $gDates)) : '';
           // Searchable by what is actually printed on the row: the year, the
           // decision, the day count and the dates.

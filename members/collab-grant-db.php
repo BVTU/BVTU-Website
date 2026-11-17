@@ -181,7 +181,7 @@ function cgGetApplication(int $id): ?array {
 }
 
 function cgUpdateStatus(int $id, string $status, string $reviewedBy, string $notes = '',
-                        ?int $daysApproved = null): void {
+                        ?float $daysApproved = null): void {
     cgEnsureEditSupport();
     // Only an approval carries a day count. Anything else clears it, so a grant
     // reset to pending does not keep counting against the applicant's three days.
@@ -770,12 +770,12 @@ function cgSendCollaboratorEmail(array $app, bool $force = false): array {
     }
 
     $days    = cgEffectiveDays($app);
-    $dayWord = $days === 1 ? 'day' : 'days';
+    $dayWord = abs($days - 1) < 0.001 ? 'day' : 'days';
 
     $tv = [
         '{{collaborator}}' => (string)$app['collaborator_name'],
         '{{applicant}}'    => (string)$app['applicant_name'],
-        '{{days}}'         => (string)$days,
+        '{{days}}'         => cgFmtDays($days),
         '{{day_word}}'     => $dayWord,
     ];
 
@@ -806,7 +806,7 @@ function cgSendCollaboratorEmail(array $app, bool $force = false): array {
          * "still to be settled" would contradict the applicant's own letter,
          * which lists them. */
         $dateLine = 'The application lists ' . cgDateList($app['proposed_dates'] ?? '')
-                  . ', which does not match the ' . $days . ' ' . $dayWord
+                  . ', which does not match the ' . cgFmtDays($days) . ' ' . $dayWord
                   . ' approved — ' . (string)$app['applicant_name']
                   . " will confirm which with you.\n\n";
     } else {
@@ -821,7 +821,7 @@ function cgSendCollaboratorEmail(array $app, bool $force = false): array {
           // book can never drift apart.
           . emailTplBlock('collab_approved', 'booking',
                           ['{{name}}' => (string)$app['collaborator_name'],
-                           '{{days}}' => (string)$days, '{{day_word}}' => $dayWord,
+                           '{{days}}' => cgFmtDays($days), '{{day_word}}' => $dayWord,
                            '{{collab_line}}' => '']) . "\n\n"
           . "─────────────────────────────────────────────────────────────────────\n\n"
           . emailTplBlock('collab_collaborator', 'signoff', $tv) . "\n"
@@ -858,7 +858,7 @@ function cgSendApprovalEmail(array $app): void {
     $email     = $app['applicant_email'];
     if (cgEmailSuppressed($email, (string)$name, (int)($app['school_year'] ?? 0))) return;
     $days      = cgEffectiveDays($app);
-    $dayWord   = $days === 1 ? 'day' : 'days';
+    $dayWord   = abs($days - 1) < 0.001 ? 'day' : 'days';
     // has_collaborator as well as a name: the form hides its collaborator
     // inputs rather than disabling them, so a name typed and then "not yet"
     // chosen still arrives, and talking about a collaborator they said they do
@@ -906,7 +906,7 @@ function cgSendApprovalEmail(array $app): void {
         }
     }
 
-    $tv = ['{{name}}' => $name, '{{days}}' => (string)$days,
+    $tv = ['{{name}}' => $name, '{{days}}' => cgFmtDays($days),
            '{{day_word}}' => $dayWord, '{{collab_line}}' => $collabLine];
 
     $subject = emailTplSubject('collab_approved', $tv);
@@ -1120,7 +1120,7 @@ function cgEnsureEditSupport(): void {
         'link_sent_by'     => "VARCHAR(255) NOT NULL DEFAULT ''",
         // What the Executive actually granted, which need not be what was asked
         // for. NULL means nobody has decided yet, which is not the same as zero.
-        'days_approved'    => 'INT DEFAULT NULL',
+        'days_approved'    => 'DECIMAL(4,2) DEFAULT NULL',
     ] as $col => $type) {
         try {
             $db->query("SELECT `$col` FROM collab_grant_applications LIMIT 1");
@@ -1132,6 +1132,17 @@ function cgEnsureEditSupport(): void {
             } catch (\Exception $e2) {}
         }
     }
+
+    // days_approved began as INT; a part day (0.75) needs a decimal. MODIFY
+    // keeps every whole number already there. Best effort, like the columns
+    // above: a host that cannot ALTER keeps whole days and loses nothing.
+    try {
+        $col = $db->query("SHOW COLUMNS FROM collab_grant_applications LIKE 'days_approved'")->fetch();
+        if ($col && stripos((string)$col['Type'], 'decimal') !== 0) {
+            $db->exec("ALTER TABLE collab_grant_applications
+                       MODIFY COLUMN days_approved DECIMAL(4,2) DEFAULT NULL");
+        }
+    } catch (\Exception $e) {}
 
     // One row per edit, holding what actually changed. A grant that quietly
     // moved between approval and invoicing is near impossible to reconstruct a
@@ -1391,11 +1402,61 @@ function cgSendEditLink(array $app, string $actor): bool {
 
 const CG_DAY_CAP = 3;
 
+/*
+ * Days come in quarters.
+ *
+ * A teacher can be released for part of a day — asked for one, took 0.75 — so
+ * the days granted are a decimal. Quarters only, and that is not just tidiness:
+ * a quarter is exact in binary, so any total of them adds up exactly and a cap
+ * test of 3.0 against 2.25 + 0.75 cannot come out a hair over.
+ * days_requested stays whole because it is the number of dates listed.
+ */
+const CG_DAY_STEP = 0.25;
+
+/** A typed day count as a number of days, or null when it is not a quarter-day
+ *  amount above zero. Accepts "0.75", ".75" and "1,5". */
+function cgParseDays($raw): ?float {
+    $s = str_replace(',', '.', trim((string)$raw));
+    if ($s === '' || !preg_match('/^\d*(\.\d+)?$/', $s) || $s === '.') return null;
+    $n = (float)$s;
+    $q = round($n / CG_DAY_STEP);
+    if ($q < 1 || abs($q * CG_DAY_STEP - $n) > 0.0001) return null;
+    return $q * CG_DAY_STEP;
+}
+
+/** A day count as people write it: 2, 1.5, 0.75 — never 2.00. */
+function cgFmtDays($n): string {
+    $s = number_format(round((float)$n, 2), 2, '.', '');
+    return rtrim(rtrim($s, '0'), '.');
+}
+
+/** "1 day", "0.75 days", "2 days". */
+function cgDaysWord($n): string {
+    return cgFmtDays($n) . ' ' . (abs((float)$n - 1) < 0.001 ? 'day' : 'days');
+}
+
 /** The days a grant actually spends: what was granted, or what was asked when
  *  nobody has decided yet. */
-function cgEffectiveDays(array $app): int {
+function cgEffectiveDays(array $app): float {
     $a = $app['days_approved'] ?? null;
-    return $a === null ? (int)$app['days_requested'] : (int)$a;
+    return round($a === null ? (float)$app['days_requested'] : (float)$a, 2);
+}
+
+/**
+ * How much of each date an application spends.
+ *
+ * Whole days on every date but the last, which takes what is left: one date
+ * granted 0.75 is 0.75 of that day; two dates granted 1.5 are a day and a half.
+ * Nobody records which day was the short one, and it does not matter — the
+ * person's total is the same whichever it is.
+ */
+function cgDateWeights(array $dates, float $days): array {
+    $out = [];
+    $n   = count($dates);
+    foreach (array_values($dates) as $i => $d) {
+        $out[$d] = $i < $n - 1 ? 1.0 : round($days - ($n - 1), 2);
+    }
+    return $out;
 }
 
 /** A name reduced to something comparable: case, punctuation and spacing gone. */
@@ -1666,7 +1727,10 @@ function cgAppDates(array $app): array {
         $iso = date('Y-m-d', $t);
         if (!in_array($iso, $out, true)) $out[] = $iso;
     }
-    return count($out) === cgEffectiveDays($app) ? $out : [];
+    // A part day still needs a date of its own, so 0.75 days is one date and
+    // 1.5 is two.
+    $days = cgEffectiveDays($app);
+    return $days > 0 && count($out) === (int)ceil($days - 0.001) ? $out : [];
 }
 
 /**
@@ -1877,7 +1941,7 @@ function cgDaysLedger(int $year, bool $fresh = false): array {
     // Without it a merged row lists only the address it is counted under, and
     // the page cannot show the reader what it joined together.
     $add = function (string $key, string $name, string $email, string $status,
-                     int $days, int $appId, string $role, bool $exact,
+                     float $days, int $appId, string $role, bool $exact,
                      string $seen = '', array $dates = []) use (&$people) {
         if (!isset($people[$key])) {
             $people[$key] = ['key' => $key, 'name' => $name, 'email' => $email,
@@ -1898,14 +1962,17 @@ function cgDaysLedger(int $year, bool $fresh = false): array {
             }
         }
         if ($dates) {
-            foreach ($dates as $d) {
+            foreach (cgDateWeights($dates, $days) as $d => $w) {
                 if (!isset($people[$key]['days'][$d])) {
-                    $people[$key]['days'][$d] = ['status' => $status, 'apps' => [$appId]];
+                    $people[$key]['days'][$d] = ['status' => $status, 'apps' => [$appId], 'w' => $w];
                     continue;
                 }
                 if (!in_array($appId, $people[$key]['days'][$d]['apps'], true)) {
                     $people[$key]['days'][$d]['apps'][] = $appId;
                 }
+                // Two claims on one date are still one day away at most: the
+                // larger share stands, not the sum.
+                $people[$key]['days'][$d]['w'] = max($people[$key]['days'][$d]['w'], $w);
                 // Approved outranks pending: the day is spoken for either way,
                 // and counting it as pending would understate what is committed.
                 if ($status === 'approved') $people[$key]['days'][$d]['status'] = 'approved';
@@ -1963,7 +2030,7 @@ function cgDaysLedger(int $year, bool $fresh = false): array {
      */
     foreach ($rows as $r) {
         $days = cgEffectiveDays($r);
-        if ($days < 1) continue;
+        if ($days <= 0) continue;
 
         $rawEmail = strtolower(trim((string)$r['applicant_email']));
         $email    = cgCanonEmail($rawEmail);
@@ -1987,7 +2054,7 @@ function cgDaysLedger(int $year, bool $fresh = false): array {
 
     foreach ($rows as $r) {
         $days = cgEffectiveDays($r);
-        if ($days < 1) continue;
+        if ($days <= 0) continue;
 
         // 'has_collaborator' is what the review panel reads, so the ledger reads
         // it too: a name left behind after someone switched back to "not yet"
@@ -2039,12 +2106,12 @@ function cgDaysLedger(int $year, bool $fresh = false): array {
          * is deduplicated there because nothing is known there, and quietly
          * dropping them would understate a real total.
          */
-        $appr = $pend = 0;
+        $appr = $pend = 0.0;
         foreach ($p['days'] as $info) {
-            if ($info['status'] === 'approved') $appr++; else $pend++;
+            if ($info['status'] === 'approved') $appr += $info['w']; else $pend += $info['w'];
         }
-        $p['approved'] = $appr + (int)$p['undated_approved'];
-        $p['pending']  = $pend + (int)$p['undated_pending'];
+        $p['approved'] = round($appr + (float)$p['undated_approved'], 2);
+        $p['pending']  = round($pend + (float)$p['undated_pending'], 2);
 
         // Days two applications both claim, and who claimed them. Named on the
         // page: the person has not used those days twice, and a total that
@@ -2067,7 +2134,7 @@ function cgDaysLedger(int $year, bool $fresh = false): array {
         $p['shared_apps'] = $withApps;
         // Some of this total was summed rather than counted by date, so the
         // deduplication above could not reach it.
-        $p['undated'] = ((int)$p['undated_approved'] + (int)$p['undated_pending']) > 0;
+        $p['undated'] = ((float)$p['undated_approved'] + (float)$p['undated_pending']) > 0;
 
         $people[$k] = cgApplyCap($p, $year);
     }
@@ -2108,8 +2175,8 @@ function cgYearPersonDays(int $year): array {
          * exempt bucket and show a headline of zero, which is the worst way
          * for this to be wrong. */
         $free = array_key_exists('capped', $p) && empty($p['capped']);
-        $out[$free ? 'exempt_approved' : 'approved'] += (int)$p['approved'];
-        $out[$free ? 'exempt_pending'  : 'pending']  += (int)$p['pending'];
+        $out[$free ? 'exempt_approved' : 'approved'] += (float)$p['approved'];
+        $out[$free ? 'exempt_pending'  : 'pending']  += (float)$p['pending'];
         $out[$free ? 'exempt_people'   : 'people']++;
     }
     return $out;
@@ -2337,11 +2404,10 @@ function cgLedgerDuplicates(int $year): array {
  * is reading.
  */
 function cgDaysLine(array $app): string {
-    $asked   = (int)$app['days_requested'];
+    $asked   = (float)$app['days_requested'];
     $granted = $app['days_approved'] ?? null;
-    $word    = function (int $n) { return $n . ' ' . ($n === 1 ? 'day' : 'days'); };
-    if ($granted === null || (int)$granted === $asked) return $word($asked);
-    return $word($asked) . ' now listed, ' . (int)$granted . ' granted';
+    if ($granted === null || abs((float)$granted - $asked) < 0.001) return cgDaysWord($asked);
+    return cgDaysWord($asked) . ' now listed, ' . cgFmtDays($granted) . ' granted';
 }
 
 
@@ -2513,13 +2579,13 @@ function cgExemptRemove(array $person): bool {
 /** Fill in a person's cap standing, exempt or not. Shared so the ledger and the
  *  not-in-the-ledger default can never disagree about it. */
 function cgApplyCap(array $p, int $year): array {
-    $used  = (int)$p['approved'] + (int)$p['pending'];
+    $used  = round((float)$p['approved'] + (float)$p['pending'], 2);
     $ex    = cgExemptFor($p, $year);
     $p['used']   = $used;
     $p['capped'] = ($ex === null);
     $p['exempt_reason'] = $ex === null ? '' : (string)$ex['reason'];
-    $p['left'] = $ex === null ? max(0, CG_DAY_CAP - $used) : 0;
-    $p['over'] = $ex === null ? $used > CG_DAY_CAP : false;
+    $p['left'] = $ex === null ? max(0.0, round(CG_DAY_CAP - $used, 2)) : 0;
+    $p['over'] = $ex === null ? $used > CG_DAY_CAP + 0.001 : false;
     return $p;
 }
 
@@ -2542,7 +2608,8 @@ function cgYearOfDate(string $iso): int {
  * sent, so the record never claims an email went out.
  *
  * $d: applicant_name, applicant_email (optional when the name is one contact),
- * collaborator_name, collaborator_email, dates (Y-m-d list), notes.
+ * collaborator_name, collaborator_email, dates (Y-m-d list), days (optional,
+ * for a part day), notes.
  * Returns ['id' => int, 'year' => int] or ['error' => string].
  */
 function cgAddManualGrant(array $d, string $actor): array {
@@ -2600,7 +2667,18 @@ function cgAddManualGrant(array $d, string $actor): array {
 
     $note = trim('Added by hand by ' . $actor . ' on ' . date('M j, Y') . '.'
           . "\n" . trim((string)($d['notes'] ?? '')));
-    $days = count($dates);
+    // The dates say how many days, unless someone was released for part of
+    // one: 0.75 is one date, 1.5 is two.
+    $days = (float)count($dates);
+    $rawDays = trim((string)($d['days'] ?? ''));
+    if ($rawDays !== '') {
+        $days = cgParseDays($rawDays);
+        if ($days === null) return ['error' => '"' . $rawDays . '" is not a number of days. Use quarters: 0.25, 0.5, 0.75, 1…'];
+        if ((int)ceil($days - 0.001) !== count($dates)) {
+            return ['error' => cgDaysWord($days) . ' does not fit ' . count($dates) . ' '
+                             . (count($dates) === 1 ? 'date' : 'dates') . '. Each day, or part of one, needs its own date.'];
+        }
+    }
     $hasCol = $col['name'] !== '';
 
     $cols = ['applicant_name', 'applicant_email', 'school', 'position',
@@ -2609,7 +2687,7 @@ function cgAddManualGrant(array $d, string $actor): array {
              'admin_notes', 'school_year', 'reviewed_at', 'reviewed_by'];
     $vals = [$app['name'], $app['email'], '', '',
              $hasCol ? 1 : 0, $hasCol ? $col['name'] : null, 0,
-             json_encode($dates), $days, $days, 'approved',
+             json_encode($dates), count($dates), $days, 'approved',
              $note, $year, date('Y-m-d H:i:s'), $actor];
     if ($hasCol && cgHasCollabEmail()) {
         $cols[] = 'collaborator_email'; $vals[] = $col['email'];
