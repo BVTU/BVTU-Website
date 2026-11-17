@@ -1107,28 +1107,49 @@ function cgInvoiceLinesFor(array $apps): array {
  * the same collaborators, applying themselves). Each is a TTOC to pay for.
  */
 function cgGrantPeople(array $app, array $folded = []): array {
-    $out = [];
-    $add = function (string $n) use (&$out) {
-        $n = trim($n);
-        $k = cgNameKey($n);
-        if ($k !== '' && !isset($out[$k])) $out[$k] = $n;
+    $year   = (int)($app['school_year'] ?? 0);
+    $out    = [];
+    $seenId = [];
+    $seenNm = [];
+    /* Who someone is, then what to call them: an email address settles that
+     * a preferred name on one form and a full name on another are one
+     * teacher, the same way the days ledger decides it. A name is all there
+     * is to go on only where no address is known. */
+    $add = function (string $id, string $name) use (&$out, &$seenId, &$seenNm) {
+        $name = trim($name);
+        $nk   = cgNameKey($name);
+        if ($nk === '') return;
+        if (($id !== '' && isset($seenId[$id])) || isset($seenNm[$nk])) return;
+        if ($id !== '') $seenId[$id] = true;
+        $seenNm[$nk] = true;
+        $out[] = $name;
     };
-    $add((string)$app['applicant_name']);
-    if (!empty($app['has_collaborator'])) {
-        foreach (cgSplitNames((string)($app['collaborator_name'] ?? '')) as $n) $add($n);
-    }
+    $copies = [$app];
     foreach ($folded as $f) {
         // Only copies that release anyone — the same approved-or-pending test
         // the days ledger uses. A declined copy put nobody in a classroom.
-        if (!in_array($f['status'] ?? '', ['approved', 'pending'], true)) continue;
-        $add((string)$f['applicant_name']);
-        // A folded copy may name someone the primary does not; the days
-        // ledger still charges them, so they are a TTOC to bill here too.
-        if (!empty($f['has_collaborator'])) {
-            foreach (cgSplitNames((string)($f['collaborator_name'] ?? '')) as $n) $add($n);
+        if (in_array($f['status'] ?? '', ['approved', 'pending'], true)) $copies[] = $f;
+    }
+    foreach ($copies as $r) {
+        $em = cgCanonEmail((string)($r['applicant_email'] ?? ''));
+        $add($em !== '' ? 'e:' . $em : '', (string)$r['applicant_name']);
+    }
+    // Collaborators after every applicant, so a teacher who both applied and
+    // was named keeps the name they gave on their own form.
+    foreach ($copies as $r) {
+        if (empty($r['has_collaborator'])) continue;
+        $named = cgSplitNames((string)($r['collaborator_name'] ?? ''));
+        $typed = cgCanonEmail((string)($r['collaborator_email'] ?? ''));
+        if (count($named) === 1 && $typed !== '' && filter_var($typed, FILTER_VALIDATE_EMAIL)) {
+            $add('e:' . $typed, $named[0]);
+            continue;
+        }
+        foreach ($named as $n) {
+            $hit = cgResolveCollaborator($n, cgContactsByName(), cgApplicantsByName($year));
+            $add(strpos($hit['key'], 'e:') === 0 ? $hit['key'] : '', $n);
         }
     }
-    return array_values($out);
+    return $out;
 }
 
 /**

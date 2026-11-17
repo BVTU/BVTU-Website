@@ -905,8 +905,13 @@ $totalDaysApproved = $personDays['approved'];
     .cg-grid-none { color: var(--gray-400); }
     .cg-grid-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
     .cg-grid-detail > td { padding: .75rem; background: var(--off-white); }
-    /* The line above already says who and what; the card is opened, not toggled. */
-    .cg-grid .app-card-head { display: none; }
+    /* The line above already says who, the status and the costing; the card
+       keeps only its school · position · days · applied line, and is opened
+       from the table line rather than toggled. */
+    .cg-grid .app-card-head { cursor: default; padding: .6rem 1.25rem 0; }
+    .cg-grid .app-card-head:hover { background: none; }
+    .cg-grid .app-card-head .app-name, .cg-grid .app-card-head .app-status-badge,
+    .cg-grid .app-card-head .cg-costed, .cg-grid .app-card-chevron { display: none; }
 
     /* ══ REVIEW VIEW — accordion cards ══════════════════════ */
     .app-list { display: flex; flex-direction: column; gap: 1rem; }
@@ -2823,7 +2828,9 @@ function cgGridSort(key) {
 }
 
 function toggleCard(id) {
-      document.getElementById('app-' + id).classList.toggle('open');
+      var card = document.getElementById('app-' + id);
+      if (card.closest('.cg-grid')) return;   // opened from its table line instead
+      card.classList.toggle('open');
     }
   </script>
   <script src="../js/search.js?v=<?= @filemtime(__DIR__ . '/../js/search.js') ?>"></script>
