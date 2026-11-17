@@ -631,7 +631,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'fulfi
         $lines[] = ['person' => (string)($people[$i] ?? ''), 'invoice_number' => (string)$n,
                     'amount' => (string)($costs[$i] ?? '')];
     }
-    $err = cgSetFulfilment($id, !empty($_POST['atrieve']), $lines, $member['email']);
+    $err = cgSetFulfilment($id, $lines, $member['email'], !empty($_POST['inv_blind']));
     $notice = $err === '' ? 'Saved.' : $err;
     $apps   = cgGetApplications($year);
 }
@@ -701,13 +701,15 @@ $apps = array_values(array_filter($apps, fn($a) => empty($a['duplicate_of'])));
 
 // Each application's invoice lines, read once for the page.
 $invLines = cgInvoiceLinesFor($allApps);
+$invBlind = cgInvoiceReadFailed();
 
 /** Approved, but the district paperwork is not finished — including a
  *  half-filled invoice line, or someone on the grant with none. */
 $cgNeedsFollowUp = function (array $a) use ($invLines, $foldedUnder): bool {
+    // No Atrieve tick of its own: an invoice for the release means it was
+    // booked. cgSetFulfilment() stamps it from the lines.
     return $a['status'] === 'approved'
-        && (empty($a['atrieve_confirmed'])
-            || trim((string)($a['invoice_number'] ?? '')) === ''
+        && (trim((string)($a['invoice_number'] ?? '')) === ''
             || ($a['release_cost'] ?? null) === null
             || cgInvoicingOpen($invLines[(int)$a['id']] ?? [],
                                cgGrantPeople($a, $foldedUnder[(int)$a['id']] ?? [])));
@@ -732,6 +734,14 @@ $shownApps    = $view === 'review' ? $pendingApps
  * Whatever has nothing to sort on — no invoice, no dates, no collaborator —
  * goes last, so it does not bury the rows that do.
  */
+/** The dates a grant releases someone: the granted ones once approved (a
+ *  date turned down is not a release), otherwise the ones asked for. */
+function cgReleaseDates(array $a): array {
+    $d = ($a['status'] ?? '') === 'approved' ? array_keys(cgAppDateWeights($a)) : [];
+    if (!$d) $d = cgAppDatesLoose($a);
+    sort($d);
+    return $d;
+}
 $cgSorts = ['applied' => 'Applied', 'date' => 'Release date', 'invoice' => 'Invoice',
             'applicant' => 'Applicant', 'collaborator' => 'Collaborator'];
 $sort = $_GET['sort'] ?? 'applied';
@@ -740,8 +750,7 @@ if ($view === 'all' && $sort !== 'applied') {
     $sortKey = function (array $a) use ($sort, $invLines) {
         switch ($sort) {
             case 'date':
-                $d = cgAppDatesLoose($a);
-                sort($d);
+                $d = cgReleaseDates($a);
                 return $d[0] ?? '';
             case 'invoice':
                 $n = [];
@@ -1579,9 +1588,10 @@ $totalDaysApproved = $personDays['approved'];
                     font-size:.86rem; font-family:inherit; }
       .ft-lines { display:flex; flex-direction:column; gap:.35rem; }
       .ft-line { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem .85rem; }
-      .ft-who { border:1px solid var(--border); border-radius:6px; padding:.25rem .4rem;
-                font-size:.84rem; font-family:inherit; min-width:9.5rem; background:#fff; }
-      .ft-extra { opacity:.75; }
+      .ft-who { font-size:.86rem; font-weight:600; color:var(--gray-700); min-width:9.5rem; }
+      .cg-costed { font-size:.74rem; font-weight:700; padding:.15rem .5rem; border-radius:999px;
+                   white-space:nowrap; background:#fffbeb; color:#92400e; border:1px solid #fde68a; }
+      .cg-costed.done { background:#f0f9f3; color:#1a5c2e; border-color:#b3d9bf; }
       .ft-total { font-size:.8rem; font-weight:700; color:var(--gray-600); }
       .ft-save { border:1px solid var(--border); background:#fff; color:var(--gray-700);
                  font-size:.8rem; padding:.3rem .7rem; }
@@ -2067,7 +2077,7 @@ $totalDaysApproved = $personDays['approved'];
           Nothing waiting for a decision. <a href="?view=all&amp;year=<?= $year ?>">See all
           <?= count($apps) ?> applications</a>.
         <?php elseif ($view === 'followup'): ?>
-          Every approved grant has its Atrieve confirmation, invoice number and cost recorded.
+          Every approved grant has an invoice and a cost for each person on it.
           <a href="?view=all&amp;year=<?= $year ?>">See all applications</a>.
         <?php endif; ?>
       </div>
@@ -2173,7 +2183,7 @@ $totalDaysApproved = $personDays['approved'];
                   // The field the list is sorted on, so the order can be read.
                   $sortShow = '';
                   if ($view === 'all' && $sort === 'date') {
-                      $sd = cgAppDatesLoose($app); sort($sd);
+                      $sd = cgReleaseDates($app);
                       $sortShow = $sd ? implode(', ', array_map(fn($d) => date('M j', strtotime($d)), $sd)) : 'no dates';
                   } elseif ($view === 'all' && $sort === 'invoice') {
                       $sortShow = trim((string)($app['invoice_number'] ?? '')) !== ''
@@ -2189,6 +2199,11 @@ $totalDaysApproved = $personDays['approved'];
                       $sortShow !== '' ? $sortShow : date('M j', strtotime($app['submitted_at']))], 'strlen'))) ?>
               </div>
             </div>
+            <?php if ($app['status'] === 'approved'):
+                [$hc, $hn] = cgCostedCount($invLines[(int)$app['id']] ?? [],
+                                           cgGrantPeople($app, $foldedUnder[(int)$app['id']] ?? [])); ?>
+              <span class="cg-costed<?= $hc >= $hn ? ' done' : '' ?>"><?= $hc ?>/<?= $hn ?> costed</span>
+            <?php endif; ?>
             <span class="app-status-badge" style="background:<?= $sc['bg'] ?>;border-color:<?= $sc['border'] ?>;color:<?= $sc['text'] ?>;">
               <?= $sc['label'] ?>
             </span>
@@ -2651,46 +2666,41 @@ $totalDaysApproved = $personDays['approved'];
               <?= csrfField() ?>
               <input type="hidden" name="app_id" value="<?= $app['id'] ?>">
               <input type="hidden" name="action" value="fulfilment">
+              <?php if ($invBlind): ?><input type="hidden" name="inv_blind" value="1"><?php endif; ?>
               <?php /* One line. An invoice number and a dollar figure are
                        both about eight characters, and they had a full-width
                        box each, a heading each and a button on its own row
                        under them — four stacked bands for two short values. */ ?>
               <div class="ft-row">
                 <span class="ft-head">Follow-through</span>
-                <label class="ft-check">
-                  <input type="checkbox" name="atrieve" value="1"
-                         <?= !empty($app['atrieve_confirmed']) ? 'checked' : '' ?>>
-                  Atrieve
-                </label>
-                <?php /* A row per person released — each is a TTOC of their
-                         own, not always on the same invoice — and one more
-                         to add a second invoice for someone. */
+                <?php /* A row per person released: each is a TTOC of their
+                         own, billed on its own invoice. A line for anyone no
+                         longer on the grant, or for the grant as a whole (what
+                         was recorded before lines had a person), stays shown
+                         below them, so saving never drops a figure unseen. */
                       $myLines  = $invLines[(int)$app['id']] ?? [];
                       $myPeople = cgGrantPeople($app, $foldedUnder[(int)$app['id']] ?? []);
-                      $shownLines = $myLines;
-                      $hasLine = [];
-                      foreach ($myLines as $ln) $hasLine[cgNameKey((string)$ln['person'])] = true;
+                      $shownLines = [];
+                      $used = [];
                       foreach ($myPeople as $pn) {
-                          if (empty($hasLine[cgNameKey($pn)])) {
-                              $shownLines[] = ['person' => $pn, 'invoice_number' => '', 'amount' => null];
+                          $found = false;
+                          foreach ($myLines as $i => $ln) {
+                              if (!isset($used[$i]) && cgNameKey((string)$ln['person']) === cgNameKey($pn)) {
+                                  $used[$i] = true; $found = true;
+                                  $shownLines[] = ['person' => $pn] + $ln;
+                              }
                           }
+                          if (!$found) $shownLines[] = ['person' => $pn, 'invoice_number' => '', 'amount' => null];
                       }
-                      $shownLines[] = ['person' => $myPeople[0] ?? '', 'invoice_number' => '', 'amount' => null, 'extra' => true]; ?>
+                      foreach ($myLines as $i => $ln) if (!isset($used[$i])) $shownLines[] = $ln;
+                      [$costedN, $peopleN] = cgCostedCount($myLines, $myPeople); ?>
                 <span class="ft-lines">
-                  <?php foreach ($shownLines as $li => $ln):
-                      $lp = (string)$ln['person'];
-                      $opts = $myPeople;
-                      if ($lp !== '' && !in_array($lp, $opts, true)) $opts[] = $lp; ?>
-                    <span class="ft-line<?= !empty($ln['extra']) ? ' ft-extra' : '' ?>">
-                      <select name="inv_person[]" class="ft-who" aria-label="Who this invoice is for">
-                        <?php foreach ($opts as $on): ?>
-                          <option value="<?= htmlspecialchars($on) ?>"<?= $on === $lp ? ' selected' : '' ?>><?= htmlspecialchars($on) ?></option>
-                        <?php endforeach; ?>
-                        <option value=""<?= $lp === '' ? ' selected' : '' ?>>Whole grant</option>
-                      </select>
+                  <?php foreach ($shownLines as $ln): $lp = (string)$ln['person']; ?>
+                    <span class="ft-line">
+                      <input type="hidden" name="inv_person[]" value="<?= htmlspecialchars($lp) ?>">
+                      <span class="ft-who"><?= $lp !== '' ? htmlspecialchars($lp) : 'Whole grant' ?></span>
                       <label class="ft-f">Invoice
-                        <input type="text" name="invoice_number[]" maxlength="100"
-                               placeholder="<?= !empty($ln['extra']) ? 'another' : '' ?>" style="width:7.5rem;"
+                        <input type="text" name="invoice_number[]" maxlength="100" style="width:7.5rem;"
                                value="<?= htmlspecialchars((string)$ln['invoice_number']) ?>">
                       </label>
                       <label class="ft-f">Cost
@@ -2700,17 +2710,10 @@ $totalDaysApproved = $personDays['approved'];
                       </label>
                     </span>
                   <?php endforeach; ?>
-                  <?php if (($app['release_cost'] ?? null) !== null): ?>
-                    <span class="ft-total">Total $<?= number_format((float)$app['release_cost'], 2) ?></span>
-                  <?php endif; ?>
+                  <span class="ft-total"><?= $costedN ?> of <?= $peopleN ?> costed<?php
+                    if (($app['release_cost'] ?? null) !== null): ?> · Total $<?= number_format((float)$app['release_cost'], 2) ?><?php endif; ?></span>
                 </span>
                 <button type="submit" class="btn ft-save">Save</button>
-                <?php if (!empty($app['atrieve_confirmed']) && !empty($app['atrieve_confirmed_at'])): ?>
-                  <span class="ft-when">Atrieve confirmed
-                    <?= date('M j', strtotime($app['atrieve_confirmed_at'])) ?><?=
-                      $app['atrieve_confirmed_by']
-                        ? ' by ' . htmlspecialchars($app['atrieve_confirmed_by']) : '' ?></span>
-                <?php endif; ?>
               </div>
             </form>
             <?php endif; ?>

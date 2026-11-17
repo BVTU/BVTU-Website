@@ -1064,6 +1064,7 @@ function cgEnsureInvoiceLines(): bool {
  */
 function cgInvoiceLinesFor(array $apps): array {
     $out = [];
+    cgInvoiceReadFailed(false);
     $ids = array_values(array_filter(array_map(function ($a) { return (int)$a['id']; }, $apps)));
     if ($ids && cgEnsureInvoiceLines()) {
         try {
@@ -1078,7 +1079,10 @@ function cgInvoiceLinesFor(array $apps): array {
             }
         } catch (\Exception $e) {
             error_log('cgInvoiceLinesFor: ' . $e->getMessage());
+            cgInvoiceReadFailed(true);
         }
+    } elseif ($ids) {
+        cgInvoiceReadFailed(true);
     }
     /* An application with figures of its own and no lines was never carried
      * over — the copy failed, or the table could not be made. Its figures are
@@ -1114,6 +1118,35 @@ function cgGrantPeople(array $app, array $folded = []): array {
     return array_values($out);
 }
 
+/**
+ * Whether the last cgInvoiceLinesFor() could not read the lines and showed
+ * each grant's summary instead. A form built from that must not be saved over
+ * real lines: they may hold per-person detail the summary does not.
+ */
+function cgInvoiceReadFailed(?bool $set = null): bool {
+    static $failed = false;
+    if ($set !== null) $failed = $set;
+    return $failed;
+}
+
+/**
+ * How many of the people on a grant have a cost recorded: [costed, people].
+ * A cost for the grant as a whole covers everyone; so does 0, for a release
+ * that cost the local nothing.
+ */
+function cgCostedCount(array $lines, array $people): array {
+    $n = count($people);
+    $done = [];
+    foreach ($lines as $l) {
+        if ($l['amount'] === null) continue;
+        if (trim((string)$l['person']) === '') return [$n, $n];
+        $done[cgNameKey((string)$l['person'])] = true;
+    }
+    $c = 0;
+    foreach ($people as $p) if (!empty($done[cgNameKey($p)])) $c++;
+    return [$c, $n];
+}
+
 /** A line with a number and no amount, or an amount and no number, is not finished. */
 function cgInvoiceLinesOpen(array $lines): bool {
     foreach ($lines as $l) {
@@ -1143,19 +1176,19 @@ function cgInvoicingOpen(array $lines, array $people): bool {
 }
 
 /**
- * Record the follow-through on an approved grant: whether the absence has been
- * logged in Atrieve, and the district's invoices for it.
+ * Record the follow-through on an approved grant: the district's invoices for
+ * it, which also confirms the absence is in Atrieve.
  *
  * The confirmation stamps who and when, because "somebody said it was done" is
  * not much of a record a year later when the district queries an invoice.
- * Unticking clears the stamp, so the two can never disagree.
+ * Clearing every line clears the stamp, so the two can never disagree.
  *
  * $lines is every invoice line as the form holds it, [['person' =>,
  * 'invoice_number' =>, 'amount' =>], …]; a line with both boxes empty is dropped, and the set
  * replaces what was there. An amount left empty is "not recorded", not $0.
  * Returns '' on success or the reason it was refused.
  */
-function cgSetFulfilment(int $id, bool $atrieve, array $lines, string $actor): string {
+function cgSetFulfilment(int $id, array $lines, string $actor, bool $builtBlind = false): string {
     cgEnsureTable();
     $clean = [];
     foreach ($lines as $l) {
@@ -1184,11 +1217,24 @@ function cgSetFulfilment(int $id, bool $atrieve, array $lines, string $actor): s
         $cur = cgGetApplication($id);
         if (!$cur) return 'That application could not be found.';
         $hasLines = cgEnsureInvoiceLines();
+        // The form was built when the lines could not be read. If there are
+        // lines now, saving the summary it showed would erase them.
+        if ($builtBlind && $hasLines) {
+            $c = $db->prepare("SELECT COUNT(*) FROM collab_grant_invoices WHERE app_id=?");
+            $c->execute([$id]);
+            if ((int)$c->fetchColumn() > 0) {
+                return 'The invoices could not be read when this page loaded, so nothing was saved. Reload the page and try again.';
+            }
+        }
         if (!$hasLines && count($clean) > 1) {
             return 'Only one invoice can be recorded on this server just now. The problem has been logged.';
         }
         $db->beginTransaction();
 
+        // Entering the district's invoice or cost is the confirmation that the
+        // release is in Atrieve, so there is no separate tick: the stamp
+        // follows the lines.
+        $atrieve = (bool)$clean;
         $was = !empty($cur['atrieve_confirmed']);
         if ($atrieve && !$was) {
             $db->prepare("UPDATE collab_grant_applications
