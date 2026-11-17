@@ -399,9 +399,17 @@ function cgApplyInvoiceMatches(array $picks, string $actor): array {
                 $found = false;
                 foreach ($lines as &$l) {
                     if (trim((string)$l['person']) === '' || cgNameKey((string)$l['person']) !== cgNameKey($a['person'])) continue;
-                    $found = true;
                     $nums = cgLineInvoices($l);
-                    if (!in_array($a['inv'], $nums, true)) $nums[] = $a['inv'];
+                    $has  = in_array($a['inv'], $nums, true);
+                    /* Joined only onto a row that is costed and has room. A row
+                     * with an invoice and no cost yet is still owed one —
+                     * folding this cost into it would make it look finished —
+                     * and the list of numbers must never be cut short, or a
+                     * dropped number would be read in again later. */
+                    if ($l['amount'] === null && !$has) continue;
+                    if (!$has && mb_strlen(implode(', ', array_merge($nums, [$a['inv']]))) > 100) continue;
+                    $found = true;
+                    if (!$has) $nums[] = $a['inv'];
                     $l['invoice_number'] = implode(', ', $nums);
                     $l['amount'] = round((float)($l['amount'] ?? 0) + $a['cost'], 2);
                     break;
@@ -432,6 +440,8 @@ function cgApplyInvoiceMatches(array $picks, string $actor): array {
         };
         $err = cgSetFulfilment((int)$id, $build, $actor, false, $record);
         if ($blind) { $errors[] = $app['applicant_name'] . ': its invoices could not be read, so it was left alone.'; continue; }
+        // Failed before the lines were worked out (no table, no lock): say why.
+        if (!$toRecord && $err !== '' && $err !== 'Nothing was saved.') { $errors[] = $app['applicant_name'] . ': ' . $err; continue; }
         if (!$toRecord) { $skipped += $skip; continue; }
         if ($err !== '') { $errors[] = $app['applicant_name'] . ': ' . $err; continue; }
         $saved += count($toRecord);
