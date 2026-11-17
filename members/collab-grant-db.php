@@ -1009,6 +1009,36 @@ function cgSendSubmissionConfirmation(array $app): void {
 }
 
 /**
+ * Which absences have been saved from an invoice, one row each.
+ *
+ * A person's grant row holds one cost and a list of invoice numbers, which
+ * cannot say which of their absences on an invoice are already in it. This
+ * can: so an invoice read twice is not counted twice, and an absence left
+ * unticked the first time can still be saved later.
+ */
+function cgEnsureInvoiceImports(): bool {
+    static $ok = null;
+    if ($ok !== null) return $ok;
+    try {
+        getDB()->exec("CREATE TABLE IF NOT EXISTS collab_grant_invoice_imports (
+            id             INT AUTO_INCREMENT PRIMARY KEY,
+            app_id         INT NOT NULL,
+            person_key     VARCHAR(255) NOT NULL,
+            invoice_number VARCHAR(100) NOT NULL,
+            absence_date   DATE NOT NULL,
+            cost           DECIMAL(10,2) NOT NULL,
+            created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+            created_by     VARCHAR(255) NOT NULL DEFAULT '',
+            UNIQUE KEY uq_absence (app_id, person_key, invoice_number, absence_date)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        return $ok = true;
+    } catch (\Exception $e) {
+        error_log('cgEnsureInvoiceImports: ' . $e->getMessage());
+        return $ok = false;
+    }
+}
+
+/**
  * Invoice lines: one grant can be billed across several district invoices.
  *
  * Each teacher a grant releases is a TTOC of their own, billed on its own —
@@ -1223,7 +1253,7 @@ function cgRenameInvoicePerson(int $appId, string $old, string $new): void {
                 }
             } catch (\Exception $e) { error_log('cgRenameInvoicePerson lines: ' . $e->getMessage()); }
         }
-        if (function_exists('cgEnsureInvoiceImports') && cgEnsureInvoiceImports()) {
+        if (cgEnsureInvoiceImports()) {
             try {
                 $db->prepare("UPDATE IGNORE collab_grant_invoice_imports SET person_key=? WHERE app_id=? AND person_key=?")
                    ->execute([$nk, $id, $ok]);
@@ -1276,7 +1306,7 @@ function cgMergeGrantPerson(int $primaryId, array $appIds, string $from, string 
     // The invoice reader's record of saved absences moves with the name, or
     // the corrected name would read as typed in by hand. Where both names
     // already hold the same absence, the one on the right name stays.
-    if (function_exists('cgEnsureInvoiceImports') && cgEnsureInvoiceImports()) {
+    if (cgEnsureInvoiceImports()) {
         try {
             $db->prepare("UPDATE IGNORE collab_grant_invoice_imports SET person_key=? WHERE app_id=? AND person_key=?")
                ->execute([cgNameKey($to), $primaryId, $fk]);
@@ -1392,7 +1422,7 @@ function cgSetFulfilment(int $id, $lines, string $actor, bool $builtBlind = fals
             return 'The invoices cannot be saved just now, so nothing was changed. The problem has been logged.';
         }
         // Made before the transaction: creating a table would commit it.
-        $hasImports = function_exists('cgEnsureInvoiceImports') && cgEnsureInvoiceImports();
+        $hasImports = cgEnsureInvoiceImports();
         $db->beginTransaction();
         /* One save at a time per grant. The row lock is held to the commit, so
          * a caller that works out new lines from the current ones — the
@@ -1457,6 +1487,7 @@ function cgSetFulfilment(int $id, $lines, string $actor, bool $builtBlind = fals
         if ($hasImports) {
             $onRow = [];
             foreach ($clean as $l) {
+                if ($l['amount'] === null) continue;   // cost cleared: nothing saved here
                 foreach (array_filter(array_map('trim', explode(',', $l['invoice_number'])), 'strlen') as $n) {
                     $onRow[cgNameKey($l['person']) . '|' . $n] = true;
                 }

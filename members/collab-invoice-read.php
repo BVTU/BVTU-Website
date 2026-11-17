@@ -190,35 +190,8 @@ function cgInvNameScore(string $invoice, string $grant): array {
     return [0, ''];
 }
 
-/**
- * Which absences have been saved from an invoice, one row each.
- *
- * A person's grant row holds one cost and a list of invoice numbers, which
- * cannot say which of their absences on an invoice are already in it. This
- * can: so an invoice read twice is not counted twice, and an absence left
- * unticked the first time can still be saved later.
- */
-function cgEnsureInvoiceImports(): bool {
-    static $ok = null;
-    if ($ok !== null) return $ok;
-    try {
-        getDB()->exec("CREATE TABLE IF NOT EXISTS collab_grant_invoice_imports (
-            id             INT AUTO_INCREMENT PRIMARY KEY,
-            app_id         INT NOT NULL,
-            person_key     VARCHAR(255) NOT NULL,
-            invoice_number VARCHAR(100) NOT NULL,
-            absence_date   DATE NOT NULL,
-            cost           DECIMAL(10,2) NOT NULL,
-            created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
-            created_by     VARCHAR(255) NOT NULL DEFAULT '',
-            UNIQUE KEY uq_absence (app_id, person_key, invoice_number, absence_date)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-        return $ok = true;
-    } catch (\Exception $e) {
-        error_log('cgEnsureInvoiceImports: ' . $e->getMessage());
-        return $ok = false;
-    }
-}
+// cgEnsureInvoiceImports() lives in collab-grant-db.php, so every page that
+// edits a grant can keep these records in step, not only this one.
 
 /** Saved absences of one grant: "personkey|invoice|Y-m-d" => true. */
 function cgInvoiceImportsFor(int $appId): array {
@@ -252,6 +225,9 @@ function cgAbsenceStatus(array $lines, array $imports, string $person, string $i
     $onRow = false;
     foreach ($lines as $l) {
         $lp = trim((string)$l['person']);
+        // A row whose cost was cleared holds nothing for this absence, even
+        // if its invoice number was kept.
+        if ($l['amount'] === null) continue;
         if (($lp === '' || cgNameKey($lp) === $pk) && in_array($inv, cgLineInvoices($l), true)) {
             if ($lp === '') return 'by hand';   // carried-over whole-grant figure
             $onRow = true;
