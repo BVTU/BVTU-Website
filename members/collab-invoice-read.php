@@ -191,13 +191,88 @@ function cgInvNameScore(string $invoice, string $grant): array {
 }
 
 /**
+ * Which absences have been saved from an invoice, one row each.
+ *
+ * A person's grant row holds one cost and a list of invoice numbers, which
+ * cannot say which of their absences on an invoice are already in it. This
+ * can: so an invoice read twice is not counted twice, and an absence left
+ * unticked the first time can still be saved later.
+ */
+function cgEnsureInvoiceImports(): bool {
+    static $ok = null;
+    if ($ok !== null) return $ok;
+    try {
+        getDB()->exec("CREATE TABLE IF NOT EXISTS collab_grant_invoice_imports (
+            id             INT AUTO_INCREMENT PRIMARY KEY,
+            app_id         INT NOT NULL,
+            person_key     VARCHAR(255) NOT NULL,
+            invoice_number VARCHAR(100) NOT NULL,
+            absence_date   DATE NOT NULL,
+            cost           DECIMAL(10,2) NOT NULL,
+            created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+            created_by     VARCHAR(255) NOT NULL DEFAULT '',
+            UNIQUE KEY uq_absence (app_id, person_key, invoice_number, absence_date)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        return $ok = true;
+    } catch (\Exception $e) {
+        error_log('cgEnsureInvoiceImports: ' . $e->getMessage());
+        return $ok = false;
+    }
+}
+
+/** Saved absences of one grant: "personkey|invoice|Y-m-d" => true. */
+function cgInvoiceImportsFor(int $appId): array {
+    $out = [];
+    if (!cgEnsureInvoiceImports()) return $out;
+    try {
+        $st = getDB()->prepare("SELECT person_key, invoice_number, absence_date FROM collab_grant_invoice_imports WHERE app_id=?");
+        $st->execute([$appId]);
+        foreach ($st->fetchAll() as $r) {
+            $out[$r['person_key'] . '|' . $r['invoice_number'] . '|' . $r['absence_date']] = true;
+        }
+    } catch (\Exception $e) { error_log('cgInvoiceImportsFor: ' . $e->getMessage()); }
+    return $out;
+}
+
+/** The invoice numbers a line lists. */
+function cgLineInvoices(array $l): array {
+    return array_values(array_filter(array_map('trim', explode(',', (string)$l['invoice_number'])), 'strlen'));
+}
+
+/**
+ * Is this absence already on the grant? 'saved' when the reader saved it;
+ * 'by hand' when the invoice is on the person's row (or a whole-grant row)
+ * but was typed in, so which absences it covers is unknown and none is added;
+ * '' when it is not there. An import whose invoice has since been taken off
+ * the row no longer counts — the row is what the totals read.
+ */
+function cgAbsenceStatus(array $lines, array $imports, string $person, string $inv, string $date): string {
+    if ($inv === '') return '';
+    $pk = cgNameKey($person);
+    $onRow = false;
+    foreach ($lines as $l) {
+        $lp = trim((string)$l['person']);
+        if (($lp === '' || cgNameKey($lp) === $pk) && in_array($inv, cgLineInvoices($l), true)) {
+            if ($lp === '') return 'by hand';   // carried-over whole-grant figure
+            $onRow = true;
+        }
+    }
+    if (!$onRow) return '';
+    if (isset($imports[$pk . '|' . $inv . '|' . $date])) return 'saved';
+    foreach (array_keys($imports) as $k) {
+        if (strpos($k, $pk . '|' . $inv . '|') === 0) return '';   // reader saved others on it, not this one
+    }
+    return 'by hand';
+}
+
+/**
  * Match what was read against the approved grants of the school years its
  * absence dates fall in. Returns:
  *   'rows'      — one per absence: the line as read, and its best match or none
  *   'invoices'  — number, date, description, total and adjustments of each
  * A row's 'match' is null, or ['app_id', 'person', 'applicant', 'label'
- * ('match' | 'likely'), 'why' (list of reasons), 'already' (true when that
- * person's line on the grant already lists this invoice)].
+ * ('match' | 'likely'), 'why' (list of reasons), 'already' (cgAbsenceStatus():
+ * '', 'saved' or 'by hand'), and 'choices' when several grants fit equally].
  */
 function cgMatchInvoice(array $read): array {
     $rows = [];
@@ -223,9 +298,10 @@ function cgMatchInvoice(array $read): array {
         foreach ($grants as $g) {
             $w = cgAppDateWeights($g);
             $dates = $w ? $w : array_fill_keys(cgAppDatesLoose($g), 1.0);
+            $imports = cgInvoiceImportsFor((int)$g['id']);
             foreach (cgGrantPeople($g, $folded[(int)$g['id']] ?? []) as $p) {
                 $cands[] = ['app' => $g, 'person' => $p, 'dates' => $dates,
-                            'lines' => $lines[(int)$g['id']] ?? []];
+                            'lines' => $lines[(int)$g['id']] ?? [], 'imports' => $imports];
             }
         }
     }
@@ -249,7 +325,9 @@ function cgMatchInvoice(array $read): array {
                      'hours' => (float)($ab['hours'] ?? 0), 'cost' => round((float)($ab['cost'] ?? 0), 2),
                      'match' => null];
 
-            $best = null; $bestScore = -1;
+            // Every candidate at the best score, so a tie is seen, not settled
+            // by whichever grant happened to come first.
+            $top = []; $bestScore = -1;
             foreach ($cands as $c) {
                 [$ns, $nWhy] = cgInvNameScore($name, $c['person']);
                 if ($ns === 0) continue;
@@ -266,7 +344,8 @@ function cgMatchInvoice(array $read): array {
                 if ($ns === 1 && $ds < 3) continue;
                 if ($ns >= 2 && $ds === 0) continue;
                 $score = $ns * 10 + $ds;
-                if ($score <= $bestScore) continue;
+                if ($score < $bestScore) continue;
+                if ($score > $bestScore) { $top = []; $bestScore = $score; }
                 $why = [];
                 if ($nWhy !== '') $why[] = $nWhy . ' (' . $c['person'] . ')';
                 if ($gap === null) $why[] = 'the grant has no dates';
@@ -274,20 +353,23 @@ function cgMatchInvoice(array $read): array {
                 // Part days are not settled yet: say so rather than guess.
                 if ($row['hours'] > 0 && $row['hours'] < 1) $why[] = 'invoice shows part of a day';
                 elseif ($part < 1) $why[] = 'grant has this as ' . cgPartLabel($part);
-                $already = false;
-                foreach ($c['lines'] as $l) {
-                    if (cgNameKey((string)$l['person']) === cgNameKey($c['person']) && $num !== ''
-                        && in_array($num, array_map('trim', explode(',', (string)$l['invoice_number'])), true)) {
-                        $already = true;
-                    }
-                }
-                $best = ['app_id' => (int)$c['app']['id'], 'person' => $c['person'],
-                         'applicant' => (string)$c['app']['applicant_name'],
-                         'label' => ($ns === 3 && $ds === 3) ? 'match' : 'likely',
-                         'why' => $why, 'already' => $already];
-                $bestScore = $score;
+                $status = cgAbsenceStatus($c['lines'], $c['imports'], $c['person'], $num, $iso);
+                $top[] = ['app_id' => (int)$c['app']['id'], 'person' => $c['person'],
+                          'applicant' => (string)$c['app']['applicant_name'],
+                          'label' => ($ns === 3 && $ds === 3) ? 'match' : 'likely',
+                          'why' => $why, 'already' => $status];
             }
-            $row['match'] = $best;
+            if ($top) {
+                $m = $top[0];
+                if (count($top) > 1) {
+                    // Same evidence for two grants: someone has to say which.
+                    $m['label'] = 'likely';
+                    $m['why'][] = 'on more than one grant — choose which';
+                    $m['choices'] = array_map(fn($x) => ['app_id' => $x['app_id'], 'person' => $x['person'],
+                                                         'applicant' => $x['applicant'], 'already' => $x['already']], $top);
+                }
+                $row['match'] = $m;
+            }
             $rows[] = $row;
         }
     }
@@ -295,55 +377,74 @@ function cgMatchInvoice(array $read): array {
 }
 
 /**
- * Write confirmed matches onto their grants. $picks: [['app_id', 'person',
- * 'invoice_number', 'cost'], …]. A person released on two dates of one
- * invoice is one row on the grant, so their absences add up; a second invoice
- * for someone already costed adds to their cost and lists both numbers.
- * Returns ['saved' => n, 'errors' => [...]].
+ * Write confirmed absences onto their grants. $picks: [['app_id', 'person',
+ * 'invoice_number', 'date', 'cost'], …]. Each absence is added once: one
+ * already saved by the reader, or on an invoice typed onto the row by hand,
+ * is skipped and said so. A person's absences add to their one row on the
+ * grant, and a new invoice's number joins the ones listed there.
+ * Returns ['saved' => n, 'skipped' => n, 'errors' => [...]].
  */
 function cgApplyInvoiceMatches(array $picks, string $actor): array {
     $byApp = [];
     foreach ($picks as $p) {
         $id = (int)($p['app_id'] ?? 0);
         $person = trim((string)($p['person'] ?? ''));
-        $num = trim((string)($p['invoice_number'] ?? ''));
-        $cost = (float)($p['cost'] ?? 0);
-        if (!$id || $person === '' || $cost < 0) continue;
-        $k = cgNameKey($person);
-        if (!isset($byApp[$id][$k])) $byApp[$id][$k] = ['person' => $person, 'nums' => [], 'cost' => 0.0];
-        if ($num !== '' && !in_array($num, $byApp[$id][$k]['nums'], true)) $byApp[$id][$k]['nums'][] = $num;
-        $byApp[$id][$k]['cost'] = round($byApp[$id][$k]['cost'] + $cost, 2);
+        $cost = round((float)($p['cost'] ?? 0), 2);
+        $t = strtotime((string)($p['date'] ?? ''));
+        if (!$id || $person === '' || $cost < 0 || !$t) continue;
+        $byApp[$id][] = ['person' => $person, 'inv' => trim((string)($p['invoice_number'] ?? '')),
+                         'date' => date('Y-m-d', $t), 'cost' => $cost];
     }
 
-    $saved = 0; $errors = [];
-    foreach ($byApp as $id => $people) {
+    $saved = 0; $skipped = 0; $errors = [];
+    if ($byApp && !cgEnsureInvoiceImports()) {
+        return ['saved' => 0, 'skipped' => 0, 'errors' => ['The invoice record could not be set up, so nothing was saved.']];
+    }
+    $db = getDB();
+    foreach ($byApp as $id => $absences) {
         $app = cgGetApplication((int)$id);
         if (!$app) { $errors[] = 'Grant #' . $id . ' could not be found.'; continue; }
         $lines = cgInvoiceLinesFor([$app])[(int)$id] ?? [];
         if (cgInvoiceReadFailed()) { $errors[] = $app['applicant_name'] . ': its invoices could not be read, so it was left alone.'; continue; }
-        foreach ($people as $k => $add) {
+        $imports = cgInvoiceImportsFor((int)$id);
+
+        $added = [];
+        foreach ($absences as $a) {
+            $key = cgNameKey($a['person']) . '|' . $a['inv'] . '|' . $a['date'];
+            if (isset($added[$key]) || cgAbsenceStatus($lines, $imports, $a['person'], $a['inv'], $a['date']) !== '') {
+                $skipped++; continue;
+            }
+            $added[$key] = true;
             $found = false;
             foreach ($lines as &$l) {
-                if (cgNameKey((string)$l['person']) !== $k) continue;
+                if (trim((string)$l['person']) === '' || cgNameKey((string)$l['person']) !== cgNameKey($a['person'])) continue;
                 $found = true;
-                $have = array_values(array_filter(array_map('trim', explode(',', (string)$l['invoice_number'])), 'strlen'));
-                $new  = array_values(array_diff($add['nums'], $have));
-                if (!$new && $add['nums']) break;   // this invoice is on the line already
-                $l['invoice_number'] = implode(', ', array_merge($have, $new));
-                $l['amount'] = round((float)($l['amount'] ?? 0) + $add['cost'], 2);
+                $nums = cgLineInvoices($l);
+                if ($a['inv'] !== '' && !in_array($a['inv'], $nums, true)) $nums[] = $a['inv'];
+                $l['invoice_number'] = implode(', ', $nums);
+                $l['amount'] = round((float)($l['amount'] ?? 0) + $a['cost'], 2);
                 break;
             }
             unset($l);
             if (!$found) {
-                $lines[] = ['person' => $add['person'], 'invoice_number' => implode(', ', $add['nums']),
-                            'amount' => $add['cost']];
+                $lines[] = ['person' => $a['person'], 'invoice_number' => $a['inv'], 'amount' => $a['cost']];
             }
+            $added[$key] = $a;
         }
+        $toRecord = array_filter($added, 'is_array');
+        if (!$toRecord) continue;
+
         $err = cgSetFulfilment((int)$id, array_map(fn($l) => [
             'person' => (string)$l['person'], 'invoice_number' => (string)$l['invoice_number'],
             'amount' => $l['amount'] === null ? '' : (string)$l['amount']], $lines), $actor);
-        if ($err !== '') $errors[] = $app['applicant_name'] . ': ' . $err;
-        else $saved += count($people);
+        if ($err !== '') { $errors[] = $app['applicant_name'] . ': ' . $err; continue; }
+        $ins = $db->prepare("INSERT IGNORE INTO collab_grant_invoice_imports
+                             (app_id, person_key, invoice_number, absence_date, cost, created_by) VALUES (?,?,?,?,?,?)");
+        foreach ($toRecord as $a) {
+            try { $ins->execute([(int)$id, cgNameKey($a['person']), $a['inv'], $a['date'], $a['cost'], $actor]); }
+            catch (\Exception $e) { error_log('invoice import record: ' . $e->getMessage()); }
+            $saved++;
+        }
     }
-    return ['saved' => $saved, 'errors' => $errors];
+    return ['saved' => $saved, 'skipped' => $skipped, 'errors' => $errors];
 }

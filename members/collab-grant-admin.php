@@ -703,9 +703,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'invoi
     $picks = [];
     foreach ((array)($_POST['pick'] ?? []) as $i) {
         $i = (int)$i;
-        $picks[] = ['app_id' => (int)($_POST['pick_app'][$i] ?? 0),
-                    'person' => (string)($_POST['pick_person'][$i] ?? ''),
+        $app_id = (int)($_POST['pick_app'][$i] ?? 0);
+        $person = (string)($_POST['pick_person'][$i] ?? '');
+        // A tie between grants is settled by the dropdown: "id|person".
+        $choice = (string)($_POST['pick_target'][$i] ?? '');
+        if ($choice !== '' && strpos($choice, '|') !== false) {
+            [$app_id, $person] = explode('|', $choice, 2);
+            $app_id = (int)$app_id;
+        } elseif (isset($_POST['pick_target'][$i])) {
+            continue;   // a tie left unchosen saves nothing
+        }
+        $picks[] = ['app_id' => $app_id, 'person' => $person,
                     'invoice_number' => (string)($_POST['pick_inv'][$i] ?? ''),
+                    'date' => (string)($_POST['pick_date'][$i] ?? ''),
                     'cost' => (string)($_POST['pick_cost'][$i] ?? '')];
     }
     if (!$picks) {
@@ -713,6 +723,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'invoi
     } else {
         $res = cgApplyInvoiceMatches($picks, $member['email']);
         $notice = $res['saved'] ? 'Saved ' . $res['saved'] . ' cost' . ($res['saved'] === 1 ? '' : 's') . ' from the invoice.' : 'Nothing was saved.';
+        if ($res['skipped']) $notice .= ' ' . $res['skipped'] . ' already on the grant ' . ($res['skipped'] === 1 ? 'was' : 'were') . ' left as ' . ($res['skipped'] === 1 ? 'it was' : 'they were') . '.';
         if ($res['errors']) $notice .= ' ' . implode(' ', $res['errors']);
     }
     $apps = cgGetApplications($year);
@@ -2189,7 +2200,9 @@ $totalDaysApproved = $personDays['approved'];
           <?php foreach ($rvHit as $i => $r): $m = $r['match']; ?>
             <tr>
               <td><input type="checkbox" name="pick[]" value="<?= $i ?>" aria-label="Save this one"
-                         <?= ($m['label'] === 'match' && !$m['already']) ? 'checked' : '' ?>>
+                         <?= ($m['label'] === 'match' && $m['already'] === '') ? 'checked' : '' ?>
+                         <?= $m['already'] !== '' && empty($m['choices']) ? 'disabled' : '' ?>>
+                <input type="hidden" name="pick_date[<?= $i ?>]" value="<?= htmlspecialchars($r['date']) ?>">
                 <input type="hidden" name="pick_app[<?= $i ?>]" value="<?= (int)$m['app_id'] ?>">
                 <input type="hidden" name="pick_person[<?= $i ?>]" value="<?= htmlspecialchars($m['person']) ?>">
                 <input type="hidden" name="pick_inv[<?= $i ?>]" value="<?= htmlspecialchars($r['invoice_number']) ?>">
@@ -2197,8 +2210,19 @@ $totalDaysApproved = $personDays['approved'];
               <td><?= htmlspecialchars($r['name']) ?></td>
               <td><?= $r['date'] ? date('M j', strtotime($r['date'])) : '—' ?></td>
               <td class="cg-grid-num">$<?= number_format($r['cost'], 2) ?></td>
-              <td><?= htmlspecialchars($m['person']) ?> <span class="cg-grid-none">on <?= htmlspecialchars($m['applicant']) ?>'s grant</span></td>
-              <td><span class="cg-costed<?= $m['label'] === 'match' ? ' done' : '' ?>"><?= $m['already'] ? 'already saved' : ($m['label'] === 'match' ? 'match' : 'check') ?></span>
+              <td><?php if (!empty($m['choices'])): ?>
+                  <select name="pick_target[<?= $i ?>]" class="ft-merge" aria-label="Which grant">
+                    <option value="">Which grant?</option>
+                    <?php foreach ($m['choices'] as $ch): ?>
+                      <option value="<?= (int)$ch['app_id'] ?>|<?= htmlspecialchars($ch['person']) ?>"><?=
+                        htmlspecialchars($ch['person'] . ' on ' . $ch['applicant'] . "'s grant") ?><?= $ch['already'] !== '' ? ' (already on it)' : '' ?></option>
+                    <?php endforeach; ?>
+                  </select>
+                <?php else: ?>
+                  <?= htmlspecialchars($m['person']) ?> <span class="cg-grid-none">on <?= htmlspecialchars($m['applicant']) ?>'s grant</span>
+                <?php endif; ?></td>
+              <td><span class="cg-costed<?= $m['label'] === 'match' || $m['already'] !== '' ? ' done' : '' ?>"><?=
+                  $m['already'] === 'saved' ? 'already saved' : ($m['already'] === 'by hand' ? 'entered by hand' : ($m['label'] === 'match' ? 'match' : 'check')) ?></span>
                 <?php if ($m['why']): ?><span class="cg-inv-why"><?= htmlspecialchars(implode('; ', $m['why'])) ?></span><?php endif; ?></td>
             </tr>
           <?php endforeach; ?>
