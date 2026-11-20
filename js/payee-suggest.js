@@ -22,6 +22,7 @@
 
   var out = document.createElement('div');
   out.className = 'payee-sug';
+  out.setAttribute('role', 'listbox');
   out.style.cssText = 'display:none;position:absolute;left:0;right:0;top:100%;z-index:50;'
     + 'background:#fff;border:1px solid #d1d5db;border-radius:8px;margin-top:2px;'
     + 'box-shadow:0 6px 18px rgba(0,0,0,.12);overflow:hidden;';
@@ -63,8 +64,13 @@
       em.style.cssText = 'font-size:.76rem;color:#6b7280;';
       em.textContent = p.email || '';
       a.appendChild(nm); a.appendChild(em);
-      // mousedown, not click: click fires after the box loses focus.
-      a.addEventListener('mousedown', function (e) { e.preventDefault(); pick(p); });
+      /* Arrow keys and Enter in the name box are the keyboard route, so the
+       * buttons stay out of the tab order. mousedown keeps the box focused for
+       * a mouse; click covers screen readers, which activate without one. */
+      a.tabIndex = -1;
+      a.setAttribute('role', 'option');
+      a.addEventListener('mousedown', function (e) { e.preventDefault(); });
+      a.addEventListener('click', function (e) { e.preventDefault(); pick(p); });
       a.addEventListener('mouseenter', function () { setCursor(items.indexOf(a)); });
       a._person = p;
       out.appendChild(a);
@@ -126,5 +132,10 @@
     }
   });
 
-  nameBox.addEventListener('blur', function () { setTimeout(hide, 120); });
+  nameBox.addEventListener('blur', function (e) {
+    if (e.relatedTarget && out.contains(e.relatedTarget)) return;
+    setTimeout(function () {
+      if (!out.contains(document.activeElement)) hide();
+    }, 120);
+  });
 })();
