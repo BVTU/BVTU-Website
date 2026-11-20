@@ -716,13 +716,16 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
 
   <div class="toolbar">
     <button type="button" class="btn-add" onclick="addRow()">+ Add Row</button>
+    <button type="button" class="btn-phone" onclick="document.getElementById('batchFiles').click()">🧾 Add receipts</button>
+    <input type="file" id="batchFiles" accept="image/*,.pdf,.heic,.heif" multiple style="display:none"
+      onchange="bvtuReceiptBatch(this.files); this.value='';">
     <button type="button" class="btn-phone" onclick="toggleQR()">📱 Phone Upload</button>
     <span class="mileage-note">Mileage: $<?= number_format($mileageRate, 2) ?>/km · attach receipts with 📎</span>
   </div>
 
   <!-- Global drop zone -->
   <div id="globalDropZone" class="drop-zone">
-    ⬇ Drop receipt files here — each file is added as a new expense row automatically
+    ⬇ Drop receipts here — one line each
   </div>
 
   <!-- QR code panel -->
@@ -844,6 +847,7 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
 
 <script src="../js/sort-by-date.js?v=<?= @filemtime(__DIR__ . '/../js/sort-by-date.js') ?>"></script>
 <script src="../js/receipt-dupes.js?v=<?= @filemtime(__DIR__ . '/../js/receipt-dupes.js') ?>"></script>
+<script src="../js/receipt-batch.js?v=<?= @filemtime(__DIR__ . '/../js/receipt-batch.js') ?>"></script>
 <script src="../js/qrcode.js?v=<?= @filemtime(__DIR__ . '/../js/qrcode.js') ?>"></script>
 <script src="../js/qr-img.js?v=<?= @filemtime(__DIR__ . '/../js/qr-img.js') ?>"></script>
 <script>
@@ -1318,20 +1322,7 @@ function enableRowDrop(rowId) {
         counter = 0;
         dz.classList.remove('drag-active', 'drag-over');
 
-        const files = [...e.dataTransfer.files].filter(
-            f => f.type.startsWith('image/') || f.type === 'application/pdf'
-        );
-        if (!files.length) return;
-
-        files.forEach(file => {
-            let rowId = null;
-            for (const hidden of document.querySelectorAll('[name="receipt_path[]"]')) {
-                if (!hidden.value) { rowId = hidden.id.replace('rpath-', ''); break; }
-            }
-            if (!rowId) rowId = addRow();
-            showLocalPreview(rowId, file);
-            uploadAndScan(file, rowId);
-        });
+        bvtuReceiptBatch(e.dataTransfer.files);
     });
 })();
 
@@ -1410,7 +1401,7 @@ function uploadAndScan(file, rowId, allowDup) {
     if (ownId && ownId.value) fd.append('exclude_expense_id', ownId.value);
     if (allowDup) fd.append('allow_duplicate', '1');
 
-    fetch('lp-scan.php', { method: 'POST', body: fd })
+    return fetch('lp-scan.php', { method: 'POST', body: fd })
         .then(r => r.json())
         .then(data => {
             if (spinner) spinner.style.display = 'none';
@@ -2020,6 +2011,8 @@ function singleFilledCategory(tr) {
  *  cost of being wrong that way is one extra empty row, and the other way is
  *  landing on somebody's work. */
 function rowIsUntouched(tr) {
+    // Taken by a receipt batch whose scan has not come back yet.
+    if (tr.dataset.batchReserved) return false;
     var path = tr.querySelector('[name="receipt_path[]"]');
     if (!path || String(path.value).trim()) return false;
 
