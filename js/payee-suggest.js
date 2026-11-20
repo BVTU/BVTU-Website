@@ -28,6 +28,8 @@
   wrap.appendChild(out);
 
   var timer = null, controller = null, items = [], cursor = -1;
+  // What pick() put in the boxes, so a changed name can take its address back.
+  var filled = null;
 
   function hide() { out.style.display = 'none'; items = []; cursor = -1; }
 
@@ -37,7 +39,9 @@
     nameBox.value = p.name;
     if (p.email && !isDistrict(p.email)) {
       emailBox.value = p.email;
+      filled = { name: p.name, email: p.email };
     } else {
+      filled = null;
       emailBox.value = '';
       emailBox.focus();
     }
@@ -92,6 +96,16 @@
   }
 
   nameBox.addEventListener('input', function () {
+    // The list on screen answered the old text; leaving it clickable would let
+    // a stale match overwrite what is being typed.
+    hide();
+    if (controller) controller.abort();
+    // A picked person's address must not stay behind under somebody else's
+    // name. Only taken back if nobody has edited it since.
+    if (filled && nameBox.value !== filled.name) {
+      if (emailBox.value === filled.email) emailBox.value = '';
+      filled = null;
+    }
     clearTimeout(timer);
     timer = setTimeout(look, 180);
   });
