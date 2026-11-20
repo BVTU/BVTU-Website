@@ -83,6 +83,11 @@ if (!$row) {
     $row = $s3->fetch();
 }
 
+// Uploaded in this session and not saved onto a voucher line yet.
+if (!$row && in_array($path, (array)($_SESSION['lp_scan_uploads'] ?? []), true)) {
+    $row = ['submitted_by_email' => $member['email']];
+}
+
 if (!$row) { http_response_code(404); exit('Receipt not found.'); }
 
 $isOwner      = $row['submitted_by_email'] === $member['email'];

@@ -134,6 +134,20 @@ if ($mayCompare && empty($_POST['allow_duplicate'])) {
     }
 }
 
+/*
+ * Kept, so this person may look at it before the voucher is saved.
+ * lp-receipt.php finds a receipt's owner through the voucher line that holds
+ * it, and a file dropped onto the form has no line yet — the hover preview
+ * and "open" both answered "Receipt not found" until the next save. The
+ * session is the record of who uploaded it; a short list, newest last.
+ */
+$_SESSION['lp_scan_uploads'] = array_slice(
+    array_merge((array)($_SESSION['lp_scan_uploads'] ?? []), [$savedName]), -200);
+// Released now: the Vision call below takes seconds, and an open session
+// holds every other request from this browser — the preview, and the rest of
+// a receipt batch — waiting behind it.
+session_write_close();
+
 // Build grant and budget line lists for the prompt
 $grants      = lpGetGrants();
 $budgetLines = lpGetBudgetLines();
