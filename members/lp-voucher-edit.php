@@ -100,20 +100,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($payeeWritable && !empty($_POST['pay_vendor'])) {
         $payeeName  = trim($_POST['payee_name']  ?? '');
         $payeeEmail = trim($_POST['payee_email'] ?? '');
-        if ($payeeName === '') $errors[] = 'Please say who the vendor is.';
+        if ($payeeName === '') $errors[] = 'Please say who to pay.';
         if ($payeeEmail === '') {
-            $errors[] = 'Please give the vendor\'s e-transfer address.';
+            $errors[] = 'Please give their e-transfer address.';
         } elseif (!filter_var($payeeEmail, FILTER_VALIDATE_EMAIL)) {
-            $errors[] = 'That vendor e-transfer address does not look right.';
+            $errors[] = 'That e-transfer address does not look right.';
         } elseif (strcasecmp($payeeEmail, (string)$voucher['submitted_by_email']) === 0) {
-            $errors[] = 'That is the submitter\'s own address — untick the vendor box '
+            $errors[] = 'That is the submitter\'s own address — untick "Pay member or vendor" '
                       . 'to claim this back instead.';
         } elseif (strcasecmp($payeeEmail, (string)($member['email'] ?? '')) === 0) {
             // An exec editing somebody else's draft could otherwise name their
             // own address as the vendor. The signing guard would stop them
             // signing it, but the other two officers would be approving a
             // payment to the person who typed it in.
-            $errors[] = 'That is your own address — you cannot make yourself the vendor '
+            $errors[] = 'That is your own address — you cannot make yourself the payee '
                       . 'on someone else\'s voucher.';
         }
     }
@@ -671,22 +671,20 @@ $mobileUrl     = "{$protocol}://{$host}/members/lp-mobile-receipt.php?token={$up
     <label class="vendor-tick">
       <input type="checkbox" name="pay_vendor" value="1" id="payVendor"
              onchange="vendorToggle()"<?= $vTicked ? ' checked' : '' ?>>
-      <span>Pay a vendor instead of me</span>
+      <span>Pay member or vendor</span>
     </label>
     <p class="vendor-why">
-      Signed the same way &mdash; Treasurer, then Vice-President. Tick this and the
-      payment instruction tells the Treasurer to e&#8209;transfer the vendor, not you.
-      It can only be changed until the first signature.
+      The Treasurer e&#8209;transfers them, not the submitter. Fixed once it goes for signature.
     </p>
     <div class="vendor-fields" id="vendorFields">
       <div class="hfield" style="flex:2;">
-        <label>Vendor *</label>
-        <input type="text" name="payee_name" maxlength="200" placeholder="e.g. Northern Sound &amp; Light"
+        <label>Pay to *</label>
+        <input type="text" name="payee_name" maxlength="200" placeholder="Member or business name"
           value="<?= htmlspecialchars($vName) ?>">
       </div>
       <div class="hfield" style="flex:2;">
         <label>Their e&#8209;transfer address *</label>
-        <input type="email" name="payee_email" maxlength="255" placeholder="e.g. accounts@northernsound.ca"
+        <input type="email" name="payee_email" maxlength="255" placeholder="name@example.com"
           value="<?= htmlspecialchars($vEmail) ?>">
       </div>
     </div>

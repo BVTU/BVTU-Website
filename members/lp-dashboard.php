@@ -427,7 +427,7 @@ $grantSumJson      = json_encode(array_values($grantSum));
       These were entered by hand before everything went through the expense portal.
       They still count against their grant or budget line, so the year's figures and the
       BCTF claim are unchanged. Nothing new can be added here &mdash; to pay somebody
-      outside the union, start a voucher and tick &ldquo;Pay a vendor instead of me&rdquo;,
+      else, start a voucher and tick &ldquo;Pay member or vendor&rdquo;,
       and it gets two signatures before the money moves.
     </p>
 

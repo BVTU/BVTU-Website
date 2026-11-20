@@ -73,7 +73,7 @@ if ($action === 'delete') {
 if ($action === 'add') {
     lpDirectBack($back, 'error',
         'Logging a payment afterwards has been retired — everything goes through the '
-      . 'expense portal now. Start a voucher and tick "Pay a vendor instead of me", '
+      . 'expense portal now. Start a voucher and tick "Pay member or vendor", '
       . 'and it gets two signatures before the money moves.');
 }
 

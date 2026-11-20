@@ -70,18 +70,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!$voucherName) $errors[] = 'Please enter a voucher name.';
     if ($payVendor) {
-        if ($payeeName === '')  $errors[] = 'Please say who the vendor is.';
+        if ($payeeName === '')  $errors[] = 'Please say who to pay.';
         // Refused rather than left blank: a signed authorisation with nowhere
         // to send the money is worse than one that was never submitted.
         if ($payeeEmail === '') {
-            $errors[] = 'Please give the vendor\'s e-transfer address.';
+            $errors[] = 'Please give their e-transfer address.';
         } elseif (!filter_var($payeeEmail, FILTER_VALIDATE_EMAIL)) {
-            $errors[] = 'That vendor e-transfer address does not look right.';
+            $errors[] = 'That e-transfer address does not look right.';
         }
         if ($payeeEmail !== '' && strcasecmp($payeeEmail, (string)$member['email']) === 0) {
             // Not a vendor payment at all, and routing it as one would hide a
             // reimbursement to yourself behind a vendor label.
-            $errors[] = 'That is your own address — leave the vendor box unticked '
+            $errors[] = 'That is your own address — leave "Pay member or vendor" unticked '
                       . 'to claim this back yourself.';
         }
     }
@@ -542,22 +542,20 @@ $initRowsJson = json_encode($initRows);
     <label class="vendor-tick">
       <input type="checkbox" name="pay_vendor" value="1" id="payVendor"
              onchange="vendorToggle()"<?= !empty($_POST['pay_vendor']) ? ' checked' : '' ?>>
-      <span>Pay a vendor instead of me</span>
+      <span>Pay member or vendor</span>
     </label>
     <p class="vendor-why">
-      Signed the same way &mdash; Treasurer, then Vice-President. The difference is
-      where the money goes: tick this and the payment instruction tells the Treasurer
-      to e&#8209;transfer the vendor, not you.
+      The Treasurer e&#8209;transfers them, not you.
     </p>
     <div class="vendor-fields" id="vendorFields">
       <div class="hfield" style="flex:2;">
-        <label>Vendor *</label>
-        <input type="text" name="payee_name" maxlength="200" placeholder="e.g. Northern Sound &amp; Light"
+        <label>Pay to *</label>
+        <input type="text" name="payee_name" maxlength="200" placeholder="Member or business name"
           value="<?= htmlspecialchars($_POST['payee_name'] ?? '') ?>">
       </div>
       <div class="hfield" style="flex:2;">
         <label>Their e&#8209;transfer address *</label>
-        <input type="email" name="payee_email" maxlength="255" placeholder="e.g. accounts@northernsound.ca"
+        <input type="email" name="payee_email" maxlength="255" placeholder="name@example.com"
           value="<?= htmlspecialchars($_POST['payee_email'] ?? '') ?>">
       </div>
     </div>
