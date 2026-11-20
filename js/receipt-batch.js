@@ -38,6 +38,11 @@
     if (tr) delete tr.dataset.batchReserved;
   }
 
+  function attached(job) {
+    var el = document.getElementById('rpath-' + job.id);
+    return !!(el && String(el.value).trim());
+  }
+
   window.bvtuReceiptBatch = function (fileList) {
     var files = Array.prototype.filter.call(fileList || [], isReceiptFile);
     var skipped = (fileList ? fileList.length : 0) - files.length;
@@ -62,10 +67,13 @@
         release(job.id);
         done++;
         if (done === jobs.length) {
-          if (typeof showToast === 'function') {
-            showToast('✅ ' + jobs.length + (jobs.length === 1 ? ' receipt' : ' receipts') + ' read'
-                      + (skipped ? ' · ' + skipped + ' skipped (not a photo or PDF)' : ''));
-          }
+          /* uploadAndScan resolves on failure too, having already flagged the
+           * row, so success is read off the rows: a receipt that is attached. */
+          var added = jobs.filter(attached).length;
+          var msg = (added === jobs.length ? '✅ ' : '⚠ ') + added + ' of ' + jobs.length
+                  + (jobs.length === 1 ? ' receipt' : ' receipts') + ' added';
+          if (skipped) msg += ' · ' + skipped + ' not a photo or PDF';
+          if (typeof showToast === 'function') showToast(msg);
         } else {
           startOne();
         }
