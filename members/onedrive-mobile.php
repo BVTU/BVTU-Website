@@ -110,7 +110,7 @@ $mayCreate = odTokenMayCreate($row);
 
   <input class="cap" id="caption" placeholder="Name for the file (optional)">
   <button class="shoot" onclick="document.getElementById('cam').click();">&#x1F4F7; Take a photo</button>
-  <button class="pick" onclick="document.getElementById('saved').click();">&#x1F5BC;&#xFE0F; Choose a saved photo</button>
+  <button class="pick" onclick="document.getElementById('saved').click();">&#x1F4C4; Choose a photo or file</button>
   <!--
     Two inputs, not one.
 
@@ -121,7 +121,7 @@ $mayCreate = odTokenMayCreate($row);
     So the choice is made with two buttons instead of left to the browser.
   -->
   <input type="file" id="cam" accept="image/*" capture="environment" onchange="send(this)">
-  <input type="file" id="saved" accept="image/*" onchange="send(this)">
+  <input type="file" id="saved" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx" onchange="send(this)">
 
   <div id="log"></div>
 
@@ -303,7 +303,10 @@ $mayCreate = odTokenMayCreate($row);
 
     var row = document.createElement('div');
     row.className = 'item';
-    row.innerHTML = '<img src="' + URL.createObjectURL(file) + '"><div>Uploading&hellip;</div>';
+    var isImg = /^image\//.test(file.type || '');
+    row.innerHTML = (isImg ? '<img src="' + URL.createObjectURL(file) + '">'
+                           : '<span style="font-size:2rem;line-height:1;">&#x1F4C4;</span>')
+                  + '<div>Uploading&hellip;</div>';
     document.getElementById('log').prepend(row);
     input.value = '';
 

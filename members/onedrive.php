@@ -221,9 +221,14 @@ $recent = odRecentUploads();
     <noscript><a href="<?= htmlspecialchars($mobileUrl) ?>">Open the uploader link</a></noscript>
     <div class="txt">
       <strong style="color:var(--gray-800);">Scan with your phone</strong><br>
-      Browse to any folder in your OneDrive, then photograph a document into it. Give it a
-      name and it is filed as that plus the date; leave it blank and it is named by
-      date and time.
+      Browse to any folder in your OneDrive, then photograph a document or upload a
+      file into it. Give it a name and it is filed as that plus the date.
+      <?php // Already on the phone: a QR code cannot be scanned by the screen it
+            // is on. Same uploader, same token, this tab. ?>
+      <div style="margin-top:.7rem;">
+        <a href="<?= htmlspecialchars($mobileUrl) ?>" class="btn btn-primary"
+           style="padding:.5rem 1.1rem;font-size:.9rem;">Upload from this device</a>
+      </div>
     </div>
   </div>
   <?php endif; ?>
