@@ -76,8 +76,13 @@ if ($voucherId) {
             'created_at'       => $d['created_at'],
             'voucher_name'     => 'Paid directly' . ($d['cheque_ref'] ? ' · ' . $d['cheque_ref'] : ''),
             'voucher_number'   => null,
+            'grant_excluded'   => (int)($d['grant_excluded'] ?? 0),
         ];
     }
+    // Unticked from the grant: paid from the local's own money, not claimed.
+    $expenses = array_values(array_filter($expenses, function ($e) {
+        return empty($e['grant_excluded']);
+    }));
     usort($expenses, fn($a, $b) => strcmp((string)$a['expense_date'], (string)$b['expense_date']));
 
     $zipStem  = $grant['name'] . '-Receipts-' . $grant['year'];

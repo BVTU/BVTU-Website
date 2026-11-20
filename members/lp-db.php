@@ -935,8 +935,66 @@ function lpIsReleaseTimeGrant(array $grant, array $all): bool {
     return $best !== null && (int)$grant['id'] === $best;
 }
 
+/**
+ * grant_excluded: an expense that stays tagged to its grant but is not counted
+ * against it. For an overspent grant, where the overflow is paid from the
+ * local's own money — unticked in the grant's transaction list rather than
+ * hunted down on its voucher. Kept tagged so it is still listed there and can
+ * be ticked back. Applies to the grant only; a budget line still counts it.
+ */
+function lpEnsureGrantExclusion(): void {
+    static $done = false;
+    if ($done) return;
+    $done = true;
+    lpDirectEnsure();
+    foreach (['lp_expenses', 'lp_direct_expenses'] as $t) {
+        try {
+            $has = getDB()->query(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='{$t}' AND COLUMN_NAME='grant_excluded'"
+            )->fetchColumn();
+            if (!$has) getDB()->exec("ALTER TABLE {$t} ADD COLUMN grant_excluded TINYINT(1) NOT NULL DEFAULT 0");
+        } catch (Exception $e) {
+            error_log('lpEnsureGrantExclusion ' . $t . ': ' . $e->getMessage());
+        }
+    }
+}
+
+/**
+ * Count, or stop counting, one expense against its grant. $ref is an
+ * lp_expenses id, or 'd' + an lp_direct_expenses id, as the grant list names
+ * them. Only on the open year: a closed year may already be archived and
+ * claimed, and its figures should not move under it.
+ */
+function lpSetGrantCounted(string $ref, int $grantId, bool $counted): void {
+    lpEnsureGrantExclusion();
+    $db = getDB();
+    $g  = $db->prepare("SELECT year FROM lp_grants WHERE id=?");
+    $g->execute([$grantId]);
+    $year = $g->fetchColumn();
+    if ($year === false) throw new RuntimeException('Grant not found.');
+    if ((int)$year !== lpCurrentYear()) throw new RuntimeException('That grant is from a closed year.');
+
+    if (preg_match('/^d(\d+)$/', $ref, $m)) {
+        $s = $db->prepare("UPDATE lp_direct_expenses SET grant_excluded=? WHERE id=? AND grant_id=?");
+        $s->execute([$counted ? 0 : 1, (int)$m[1], $grantId]);
+        $found = $db->prepare("SELECT COUNT(*) FROM lp_direct_expenses WHERE id=? AND grant_id=?");
+        $found->execute([(int)$m[1], $grantId]);
+    } elseif (ctype_digit($ref)) {
+        $s = $db->prepare("UPDATE lp_expenses SET grant_excluded=? WHERE id=? AND grant_id=?");
+        $s->execute([$counted ? 0 : 1, (int)$ref, $grantId]);
+        $found = $db->prepare("SELECT COUNT(*) FROM lp_expenses WHERE id=? AND grant_id=?");
+        $found->execute([(int)$ref, $grantId]);
+    } else {
+        throw new RuntimeException('Invalid expense.');
+    }
+    // rowCount() is 0 when the value was already set, so existence is asked.
+    if (!(int)$found->fetchColumn()) throw new RuntimeException('That expense is not on this grant.');
+}
+
 function lpGrantSummary(int $year = 0): array {
     if (!$year) $year = lpCurrentYear();
+    lpEnsureGrantExclusion();
     $grants = lpGetGrants($year);
     $direct = lpDirectTotals('grant_id', $year);
     $db = getDB();
@@ -945,7 +1003,7 @@ function lpGrantSummary(int $year = 0): array {
             "SELECT COALESCE(SUM(e.travel_amt+e.meals+e.gifts+e.misc+e.office+e.phone),0)
              FROM lp_expenses e
              JOIN lp_vouchers v ON v.id = e.voucher_id
-             WHERE e.grant_id=?"
+             WHERE e.grant_id=? AND e.grant_excluded=0"
         );
         $s->execute([$g['id']]);
         $g['spent_vouchers'] = (float)$s->fetchColumn();
@@ -1411,10 +1469,12 @@ function lpEmailPaid(array $v, float $total): void {
 }
 
 function lpGetExpensesByGrant(int $grantId): array {
+    lpEnsureGrantExclusion();
     $s = getDB()->prepare(
         "SELECT e.id, e.expense_date, e.description, e.travel_km, e.travel_amt,
                 e.meals, e.gifts, e.misc, e.office, e.phone,
                 e.receipt_path, e.receipt_filename, e.receipt_extra, e.created_at,
+                e.grant_excluded,
                 v.name AS voucher_name, v.voucher_number, v.id AS voucher_id, v.status AS voucher_status
          FROM lp_expenses e
          JOIN lp_vouchers v ON v.id = e.voucher_id
@@ -1871,6 +1931,7 @@ function lpAddDirectExpense(array $d, string $by): int {
 
 function lpGetDirectExpenses(int $year, ?int $grantId = null, ?int $lineId = null): array {
     lpDirectEnsure();
+    lpEnsureGrantExclusion();
     $sql = "SELECT d.*, g.name AS grant_name, b.name AS budget_line_name
             FROM lp_direct_expenses d
             LEFT JOIN lp_grants g       ON g.id = d.grant_id
@@ -1911,10 +1972,13 @@ function lpDeleteDirectExpense(int $id): bool {
 function lpDirectTotals(string $column, int $year): array {
     lpDirectEnsure();
     $col = $column === 'grant_id' ? 'grant_id' : 'budget_line_id';
+    // An unticked item is out of the grant's total only, never the line's.
+    $skip = '';
+    if ($col === 'grant_id') { lpEnsureGrantExclusion(); $skip = ' AND grant_excluded=0'; }
     try {
         $s = getDB()->prepare(
             "SELECT $col AS k, COALESCE(SUM(amount),0) AS t
-             FROM lp_direct_expenses WHERE year=? AND $col IS NOT NULL GROUP BY $col");
+             FROM lp_direct_expenses WHERE year=? AND $col IS NOT NULL{$skip} GROUP BY $col");
         $s->execute([$year]);
         $out = [];
         foreach ($s->fetchAll(PDO::FETCH_ASSOC) as $r) $out[(int)$r['k']] = (float)$r['t'];

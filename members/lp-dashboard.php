@@ -47,8 +47,11 @@ foreach ($grantSum as &$g) {
     $g['outstanding_count']  = 0;
     $g['outstanding_total']  = 0;
 
-    if ($g['spent'] > 0) {
-        $expenses = lpGetExpensesByGrant($g['id']);
+    // Listed whenever anything is tagged to the grant, counted or not — a
+    // grant with every item unticked reads $0 spent and still has to open,
+    // or nothing could be ticked back.
+    $expenses = lpGetExpensesByGrant($g['id']);
+    {
         // Direct payments shaped like voucher rows, so the modal shows the same
         // money the card totals; otherwise the two disagree and the card looks wrong.
         foreach (lpGetDirectExpenses($year, (int)$g['id']) as $d) {
@@ -63,6 +66,7 @@ foreach ($grantSum as &$g) {
                 'created_at'     => $d['created_at'],
                 'voucher_name'   => 'Paid directly' . ($d['cheque_ref'] ? ' · ' . $d['cheque_ref'] : ''),
                 'voucher_number' => null, 'voucher_id' => null, 'voucher_status' => 'paid',
+                'grant_excluded' => (int)($d['grant_excluded'] ?? 0),
             ];
         }
         usort($expenses, fn($a, $b) => strcmp((string)$a['expense_date'], (string)$b['expense_date']));
@@ -70,6 +74,7 @@ foreach ($grantSum as &$g) {
 
         $cutoff = $g['submission'] ? strtotime($g['submission']['submitted_at']) : null;
         foreach ($expenses as $e) {
+            if (!empty($e['grant_excluded'])) continue;   // not part of the claim
             if ($cutoff === null || strtotime($e['created_at']) > $cutoff) {
                 $g['outstanding_count']++;
                 $g['outstanding_total'] += lpRowTotal($e);
@@ -190,6 +195,8 @@ $grantSumJson      = json_encode(array_values($grantSum));
     .gtable thead th.r { text-align: right; }
     .gtable tbody tr { border-bottom: 1px solid var(--gray-100); }
     .gtable tbody tr:last-child { border-bottom: none; }
+    .gtable tbody tr.g-out td { color: var(--gray-400); }
+    .gtable tbody tr.g-out td.gamt { text-decoration: line-through; }
     .gtable tbody tr:hover { background: #f8fafc; }
     .gtable td { padding: .55rem .9rem; vertical-align: middle; }
     .gtable td.r { text-align: right; color: var(--gray-700); }
@@ -369,7 +376,7 @@ $grantSumJson      = json_encode(array_values($grantSum));
              Its money is district invoices, and the modal lists vouchers and
              direct payments — a Treasurer clicking "$4,086.75 spent" would
              get an empty box and no way to the real detail. */
-          $modal = $hasSpend && !$isRt; ?>
+          $modal = !empty($grantExpenses[$g['id']]) && !$isRt; ?>
     <div class="grant-card <?= $modal ? 'has-spend' : '' ?>"
          <?= $modal ? 'onclick="openGrantModal('.$g['id'].')" title="Click to view transactions"' : '' ?>>
     <?php endif; ?>
@@ -384,7 +391,11 @@ $grantSumJson      = json_encode(array_values($grantSum));
       </div>
       <div class="nums">
         <span class="spent-lbl">$<?= number_format($g['spent'],2) ?> spent</span>
-        <span class="rem-lbl <?= $class ?>">$<?= number_format(max(0,$g['remaining']),2) ?> left</span>
+        <?php if ($g['remaining'] < 0): ?>
+        <span class="rem-lbl over">&minus;$<?= number_format(-$g['remaining'],2) ?> left</span>
+        <?php else: ?>
+        <span class="rem-lbl <?= $class ?>">$<?= number_format($g['remaining'],2) ?> left</span>
+        <?php endif; ?>
       </div>
       <?php /* Those invoices are entered in one place, so money reaching this
                grant from both sides means the same bill has been recorded
@@ -566,6 +577,7 @@ $grantSumJson      = json_encode(array_values($grantSum));
         <table class="gtable">
           <thead>
             <tr>
+              <th title="Counts toward the grant">Counts</th>
               <th>Date</th>
               <th>Voucher</th>
               <th>Description</th>
@@ -608,6 +620,35 @@ $grantSumJson      = json_encode(array_values($grantSum));
 <script>
 const GRANT_EXPENSES = <?= $grantExpensesJson ?>;
 const GRANT_META     = <?= $grantSumJson ?>;
+// The open year only, and only for the grant tools' own gate.
+const GRANT_CAN_TICK = <?= ($isCurrent && execIsAdmin($member['email'])) ? 'true' : 'false' ?>;
+
+/* Saved at once, then the page reloads onto the same list, so the card, the
+ * totals and the BCTF status all come from the server rather than being
+ * patched up here and drifting from it. */
+function setGrantCounted(grantId, ref, box) {
+    box.disabled = true;
+    const fd = new FormData();
+    fd.append('action', 'set_counted');
+    fd.append('grant_id', grantId);
+    fd.append('expense', ref);
+    fd.append('counted', box.checked ? '1' : '0');
+    fd.append('csrf_token', document.querySelector('#gsub-form [name="csrf_token"]').value);
+    fetch('lp-grant-action.php', { method: 'POST', body: fd, credentials: 'same-origin',
+                                   headers: { 'Accept': 'application/json' } })
+        .then(r => r.json())
+        .then(d => {
+            if (!d || !d.ok) throw new Error((d && d.error) || 'Not saved.');
+            const u = new URL(location.href);
+            u.searchParams.set('grant', grantId);
+            location.replace(u.toString());
+        })
+        .catch(err => {
+            box.checked = !box.checked;
+            box.disabled = false;
+            alert(err.message || 'Not saved.');
+        });
+}
 
 function fmt2(n) { return '$' + parseFloat(n||0).toFixed(2); }
 function fmtDate(d) {
@@ -679,12 +720,13 @@ function openGrantModal(grantId) {
         document.getElementById('gmodal-total').textContent = '';
     } else {
         empty.style.display = 'none';
-        let grandTotal = 0;
+        let grandTotal = 0, outCount = 0, outTotal = 0;
         rows.forEach(e => {
             const rowTotal = (parseFloat(e.travel_amt)||0) + (parseFloat(e.meals)||0)
                            + (parseFloat(e.gifts)||0)     + (parseFloat(e.misc)||0)
                            + (parseFloat(e.office)||0)    + (parseFloat(e.phone)||0);
-            grandTotal += rowTotal;
+            const counted = !parseInt(e.grant_excluded || 0, 10);
+            if (counted) grandTotal += rowTotal; else { outCount++; outTotal += rowTotal; }
 
             const vNum = e.voucher_number ? '#' + e.voucher_number + ' — ' : '';
             const vLabel = vNum + e.voucher_name;
@@ -694,7 +736,12 @@ function openGrantModal(grantId) {
                 : '';
 
             const tr = document.createElement('tr');
+            if (!counted) tr.className = 'g-out';
             tr.innerHTML =
+                '<td style="text-align:center;"><input type="checkbox"' + (counted ? ' checked' : '') +
+                    (GRANT_CAN_TICK ? '' : ' disabled') +
+                    ' title="Counts toward the grant" onchange="setGrantCounted(' + grantId + ', \'' +
+                    escH(String(e.id)) + '\', this)"></td>' +
                 '<td style="white-space:nowrap;">' + fmtDate(e.expense_date) + '</td>' +
                 // A direct payment has no voucher to open, so it is named, not linked.
                 '<td>' + (e.voucher_id
@@ -710,11 +757,12 @@ function openGrantModal(grantId) {
                 '<td class="r">' + (parseFloat(e.misc)       > 0 ? fmt2(e.misc)       : '') + '</td>' +
                 '<td class="r">' + (parseFloat(e.office)     > 0 ? fmt2(e.office)     : '') + '</td>' +
                 '<td class="r">' + (parseFloat(e.phone)      > 0 ? fmt2(e.phone)      : '') + '</td>' +
-                '<td class="r bold">' + fmt2(rowTotal) + '</td>';
+                '<td class="r bold gamt">' + fmt2(rowTotal) + '</td>';
             tbody.appendChild(tr);
         });
 
-        document.getElementById('gmodal-count').textContent = rows.length + ' transaction' + (rows.length !== 1 ? 's' : '');
+        document.getElementById('gmodal-count').textContent = rows.length + ' transaction' + (rows.length !== 1 ? 's' : '')
+            + (outCount ? ' \u00b7 ' + outCount + ' not counted (' + fmt2(outTotal) + ')' : '');
         document.getElementById('gmodal-total').textContent = fmt2(grandTotal);
     }
 
@@ -737,6 +785,11 @@ function undoGrantSubmission() {
     document.getElementById('gsub-action').value = 'unmark_submitted';
     document.getElementById('gsub-form').submit();
 }
+
+(function () {
+    const g = new URLSearchParams(location.search).get('grant');
+    if (g && GRANT_EXPENSES[g]) openGrantModal(parseInt(g, 10));
+})();
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { document.getElementById('gmodal-backdrop').classList.remove('open'); document.body.style.overflow = ''; } });
 </script>
