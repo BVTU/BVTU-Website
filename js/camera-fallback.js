@@ -64,7 +64,7 @@
         '<div style="font-weight:700;margin-bottom:.3rem;">Your phone did not open the camera.</div>'
         + '<div style="margin-bottom:.7rem;">It is usually switched off for this browser in the '
         + 'phone\'s own settings, and a web page cannot turn it back on. Take the photo with your '
-        + 'camera app, then use <strong>Choose a saved photo</strong> here.</div>'
+        + 'camera app, then pick it with the <strong>Choose</strong> button here.</div>'
         + '<div style="display:flex;"><span style="flex:1"></span>'
         + '<button type="button" style="border-radius:.4rem;padding:.4rem .85rem;font-size:.82rem;'
         + 'font-weight:600;cursor:pointer;background:#fff;color:#422006;border:1px solid #d6d3d1;'
