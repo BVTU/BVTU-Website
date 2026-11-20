@@ -625,7 +625,7 @@ $grantSumJson      = json_encode(array_values($grantSum));
 const GRANT_EXPENSES = <?= $grantExpensesJson ?>;
 const GRANT_META     = <?= $grantSumJson ?>;
 // The open year only, and only for the grant tools' own gate.
-const GRANT_CAN_TICK = <?= ($isCurrent && execIsAdmin($member['email'])) ? 'true' : 'false' ?>;
+const GRANT_CAN_TICK = <?= ($isCurrent && !lpYearIsClosed($year) && execIsAdmin($member['email'])) ? 'true' : 'false' ?>;
 
 /* Saved at once, then the page reloads onto the same list, so the card, the
  * totals and the BCTF status all come from the server rather than being

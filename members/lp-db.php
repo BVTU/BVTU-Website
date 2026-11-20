@@ -982,7 +982,9 @@ function lpSetGrantCounted(string $ref, int $grantId, bool $counted): void {
     $g->execute([$grantId]);
     $year = $g->fetchColumn();
     if ($year === false) throw new RuntimeException('Grant not found.');
-    if ((int)$year !== lpCurrentYear()) throw new RuntimeException('That grant is from a closed year.');
+    if ((int)$year !== lpCurrentYear() || lpYearIsClosed((int)$year)) {
+        throw new RuntimeException('That grant is from a closed year.');
+    }
 
     if (preg_match('/^d(\d+)$/', $ref, $m)) {
         // grant_counted_at first: MySQL applies SET left to right, so it must

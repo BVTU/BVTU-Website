@@ -223,6 +223,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $existingId = (int)($expIds[$i] ?? 0);
             if ($existingId && in_array($existingId, $keptIds)) {
+                /* Unticked from one grant is not unticked from the next: a
+                 * line moved to another grant counts there in full. Cleared
+                 * before the update, which is what changes grant_id. */
+                lpEnsureGrantExclusion();
+                $db->prepare("UPDATE lp_expenses SET grant_excluded=0, grant_counted_at=NULL
+                               WHERE id=? AND voucher_id=? AND NOT (grant_id <=> ?)")
+                   ->execute([$existingId, $id, ($grantIds[$i] ?? '') ?: null]);
                 $upd->execute(array_merge($params, [$existingId, $id]));
             } else {
                 $ins->execute(array_merge([$id], $params));
