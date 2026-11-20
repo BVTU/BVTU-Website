@@ -667,6 +667,7 @@ $initRowsJson = json_encode($initRows);
 <script src="../js/sort-by-date.js?v=<?= @filemtime(__DIR__ . '/../js/sort-by-date.js') ?>"></script>
 <script src="../js/receipt-dupes.js?v=<?= @filemtime(__DIR__ . '/../js/receipt-dupes.js') ?>"></script>
 <script src="../js/receipt-batch.js?v=<?= @filemtime(__DIR__ . '/../js/receipt-batch.js') ?>"></script>
+<script src="../js/payee-suggest.js?v=<?= @filemtime(__DIR__ . '/../js/payee-suggest.js') ?>"></script>
 <script src="../js/qrcode.js?v=<?= @filemtime(__DIR__ . '/../js/qrcode.js') ?>"></script>
 <script src="../js/qr-img.js?v=<?= @filemtime(__DIR__ . '/../js/qr-img.js') ?>"></script>
 <script>
