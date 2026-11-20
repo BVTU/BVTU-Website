@@ -2,9 +2,10 @@
  * payee-suggest.js — "Pay to" offers matching people; picking one fills their
  * e-transfer address.
  *
- * Used by lp-voucher-new.php and lp-voucher-edit.php. Reads people-suggest.php
- * (admin-only, the same people allowed to create a voucher; anyone else gets a
- * 403 and simply no suggestions). Typing a business name still works — the
+ * Used by lp-voucher-new.php and lp-voucher-edit.php. Reads lp-payee-suggest.php:
+ * people paid on earlier vouchers first, then the contact list. Only those
+ * allowed to create a voucher get an answer; anyone else gets a 403 and simply
+ * no suggestions. Typing a business name still works — the
  * list only appears when somebody on the contact list matches.
  *
  * Only the primary address comes back, and an sd54.bc.ca one is not filled in:
@@ -62,7 +63,8 @@
       nm.textContent = p.name;
       var em = document.createElement('div');
       em.style.cssText = 'font-size:.76rem;color:#6b7280;';
-      em.textContent = p.email || '';
+      em.textContent = (p.email || '')
+        + (p.times > 0 ? ' \u00b7 paid ' + p.times + (p.times === 1 ? ' time' : ' times') : '');
       a.appendChild(nm); a.appendChild(em);
       /* Arrow keys and Enter in the name box are the keyboard route, so the
        * buttons stay out of the tab order. mousedown keeps the box focused for
@@ -90,7 +92,7 @@
     if (q.length < 2) { hide(); return; }
     if (controller) controller.abort();
     controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-    fetch('people-suggest.php?q=' + encodeURIComponent(q),
+    fetch('lp-payee-suggest.php?q=' + encodeURIComponent(q),
           controller ? { signal: controller.signal, credentials: 'same-origin' } : { credentials: 'same-origin' })
       .then(function (r) { return r.ok ? r.json() : []; })
       .then(function (d) {
