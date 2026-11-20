@@ -954,6 +954,15 @@ function lpEnsureGrantExclusion(): void {
                  WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='{$t}' AND COLUMN_NAME='grant_excluded'"
             )->fetchColumn();
             if (!$has) getDB()->exec("ALTER TABLE {$t} ADD COLUMN grant_excluded TINYINT(1) NOT NULL DEFAULT 0");
+            /* When it was last ticked back in. The BCTF "new since the last
+             * submission" test goes by date, and an item left out of a sent
+             * claim then ticked back keeps its old created_at — it would read
+             * as already sent. This date counts as its arrival instead. */
+            $has2 = getDB()->query(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='{$t}' AND COLUMN_NAME='grant_counted_at'"
+            )->fetchColumn();
+            if (!$has2) getDB()->exec("ALTER TABLE {$t} ADD COLUMN grant_counted_at DATETIME DEFAULT NULL");
         } catch (Exception $e) {
             error_log('lpEnsureGrantExclusion ' . $t . ': ' . $e->getMessage());
         }
@@ -976,13 +985,21 @@ function lpSetGrantCounted(string $ref, int $grantId, bool $counted): void {
     if ((int)$year !== lpCurrentYear()) throw new RuntimeException('That grant is from a closed year.');
 
     if (preg_match('/^d(\d+)$/', $ref, $m)) {
-        $s = $db->prepare("UPDATE lp_direct_expenses SET grant_excluded=? WHERE id=? AND grant_id=?");
-        $s->execute([$counted ? 0 : 1, (int)$m[1], $grantId]);
+        // grant_counted_at first: MySQL applies SET left to right, so it must
+        // read grant_excluded before that is changed.
+        $s = $db->prepare("UPDATE lp_direct_expenses
+                              SET grant_counted_at = IF(? = 0 AND grant_excluded = 1, NOW(), grant_counted_at),
+                                  grant_excluded = ?
+                            WHERE id=? AND grant_id=?");
+        $s->execute([$counted ? 0 : 1, $counted ? 0 : 1, (int)$m[1], $grantId]);
         $found = $db->prepare("SELECT COUNT(*) FROM lp_direct_expenses WHERE id=? AND grant_id=?");
         $found->execute([(int)$m[1], $grantId]);
     } elseif (ctype_digit($ref)) {
-        $s = $db->prepare("UPDATE lp_expenses SET grant_excluded=? WHERE id=? AND grant_id=?");
-        $s->execute([$counted ? 0 : 1, (int)$ref, $grantId]);
+        $s = $db->prepare("UPDATE lp_expenses
+                              SET grant_counted_at = IF(? = 0 AND grant_excluded = 1, NOW(), grant_counted_at),
+                                  grant_excluded = ?
+                            WHERE id=? AND grant_id=?");
+        $s->execute([$counted ? 0 : 1, $counted ? 0 : 1, (int)$ref, $grantId]);
         $found = $db->prepare("SELECT COUNT(*) FROM lp_expenses WHERE id=? AND grant_id=?");
         $found->execute([(int)$ref, $grantId]);
     } else {
@@ -1474,7 +1491,7 @@ function lpGetExpensesByGrant(int $grantId): array {
         "SELECT e.id, e.expense_date, e.description, e.travel_km, e.travel_amt,
                 e.meals, e.gifts, e.misc, e.office, e.phone,
                 e.receipt_path, e.receipt_filename, e.receipt_extra, e.created_at,
-                e.grant_excluded,
+                e.grant_excluded, e.grant_counted_at,
                 v.name AS voucher_name, v.voucher_number, v.id AS voucher_id, v.status AS voucher_status
          FROM lp_expenses e
          JOIN lp_vouchers v ON v.id = e.voucher_id

@@ -67,6 +67,7 @@ foreach ($grantSum as &$g) {
                 'voucher_name'   => 'Paid directly' . ($d['cheque_ref'] ? ' · ' . $d['cheque_ref'] : ''),
                 'voucher_number' => null, 'voucher_id' => null, 'voucher_status' => 'paid',
                 'grant_excluded' => (int)($d['grant_excluded'] ?? 0),
+                'grant_counted_at' => $d['grant_counted_at'] ?? null,
             ];
         }
         usort($expenses, fn($a, $b) => strcmp((string)$a['expense_date'], (string)$b['expense_date']));
@@ -75,7 +76,10 @@ foreach ($grantSum as &$g) {
         $cutoff = $g['submission'] ? strtotime($g['submission']['submitted_at']) : null;
         foreach ($expenses as $e) {
             if (!empty($e['grant_excluded'])) continue;   // not part of the claim
-            if ($cutoff === null || strtotime($e['created_at']) > $cutoff) {
+            // Ticked back in after a claim went: new to the claim, whatever its age.
+            $arrived = max(strtotime((string)$e['created_at']) ?: 0,
+                           strtotime((string)($e['grant_counted_at'] ?? '')) ?: 0);
+            if ($cutoff === null || $arrived > $cutoff) {
                 $g['outstanding_count']++;
                 $g['outstanding_total'] += lpRowTotal($e);
             }
