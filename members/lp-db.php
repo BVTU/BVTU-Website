@@ -1278,6 +1278,8 @@ function _lpWrap(string $title, string $body): string {
         .row:last-child{border-bottom:none;}
         .lbl{color:#6b7280;font-size:13px;width:140px;flex-shrink:0;}
         .val{color:#111827;font-size:13px;font-weight:600;}
+        .row.pay .lbl{color:#1a6b35;font-weight:700;}
+        .row.pay .val{font-size:14px;}
         .btn{display:inline-block;background:#1a6b35;color:#fff;padding:10px 22px;border-radius:7px;text-decoration:none;font-size:14px;font-weight:700;margin-top:8px;}
         .ftr{background:#f9fafb;padding:16px 28px;font-size:12px;color:#9ca3af;border-top:1px solid #e5e7eb;}
     </style></head><body><div class="wrap">
@@ -1364,16 +1366,23 @@ function lpPayTo(array $v): array {
     ];
 }
 
+/** The rows every voucher email opens with. Number only when there is one. */
+function _lpVoucherRows(array $v): string {
+    $num = trim((string)($v['voucher_number'] ?? ''));
+    return '<div class="row"><span class="lbl">Voucher</span><span class="val">' . htmlspecialchars($v['name']) . '</span></div>'
+         . ($num !== ''
+            ? '<div class="row"><span class="lbl">Number</span><span class="val">' . htmlspecialchars($num) . '</span></div>'
+            : '')
+         . '<div class="row"><span class="lbl">Submitted by</span><span class="val">' . htmlspecialchars($v['submitted_by']) . '</span></div>';
+}
+
 function _lpVoucherBox(array $v, float $total): string {
     $siteUrl = defined('SITE_URL') ? SITE_URL : 'https://bvtu.ca';
     return '<div class="detail-box">'
-         . '<div class="row"><span class="lbl">Voucher</span><span class="val">' . htmlspecialchars($v['name']) . '</span></div>'
-         . '<div class="row"><span class="lbl">Number</span><span class="val">' . htmlspecialchars($v['voucher_number'] ?? '—') . '</span></div>'
-         . '<div class="row"><span class="lbl">Submitted by</span><span class="val">' . htmlspecialchars($v['submitted_by']) . '</span></div>'
+         . _lpVoucherRows($v)
          // The payee goes in front of both signers, not just in the payment
-         // instruction at the end. Authorising money to a vendor is a different
-         // decision from reimbursing a colleague, and the signature is the
-         // moment to know which one is being asked for.
+         // instruction at the end: the signature is the moment to know who
+         // the money is going to.
          . (lpIsVendorPayment($v)
             ? '<div class="row"><span class="lbl">Pay to</span><span class="val">'
               . htmlspecialchars(lpPayTo($v)['name']) . '</span></div>'
@@ -1427,20 +1436,15 @@ function lpEmailVPApproved(array $v, float $total): void {
         ? htmlspecialchars($pay['email'])
         : '<strong style="color:#991b1b;">no e-transfer address on the voucher &mdash; '
           . 'ask before paying</strong>';
-    $body = '<p>The LP expense voucher has received both signatures and is <strong>ready for e-transfer payment</strong>.</p>'
-          . _lpVoucherBox($v, $total)
-          . '<div class="detail-box" style="background:#f0fdf4;border-color:#bbf7d0;">'
-          . ($pay['vendor']
-             ? '<div class="row"><span class="lbl">Pay</span><span class="val">'
-               . htmlspecialchars($pay['name']) . '</span></div>'
-             : '')
-          . '<div class="row"><span class="lbl">Send e-transfer to</span><span class="val">' . $where . '</span></div>'
-          . '<div class="row"><span class="lbl">Amount</span><span class="val">$' . number_format($total, 2) . '</span></div>'
-          . ($pay['vendor']
-             ? '<div class="row"><span class="lbl">Not</span><span class="val">'
-               . htmlspecialchars((string)$v['submitted_by'])
-               . ' &mdash; they submitted it, they are not being reimbursed</span></div>'
-             : '')
+    // One box, one button. The payee always gets a Pay row — on a
+    // reimbursement that is the submitter — so the email has the same shape
+    // whoever is being paid.
+    $body = '<p>The LP expense voucher has both signatures and is <strong>ready for e-transfer</strong>.</p>'
+          . '<div class="detail-box">'
+          . _lpVoucherRows($v)
+          . '<div class="row pay"><span class="lbl">Pay</span><span class="val">' . htmlspecialchars($pay['name']) . '</span></div>'
+          . '<div class="row pay"><span class="lbl">E-transfer to</span><span class="val">' . $where . '</span></div>'
+          . '<div class="row pay"><span class="lbl">Amount</span><span class="val">$' . number_format($total, 2) . '</span></div>'
           . '</div>'
           . '<p><a class="btn" href="' . $siteUrl . '/members/approvals.php">Open Approvals &amp; Payments</a></p>';
     /* Whoever may actually record it, not the Treasurer roster by assumption.
