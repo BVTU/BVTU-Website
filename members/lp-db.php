@@ -1376,7 +1376,7 @@ function _lpVoucherBox(array $v, float $total): string {
          // moment to know which one is being asked for.
          . (lpIsVendorPayment($v)
             ? '<div class="row"><span class="lbl">Pay to</span><span class="val">'
-              . htmlspecialchars(lpPayTo($v)['name']) . ' (member)</span></div>'
+              . htmlspecialchars(lpPayTo($v)['name']) . '</span></div>'
               // The address too, not just the name: it is the address the money
               // follows, so it is the thing being signed for.
               . '<div class="row"><span class="lbl">E-transfer to</span><span class="val">'
@@ -1431,7 +1431,7 @@ function lpEmailVPApproved(array $v, float $total): void {
           . _lpVoucherBox($v, $total)
           . '<div class="detail-box" style="background:#f0fdf4;border-color:#bbf7d0;">'
           . ($pay['vendor']
-             ? '<div class="row"><span class="lbl">Pay the member</span><span class="val">'
+             ? '<div class="row"><span class="lbl">Pay</span><span class="val">'
                . htmlspecialchars($pay['name']) . '</span></div>'
              : '')
           . '<div class="row"><span class="lbl">Send e-transfer to</span><span class="val">' . $where . '</span></div>'
@@ -1469,7 +1469,7 @@ function lpEmailRejected(array $v): void {
 function lpEmailPaid(array $v, float $total): void {
     $pay = lpPayTo($v);
     $body = '<p>' . ($pay['vendor']
-            ? 'The member payment you submitted has been sent by e-transfer.'
+            ? 'The payment you submitted has been sent by e-transfer.'
             : 'Your LP expense voucher has been paid via e-transfer.') . '</p>'
           . '<div class="detail-box">'
           . '<div class="row"><span class="lbl">Voucher</span><span class="val">' . htmlspecialchars($v['name']) . '</span></div>'
@@ -1482,7 +1482,7 @@ function lpEmailPaid(array $v, float $total): void {
           . '</div>';
     if ($v['submitted_by_email']) {
         lpNotify($v['submitted_by_email'],
-                 ($pay['vendor'] ? 'Member Paid — ' : 'LP Voucher Paid — ') . $v['name'],
+                 ($pay['vendor'] ? 'Payment Sent — ' : 'LP Voucher Paid — ') . $v['name'],
                  _lpWrap('Payment Sent', $body));
     }
 }
