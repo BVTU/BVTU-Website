@@ -53,12 +53,14 @@ function calCard($y, $c) {
   <link rel="icon" href="favicon.ico">
   <style>
     .cal-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
       gap: 1.75rem;
       margin-bottom: 2rem;
     }
-    @media (max-width: 680px) { .cal-grid { grid-template-columns: 1fr; } }
+    .cal-grid > .cal-card { flex: 0 1 calc((100% - 1.75rem) / 2); }
+    @media (max-width: 680px) { .cal-grid > .cal-card { flex-basis: 100%; } }
     .cal-card {
       background: var(--white);
       border: 1.5px solid var(--border);
