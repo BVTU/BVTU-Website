@@ -2,6 +2,30 @@
 require_once __DIR__ . '/members/auth.php';
 $loggedIn = isLoggedIn();
 $member   = $loggedIn ? getMember() : null;
+
+// Grids by the year the school year starts in. Past years go to the archive.
+$grids      = [2024, 2025, 2026, 2027, 2028];
+$schoolYear = (int)date('n') >= 9 ? (int)date('Y') : (int)date('Y') - 1;
+$current    = array_values(array_filter($grids, function ($y) use ($schoolYear) { return $y >= $schoolYear; }));
+$past       = array_values(array_filter($grids, function ($y) use ($schoolYear) { return $y <  $schoolYear; }));
+rsort($past);
+
+function salaryCard($y) {
+  $pdf = 'documents/salary-grids/sd54-salary-grid-' . $y . '.pdf';
+  ?>
+          <div class="salary-card">
+            <div class="salary-card-icon">
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            </div>
+            <div class="salary-card-year"><?= $y ?>–<?= sprintf('%02d', ($y + 1) % 100) ?></div>
+            <div class="salary-card-sub">SD54 Salary Grid</div>
+            <div class="salary-card-actions">
+              <a href="<?= $pdf ?>" target="_blank" class="salary-btn-view">View</a>
+              <a href="<?= $pdf ?>" download class="salary-btn-dl">↓ PDF</a>
+            </div>
+          </div>
+<?php
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -91,6 +115,19 @@ $member   = $loggedIn ? getMember() : null;
       border: 1.5px solid var(--primary);
     }
     .salary-btn-dl:hover { background: var(--primary-dk); }
+    .year-archive { margin: 1.75rem 0 0; }
+    .year-archive > summary {
+      display: inline-flex; align-items: center; gap: .45rem;
+      cursor: pointer; list-style: none;
+      font-size: .85rem; font-weight: 700; color: var(--primary);
+      padding: .45rem 1rem; border-radius: 7px;
+      border: 1.5px solid var(--border); background: var(--white);
+      margin-bottom: .25rem;
+    }
+    .year-archive > summary::-webkit-details-marker { display: none; }
+    .year-archive > summary::before { content: '▸'; transition: transform .15s; }
+    .year-archive[open] > summary::before { transform: rotate(90deg); }
+    .year-archive > summary:hover { border-color: var(--primary); }
   </style>
 </head>
 <body>
@@ -111,68 +148,17 @@ $member   = $loggedIn ? getMember() : null;
         <p>Grids reflect the provincial collective agreement and are updated each year. Source: <a href="https://www.bctf.ca/topics/services-information/collective-agreements-and-salary/view-salary-grids" target="_blank" rel="noopener">BCTF salary grid database</a>.</p>
 
         <div class="salary-grid-cards">
-
-          <div class="salary-card">
-            <div class="salary-card-icon">
-              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-            </div>
-            <div class="salary-card-year">2024–25</div>
-            <div class="salary-card-sub">SD54 Salary Grid</div>
-            <div class="salary-card-actions">
-              <a href="documents/salary-grids/sd54-salary-grid-2024.pdf" target="_blank" class="salary-btn-view">View</a>
-              <a href="documents/salary-grids/sd54-salary-grid-2024.pdf" download class="salary-btn-dl">↓ PDF</a>
-            </div>
-          </div>
-
-          <div class="salary-card">
-            <div class="salary-card-icon">
-              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-            </div>
-            <div class="salary-card-year">2025–26</div>
-            <div class="salary-card-sub">SD54 Salary Grid</div>
-            <div class="salary-card-actions">
-              <a href="documents/salary-grids/sd54-salary-grid-2025.pdf" target="_blank" class="salary-btn-view">View</a>
-              <a href="documents/salary-grids/sd54-salary-grid-2025.pdf" download class="salary-btn-dl">↓ PDF</a>
-            </div>
-          </div>
-
-          <div class="salary-card">
-            <div class="salary-card-icon">
-              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-            </div>
-            <div class="salary-card-year">2026–27</div>
-            <div class="salary-card-sub">SD54 Salary Grid</div>
-            <div class="salary-card-actions">
-              <a href="documents/salary-grids/sd54-salary-grid-2026.pdf" target="_blank" class="salary-btn-view">View</a>
-              <a href="documents/salary-grids/sd54-salary-grid-2026.pdf" download class="salary-btn-dl">↓ PDF</a>
-            </div>
-          </div>
-
-          <div class="salary-card">
-            <div class="salary-card-icon">
-              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-            </div>
-            <div class="salary-card-year">2027–28</div>
-            <div class="salary-card-sub">SD54 Salary Grid</div>
-            <div class="salary-card-actions">
-              <a href="documents/salary-grids/sd54-salary-grid-2027.pdf" target="_blank" class="salary-btn-view">View</a>
-              <a href="documents/salary-grids/sd54-salary-grid-2027.pdf" download class="salary-btn-dl">↓ PDF</a>
-            </div>
-          </div>
-
-          <div class="salary-card">
-            <div class="salary-card-icon">
-              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-            </div>
-            <div class="salary-card-year">2028–29</div>
-            <div class="salary-card-sub">SD54 Salary Grid</div>
-            <div class="salary-card-actions">
-              <a href="documents/salary-grids/sd54-salary-grid-2028.pdf" target="_blank" class="salary-btn-view">View</a>
-              <a href="documents/salary-grids/sd54-salary-grid-2028.pdf" download class="salary-btn-dl">↓ PDF</a>
-            </div>
-          </div>
-
+<?php foreach ($current as $y) salaryCard($y); ?>
         </div>
+
+<?php if ($past): ?>
+        <details class="year-archive">
+          <summary>Archive (<?= count($past) ?>)</summary>
+          <div class="salary-grid-cards">
+<?php foreach ($past as $y) salaryCard($y); ?>
+          </div>
+        </details>
+<?php endif; ?>
       </div>
 
     </div>
