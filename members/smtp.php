@@ -295,6 +295,42 @@ function siteMailWithAttachments(
     }
 }
 
+/**
+ * Turn the label/value detail rows into tables with inline styles.
+ *
+ * The rows are two spans laid side by side by a flexbox rule in <style>. Gmail
+ * and Outlook drop that rule, and the label runs straight into the value
+ * ("Paid bySarah"). A table cell with inline styles keeps its width everywhere.
+ */
+function siteMailInlineRows(string $html): string {
+    return (string)preg_replace_callback(
+        '#<div class="row( pay)?"><span class="lbl">(.*?)</span><span class="val">(.*?)</span></div>#s',
+        function (array $m): string {
+            $pay = $m[1] !== '';
+            $lbl = 'padding:5px 12px 5px 0;width:130px;vertical-align:top;font-size:13px;'
+                 . ($pay ? 'color:#1a6b35;font-weight:700;' : 'color:#6b7280;');
+            $val = 'padding:5px 0;vertical-align:top;color:#111827;font-weight:600;font-size:'
+                 . ($pay ? '14px;' : '13px;');
+            return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"'
+                 . ' style="border-collapse:collapse;border-bottom:1px solid #eef0f3;"><tr>'
+                 . '<td style="' . $lbl . '">' . $m[2] . '</td>'
+                 . '<td style="' . $val . '">' . $m[3] . '</td>'
+                 . '</tr></table>';
+        },
+        $html
+    );
+}
+
+/** Plain-text alternative that keeps a space between cells and a break between blocks. */
+function siteMailPlainText(string $html): string {
+    $html = (string)preg_replace('#<(style|head)\b.*?</\1>#is', '', $html);
+    $html = (string)preg_replace('#</td>\s*<td#i', '</td> <td', $html);
+    $html = (string)preg_replace('#<br\s*/?>|</(p|div|tr|table|h[1-6]|li)>#i', "\n", $html);
+    $text = html_entity_decode(strip_tags($html), ENT_QUOTES, 'UTF-8');
+    $text = (string)preg_replace("/[ \t]+/", ' ', $text);
+    return trim((string)preg_replace("/\n\s*\n+/", "\n\n", $text));
+}
+
 function siteMail(string $to, string $subject, string $body, bool $isHtml = false): bool {
     // Load config if not already loaded
     $cfg = __DIR__ . '/config.php';
@@ -330,10 +366,11 @@ function siteMail(string $to, string $subject, string $body, bool $isHtml = fals
         $mail->CharSet = 'UTF-8';
         // Tagged on test with the address it would really have gone to.
         $mail->Subject = siteMailSubject($subject, $to);
-        $mail->Body    = $body;
         if ($isHtml) {
-            $mail->AltBody = strip_tags($body);
+            $body = siteMailInlineRows($body);
+            $mail->AltBody = siteMailPlainText($body);
         }
+        $mail->Body    = $body;
 
         $mail->send();
         _siteMailLog($to, $subject, true, '', $body, $isHtml);
