@@ -249,7 +249,11 @@ function evEnsureMapColumns(): bool {
               // A deadline or a Pro-D day is not a 4:30 appointment. Stored as
               // a flag rather than by convention on the times, so "all day" and
               // "happens to start at midnight" stay different things.
-              'all_day' => 'TINYINT(1) NOT NULL DEFAULT 0'] as $col => $type) {
+              'all_day' => 'TINYINT(1) NOT NULL DEFAULT 0',
+              // Whether whoever created the event is copied on its sign-up
+              // and cancellation notices. On by default; turned off for an
+              // event someone else runs, so its sign-ups go only to them.
+              'notify_creator' => 'TINYINT(1) NOT NULL DEFAULT 1'] as $col => $type) {
         try {
             $has = (int)getDB()->query(
                 "SELECT COUNT(*) FROM information_schema.COLUMNS
@@ -599,6 +603,9 @@ function evUpdate(int $id, array $d): void {
     // silently stopped map pins being saved too.
     $withKind = evHasEventColumn('kind') && evHasEventColumn('signup');
     $withDay  = evHasEventColumn('all_day');
+    // Only written when the caller says. Quick-add does not, and must not
+    // switch an existing event's copy back on by leaving the key out.
+    $withCopy = array_key_exists('notify_creator', $d) && evHasEventColumn('notify_creator');
 
     $sql = "UPDATE ev_events SET
                 title = ?, summary = ?, description = ?, starts_at = ?, ends_at = ?,
@@ -606,6 +613,7 @@ function evUpdate(int $id, array $d): void {
          . ($withMap  ? ", map_lat = ?, map_lng = ?" : "")
          . ($withKind ? ", kind = ?, signup = ?" : "")
          . ($withDay  ? ", all_day = ?" : "")
+         . ($withCopy ? ", notify_creator = ?" : "")
          . ", updated_at = NOW()
             WHERE id = ?";
 
@@ -642,6 +650,7 @@ function evUpdate(int $id, array $d): void {
         $args[] = !empty($d['signup']) ? 1 : 0;
     }
     if ($withDay) $args[] = !empty($d['all_day']) ? 1 : 0;
+    if ($withCopy) $args[] = !empty($d['notify_creator']) ? 1 : 0;
     $args[] = $id;
 
     getDB()->prepare($sql)->execute($args);
@@ -1398,37 +1407,65 @@ function evSendChangeLink(array $event, array $reg): void {
     siteMail($reg['email'], 'Already registered: ' . $event['title'], implode("\n", $lines));
 }
 
+/** Is whoever created this event copied on its notices? Yes unless switched off. */
+function evCopiesCreator(array $e): bool {
+    return !array_key_exists('notify_creator', $e) || !empty($e['notify_creator']);
+}
+
+/**
+ * Who hears about sign-ups and cancellations for an event.
+ *
+ * The notify address and the creator both, not one or the other. This used to
+ * send to notify_email, falling back to created_by only when notify_email was
+ * empty — so an event whose notify field had been pointed at somebody else
+ * told the person who set it up nothing, with no sign that it would.
+ *
+ * The creator can now be left off per event (notify_creator = 0), for an event
+ * someone else runs. That is a choice made on the event, not a side effect of
+ * filling in the other field. If it leaves no usable address, the creator is
+ * told after all: an event with sign-ups that notifies nobody is a fault.
+ *
+ * Deduplicated case-insensitively, so the ordinary case where they are the
+ * same address still sends one email.
+ */
+function evNotifyAddresses(array $event): array {
+    $valid = function ($addr) {
+        $addr = trim((string)$addr);
+        return ($addr !== '' && filter_var($addr, FILTER_VALIDATE_EMAIL)) ? $addr : '';
+    };
+    $notify  = $valid($event['notify_email'] ?? '');
+    $creator = $valid($event['created_by'] ?? '');
+
+    $to = [];
+    if ($notify !== '') $to[strtolower($notify)] = $notify;
+    if ($creator !== '' && (evCopiesCreator($event) || !$to)) $to[strtolower($creator)] = $creator;
+    return array_values($to);
+}
+
+/** Send one notice to each address; one failing must not cost another its copy. */
+function evMailEach(array $to, string $subject, string $body, string $where): void {
+    foreach ($to as $addr) {
+        try {
+            siteMail($addr, $subject, $body);
+        } catch (\Throwable $e) {
+            error_log($where . ': ' . $addr . ' — ' . $e->getMessage());
+        }
+    }
+}
+
 function evSendCancelNotice(array $event, array $reg): void {
-    $to = trim((string)($event['notify_email'] ?? '')) ?: trim((string)($event['created_by'] ?? ''));
-    if ($to === '') return;
+    $to = evNotifyAddresses($event);
+    if (!$to) return;
     $left = count(evRegistrations((int)$event['id']));
-    siteMail($to, 'Cancellation: ' . $event['title'], implode("\n", [
+    evMailEach($to, 'Cancellation: ' . $event['title'], implode("\n", [
         $reg['name'] . ' (' . $reg['email'] . ') has cancelled their spot at ' . $event['title'] . '.',
         '',
         'That leaves ' . $left . ' registered.',
-    ]));
+    ]), 'evSendCancelNotice');
 }
 
 function evSendOrganiserNotice(array $event, array $reg, array $answers, bool $isUpdate = false): void {
-    /*
-     * Both addresses, not one or the other.
-     *
-     * This used to send to notify_email, falling back to created_by only when
-     * notify_email was empty — so an event whose notify field had been pointed
-     * at somebody else told nobody else at all, and the person who set the
-     * event up heard nothing. That is exactly what happened: one event's
-     * notices arrived and another's did not, with no difference between them
-     * but that field.
-     *
-     * Deduplicated case-insensitively, so the ordinary case where they are the
-     * same address still sends one email.
-     */
-    $to = [];
-    foreach ([$event['notify_email'] ?? '', $event['created_by'] ?? ''] as $addr) {
-        $addr = trim((string)$addr);
-        if ($addr === '' || !filter_var($addr, FILTER_VALIDATE_EMAIL)) continue;
-        $to[strtolower($addr)] = $addr;
-    }
+    $to = evNotifyAddresses($event);
     if (!$to) return;
 
     $count = count(evRegistrations((int)$event['id']));
@@ -1447,15 +1484,7 @@ function evSendOrganiserNotice(array $event, array $reg, array $answers, bool $i
     $lines[] = 'That makes ' . $count . ' registered so far.';
 
     $subject = ($isUpdate ? 'Updated' : 'New') . ' registration: ' . $event['title'];
-    $body    = implode("\n", $lines);
-    foreach ($to as $addr) {
-        // One failing address must not cost the other one its notice.
-        try {
-            siteMail($addr, $subject, $body);
-        } catch (\Throwable $e) {
-            error_log('evSendOrganiserNotice: ' . $addr . ' — ' . $e->getMessage());
-        }
-    }
+    evMailEach($to, $subject, implode("\n", $lines), 'evSendOrganiserNotice');
 }
 
 // ── Sending the handouts ──────────────────────────────────────────────────────

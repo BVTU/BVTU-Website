@@ -75,6 +75,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
         if ($notify !== '' && !filter_var($notify, FILTER_VALIDATE_EMAIL)) {
             $errors[] = 'That notification address does not look like an email address.';
         }
+        $copyCreator = !empty($_POST['notify_creator']);
+        if (!$copyCreator && $notify === '') {
+            $errors[] = 'Put in the address registrations should go to, or keep yourself on the list.';
+        }
+        if (!$copyCreator && !evHasEventColumn('notify_creator')) {
+            $errors[] = 'Taking the creator off the list is not available yet — the database '
+                      . 'could not be updated for it. Nothing was saved.';
+        }
 
         // Empty clears the pin; anything we cannot read is reported rather than
         // silently dropped, or the organiser would never learn the map is blank.
@@ -101,6 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
                 'location'        => evStr($_POST['location'] ?? ''),
                 'confirm_message' => evStr($_POST['confirm_message'] ?? ''),
                 'notify_email'    => $notify,
+                'notify_creator'  => $copyCreator ? 1 : 0,
             ]);
             $notice = 'Details saved.';
             $event  = evGet($id);
@@ -341,16 +350,14 @@ $forInput = function ($v) {
         </div>
 
         <div class="fld">
-          <label class="lbl" for="f-notify">Send an email for each registration</label>
-          <?php // The old hint said blank stops them. It does not — the code
-                // falls back to whoever created the event, which is the useful
-                // behaviour and the one to keep. The hint was the wrong half. ?>
-          <p class="hint">
-            Blank means they go to whoever created this event
-            (<?= $h(trim((string)($event['created_by'] ?? '')) ?: 'nobody — so none would be sent') ?>).
-            Put a different address here to send them somewhere else.
-          </p>
+          <label class="lbl" for="f-notify">Send an email for each registration to</label>
+          <?php // Both this address and the creator are told, unless the box
+                // below is unticked — see evNotifyAddresses(). ?>
           <input type="email" id="f-notify" name="notify_email" value="<?= $h($event['notify_email']) ?>">
+          <label class="chk" style="margin-top:.5rem;">
+            <input type="checkbox" name="notify_creator" value="1"<?= evCopiesCreator($event) ? ' checked' : '' ?>>
+            Also send them to <?= $h(trim((string)($event['created_by'] ?? '')) ?: 'the event creator') ?>
+          </label>
         </div>
 
         <button type="submit" class="btn btn-primary">Save details</button>
