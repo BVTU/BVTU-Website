@@ -392,13 +392,19 @@ function odFolderIdByPath(string $path): string {
 
 /** A child folder by name, made if it is not there. Returns its id, or ''. */
 function odChildFolder(string $parentId, string $name): string {
-    foreach (odListFolders($parentId) as $f) {
-        if (strcasecmp((string)$f['name'], $name) === 0) return (string)$f['id'];
-    }
+    // Asked for by name rather than found in a listing: a listing stops at 200
+    // items, and a folder past that would look missing and then fail to create.
+    $lookup = function () use ($parentId, $name): string {
+        $base = ($parentId === '' || $parentId === 'root')
+            ? '/me/drive/root:/' : '/me/drive/items/' . rawurlencode($parentId) . ':/';
+        [$code, $data] = odGraph('GET', $base . rawurlencode($name) . ':?$select=id,folder');
+        return ($code === 200 && isset($data['folder'])) ? (string)$data['id'] : '';
+    };
+    $id = $lookup();
+    if ($id !== '') return $id;
     $made = odCreateFolder($parentId, $name);
-    if (!empty($made['ok']))       return (string)$made['folder']['id'];
-    if (!empty($made['existing'])) return (string)$made['existing']['id'];
-    return '';
+    if (!empty($made['ok'])) return (string)$made['folder']['id'];
+    return $lookup();   // made by another run in the meantime, or a file in the way
 }
 
 function odLogUpload(string $name, string $folderPath, string $webUrl, int $size, string $by): void {
