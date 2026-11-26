@@ -213,15 +213,6 @@ $recent = odRecentUploads();
     <?php endif; ?>
   </div>
 
-  <h2 class="sec">Expense receipts</h2>
-  <div class="pcard state">
-    <div class="txt">
-      <strong>Copied to the Treasurer's folder by month</strong>
-      <span>BVTUTreasurer / year / Receipts and Invoices by month</span>
-    </div>
-    <a href="onedrive-receipts.php" class="btn btn-outline" style="padding:.5rem 1.1rem;font-size:.9rem;">Open</a>
-  </div>
-
   <?php if ($live): ?>
   <h2 class="sec">Upload documents</h2>
   <div class="pcard qr-row">
