@@ -9,8 +9,8 @@
  * folders already run (26_27 holds July and August). It is not the portal's
  * September school year, and must not be swapped for expSchoolYear().
  *
- * Covers member reimbursements (exp_batches) and President's expenses (LP
- * vouchers). Pro-D claims are a separate fund with their own treasurer.
+ * Covers member reimbursements (exp_batches, and the retired one-receipt
+ * exp_expenses) and President's expenses (LP vouchers). Pro-D claims are a separate fund with their own treasurer.
  *
  * The base folder is never created here. If it is missing, OneDrive is
  * connected to some other account, and building the Treasurer's tree inside
@@ -81,7 +81,7 @@ function odrCleanName(string $s): string {
 function odrCandidates(string $source = '', int $parentId = 0): array {
     // Both portals make their tables the first time they are opened; one that
     // never has been would otherwise fail this query outright.
-    if ($source === '' || $source === 'exp') expBatchEnsureTables();
+    if ($source === '' || $source === 'exp' || $source === 'old') expBatchEnsureTables();
     if ($source === '' || $source === 'lp')  lpEnsureTables();
     $db  = getDB();
     $out = [];
@@ -106,6 +106,28 @@ function odrCandidates(string $source = '', int $parentId = 0): array {
                     'part'   => 0, 'parts' => 1,
                 ];
             }
+        }
+    }
+
+    // The retired one-receipt claims (exp_expenses). Nothing submits these any
+    // more, so only the backfill reaches them; a source of their own because
+    // their ids overlap exp_batch_items'.
+    if ($source === '' || $source === 'old') {
+        $sql = "SELECT * FROM exp_expenses WHERE status NOT IN ($skip)
+                  AND COALESCE(receipt_path,'') <> ''" . ($parentId ? ' AND id=?' : '');
+        $st  = $db->prepare($sql);
+        $st->execute($parentId ? [$parentId] : []);
+        foreach ($st->fetchAll() as $x) {
+            $out[] = [
+                'source' => 'old', 'parent_id' => (int)$x['id'], 'line_id' => (int)$x['id'],
+                'path'   => trim((string)$x['receipt_path']), 'dir' => EXP_RECEIPTS_DIR,
+                'date'   => odrDate($x['expense_date'] ?? '') ?: odrDate($x['extracted_date'] ?? '')
+                         ?: odrDate($x['created_at'] ?? ''),
+                'ref'    => (string)($x['ref_code'] ?? ''),
+                'who'    => (string)($x['user_name'] ?? ''),
+                'desc'   => (string)($x['description'] ?? '') ?: (string)($x['extracted_vendor'] ?? ''),
+                'part'   => 0, 'parts' => 1,
+            ];
         }
     }
 

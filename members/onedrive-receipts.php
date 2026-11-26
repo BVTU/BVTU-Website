@@ -58,9 +58,9 @@ $since = odrNow();
 
 $h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); };
 $viewUrl = function (array $c): string {
-    return $c['source'] === 'lp'
-        ? 'lp-voucher-view.php?id=' . (int)$c['parent_id']
-        : 'exp-claim-view.php?id=' . (int)$c['parent_id'];
+    if ($c['source'] === 'lp')  return 'lp-voucher-view.php?id=' . (int)$c['parent_id'];
+    if ($c['source'] === 'old') return 'exp-view.php?id=' . (int)$c['parent_id'];
+    return 'exp-claim-view.php?id=' . (int)$c['parent_id'];
 };
 ?>
 <!DOCTYPE html>
