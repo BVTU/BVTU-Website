@@ -97,44 +97,7 @@ if ($slug === '' && !in_array($ext, ['jpg', 'png', 'webp', 'heic'], true)) {
 $name  = ($slug !== '' ? $slug : 'photo') . '-' . date('Y-m-d-His') . '.' . $ext;
 
 $size = filesize($tmp);
-$dest = $folderId === 'root'
-    ? '/me/drive/root:/' . rawurlencode($name) . ':'
-    : '/me/drive/items/' . rawurlencode($folderId) . ':/' . rawurlencode($name) . ':';
-
-if ($size <= 4 * 1024 * 1024) {
-    [$code, $data] = odGraph('PUT', $dest . '/content', [
-        'body'        => file_get_contents($tmp),
-        'contentType' => $info['mime'],
-    ]);
-} else {
-    // Larger than Graph's simple-upload limit: open a session and send chunks.
-    [$sc, $sess] = odGraph('POST', $dest . '/createUploadSession', [
-        'json' => ['item' => ['@microsoft.graph.conflictBehavior' => 'rename']],
-    ]);
-    if ($sc >= 400 || empty($sess['uploadUrl'])) {
-        echo json_encode(['error' => 'Could not start the upload.' ]); exit;
-    }
-
-    $chunk = 5 * 1024 * 1024;   // must be a multiple of 320 KiB
-    $fh    = fopen($tmp, 'rb');
-    $sent  = 0;
-    $code  = 0;
-    $data  = [];
-    while ($sent < $size) {
-        $buf  = fread($fh, $chunk);
-        $len  = strlen($buf);
-        $range = 'bytes ' . $sent . '-' . ($sent + $len - 1) . '/' . $size;
-        [$code, $data] = odGraph('PUT', $sess['uploadUrl'], [
-            'body'         => $buf,
-            'contentType'  => 'application/octet-stream',
-            'contentRange' => $range,
-            'noAuth'       => true,   // the session URL carries its own auth
-        ]);
-        if ($code >= 400) break;
-        $sent += $len;
-    }
-    fclose($fh);
-}
+[$code, $data] = odUploadFile($folderId, $name, $tmp, $info['mime']);
 
 if ($code >= 400 || empty($data['id'])) {
     $msg = $data['error']['message'] ?? 'Upload failed.';

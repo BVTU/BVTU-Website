@@ -425,6 +425,22 @@ function expBatchSubmit(int $id): void {
     getDB()->prepare(
         "UPDATE exp_batches SET status='pending', submitted_at=NOW() WHERE id=?"
     )->execute([$id]);
+    expCopyReceiptsToOneDrive('exp', $id);
+}
+
+/**
+ * Copy a claim's or voucher's receipts to the Treasurer's OneDrive once the
+ * page has been sent — see od-receipts.php. Loaded only here, so pages that
+ * never submit anything do not load the OneDrive code, and nothing it does
+ * can stop a submission going through.
+ */
+function expCopyReceiptsToOneDrive(string $source, int $id): void {
+    try {
+        require_once __DIR__ . '/od-receipts.php';
+        odrAfterResponse($source, $id);
+    } catch (\Throwable $e) {
+        error_log('expCopyReceiptsToOneDrive ' . $source . ' #' . $id . ': ' . $e->getMessage());
+    }
 }
 
 /**

@@ -1128,6 +1128,7 @@ function lpSubmitVoucher(int $id): void {
     getDB()->prepare(
         "UPDATE lp_vouchers SET status='submitted', submitted_at=NOW() WHERE id=?"
     )->execute([$id]);
+    expCopyReceiptsToOneDrive('lp', $id);
 }
 
 function lpApproveAsSigner1(int $id, string $email, string $name, string $note = ''): void {

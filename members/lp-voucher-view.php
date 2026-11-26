@@ -37,6 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'submi
     if ($voucher['status'] === 'draft' && ($isOwner || prodIsExec($member['email']))) {
         getDB()->prepare("UPDATE lp_vouchers SET status='submitted', submitted_at=NOW() WHERE id=?")
                ->execute([$id]);
+        expCopyReceiptsToOneDrive('lp', $id);
         $voucher = lpGetVoucher($id); // reload
 
         // Send email to treasurer(s)

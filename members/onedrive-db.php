@@ -330,6 +330,77 @@ function odCreateFolder(string $parentId, string $name): array {
         : 'OneDrive would not create that folder' . ($msg ? ': ' . $msg : '.')];
 }
 
+/**
+ * Put a file from disk into a folder. Returns [httpCode, driveItem].
+ *
+ * Small files go up in one PUT; anything over 4MB uses an upload session, which
+ * phone photos routinely need. $conflict is Graph's conflictBehavior for the
+ * simple PUT — '' leaves Graph's default; 'rename' never touches a file that is
+ * already there. The upload session always renames.
+ */
+function odUploadFile(string $folderId, string $name, string $file, string $mime, string $conflict = ''): array {
+    $size = (int)filesize($file);
+    $dest = ($folderId === '' || $folderId === 'root')
+        ? '/me/drive/root:/' . rawurlencode($name) . ':'
+        : '/me/drive/items/' . rawurlencode($folderId) . ':/' . rawurlencode($name) . ':';
+
+    if ($size <= 4 * 1024 * 1024) {
+        $q = $conflict !== '' ? '?@microsoft.graph.conflictBehavior=' . rawurlencode($conflict) : '';
+        return odGraph('PUT', $dest . '/content' . $q, [
+            'body'        => file_get_contents($file),
+            'contentType' => $mime,
+        ]);
+    }
+
+    [$sc, $sess] = odGraph('POST', $dest . '/createUploadSession', [
+        'json' => ['item' => ['@microsoft.graph.conflictBehavior' => 'rename']],
+    ]);
+    if ($sc >= 400 || empty($sess['uploadUrl'])) {
+        return [$sc ?: 500, ['error' => ['message' => 'Could not start the upload.']]];
+    }
+
+    $chunk = 5 * 1024 * 1024;   // must be a multiple of 320 KiB
+    $fh    = fopen($file, 'rb');
+    $sent  = 0;
+    $code  = 0;
+    $data  = [];
+    while ($sent < $size) {
+        $buf  = fread($fh, $chunk);
+        $len  = strlen($buf);
+        if ($len === 0) break;
+        [$code, $data] = odGraph('PUT', $sess['uploadUrl'], [
+            'body'         => $buf,
+            'contentType'  => 'application/octet-stream',
+            'contentRange' => 'bytes ' . $sent . '-' . ($sent + $len - 1) . '/' . $size,
+            'noAuth'       => true,   // the session URL carries its own auth
+        ]);
+        if ($code >= 400) break;
+        $sent += $len;
+    }
+    fclose($fh);
+    return [$code, $data];
+}
+
+/** The id of the folder at this path from the drive root, or '' if there is none. */
+function odFolderIdByPath(string $path): string {
+    $segs = array_filter(explode('/', trim($path, '/')), 'strlen');
+    if (!$segs) return 'root';
+    [$code, $data] = odGraph('GET', '/me/drive/root:/'
+        . implode('/', array_map('rawurlencode', $segs)) . ':?$select=id,folder');
+    return ($code === 200 && isset($data['folder'])) ? (string)$data['id'] : '';
+}
+
+/** A child folder by name, made if it is not there. Returns its id, or ''. */
+function odChildFolder(string $parentId, string $name): string {
+    foreach (odListFolders($parentId) as $f) {
+        if (strcasecmp((string)$f['name'], $name) === 0) return (string)$f['id'];
+    }
+    $made = odCreateFolder($parentId, $name);
+    if (!empty($made['ok']))       return (string)$made['folder']['id'];
+    if (!empty($made['existing'])) return (string)$made['existing']['id'];
+    return '';
+}
+
 function odLogUpload(string $name, string $folderPath, string $webUrl, int $size, string $by): void {
     odEnsureTables();
     getDB()->prepare(
