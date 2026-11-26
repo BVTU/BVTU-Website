@@ -79,6 +79,10 @@ function odrCleanName(string $s): string {
  * $source '' for both; $parentId 0 for all.
  */
 function odrCandidates(string $source = '', int $parentId = 0): array {
+    // Both portals make their tables the first time they are opened; one that
+    // never has been would otherwise fail this query outright.
+    if ($source === '' || $source === 'exp') expBatchEnsureTables();
+    if ($source === '' || $source === 'lp')  lpEnsureTables();
     $db  = getDB();
     $out = [];
     $skip = implode(',', array_map(function ($s) { return "'" . $s . "'"; }, ODR_SKIP_STATUSES));
@@ -219,7 +223,9 @@ function odrCopyOne(array $c): ?string {
     $desc = function_exists('mb_substr') ? mb_substr(trim($c['desc']), 0, 60) : substr(trim($c['desc']), 0, 60);
     $name = odrCleanName($c['date'] . ' ' . $c['ref'] . ' ' . $c['who'] . ($desc !== '' ? ' - ' . $desc : '')
           . ($c['parts'] > 1 ? ' (' . ($c['part'] + 1) . ' of ' . $c['parts'] . ')' : ''));
-    $name = ($name !== '' ? substr($name, 0, 180) : 'receipt') . ($ext !== '' ? '.' . $ext : '');
+    // Cut by bytes on a character boundary: half a character is a name Graph refuses.
+    $cut  = function_exists('mb_strcut') ? mb_strcut($name, 0, 180, 'UTF-8') : substr($name, 0, 180);
+    $name = ($cut !== '' ? rtrim($cut, '. ') : 'receipt') . ($ext !== '' ? '.' . $ext : '');
 
     $mimes = ['pdf' => 'application/pdf', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg',
               'png' => 'image/png', 'webp' => 'image/webp', 'gif' => 'image/gif',
