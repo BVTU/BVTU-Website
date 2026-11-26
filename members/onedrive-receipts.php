@@ -27,6 +27,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && reqPostStr('action') === 'run') {
     header('Content-Type: application/json');
     if (!csrfValid()) { echo json_encode(['ok' => false, 'error' => 'That page expired. Reload it.']); exit; }
     if (!$live)       { echo json_encode(['ok' => false, 'error' => 'OneDrive needs reconnecting.']); exit; }
+    // Let go of the session: uploads can take minutes, and holding it would
+    // freeze every other portal page open in the same browser until they finish.
+    if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
     @set_time_limit(180);
     $since = reqPostStr('since');
     if (!preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $since)) $since = odrNow();
