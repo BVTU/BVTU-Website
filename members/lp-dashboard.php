@@ -236,6 +236,8 @@ $grantSumJson      = json_encode(array_values($grantSum));
 
     .new-voucher-btn { display: inline-flex; align-items: center; gap: .4rem; background: var(--primary); color: #fff; border-radius: 9px; padding: .6rem 1.15rem; font-size: .9rem; font-weight: 700; text-decoration: none; }
     .new-voucher-btn:hover { background: var(--primary-dk); color: #fff; }
+    .odr-sync-btn { display: inline-flex; align-items: center; background: #fff; color: var(--primary); border: 1.5px solid var(--primary); border-radius: 9px; padding: .55rem 1.05rem; font-size: .9rem; font-weight: 700; text-decoration: none; }
+    .odr-sync-btn:hover { background: #f0f7ff; color: var(--primary); }
 
     .empty-state { text-align: center; padding: 2.5rem; color: var(--gray-400); background: #fff; border: 1px solid var(--gray-200); border-radius: 10px; }
   </style>
@@ -271,6 +273,7 @@ $grantSumJson      = json_encode(array_values($grantSum));
       <?php if ($canCreate): ?>
       <a href="lp-voucher-new.php" class="new-voucher-btn">+ New Voucher</a>
       <?php endif; ?>
+      <a href="onedrive-receipts.php" class="odr-sync-btn">Sync receipts to OneDrive</a>
       <a class="back-link" href="dashboard.php">← Dashboard</a>
     </div>
   </div>

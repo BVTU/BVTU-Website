@@ -13,7 +13,10 @@ require_once __DIR__ . '/od-receipts.php';
 
 requireLogin();
 $member = getMember();
-if (!execIsAdmin($member['email'])) { header('Location: dashboard.php'); exit; }
+// Whoever can open Expenses & Grants: the President, and the Treasurer whose
+// folder this fills. Copying a receipt changes nothing on the voucher.
+if (!lpCanView($member['email'])) { header('Location: dashboard.php'); exit; }
+$isAdmin = execIsAdmin($member['email']);
 
 odEnsureTables();
 odrEnsureTable();
@@ -98,13 +101,14 @@ $viewUrl = function (array $c): string {
 <div class="wrap">
 
   <div class="page-header">
-    <a class="back-link" href="onedrive.php">&#x2190; OneDrive</a>
+    <a class="back-link" href="lp-dashboard.php">&#x2190; Expenses &amp; Grants</a>
     <h1>Expense Receipts in OneDrive</h1>
     <p class="odr-dest"><code><?= $h(OD_RECEIPTS_BASE) ?> / <em>year</em> / <?= $h(OD_RECEIPTS_MONTHLY) ?> / <em>month</em></code></p>
   </div>
 
   <?php if (!$live): ?>
-    <div class="error-box">&#x26A0; OneDrive is not connected. <a href="onedrive.php">Connect it</a> first.</div>
+    <div class="error-box">&#x26A0; OneDrive is not connected.
+      <?= $isAdmin ? '<a href="onedrive.php">Connect it</a> first.' : 'Ask the President to reconnect it.' ?></div>
   <?php endif; ?>
 
   <div class="pcard" style="margin-top:1.25rem;">
