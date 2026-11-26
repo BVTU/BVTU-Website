@@ -24,8 +24,6 @@
 require_once __DIR__ . '/onedrive-db.php';
 require_once __DIR__ . '/lp-db.php';   // pulls in exp-db.php
 
-if (!defined('OD_RECEIPTS_BASE'))  define('OD_RECEIPTS_BASE', '!BVTU/BVTUTreasurer');
-if (!defined('OD_RECEIPTS_MONTHLY')) define('OD_RECEIPTS_MONTHLY', 'Receipts and Invoices by month');
 
 /** Never copied: not yet claimed, or turned down. */
 const ODR_SKIP_STATUSES = ['draft', 'rejected', 'withdrawn'];
@@ -57,14 +55,6 @@ function odrEnsureTable(): void {
 function odrDate($v): string {
     $v = substr(trim((string)$v), 0, 10);
     return (preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) && $v !== '0000-00-00' && strtotime($v)) ? $v : '';
-}
-
-/** ['26_27', 'November'] for a transaction on 2026-11-14. */
-function odrFolderFor(string $date): array {
-    $ts = strtotime($date);
-    $y  = (int)date('Y', $ts);
-    $start = (int)date('n', $ts) >= 7 ? $y : $y - 1;
-    return [sprintf('%02d_%02d', $start % 100, ($start + 1) % 100), date('F', $ts)];
 }
 
 /** Safe as a OneDrive file name. */
@@ -200,25 +190,6 @@ function odrFinish(array $c, array $fields): void {
     $vals[] = $c['source']; $vals[] = $c['line_id']; $vals[] = $c['hash'];
     getDB()->prepare("UPDATE onedrive_receipt_sync SET " . implode(',', $sets)
         . " WHERE source=? AND line_id=? AND file_hash=?")->execute($vals);
-}
-
-/** Folder ids, found once per request. */
-function odrFolderId(string $yearFolder, string $month): array {
-    static $cache = [];
-    $rel = $yearFolder . '/' . OD_RECEIPTS_MONTHLY . '/' . $month;
-    if (isset($cache[$rel])) return $cache[$rel];
-
-    if (!isset($cache[''])) $cache[''] = odFolderIdByPath(OD_RECEIPTS_BASE);
-    $id = $cache[''];
-    if ($id === '') {
-        return ['', 'The folder ' . OD_RECEIPTS_BASE . ' is not in the connected OneDrive.'];
-    }
-    foreach ([$yearFolder, OD_RECEIPTS_MONTHLY, $month] as $seg) {
-        $id = odChildFolder($id, $seg);
-        if ($id === '') return ['', 'Could not open or make the folder ' . $seg . '.'];
-    }
-    $cache[$rel] = [$id, ''];
-    return $cache[$rel];
 }
 
 /** Copy one receipt. '' on success, why not on failure, null if another run has it. */

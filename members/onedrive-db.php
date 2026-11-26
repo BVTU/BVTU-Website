@@ -407,6 +407,46 @@ function odChildFolder(string $parentId, string $name): string {
     return $lookup();   // made by another run in the meantime, or a file in the way
 }
 
+/*
+ * The Treasurer's receipts tree:
+ *   !BVTU/BVTUTreasurer/26_27/Receipts and Invoices by month/November/
+ *
+ * Here rather than in od-receipts.php because the phone uploader files into
+ * it too. The year folder runs July to June, because that is how the
+ * Treasurer's folders already run (26_27 holds July and August), not the
+ * portal's September school year. The base folder is never created: if it is
+ * missing, OneDrive is connected to some other account.
+ */
+if (!defined('OD_RECEIPTS_BASE'))  define('OD_RECEIPTS_BASE', '!BVTU/BVTUTreasurer');
+if (!defined('OD_RECEIPTS_MONTHLY')) define('OD_RECEIPTS_MONTHLY', 'Receipts and Invoices by month');
+
+/** ['26_27', 'November'] for a transaction on 2026-11-14. */
+function odrFolderFor(string $date): array {
+    $ts = strtotime($date);
+    $y  = (int)date('Y', $ts);
+    $start = (int)date('n', $ts) >= 7 ? $y : $y - 1;
+    return [sprintf('%02d_%02d', $start % 100, ($start + 1) % 100), date('F', $ts)];
+}
+
+/** Folder ids, found once per request. */
+function odrFolderId(string $yearFolder, string $month): array {
+    static $cache = [];
+    $rel = $yearFolder . '/' . OD_RECEIPTS_MONTHLY . '/' . $month;
+    if (isset($cache[$rel])) return $cache[$rel];
+
+    if (!isset($cache[''])) $cache[''] = odFolderIdByPath(OD_RECEIPTS_BASE);
+    $id = $cache[''];
+    if ($id === '') {
+        return ['', 'The folder ' . OD_RECEIPTS_BASE . ' is not in the connected OneDrive.'];
+    }
+    foreach ([$yearFolder, OD_RECEIPTS_MONTHLY, $month] as $seg) {
+        $id = odChildFolder($id, $seg);
+        if ($id === '') return ['', 'Could not open or make the folder ' . $seg . '.'];
+    }
+    $cache[$rel] = [$id, ''];
+    return $cache[$rel];
+}
+
 function odLogUpload(string $name, string $folderPath, string $webUrl, int $size, string $by): void {
     odEnsureTables();
     getDB()->prepare(

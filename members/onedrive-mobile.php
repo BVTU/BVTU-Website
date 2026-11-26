@@ -70,6 +70,10 @@ $mayCreate = odTokenMayCreate($row);
             cursor:pointer; margin:0 0 1rem; }
     .pick:active { background:#dcfce7; }
     input[type=file] { display:none; }
+    .also { display:flex; gap:.55rem; align-items:flex-start; background:#fff; border:1px solid #e5e7eb;
+            border-radius:8px; padding:.6rem .7rem; font-size:.88rem; margin-bottom:.6rem; cursor:pointer; }
+    .also input { width:1.1rem; height:1.1rem; margin:.1rem 0 0; flex-shrink:0; accent-color:#1a6b35; }
+    .also small { display:block; color:#6b7280; font-size:.76rem; }
     .cap { width:100%; border:1px solid #d1d5db; border-radius:8px; padding:.6rem .7rem;
            font-size:.92rem; font-family:inherit; margin-bottom:.6rem; }
     .item { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:.7rem .85rem;
@@ -109,6 +113,13 @@ $mayCreate = odTokenMayCreate($row);
   <div class="here" id="here"></div>
 
   <input class="cap" id="caption" placeholder="Name for the file (optional)">
+  <?php if ($mayCreate): ?>
+  <label class="also">
+    <input type="checkbox" id="alsoReceipts">
+    <span>Also save to Receipts and Invoices by month
+      <small><?= htmlspecialchars(implode(' / ', odrFolderFor(date('Y-m-d')))) ?></small></span>
+  </label>
+  <?php endif; ?>
   <button class="shoot" onclick="document.getElementById('cam').click();">&#x1F4F7; Take a photo</button>
   <button class="pick" onclick="document.getElementById('saved').click();">&#x1F4C4; Choose a photo or file</button>
   <!--
@@ -316,6 +327,8 @@ $mayCreate = odTokenMayCreate($row);
     fd.append('folder_id', dest.id);
     fd.append('folder_path', destPath);
     fd.append('label', cap);
+    var also = document.getElementById('alsoReceipts');
+    if (also && also.checked) fd.append('also_receipts', '1');
 
     fetch('onedrive-push.php', { method:'POST', body: fd })
       .then(function(r){return r.json();})
@@ -323,8 +336,12 @@ $mayCreate = odTokenMayCreate($row);
         row.querySelector('div').innerHTML = d.error
           ? '<span class="bad">' + esc(d.error) + '</span>'
           : '<span class="ok">&#x2713; ' + esc(d.name) + '</span><br>'
-            + '<span style="color:#6b7280;font-size:.78rem;">' + esc(d.folder) + '</span>';
+            + '<span style="color:#6b7280;font-size:.78rem;">' + esc(d.folder) + '</span>'
+            + (d.also ? '<br><span style="color:#6b7280;font-size:.78rem;">&#x2713; ' + esc(d.also) + '</span>' : '')
+            + (d.also_error ? '<br><span class="bad" style="font-size:.78rem;">' + esc(d.also_error) + '</span>' : '');
         document.getElementById('caption').value = '';
+        // Off again after each file: the next one is usually not a receipt.
+        if (also) also.checked = false;
       })
       .catch(function(){
         row.querySelector('div').innerHTML = '<span class="bad">Upload failed — try again.</span>';

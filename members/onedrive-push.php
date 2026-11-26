@@ -108,9 +108,45 @@ if ($code >= 400 || empty($data['id'])) {
 
 odLogUpload($data['name'] ?? $name, $folderPath, $data['webUrl'] ?? '', $size, $who);
 
+/*
+ * A second copy in this month's Treasurer folder, when ticked — a scholarship
+ * cheque that belongs with the scholarship and with the month's receipts.
+ *
+ * Only for the President's own QR or a signed-in admin, the same people who may
+ * make folders: a lent link is for putting a document in one place, not into
+ * the union's books. The first upload has already worked by now, so a problem
+ * here is reported beside it rather than as a failure.
+ */
+$also = ''; $alsoError = '';
+if (!empty($_POST['also_receipts'])) {
+    if ($row && !odTokenMayCreate($row)) {
+        $alsoError = 'This link cannot save to the Treasurer folder.';
+    } else {
+        [$yearFolder, $month] = odrFolderFor(date('Y-m-d'));
+        [$fid, $why] = odrFolderId($yearFolder, $month);
+        $alsoPath = $yearFolder . ' / ' . OD_RECEIPTS_MONTHLY . ' / ' . $month;
+        if ($fid === '') {
+            $alsoError = $why;
+        } elseif ($fid === $folderId) {
+            $also = $alsoPath;                 // that is where it went already
+        } else {
+            [$c2, $d2] = odUploadFile($fid, $data['name'] ?? $name, $tmp, $info['mime'], 'rename');
+            if ($c2 >= 400 || empty($d2['id'])) {
+                $alsoError = 'Not saved to the Treasurer folder: '
+                           . ($d2['error']['message'] ?? 'OneDrive refused it.');
+            } else {
+                $also = $alsoPath;
+                odLogUpload($d2['name'] ?? $name, $alsoPath, $d2['webUrl'] ?? '', $size, $who);
+            }
+        }
+    }
+}
+
 echo json_encode([
-    'ok'       => true,
-    'name'     => $data['name'] ?? $name,
-    'folder'   => $folderPath,
-    'web_url'  => $data['webUrl'] ?? '',
+    'ok'         => true,
+    'name'       => $data['name'] ?? $name,
+    'folder'     => $folderPath,
+    'web_url'    => $data['webUrl'] ?? '',
+    'also'       => $also,
+    'also_error' => $alsoError,
 ]);
