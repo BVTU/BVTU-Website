@@ -122,7 +122,9 @@ if (!empty($_POST['also_receipts'])) {
     if ($row && !odTokenMayCreate($row)) {
         $alsoError = 'This link cannot save to the Treasurer folder.';
     } else {
-        [$yearFolder, $month] = odrFolderFor(date('Y-m-d'));
+        $pick = trim((string)($_POST['also_month'] ?? ''));
+        if (!isset(odrMonthChoices()[$pick])) $pick = date('Y-m');
+        [$yearFolder, $month] = odrFolderFor($pick . '-01');
         [$fid, $why] = odrFolderId($yearFolder, $month);
         $alsoPath = $yearFolder . ' / ' . OD_RECEIPTS_MONTHLY . ' / ' . $month;
         if ($fid === '') {

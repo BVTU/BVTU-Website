@@ -70,10 +70,12 @@ $mayCreate = odTokenMayCreate($row);
             cursor:pointer; margin:0 0 1rem; }
     .pick:active { background:#dcfce7; }
     input[type=file] { display:none; }
-    .also { display:flex; gap:.55rem; align-items:flex-start; background:#fff; border:1px solid #e5e7eb;
+    .also { display:flex; flex-direction:column; background:#fff; border:1px solid #e5e7eb;
             border-radius:8px; padding:.6rem .7rem; font-size:.88rem; margin-bottom:.6rem; cursor:pointer; }
     .also input { width:1.1rem; height:1.1rem; margin:.1rem 0 0; flex-shrink:0; accent-color:#1a6b35; }
-    .also small { display:block; color:#6b7280; font-size:.76rem; }
+    .also label { display:flex; gap:.55rem; align-items:flex-start; cursor:pointer; flex:1; }
+    .also select { border:1px solid #d1d5db; border-radius:6px; padding:.35rem .4rem; font:inherit;
+                   font-size:.86rem; background:#fff; margin:.45rem 0 0 1.65rem; align-self:flex-start; }
     .cap { width:100%; border:1px solid #d1d5db; border-radius:8px; padding:.6rem .7rem;
            font-size:.92rem; font-family:inherit; margin-bottom:.6rem; }
     .item { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:.7rem .85rem;
@@ -114,11 +116,17 @@ $mayCreate = odTokenMayCreate($row);
 
   <input class="cap" id="caption" placeholder="Name for the file (optional)">
   <?php if ($mayCreate): ?>
-  <label class="also">
-    <input type="checkbox" id="alsoReceipts">
-    <span>Also save to Receipts and Invoices by month
-      <small><?= htmlspecialchars(implode(' / ', odrFolderFor(date('Y-m-d')))) ?></small></span>
-  </label>
+  <div class="also">
+    <label><input type="checkbox" id="alsoReceipts">
+      <span>Also save to Receipts and Invoices by month</span></label>
+    <select id="alsoMonth" aria-label="Month for the Treasurer folder"
+            onchange="document.getElementById('alsoReceipts').checked = true;">
+      <?php foreach (odrMonthChoices() as $ym => $label): ?>
+        <option value="<?= htmlspecialchars($ym) ?>"<?= $ym === date('Y-m') ? ' selected' : '' ?>><?=
+          htmlspecialchars($label) ?></option>
+      <?php endforeach; ?>
+    </select>
+  </div>
   <?php endif; ?>
   <button class="shoot" onclick="document.getElementById('cam').click();">&#x1F4F7; Take a photo</button>
   <button class="pick" onclick="document.getElementById('saved').click();">&#x1F4C4; Choose a photo or file</button>
@@ -328,7 +336,10 @@ $mayCreate = odTokenMayCreate($row);
     fd.append('folder_path', destPath);
     fd.append('label', cap);
     var also = document.getElementById('alsoReceipts');
-    if (also && also.checked) fd.append('also_receipts', '1');
+    if (also && also.checked) {
+      fd.append('also_receipts', '1');
+      fd.append('also_month', document.getElementById('alsoMonth').value);
+    }
     // Off again as soon as it is sent: the next file is usually not a receipt,
     // and it may be sent before this one has finished.
     if (also) also.checked = false;

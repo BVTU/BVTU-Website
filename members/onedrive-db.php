@@ -428,6 +428,21 @@ function odrFolderFor(string $date): array {
     return [sprintf('%02d_%02d', $start % 100, ($start + 1) % 100), date('F', $ts)];
 }
 
+/**
+ * Months the uploader may file into, newest first: next month back to two
+ * years ago. ['2026-11' => 'November 2026', ...]. The server checks a choice
+ * against this same list, so nothing outside it can be posted in.
+ */
+function odrMonthChoices(): array {
+    $out = [];
+    $first = strtotime(date('Y-m-01'));
+    for ($i = 1; $i >= -24; $i--) {
+        $ts = strtotime(($i >= 0 ? '+' : '') . $i . ' month', $first);
+        $out[date('Y-m', $ts)] = date('F Y', $ts);
+    }
+    return $out;
+}
+
 /** Folder ids, found once per request. */
 function odrFolderId(string $yearFolder, string $month): array {
     static $cache = [];
