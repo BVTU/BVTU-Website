@@ -329,6 +329,9 @@ $mayCreate = odTokenMayCreate($row);
     fd.append('label', cap);
     var also = document.getElementById('alsoReceipts');
     if (also && also.checked) fd.append('also_receipts', '1');
+    // Off again as soon as it is sent: the next file is usually not a receipt,
+    // and it may be sent before this one has finished.
+    if (also) also.checked = false;
 
     fetch('onedrive-push.php', { method:'POST', body: fd })
       .then(function(r){return r.json();})
@@ -340,8 +343,6 @@ $mayCreate = odTokenMayCreate($row);
             + (d.also ? '<br><span style="color:#6b7280;font-size:.78rem;">&#x2713; ' + esc(d.also) + '</span>' : '')
             + (d.also_error ? '<br><span class="bad" style="font-size:.78rem;">' + esc(d.also_error) + '</span>' : '');
         document.getElementById('caption').value = '';
-        // Off again after each file: the next one is usually not a receipt.
-        if (also) also.checked = false;
       })
       .catch(function(){
         row.querySelector('div').innerHTML = '<span class="bad">Upload failed — try again.</span>';
