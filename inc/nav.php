@@ -171,23 +171,27 @@ function bvtuNavSections(): array {
             ],
         ],
 
-        // One page, so the dropdown jumps into it. ttoc.php is listed only
-        // here: a second listing elsewhere would claim the page for that
-        // section, which comes first in this array.
+        // ttoc.php is the TTOC home page, a card per topic; each topic is its
+        // own page (inc/ttoc-page.php). Listed only here: a second listing
+        // would claim these pages for a section earlier in this array.
         'ttoc' => [
             'label' => 'TTOCs',
             'url'   => 'ttoc.php',
             'intro' => 'For Teachers Teaching on Call in SD54.',
-            'priority' => ['ttoc.php#copiers', 'ttoc.php#ei-calculator', 'ttoc.php#callout'],
+            'priority' => ['ttoc-copiers.php', 'ttoc-pay.php', 'ttoc-ei.php'],
             'items' => [
-                ['label' => 'TTOC Resources', 'url' => 'ttoc.php',
-                 'desc'  => 'Pay, seniority, sick leave and call-out for teachers on call'],
-                ['label' => 'Copier login', 'url' => 'ttoc.php#copiers',
-                 'desc'  => 'Copying and scanning with PaperCut'],
-                ['label' => 'EI hours calculator', 'url' => 'ttoc.php#ei-calculator',
-                 'desc'  => 'How many days you need to qualify'],
-                ['label' => 'Call-out pay', 'url' => 'ttoc.php#callout',
-                 'desc'  => 'Morning and afternoon call-out rates'],
+                ['label' => 'Copier login', 'url' => 'ttoc-copiers.php',
+                 'desc'  => 'Copy and scan with your SD54 login or an 8-digit PIN'],
+                ['label' => 'Call-out &amp; Pro-D pay', 'url' => 'ttoc-pay.php',
+                 'desc'  => 'Morning and afternoon rates, and when Pro-D days are paid'],
+                ['label' => 'EI hours calculator', 'url' => 'ttoc-ei.php',
+                 'desc'  => 'How many days you need to qualify for EI'],
+                ['label' => 'Experience credit', 'url' => 'ttoc-experience.php',
+                 'desc'  => 'How your days count toward the salary grid and seniority'],
+                ['label' => 'Sick leave', 'url' => 'ttoc-sick-leave.php',
+                 'desc'  => 'Your five days, and what changes on day 21'],
+                ['label' => 'Benefits &amp; release time', 'url' => 'ttoc-benefits.php',
+                 'desc'  => 'Health and dental, district committees, union release'],
             ],
         ],
     ];

@@ -1,0 +1,190 @@
+/* The TTOC pages: ttoc.php and ttoc-*.php, all built by inc/ttoc-page.php. */
+/* ── EI Calculator ───────────────────────────────────────────── */
+.ei-calculator {
+  background: var(--primary);
+  border-radius: var(--radius);
+  padding: 2rem;
+  color: white;
+  margin-bottom: 2.5rem;
+}
+.ei-calculator h2 {
+  color: white;
+  font-size: 1.25rem;
+  margin: 0 0 .35rem;
+}
+.ei-calculator .sub {
+  color: rgba(255,255,255,.75);
+  font-size: .9rem;
+  margin: 0 0 1.5rem;
+}
+.ei-calc-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1rem;
+  align-items: end;
+}
+@media (max-width: 600px) { .ei-calc-grid { grid-template-columns: 1fr; } }
+.ei-calc-field label {
+  display: block;
+  font-size: .8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: rgba(255,255,255,.75);
+  margin-bottom: .4rem;
+}
+.ei-calc-field input, .ei-calc-field select {
+  width: 100%;
+  padding: .75rem 1rem;
+  background: rgba(255,255,255,.15);
+  border: 1.5px solid rgba(255,255,255,.3);
+  border-radius: var(--radius-s);
+  color: white;
+  font-size: 1rem;
+  font-family: var(--font);
+}
+.ei-calc-field input::placeholder { color: rgba(255,255,255,.5); }
+.ei-calc-field input:focus, .ei-calc-field select:focus {
+  outline: none;
+  border-color: white;
+  background: rgba(255,255,255,.2);
+}
+.ei-calc-field select option { background: #1b6b42; color: white; }
+.ei-result {
+  background: rgba(255,255,255,.15);
+  border: 1.5px solid rgba(255,255,255,.3);
+  border-radius: var(--radius-s);
+  padding: .75rem 1rem;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+}
+.ei-result-val {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: white;
+}
+.ei-result-label {
+  font-size: .8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: rgba(255,255,255,.75);
+  margin-bottom: .4rem;
+}
+.ei-fact-row {
+  display: flex;
+  gap: 1.5rem;
+  margin-top: 1.25rem;
+  flex-wrap: wrap;
+}
+.ei-fact {
+  background: rgba(255,255,255,.12);
+  border-radius: var(--radius-s);
+  padding: .65rem 1rem;
+  font-size: .87rem;
+  color: rgba(255,255,255,.9);
+}
+.ei-fact strong { color: white; }
+
+/* ── Call-out rates ──────────────────────────────────────────── */
+.callout-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+@media (max-width: 500px) { .callout-cards { grid-template-columns: 1fr; } }
+.callout-card {
+  background: var(--off-white);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  text-align: center;
+}
+.callout-card.primary { border-color: var(--primary); background: var(--accent); }
+.callout-pct {
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: var(--primary);
+  line-height: 1.1;
+}
+.callout-time {
+  font-size: .82rem;
+  font-weight: 700;
+  color: var(--gray-500);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin-top: .3rem;
+}
+.callout-desc {
+  font-size: .85rem;
+  color: var(--gray-600);
+  margin-top: .5rem;
+}
+
+/* ── Section headers ─────────────────────────────────────────── */
+.ttoc-section { margin-bottom: 2.25rem; }
+.ttoc-section-head {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--primary);
+  margin-bottom: .9rem;
+  padding-bottom: .55rem;
+  border-bottom: 2px solid var(--accent);
+}
+.ttoc-icon {
+  width: 34px; height: 34px;
+  background: var(--accent);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.ttoc-icon svg {
+  width: 17px; height: 17px;
+  stroke: var(--primary); fill: none;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+
+/* ── Experience credit table ─────────────────────────────────── */
+.exp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .92rem;
+  margin: .75rem 0;
+}
+.exp-table th {
+  background: var(--primary);
+  color: white;
+  padding: .6rem 1rem;
+  text-align: left;
+  font-size: .8rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.exp-table td {
+  padding: .65rem 1rem;
+  border-bottom: 1px solid var(--gray-200);
+  color: var(--text);
+  line-height: 1.5;
+}
+.exp-table tr:last-child td { border-bottom: none; }
+.exp-table tr:nth-child(even) td { background: var(--off-white); }
+.exp-table td strong { color: var(--primary); }
+
+/* ── Day-21 milestone ────────────────────────────────────────── */
+.milestone {
+  background: #f0faf4;
+  border-left: 4px solid var(--primary);
+  border-radius: 0 var(--radius-s) var(--radius-s) 0;
+  padding: 1rem 1.2rem;
+  margin: 1rem 0;
+}
+.milestone strong { color: var(--primary); }
+
+/* ── Breadcrumb in the hero ──────────────────────────────── */
+.page-hero .breadcrumb { font-size: .85rem; margin-bottom: .6rem; color: rgba(255,255,255,.7); }
+.page-hero .breadcrumb a { color: rgba(255,255,255,.85); }
+.page-hero .breadcrumb span { margin: 0 .35rem; }
