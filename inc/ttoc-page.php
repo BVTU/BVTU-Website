@@ -21,6 +21,10 @@ require_once __DIR__ . '/../members/auth.php';
 function ttocPageStart(string $title, string $description, string $lead, bool $home = false): void {
     $h    = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); };
     $root = dirname(__DIR__);
+    // Before any output: isLoggedIn() starts the session, which fails once
+    // headers are sent unless the server happens to buffer. Read here and
+    // handed to bvtuNav() so it never has to start the session itself.
+    $loggedIn = isLoggedIn();
     ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -36,7 +40,7 @@ function ttocPageStart(string $title, string $description, string $lead, bool $h
 </head>
 <body>
 
-  <?php require_once __DIR__ . '/nav.php'; bvtuNav(); ?>
+  <?php require_once __DIR__ . '/nav.php'; bvtuNav(['loggedIn' => $loggedIn]); ?>
 
   <section class="page-hero">
     <div class="container">
