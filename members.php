@@ -36,7 +36,7 @@ $member   = $loggedIn ? getMember() : null;
 
       <?php
       /*
-       * The four sections and their pages, from the same definition as the
+       * The sections and their pages, from the same definition as the
        * menu (inc/nav.php). Every card this page used to carry is in one of
        * them; Member Resources stays as the broad starting point people have
        * bookmarked, not as a fifth menu.

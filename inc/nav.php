@@ -12,10 +12,13 @@ require_once __DIR__ . '/env.php';
  * format (Documents), audience (Members), topic and organisation, so a teacher
  * had to know which kind of thing a question was before they could find it.
  *
- * Five primary items now, in this order and no others (Cody's decision,
+ * Six primary items now, in this order and no others (Cody's decision,
  * November 2026): Contract & Benefits, Professional Development, Teaching
- * Resources, News & Updates, and My Dashboard. Search and the logo are
- * utilities, not sections.
+ * Resources, News & Updates, TTOCs, and My Dashboard. TTOCs is an audience
+ * rather than a topic, the one exception: teachers on call move between
+ * schools, need things like the copier login at once, and found their page
+ * from the bar on the old site. Search and the logo are utilities, not
+ * sections.
  *
  * The same array drives the header, the footer, the section landing pages and
  * the Member Resources overview — so a link added here appears everywhere it
@@ -34,7 +37,7 @@ require_once __DIR__ . '/env.php';
  */
 
 /**
- * The four content sections, in order.
+ * The content sections, in order.
  *
  * Each item:
  *   label   menu text (HTML-safe as written: entities, no tags)
@@ -86,8 +89,6 @@ function bvtuNavSections(): array {
                      'desc'  => 'When your class is over size — work out what you are owed'],
                     ['label' => 'Health &amp; Safety', 'url' => 'health-safety.php',
                      'desc'  => 'Committees, reporting, and your right to refuse unsafe work'],
-                    ['label' => 'TTOC Resources', 'url' => 'ttoc.php',
-                     'desc'  => 'Pay, seniority and call-out for teachers on call'],
                 ]],
                 ['label' => 'Leave', 'items' => [
                     ['label' => 'Booking time off', 'url' => 'atrieve.php',
@@ -167,6 +168,26 @@ function bvtuNavSections(): array {
                     ['label' => 'Contact', 'url' => 'contact.php',
                      'desc'  => 'Get in touch with the union office'],
                 ]],
+            ],
+        ],
+
+        // One page, so the dropdown jumps into it. ttoc.php is listed only
+        // here: a second listing elsewhere would claim the page for that
+        // section, which comes first in this array.
+        'ttoc' => [
+            'label' => 'TTOCs',
+            'url'   => 'ttoc.php',
+            'intro' => 'For Teachers Teaching on Call in SD54.',
+            'priority' => ['ttoc.php#copiers', 'ttoc.php#ei-calculator', 'ttoc.php#callout'],
+            'items' => [
+                ['label' => 'TTOC Resources', 'url' => 'ttoc.php',
+                 'desc'  => 'Pay, seniority, sick leave and call-out for teachers on call'],
+                ['label' => 'Copier login', 'url' => 'ttoc.php#copiers',
+                 'desc'  => 'Copying and scanning with PaperCut'],
+                ['label' => 'EI hours calculator', 'url' => 'ttoc.php#ei-calculator',
+                 'desc'  => 'How many days you need to qualify'],
+                ['label' => 'Call-out pay', 'url' => 'ttoc.php#callout',
+                 'desc'  => 'Morning and afternoon call-out rates'],
             ],
         ],
     ];

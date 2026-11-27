@@ -118,6 +118,9 @@ ul { list-style: none; }
   gap: .4rem;
   height: 100%;
 }
+/* Wider than the page body: the full bar needs ~1240px and the body column
+   stops at 1120px. Goes with the 1340px hamburger breakpoint below. */
+.site-header .header-inner { max-width: 1320px; }
 /* Push nav (and everything after) to the right on desktop */
 .main-nav { margin-left: auto; order: 2; }
 .search-btn { order: 3; }
@@ -894,16 +897,19 @@ body.so-lock { overflow: hidden; }
 }
 
 /*
- * The collapsed nav starts at 1280px, not 680px.
+ * The collapsed nav starts at 1340px, not 680px.
  *
- * The full bar needs 1280px of viewport — logo, eight sections and the member
+ * (Was 1280px until TTOCs joined the bar in November 2026; the bar now needs
+ * ~1240px inside a 1320px header, so 1340px with the header's padding.)
+ *
+ * The full bar once needed 1280px of viewport — logo, eight sections and the member
  * button. The hamburger that replaces it only appeared below 680px, so from
  * 681px to 1280px the bar was simply cut off at the right edge: at 1000px
  * "Newsletters" is clipped in half and the Member Login button is off-screen
  * entirely. That is every tablet and a good many laptops, on every page of the
  * site. The logo and type tightening below stays at 680px, where it belongs.
  */
-@media (max-width: 1280px) {
+@media (max-width: 1340px) {
 
   /* Hamburger must never shrink or clip */
   .nav-toggle { display: flex; flex-shrink: 0; }

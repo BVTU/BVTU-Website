@@ -141,6 +141,8 @@ $member   = $loggedIn ? getMember() : null;
 
     /* ── Section headers ─────────────────────────────────────────── */
     .ttoc-section { margin-bottom: 2.25rem; }
+    /* The menu links here; keep the heading clear of the fixed header. */
+    #copiers, #ei-calculator, #callout { scroll-margin-top: calc(var(--hdr-h) + 1rem); }
     .ttoc-section-head {
       display: flex;
       align-items: center;
@@ -215,8 +217,27 @@ $member   = $loggedIn ? getMember() : null;
   <main class="page-content">
     <div class="container">
 
+      <!-- ── Copier Login ───────────────────────────────────────── -->
+      <div class="ttoc-section" id="copiers">
+        <div class="ttoc-section-head">
+          <div class="ttoc-icon"><svg viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></div>
+          Logging In to the Copiers
+        </div>
+        <p>Copying and scanning now need a login. Your SD54 email and computer password already work.</p>
+        <p>To use an 8-digit number and PIN instead:</p>
+        <ol style="font-size:.93rem;line-height:1.9;padding-left:1.3rem;color:var(--text);">
+          <li>On an SD54 desk computer plugged into the school network, open <a href="http://trc-pcmf.sd54.bc.ca:9191/user" target="_blank" rel="noopener">PaperCut</a> and log in.</li>
+          <li>Choose <strong>Change Details</strong>.</li>
+          <li>Choose <strong>Generate Number</strong>.</li>
+          <li>Write down the 8-digit number under <strong>Current card/ID number</strong>.</li>
+        </ol>
+        <div class="info-box" style="font-size:.9rem;margin-top:.5rem;">
+          PaperCut only opens on the SD54 network — not from home or on your phone.
+        </div>
+      </div>
+
       <!-- ── EI Hours Calculator ────────────────────────────────── -->
-      <div class="ei-calculator">
+      <div class="ei-calculator" id="ei-calculator">
         <h2>EI Hours Calculator</h2>
         <p class="sub">Teachers and TTOCs receive <strong>9.1 insurable hours per day</strong> worked for EI purposes — confirmed by the BCTF. Use this calculator to find out how many days you need to qualify.</p>
 
@@ -248,7 +269,7 @@ $member   = $loggedIn ? getMember() : null;
       </div>
 
       <!-- ── Call-Out Rates ─────────────────────────────────────── -->
-      <div class="ttoc-section">
+      <div class="ttoc-section" id="callout">
         <div class="ttoc-section-head">
           <div class="ttoc-icon"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.65 3.18 2 2 0 0 1 3.62 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.54a16 16 0 0 0 6.29 6.29l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg></div>
           Call-Out Compensation
